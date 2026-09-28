@@ -506,6 +506,9 @@ LibreOffice 调用方式：`soffice --headless --norestore -env:UserInstallation
 - **防火墙**：Windows Defender 防火墙入站规则只放行 9000 端口，来源限定律所局域网网段和 WireGuard 网段；9101、9102 不放行。关闭远程桌面以外的共享（文件和打印机共享关闭）。
 - **系统盘开 BitLocker**：Windows 的页面文件、休眠文件无法可靠关闭，内存中的内容可能被写到磁盘；开 BitLocker 后，即使写入也是加密的。同时关闭休眠（`powercfg /h off`）。页面文件的残余风险写进部署说明，告知甲方。
 - **不装与服务无关的软件**；Windows 更新由甲方按内网策略管理。
+- **现状与差距**（2026-09-28 盘点，详见 `docs/src/环境事实.md`）：地址 `192.168.8.124`，Vulkan 可用，可访问 hf-mirror / ModelScope 下载模型；BitLocker 未开、休眠未关、Python 装在用户目录（服务账号无法使用，部署时改为在 `C:\prep395\` 内置 Python 或为所有用户安装）。
+- **远程控制软件**：395 上装有向日葵。它经由厂商的公网服务器中转远程控制，处理案卷的节点上不应常驻这类软件（SEC-13 的精神：服务器不经公网可达）。部署完成后卸载或至少禁止开机自启，改用局域网内的远程桌面和 SSH；是否保留由甲方决定，写入部署说明。
+- **显存**：Windows 只看到 31.6 GB 内存，其余大概率在 BIOS / Adrenalin 中划给了核显。部署前在任务管理器"GPU → 专用 GPU 内存"核对，OCR 模型和 9B 模型同时加载需要的显存在 G-5、G-6 中实测。
 
 ### 6.2 内存中处理，不落盘（SEC-12）
 
@@ -520,9 +523,9 @@ PRD SEC-12 要求临时文件只放内存盘、不写硬盘。Windows 没有 tmp
 ### 6.3 鉴权
 
 - 每个请求带 `Authorization: Bearer <律师 Key>`，与 6000D 用的是同一个 Key。
-- **395 不另存 Key**：收到请求后，用这个 Key 调用 6000D 网关的 `GET /v1/models` 做校验；返回 200 视为有效。有效结果在内存中缓存 30 秒，无效结果不缓存。
+- **395 不另存 Key**：收到请求后，用这个 Key 向 6000D 网关发一个最小的对话请求（`POST /v1/chat/completions`，`max_tokens: 1`，关闭思考）做校验；返回 200 视为有效，401 / 403 视为无效。有效结果在内存中缓存 30 秒，无效结果不缓存。
   - 效果：管理员在 `/admin` 停用 Key 后，395 最迟 30 秒内拒绝（PRD F-ACC-02）。
-  - 前提：网关开启 `require_key` 后，`/v1/models` 也要校验 Key〔待验证；如果不校验，改为用一个 `max_tokens=1` 的请求来校验〕。
+  - 实测（2026-09-28，`scripts/check_6000d.py`）：网关目前**没有开启 Key 校验**，不带 Key、带错误 Key 都返回 200；`GET /v1/models` 也不校验 Key，所以不能用它校验。甲方打开 `require_key` 之前，这个校验形同虚设，验收第 6 条（无 Key / 停用 Key 不能用）要等甲方改完再测；开发期间照常实现，用 `check_6000d.py` 复测。
   - 6000D 不可用时无法校验，395 返回 503"无法验证 Key"。这是有意的：不能绕开 Key。
 - 日志中的 Key 只记 SHA-256 的前 8 位。
 
@@ -1198,7 +1201,7 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 - 请求：`POST /v1/chat/completions`，字段 `model`（固定 `qwen38-27b`）、`messages`、`stream: true`、`max_tokens`、`temperature`、`chat_template_kwargs.enable_thinking`、`chat_template_kwargs.reasoning_effort`；请求头 `Authorization: Bearer <律师 Key>`、`X-Session-Id`（流水线）。
 - 响应：流式 `choices[0].delta`、`finish_reason`；响应头 `X-Queue-Wait-Ms`。
 - 错误到错误码的映射：第 8.3 节的表格，对应 20.1 的 `SERVER_UNREACHABLE`、`KEY_INVALID`、`SERVER_BUSY`、`CONTEXT_TOO_LONG`、`OUTPUT_TRUNCATED`、`TIMEOUT`。
-- Key 校验（395 使用）：`GET /v1/models` 返回 200 视为有效〔待验证，第 6.3 节〕。
+- Key 校验（395 使用）：`POST /v1/chat/completions`，`max_tokens: 1`，返回 200 视为有效（第 6.3 节；`/v1/models` 不校验 Key，已实测）。
 
 ### 20.8 落盘文件（`contracts/files/`、`contracts/case_db.sql`、`contracts/formats.md`）
 

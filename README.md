@@ -4,9 +4,12 @@
 |---|---|
 | `docs/PRD.html`、`docs/Spec.html` | 需求（第三版）和技术方案（第二版）；由 `docs/src/*.md` 生成，改文档改 md 再运行 `python scripts/build_docs.py` |
 | `docs/src/业务编排.md` | 五个业务能力的编排 |
+| `docs/src/环境事实.md` | 开发机、DSH、6000D、395 的实测事实（编排计划事实索引的来源） |
 | `contracts/` | 契约（接口和数据格式，Spec 第 20 节）；自检 `python contracts/check_examples.py --skills skills` |
 | `skills/` | 13 个业务 Skill、共用规则、入口清单、校验脚本；改完运行 `python skills/_scripts/build_skills.py --root skills` |
-| `scripts/check_6000d.py` | 检查 6000D 网关、Key 校验和测试 Key |
+| `scripts/check_6000d.py` | 检查 6000D 网关、Key 校验和测试 Key（开发机上运行） |
+| `scripts/probe_395.ps1` | 395 的只读盘点：系统、显卡驱动、BitLocker、防火墙、端口、外网（在 395 上运行） |
+| `scripts/check_395_reach.py` | 开发机能否访问 395 的各端口和 `/health`（开发机上运行） |
 
 其余目录（`dsh/`、`dsh-ext/`、`service/`、`prep395/`、`tools/`、`packaging/`、`tests/`）按 Spec 1.4 由开发工单创建。
 
