@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/case_card.schema.json",
+  "title": "工作区/wiki/case.json",
+  "description": "案件卡片（L0 的来源）",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "case_id": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+    },
+    "case_type": {
+      "enum": [
+        "criminal",
+        "civil",
+        "contract",
+        "other"
+      ]
+    },
+    "stance": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "set_at": {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "set_at"
+          ],
+          "description": "本方立场，只能由律师在界面上填写"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "parties": {
+      "type": "array",
+      "items": {
+        "$ref": "lawbench://contracts/common.schema.json#/$defs/fact"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "lawbench://contracts/common.schema.json#/$defs/fact"
+      }
+    },
+    "key_facts": {
+      "type": "array",
+      "items": {
+        "$ref": "lawbench://contracts/common.schema.json#/$defs/fact"
+      }
+    },
+    "generated_by": {
+      "anyOf": [
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generated_at": {
+      "anyOf": [
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "materials_at_generation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "material_id": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+          },
+          "sha256": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/sha256"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "material_id",
+          "sha256"
+        ]
+      },
+      "description": "用来判断 wiki 生成后哪些材料新增或变化"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "case_id",
+    "case_type",
+    "stance",
+    "parties",
+    "issues",
+    "key_facts",
+    "generated_by",
+    "generated_at",
+    "materials_at_generation"
+  ]
+}

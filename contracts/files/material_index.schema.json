@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/material_index.schema.json",
+  "title": "工作区/材料/index.json",
+  "description": "原件索引；导入时更新",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "case_id": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+    },
+    "next_seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "material_id": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+          },
+          "rel_path": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/material_type"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mtime": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          },
+          "sha256": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/sha256"
+          },
+          "status": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/material_status"
+          },
+          "unit": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/unit"
+          },
+          "unit_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "is_ocr": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/ocr_state"
+          },
+          "text_path": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+          },
+          "pages_need_ocr": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "pages_mixed": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "note": {
+            "anyOf": [
+              {
+                "enum": [
+                  "含修订，已按修订后文本",
+                  "由 doc 转换",
+                  "由 wps 转换",
+                  "由 xls 转换",
+                  "摘要为筛选结果，非全量"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "imported_at": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          },
+          "updated_at": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "material_id",
+          "rel_path",
+          "name",
+          "type",
+          "size",
+          "mtime",
+          "sha256",
+          "status",
+          "unit",
+          "unit_count",
+          "is_ocr",
+          "text_path",
+          "pages_need_ocr",
+          "pages_mixed",
+          "note",
+          "error",
+          "imported_at",
+          "updated_at"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "case_id",
+    "next_seq",
+    "materials"
+  ]
+}

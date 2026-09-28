@@ -1,0 +1,44 @@
+{
+  "path": "工作区/任务/T-20260928093000-7c1f/草稿/刑事阅卷笔录-v2.md",
+  "version": 2,
+  "citation_check": {
+    "passed": false,
+    "problems": [
+      {
+        "class": "B",
+        "severity": "must_fix",
+        "excerpt": "借款金额 60,000 元〔借条 第3页〕",
+        "citation": "〔借条 第3页〕",
+        "message": "该金额在〔借条 第2页〕，不在第3页"
+      }
+    ],
+    "stats": {
+      "citations": 12,
+      "must_fix": 1,
+      "hints": 0
+    }
+  },
+  "coverage": {
+    "total": 3,
+    "fully_read": [
+      "借条"
+    ],
+    "partially_read": [
+      {
+        "name": "银行流水",
+        "read_units": 40,
+        "total_units": 120
+      }
+    ],
+    "not_read": [],
+    "unreadable": [
+      {
+        "name": "证据/照片2",
+        "reason": "识别未完成"
+      }
+    ]
+  },
+  "not_fully_read": [
+    "银行流水"
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/task.schema.json",
+  "title": "工作区/任务/<任务ID>/task.json",
+  "description": "任务单（执行前写）",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "task_id": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+    },
+    "case_id": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+    },
+    "kind": {
+      "enum": [
+        "agent",
+        "pipeline"
+      ]
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/session_id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entry": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "skill": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "step": {
+      "anyOf": [
+        {
+          "enum": [
+            "wiki_build",
+            "wiki_update"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "lawbench://contracts/common.schema.json#/$defs/input_ref"
+      }
+    },
+    "params": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+    },
+    "budget": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/budget"
+    },
+    "state": {
+      "enum": [
+        "pending",
+        "running",
+        "finished",
+        "abnormal"
+      ],
+      "description": "abnormal=打开案件时发现仍为 running（上次硬退出）"
+    },
+    "created_at": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "task_id",
+    "case_id",
+    "kind",
+    "session_id",
+    "entry",
+    "skill",
+    "step",
+    "inputs",
+    "params",
+    "budget",
+    "state",
+    "created_at"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "task_id": "T-20260928093000-7c1f",
+  "case_id": "3f2b9c1e-7a4d-4e8b-9c2a-1b5d6e7f8a90",
+  "kind": "agent",
+  "session_id": "s_01HZX",
+  "entry": "刑事阅卷",
+  "skill": "criminal-reading-notes",
+  "step": null,
+  "inputs": [
+    {
+      "index": 1,
+      "title": "刑事阅卷笔录",
+      "path": "成果/刑事阅卷笔录-v1.md",
+      "version": 1,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "params": {
+    "thinking": "低",
+    "window": "64K",
+    "max_tokens": 16384
+  },
+  "budget": {
+    "model_calls": 8,
+    "tool_calls": 24,
+    "minutes": 45
+  },
+  "state": "pending",
+  "created_at": "2026-09-28T09:30:00+08:00"
+}

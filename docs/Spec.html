@@ -1,0 +1,2481 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>律所本地 AI 平台 — Spec（第二版）</title><style>
+:root{--bg:#ffffff;--fg:#1f2328;--muted:#656d76;--line:#d8dee4;--soft:#f6f8fa;--accent:#0b5cad;--code:#eff1f3;--mark:#fff8c5}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1419;--fg:#e6e8eb;--muted:#9aa4af;--line:#2d333b;--soft:#161b22;--accent:#6cb6ff;--code:#1c2128;--mark:#3b3a1f}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif}
+.layout{display:flex;max-width:1400px;margin:0 auto}
+nav{position:sticky;top:0;align-self:flex-start;width:270px;flex:none;height:100vh;overflow:auto;padding:24px 12px 40px 20px;border-right:1px solid var(--line);font-size:13px}
+nav .t{font-weight:600;margin-bottom:10px;color:var(--muted)}
+nav a{display:block;color:var(--fg);text-decoration:none;padding:3px 6px;border-radius:4px;line-height:1.45}
+nav a:hover{background:var(--soft)}
+nav a.l3{padding-left:20px;color:var(--muted);font-size:12.5px}
+main{flex:1;min-width:0;padding:28px 48px 80px}
+h1{font-size:26px;margin:0 0 18px;padding-bottom:12px;border-bottom:2px solid var(--fg)}
+h2{font-size:20px;margin:40px 0 14px;padding:6px 0 6px 12px;border-left:4px solid var(--accent);scroll-margin-top:12px}
+h3{font-size:16.5px;margin:28px 0 10px;scroll-margin-top:12px}
+h4{font-size:15px;margin:20px 0 8px}
+p{margin:10px 0}
+a{color:var(--accent)}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--soft);white-space:nowrap}
+tr:nth-child(even) td{background:color-mix(in srgb,var(--soft) 55%,transparent)}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font:12.5px/1.5 ui-monospace,Consolas,"Cascadia Mono",monospace}
+pre{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0;font-size:12.5px}
+blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid var(--line);color:var(--muted);background:var(--soft)}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}
+li{margin:3px 0}
+.meta{color:var(--muted);font-size:13px;margin:-8px 0 20px}
+.wait{background:var(--mark);padding:0 3px;border-radius:3px}
+@media (max-width:900px){nav{display:none}main{padding:20px 16px 60px}}
+@media print{nav{display:none}main{padding:0}h2{break-after:avoid}pre,table{break-inside:avoid}}
+</style></head>
+<body><div class="layout"><nav><div class="t">目录</div><a class="l2" href="#0-关键设计决定-先看这一节">0. 关键设计决定（先看这一节）</a><a class="l2" href="#1-总体架构">1. 总体架构</a><a class="l3" href="#1-1-进程和连接">1.1 进程和连接</a><a class="l3" href="#1-2-我方组合包-lawbench-dsh">1.2 我方组合包（lawbench-dsh）</a><a class="l3" href="#1-3-工作台服务的启动和看护">1.3 工作台服务的启动和看护</a><a class="l3" href="#1-4-代码仓库结构">1.4 代码仓库结构</a><a class="l2" href="#2-组件和许可证">2. 组件和许可证</a><a class="l2" href="#3-DSH-定制">3. DSH 定制</a><a class="l3" href="#3-1-组合包的配置补丁-dsh-ext-cordis-patch-yml">3.1 组合包的配置补丁（dsh-ext/cordis.patch.yml）</a><a class="l3" href="#3-2-必须改-DSH-源码的地方">3.2 必须改 DSH 源码的地方</a><a class="l3" href="#3-3-数据落点-SEC-01-SEC-11；G-4">3.3 数据落点（SEC-01、SEC-11；G-4）</a><a class="l3" href="#3-4-界面">3.4 界面</a><a class="l2" href="#4-工作台服务">4. 工作台服务</a><a class="l3" href="#4-1-案件目录-完整结构和各文件格式见第-20-8-节-contracts-formats-md">4.1 案件目录（完整结构和各文件格式见第 20.8 节、contracts/formats.md）</a><a class="l3" href="#4-2-路径闸门-case-gate-py">4.2 路径闸门（case/gate.py）</a><a class="l3" href="#4-3-给界面的接口-api-仅限界面调用">4.3 给界面的接口（/api/*，仅限界面调用）</a><a class="l3" href="#4-4-给-AI-的工具-case_-由-Agent-插件注册">4.4 给 AI 的工具（case_*，由 Agent 插件注册）</a><a class="l3" href="#4-5-本机日志">4.5 本机日志</a><a class="l2" href="#5-材料处理">5. 材料处理</a><a class="l3" href="#5-1-导入流程">5.1 导入流程</a><a class="l3" href="#5-2-各格式怎么解析">5.2 各格式怎么解析</a><a class="l3" href="#5-3-材料文本格式">5.3 材料文本格式</a><a class="l3" href="#5-4-PDF-页面类型判断">5.4 PDF 页面类型判断</a><a class="l2" href="#6-395-预处理服务-prep395">6. 395 预处理服务（prep395/）</a><a class="l3" href="#6-1-部署">6.1 部署</a><a class="l3" href="#6-2-内存中处理-不落盘-SEC-12">6.2 内存中处理，不落盘（SEC-12）</a><a class="l3" href="#6-3-鉴权">6.3 鉴权</a><a class="l3" href="#6-4-接口">6.4 接口</a><a class="l3" href="#6-5-并发-排队和取消">6.5 并发、排队和取消</a><a class="l3" href="#6-6-395-日志">6.6 395 日志</a><a class="l3" href="#6-7-去水印">6.7 去水印</a><a class="l2" href="#7-识别任务-客户端-ocr-queue-py">7. 识别任务（客户端，ocr/queue.py）</a><a class="l3" href="#7-1-状态">7.1 状态</a><a class="l3" href="#7-2-执行">7.2 执行</a><a class="l3" href="#7-3-出错和中断">7.3 出错和中断</a><a class="l3" href="#7-4-6000D-临时接管识别-可选">7.4 6000D 临时接管识别（可选）</a><a class="l2" href="#8-6000D-接入">8. 6000D 接入</a><a class="l3" href="#8-1-请求约定">8.1 请求约定</a><a class="l3" href="#8-2-参数映射">8.2 参数映射</a><a class="l3" href="#8-3-超时和错误提示">8.3 超时和错误提示</a><a class="l3" href="#8-4-取消">8.4 取消</a><a class="l3" href="#8-5-并发">8.5 并发</a><a class="l3" href="#8-6-需要甲方在-6000D-上改的配置">8.6 需要甲方在 6000D 上改的配置</a><a class="l2" href="#9-上下文编排和出处">9. 上下文编排和出处</a><a class="l3" href="#9-1-流水线-D6">9.1 流水线（D6）</a><a class="l3" href="#9-2-Agent">9.2 Agent</a><a class="l3" href="#9-3-出处格式">9.3 出处格式</a><a class="l3" href="#9-4-出处核对-checks">9.4 出处核对（checks/）</a><a class="l2" href="#10-Skill-和入口">10. Skill 和入口</a><a class="l3" href="#10-1-加载位置">10.1 加载位置</a><a class="l3" href="#10-2-目录结构">10.2 目录结构</a><a class="l3" href="#10-3-入口清单">10.3 入口清单</a><a class="l2" href="#11-全文检索-search">11. 全文检索（search/）</a><a class="l2" href="#12-导出和修订版">12. 导出和修订版</a><a class="l3" href="#12-1-导出-export-pandoc-py">12.1 导出（export/pandoc.py）</a><a class="l3" href="#12-2-修订版-Word-export-redline-py">12.2 修订版 Word（export/redline.py）</a><a class="l2" href="#13-小工具-tools">13. 小工具（tools/）</a><a class="l3" href="#13-1-长截图切分-F-TOOL-01">13.1 长截图切分（F-TOOL-01）</a><a class="l3" href="#13-2-格式互转-F-TOOL-02">13.2 格式互转（F-TOOL-02）</a><a class="l2" href="#14-打包-安装-升级">14. 打包、安装、升级</a><a class="l3" href="#14-1-安装包">14.1 安装包</a><a class="l3" href="#14-2-升级和回退">14.2 升级和回退</a><a class="l3" href="#14-3-只连两台服务器-SEC-03">14.3 只连两台服务器（SEC-03）</a><a class="l2" href="#15-网络">15. 网络</a><a class="l2" href="#16-保密要求的实现对照">16. 保密要求的实现对照</a><a class="l2" href="#17-待验证项对设计的影响">17. 待验证项对设计的影响</a><a class="l2" href="#18-与-PRD-的对应">18. 与 PRD 的对应</a><a class="l2" href="#19-实施顺序">19. 实施顺序</a><a class="l2" href="#20-契约">20. 契约</a><a class="l3" href="#20-1-通用约定">20.1 通用约定</a><a class="l3" href="#20-2-出处和材料名">20.2 出处和材料名</a><a class="l3" href="#20-3-Agent-插件-→-工作台服务-contracts-core">20.3 Agent 插件 → 工作台服务（contracts/core/）</a><a class="l3" href="#20-4-AI-工具-contracts-tools">20.4 AI 工具（contracts/tools/）</a><a class="l3" href="#20-5-界面-→-工作台服务-contracts-api">20.5 界面 → 工作台服务（contracts/api/）</a><a class="l3" href="#20-6-工作台服务-→-395-contracts-prep395">20.6 工作台服务 → 395（contracts/prep395/）</a><a class="l3" href="#20-7-工作台服务-DSH-→-6000D">20.7 工作台服务、DSH → 6000D</a><a class="l3" href="#20-8-落盘文件-contracts-files-contracts-case_db-sql-contracts-formats-md">20.8 落盘文件（contracts/files/、contracts/case_db.sql、contracts/formats.md）</a><a class="l3" href="#20-9-文本格式">20.9 文本格式</a><a class="l3" href="#20-10-Skill-和入口-contracts-skill">20.10 Skill 和入口（contracts/skill/）</a><a class="l3" href="#20-11-怎么校验">20.11 怎么校验</a><a class="l3" href="#20-12-变更记录">20.12 变更记录</a></nav><main>
+<h1 data-x id="律所本地-AI-平台-—-Spec-第二版">律所本地 AI 平台 — Spec（第二版）</h1>
+<p class="meta">需求见 PRD.html；字段级契约见仓库根目录 contracts/</p>
+<p>依据：</p>
+<ul>
+<li>PRD 第三版（本文引用的需求编号 <code>F-*</code>、<code>SEC-*</code>、<code>G-*</code> 和章节号都以第三版为准）、《服务器现状报告》；</li>
+<li><strong>DSH 官方仓库</strong> <code>github.com/deepseek-ai/deepseek-harness</code>，按提交 <code>477b4f4</code>（2026-09-24）核对。开发时从官方仓库重新拉取并固定在这个提交（编排计划的事实索引中写完整 hash）；换提交前要重新核对第 3 节列出的配置行和文件位置；</li>
+<li>案件 wiki 测试（<code>D:\pycharm\test\wiki</code>，含大卷宗流水线实测）；本地最小链路试验（只用来验证思路，不作为代码基础）；</li>
+<li>《五个业务能力编排》（<code>docs/src/业务编排.md</code>）和仓库中的 <code>skills/</code>（第 10 节）；</li>
+<li>补充情况：395 是一台 Windows 11 电脑（第 6 节）；本次只交付 Windows 客户端。</li>
+</ul>
+<p><strong>本文写&quot;怎么做&quot;</strong>：技术选型、模块划分、接口、关键规则。读者是写代码的人（包括 Claude Code）。开发按编排计划的工单进行，工单引用本文的章节号和 <code>contracts/</code> 下的契约文件。</p>
+<ul>
+<li><strong>模块之间的接口和共用的数据格式都以第 20 节契约和 <code>contracts/</code> 目录为准</strong>，写到字段级、可以用程序校验；正文中出现的接口和格式是说明，与契约不一致时以契约为准。</li>
+<li>保密相关的实现写到机制级。</li>
+<li>涉及 DSH 的地方写明官方仓库里的文件和配置行，方便直接定位。</li>
+<li>模块内部写到&quot;用什么、输入输出、关键规则&quot;，内部结构由开发工单自行决定，但不得改动契约。</li>
+<li>标 <strong><span class="wait">〔待验证〕</span></strong> 的是还没实测的点，给出主方案和备选。</li>
+</ul>
+<hr />
+<h2 id="0-关键设计决定-先看这一节">0. 关键设计决定（先看这一节）</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>决定</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td><strong>客户端用 DSH 官方桌面端</strong>（<code>apps/desktop</code>，Electron）改造，不用社区版。本次只打 Windows 包。</td>
+<td>官方仓库里已有桌面端，自带中文界面和打包脚本。</td>
+</tr>
+<tr>
+<td>D2</td>
+<td><strong>我方所有 DSH 扩展做成一个&quot;组合包&quot;（bundle）</strong>：一个 npm 包，里面有配置补丁（preset、关掉的插件、模型路由等）和三个插件（Agent 侧、Host 侧、界面侧）。随安装包放进桌面端的运行时，不依赖用户目录下的任何配置文件。<strong>不用 MCP。</strong></td>
+<td>DSH 的扩展方式就是&quot;组合包 + 插件&quot;（官方文档 <code>docs/architecture.md</code>）。放在运行时里，律师改不了，升级也不会丢。</td>
+</tr>
+<tr>
+<td>D3</td>
+<td><strong>律师工作台是一个 preset</strong>（DSH 里&quot;一个会话的 AI 挂哪些插件&quot;的配置），里面只有：系统提示、Skill 加载、<code>ask_user_question</code>、上下文压缩和我方 Agent 插件。不挂文件读写、命令、网页、AGENTS.md 加载。AI 只能用我方的 <code>case_*</code> 工具，而且看不到案件路径。</td>
+<td>桌面端用的 <code>dsh-web-app</code> 组合包已经把文件、命令等工具从全局关掉、改由各 preset 自己挂；我们的 preset 不挂，AI 就没有这些工具。案件隔离不依赖 DSH 沙箱。</td>
+</tr>
+<tr>
+<td>D4</td>
+<td><strong>只保留律师工作台这一个 preset</strong>：官方自带的 4 个 preset（<code>standard</code>、<code>ptc</code>、<code>minimal</code>、<code>cordis</code>，都能执行命令、读写文件）全部关掉，默认 preset 改成我们的。</td>
+<td>否则律师切换 preset 就能拿到命令和文件工具。</td>
+</tr>
+<tr>
+<td>D5</td>
+<td><strong>业务逻辑都在 Python（工作台服务）</strong>；DSH 插件只做转发和闸门。工作台服务是常驻的本机进程，由我方 Host 插件启动和看护。</td>
+<td>解析、检索、流水线、识别队列用 Python 写最合适；识别队列需要常驻进程。</td>
+</tr>
+<tr>
+<td>D6</td>
+<td><strong>两种执行方式</strong>：<strong>流水线</strong>——程序控制流程，模型只写每一步的内容，每步写完程序核对出处；<strong>Agent</strong>——由 DSH 的 Agent 循环调用 <code>case_*</code> 工具。每个 Skill 在头部用 <code>mode</code> 声明走哪种。本次<strong>只有案件 wiki 走流水线</strong>，其余 12 个业务 Skill 都是 Agent（按《五个业务能力编排》）；流水线框架是通用的，以后阅卷类 Skill 实测预算不够时可改为流水线。</td>
+<td>wiki 测试证明流水线可行：大卷宗 21 份材料、74 页，36 次调用、290 秒，单次最大输入 15K token，无截断，核对修正后只剩 1 处页码疑点。wiki 若走 Agent，一份材料至少一次模型调用，会超出 8 次的预算。</td>
+</tr>
+<tr>
+<td>D7</td>
+<td><strong>发往服务器的操作不开放给 AI</strong>。提交识别、9B 抽取、生成 wiki 只能由律师在界面上点击触发；AI 的工具里没有这些。</td>
+<td>SEC-02：每次外发都由律师的操作授权，AI 无法自行外发。</td>
+</tr>
+<tr>
+<td>D8</td>
+<td><strong>PDF 在本机拆页和渲染</strong>，只把律师选定的页面图片发给 395。</td>
+<td>发送量最小；395 只处理单页图片，接口简单。</td>
+</tr>
+<tr>
+<td>D9</td>
+<td><strong>律师 Key 存 Windows 凭据管理器</strong>：写一个凭据插件替换 DSH 的 <code>credentials-local</code>，工作台服务用 Python <code>keyring</code> 读同一条目（第 8.1 节）。</td>
+<td>PRD F-ACC-01a；明文文件在硬盘被拆下时可读。</td>
+</tr>
+<tr>
+<td>D10</td>
+<td><strong>模块之间的接口和共用数据格式以契约为准</strong>（第 20 节、<code>contracts/</code>）：JSON Schema 文件，Python 和 TypeScript 用同一份文件校验。</td>
+<td>各模块由不同开发会话并行编写，只靠契约对齐。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-总体架构">1. 总体架构</h2>
+<h3 id="1-1-进程和连接">1.1 进程和连接</h3>
+<pre><code>律师电脑
+┌──────────────────────────────────────────────────────────────────┐
+│ DSH 桌面端                                                         │
+│  ├ Electron 壳（窗口、托盘、首次配置）                              │
+│  ├ 界面（Web 客户端）＋ 我方界面插件（首页、案件面板、原文查看）     │
+│  └ Desktop Host（Node 进程，只监听 127.0.0.1）                      │
+│      ├ Agent 循环：只有&quot;律师工作台&quot;preset（D3、D4）                 │
+│      │   └ 我方 Agent 插件：case_* 工具、上下文注入、预算           │
+│      ├ LLM 适配器 dsh-llm-pi-ai → 律所网关                          │
+│      └ 我方 Host 插件：启动并看护工作台服务；界面调用的转发接口      │
+│             │ 本机 HTTP（启动令牌）                                  │
+│             ▼                                                      │
+│ 工作台服务（Python，常驻，127.0.0.1 随机端口）                       │
+│   ├ 案件与路径闸门   ├ 材料解析    ├ 全文检索（SQLite FTS5）          │
+│   ├ 任务单与上下文   ├ 识别队列    ├ 流水线      ├ 出处核对            │
+│   ├ 导出 / 修订版    └ 6000D、395 客户端（只允许两个地址）             │
+│             │ 读写                                                   │
+│             ▼                                                        │
+│ 案件文件夹（律师指定位置；即 DSH 的&quot;工作区&quot;，会话的工作目录）          │
+└──────────────────────────────────────────────────────────────────┘
+        │ HTTP（局域网 / WireGuard）          │
+        ▼                                     ▼
+6000D 网关 :8000 → vLLM ×2（仅本机）     395 预处理服务 :9000（Windows）
+                                           ├ OCR 后端（仅本机）
+                                           └ 9B 模型（仅本机）
+</code></pre>
+<ul>
+<li>Agent 调用 6000D：由 DSH 的 LLM 适配器发起（第 8.1 节）。</li>
+<li>流水线调用 6000D、所有 395 调用：由工作台服务发起。</li>
+<li>所有网络请求都只能去首次配置里填的两台服务器（第 14.3 节）。</li>
+<li><strong>案件 = DSH 的工作区</strong>：DSH 里&quot;打开文件夹&quot;会把这个文件夹登记为一个工作区，之后在里面建的会话，工作目录（会话头的 <code>cwd</code>）就是这个文件夹（官方 <code>packages/api/session-controller/src/commands.ts</code>）。我方界面把&quot;打开文件夹&quot;改叫&quot;打开案件&quot;。</li>
+</ul>
+<h3 id="1-2-我方组合包-lawbench-dsh">1.2 我方组合包（<code>lawbench-dsh</code>）</h3>
+<p>一个 npm 包，放在我方仓库 <code>dsh-ext/</code>，打包时装进桌面端运行时（第 14.1 节）。<code>package.json</code> 里用 <code>dsh.bundle.patch</code> 声明配置补丁，DSH 按&quot;<code>dsh-base</code> → <code>dsh-web-app</code> → 我方组合包&quot;的顺序叠加（第 3.1 节）。</p>
+<table>
+<thead>
+<tr>
+<th>部分</th>
+<th>运行在</th>
+<th>做什么</th>
+<th>用到的 DSH 接口</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cordis.patch.yml</code></td>
+<td>—</td>
+<td>关掉插件、关掉官方 preset、声明律师工作台 preset、模型路由、其他配置（第 3.1 节）</td>
+<td>配置补丁：按行 <code>id</code> 替换配置或 <code>disabled: true</code></td>
+</tr>
+<tr>
+<td>Agent 插件 <code>legal-agent</code></td>
+<td>Host（挂在 preset 里）</td>
+<td>注册 <code>case_*</code> 工具；注入上下文；预算；请求参数；结束时写结果</td>
+<td><code>ctx.tools.register</code>、<code>agent/pre-step</code>、<code>agent/request</code>、<code>tools/pre-execute</code>、<code>session/event</code></td>
+</tr>
+<tr>
+<td>Host 插件 <code>legal-host</code></td>
+<td>Host（全局）</td>
+<td>启动并看护工作台服务；给界面提供转发接口；网络白名单</td>
+<td><code>ctx.subprocess.spawn</code>、<code>TypertRemoteService</code>（<code>@Remote</code> 方法）</td>
+</tr>
+<tr>
+<td>凭据插件 <code>legal-credentials</code></td>
+<td>Host（全局，替换 <code>credentials-local</code>）</td>
+<td>Key 读写 Windows 凭据管理器（D9、第 8.1 节）</td>
+<td>DSH 凭据服务接口（与 <code>credentials-local</code> 相同）</td>
+</tr>
+<tr>
+<td>界面插件 <code>legal-ui</code></td>
+<td>界面</td>
+<td>首页、案件工作区面板、原文查看、设置页、识别进度</td>
+<td><code>ctx.slots.register</code>（<code>main</code>、<code>sidebar.panellist</code>、<code>sidebar.right.pane.tab</code>、<code>settings.section</code> 等插槽）、<code>ctx.remote.&lt;命名空间&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Agent 插件的挂载点</strong>（事件名和类型按官方 <code>packages/core/agent/src/runtime-types.ts</code>、<code>packages/core/tools/src/index.ts</code>、<code>packages/core/session/src/types.ts</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>挂载点</th>
+<th>做什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ctx.tools.register</code></td>
+<td>注册 <code>case_*</code> 工具（第 4.4 节）。<code>execute(args, exec)</code> 里，从 <code>exec.agent.session.header.cwd</code> 取案件目录，从 <code>exec.agent.id</code> 取会话 ID，转发给工作台服务；工具参数里没有路径，模型看不到案件目录</td>
+</tr>
+<tr>
+<td><code>tools/pre-execute</code></td>
+<td>白名单：只放行 <code>case_*</code>、<code>skill</code>、<code>ask_user_question</code>，其余返回 <code>{kind:'deny', reason}</code> 并记日志；统计工具调用次数，超出预算就拒绝（<code>case_save_draft</code> 除外，第 9.2 节）</td>
+</tr>
+<tr>
+<td><code>agent/pre-step</code></td>
+<td>每轮第一步：向工作台服务申请本次任务的 <code>task_id</code>，取 L0 + L1 上下文，用 <code>{kind:'enter', messages:[...原消息, 上下文消息]}</code> 注入（第 9.2 节）；之后每步检查模型调用次数和时长预算，超限返回 <code>{kind:'reject'}</code>，最后一次前注入&quot;立即收尾&quot;</td>
+</tr>
+<tr>
+<td><code>agent/request</code></td>
+<td>按任务单设置 <code>reasoningEffort</code> 和 <code>maxTokens</code>（<code>LlmCallConfig</code> 只允许改 <code>provider / model / reasoningEffort / temperature / maxTokens / stop</code>，不能改请求头）</td>
+</tr>
+<tr>
+<td><code>session/event</code></td>
+<td><code>assistant/message</code>：把模型回复交给工作台服务保存进度（第 9.2 节）；<code>turn/end</code>：写结果清单（结束原因取 <code>reason.kind</code>：<code>completed / aborted / blocked / error / max-tokens / interrupted</code>）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>调用工作台服务</strong>：<code>POST http://127.0.0.1:&lt;port&gt;/core/&lt;命令&gt;</code>，共 5 个命令（开始任务、取上下文、执行工具、保存进度、结束任务），请求和返回见第 20.3 节；成功 <code>{ok:true, value}</code>，失败 <code>{ok:false, error:{code, message}}</code>（<code>message</code> 是给律师看的中文）。端口和令牌由 Host 插件在启动服务时生成，通过 Cordis 服务共享给 Agent 插件。工作台服务不可用时，工具返回&quot;工作台服务未启动，请稍后重试&quot;。</p>
+<p><strong>界面调用工作台服务</strong>：界面插件 → <code>ctx.remote.lawbench.&lt;方法&gt;()</code> → Host 插件（<code>TypertRemoteService</code>，命名空间 <code>lawbench</code>，每个 <code>@Remote</code> 方法对应第 4.3 节的一个接口）→ 工作台服务 <code>/api/*</code>。注意：新的远程命名空间要在官方 <code>packages/api/remotes/src/client/index.ts</code> 里加一行导入才能被界面使用，这是对 DSH 源码的一处必要修改（记入 <code>dsh/PATCHES.md</code>，见官方 <code>docs/cookbook/adding-a-remote-api.md</code>）。</p>
+<h3 id="1-3-工作台服务的启动和看护">1.3 工作台服务的启动和看护</h3>
+<ul>
+<li>Host 插件启动时用 <code>ctx.subprocess.spawn</code> 拉起工作台服务，传入随机端口和 32 字节随机令牌（<code>LB_PORT</code>、<code>LB_TOKEN</code>）。DSH 会清掉子进程继承的环境变量，所以服务需要的变量（端口、令牌、应用数据目录、Key 文件位置）都要在 <code>env</code> 里显式传。</li>
+<li>DSH 没有现成的进程看护，由 Host 插件自己做：每 5 秒探测一次服务的 <code>/health</code>；进程退出或连续 3 次没有响应就重启，1 分钟内重启超过 3 次就停止重启，界面提示&quot;工作台服务异常&quot;。Host 退出时一起结束服务。</li>
+<li>服务只监听 <code>127.0.0.1</code>；每个请求必须带 <code>Authorization: Bearer &lt;LB_TOKEN&gt;</code>，否则返回 401，防止本机其他程序调用。</li>
+<li>关闭窗口时桌面端默认留在托盘，Host 和工作台服务继续运行，后台识别不中断（第 7.2 节）。</li>
+<li>Python 运行时：桌面端打包时已经内置了一个 Python 解释器（官方 <code>scripts/primary-runtime/lock.json</code>），优先复用它，把我方依赖一起装进去；不合适就单独内置 python-build-standalone。<span class="wait">〔待验证〕</span></li>
+</ul>
+<h3 id="1-4-代码仓库结构">1.4 代码仓库结构</h3>
+<pre><code>lawbench/                 我方仓库
+├─ dsh/                   DSH 官方源码（git 子模块，固定提交 477b4f4），对它的改动都记在 dsh/PATCHES.md
+├─ dsh-ext/               我方组合包 lawbench-dsh
+│  ├─ package.json        dsh.bundle.patch 指向 cordis.patch.yml
+│  ├─ cordis.patch.yml    第 3.1 节的全部配置
+│  ├─ agent/              Agent 插件（TypeScript）
+│  ├─ host/               Host 插件（TypeScript）
+│  ├─ credentials/        凭据插件：Key 存 Windows 凭据管理器（第 8.1 节）
+│  └─ ui/                 界面插件（TypeScript + React，按官方 client 插件规范构建）
+├─ service/               工作台服务（Python 3.12）
+│  └─ lawbench/
+│     ├─ api/         core.py（插件调用的 /core/*）、ui.py（界面接口 /api/*）
+│     ├─ case/        gate.py（路径闸门）、registry.py（案件注册表）、task.py（任务单、结果清单、读取记录）、context.py（L0/L1）
+│     ├─ ingest/      detect.py、pdf.py、docx.py、xlsx.py、text.py、image.py、libreoffice.py
+│     ├─ ocr/         queue.py、client395.py
+│     ├─ search/      fts.py、normalize.py
+│     ├─ llm/         client6000d.py、tokens.py
+│     ├─ pipeline/    runner.py、prompts.py、steps/（本次只有 wiki）
+│     ├─ checks/      citations.py、evidence.py（由 wiki 测试的两个检查脚本改成库）
+│     └─ export/      pandoc.py、redline.py
+├─ prep395/               395 预处理服务（Python，Windows）
+├─ skills/                内置 Skill（平铺）、_shared/共用规则.md、entries/、_scripts/（第 10 节）
+├─ tools/                 splitter/（长截图切分）、convert/（格式互转）
+├─ packaging/             安装包脚本、versions.lock、第三方许可证清单
+├─ contracts/             契约：JSON Schema、case_db.sql、formats.md、样例和自检脚本（第 20 节）
+├─ scripts/               build_docs.py（由 docs/src 生成 HTML）、check_6000d.py（网关和 Key 检查）
+└─ docs/                  PRD.html、Spec.html（由 docs/src/*.md 生成，改文档改 md）、编排计划三件套
+
+本机仓库 `D:\lawbench`，远程 `github.com/Yxiansheng1/lawbench`（私有）。测试 Key 等机密放在 `D:\lawbench\.env.local`，不提交；仓库中不放任何真实案卷。
+</code></pre>
+<hr />
+<h2 id="2-组件和许可证">2. 组件和许可证</h2>
+<p>版本号在对应验证通过后填入 <code>packaging/versions.lock</code>，之后锁定不跟随升级。</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>用在哪</th>
+<th>用途</th>
+<th>许可证</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DSH（含官方桌面端）</td>
+<td>客户端</td>
+<td>界面、Agent 循环、LLM 适配</td>
+<td>MIT</td>
+<td>固定提交 <code>477b4f4</code>；开发者预览版，不跟随上游升级</td>
+</tr>
+<tr>
+<td>Electron</td>
+<td>客户端</td>
+<td>桌面壳</td>
+<td>MIT</td>
+<td>版本随 DSH（当前 44）</td>
+</tr>
+<tr>
+<td>Python 3.12</td>
+<td>客户端、395</td>
+<td>工作台服务、395 服务</td>
+<td>PSF</td>
+<td>内置 SQLite 须 ≥ 3.34（FTS5 trigram）</td>
+</tr>
+<tr>
+<td>pypdfium2</td>
+<td>客户端</td>
+<td>PDF 取文字、判断页面类型、渲染页面图片</td>
+<td>Apache-2.0 / BSD</td>
+<td></td>
+</tr>
+<tr>
+<td>python-docx + lxml</td>
+<td>客户端</td>
+<td>docx 解析、修订版生成</td>
+<td>MIT / BSD</td>
+<td></td>
+</tr>
+<tr>
+<td>openpyxl</td>
+<td>客户端</td>
+<td>xlsx 解析</td>
+<td>MIT</td>
+<td></td>
+</tr>
+<tr>
+<td>charset-normalizer</td>
+<td>客户端</td>
+<td>txt / csv 编码识别</td>
+<td>MIT</td>
+<td></td>
+</tr>
+<tr>
+<td>olefile</td>
+<td>客户端</td>
+<td>识别加密的 Office 文件</td>
+<td>BSD</td>
+<td></td>
+</tr>
+<tr>
+<td>Pillow、numpy</td>
+<td>客户端、395、小工具</td>
+<td>图片处理、长截图切分</td>
+<td>HPND / BSD</td>
+<td></td>
+</tr>
+<tr>
+<td>tokenizers + 模型的 tokenizer.json</td>
+<td>客户端</td>
+<td>计算 token 数</td>
+<td>Apache-2.0</td>
+<td>tokenizer.json 从 6000D 模型目录拷贝，随包内置</td>
+</tr>
+<tr>
+<td>LibreOffice</td>
+<td>客户端、小工具</td>
+<td>老格式转换、Word ↔ PDF</td>
+<td>MPL-2.0</td>
+<td>两者共用一份</td>
+</tr>
+<tr>
+<td>pandoc</td>
+<td>客户端、小工具</td>
+<td>Markdown ↔ Word</td>
+<td>GPL-2.0+</td>
+<td>独立程序分发，附许可证和源码获取方式</td>
+</tr>
+<tr>
+<td>FastAPI、uvicorn、httpx</td>
+<td>客户端、395</td>
+<td>工作台服务、395 服务、HTTP 客户端</td>
+<td>MIT / BSD</td>
+<td></td>
+</tr>
+<tr>
+<td>llama.cpp（<code>llama-server</code>，Vulkan）</td>
+<td>395</td>
+<td>OCR 视觉模型、9B 模型的推理</td>
+<td>MIT</td>
+<td><span class="wait">〔待 G-5、G-6〕</span></td>
+</tr>
+<tr>
+<td>WinSW</td>
+<td>395</td>
+<td>把进程注册为 Windows 服务</td>
+<td>MIT</td>
+<td></td>
+</tr>
+<tr>
+<td>OCR 模型、9B 模型</td>
+<td>395</td>
+<td>识别、抽取</td>
+<td>选型后核对</td>
+<td><span class="wait">〔待 G-5、G-6〕</span></td>
+</tr>
+<tr>
+<td>keyring</td>
+<td>客户端</td>
+<td>读 Windows 凭据管理器中的 Key</td>
+<td>MIT</td>
+<td></td>
+</tr>
+<tr>
+<td>jsonschema（Python）、ajv（TypeScript）</td>
+<td>客户端、395</td>
+<td>按契约校验请求、返回和落盘文件</td>
+<td>MIT</td>
+<td>第 20 节</td>
+</tr>
+<tr>
+<td>md2word 的脚本（律师提供的 Skill，MIT）</td>
+<td>客户端</td>
+<td>Word 导出的参考实现，可选</td>
+<td>MIT</td>
+<td>采用时列入许可证清单</td>
+</tr>
+</tbody>
+</table>
+<p><strong>不用的组件</strong>：</p>
+<ul>
+<li>律师提供的 Skill 中 CC-BY-NC 许可的 4 个（contract-copilot、legal-proposal-generator、legal-text-format、legal-visualization）：授权明确前不吸收文本和脚本；legal-ocr 调用公网 OCR（MinerU、PaddleOCR 云端），违反 SEC-10，只可参考其 MIT 许可的后处理代码，不得打包其联网部分和 <code>config/.env</code>。</li>
+<li>MCP（Python SDK、DSH 的 <code>mcp-client</code>）：改用 DSH 插件注册工具（D2）。</li>
+<li>MarkItDown：转换时丢掉页码和段落位置，满足不了 F-MAT-04。</li>
+<li>pdf2docx、PyMuPDF：AGPL（或依赖 AGPL）。</li>
+<li>DSH 的 <code>office-to-pdf</code>、文档预览侧栏：会在 DSH 目录缓存案卷转成的 PDF；原文查看由我方实现（第 9.3 节）。</li>
+</ul>
+<hr />
+<h2 id="3-DSH-定制">3. DSH 定制</h2>
+<p>原则：<strong>能用组合包的配置补丁解决的，不改 DSH 源码</strong>；必须改源码的，逐条记在 <code>dsh/PATCHES.md</code>（改了哪个文件、为什么、怎么验证），换 DSH 提交时逐条重做。</p>
+<h3 id="3-1-组合包的配置补丁-dsh-ext-cordis-patch-yml">3.1 组合包的配置补丁（<code>dsh-ext/cordis.patch.yml</code>）</h3>
+<p><strong>DSH 的配置怎么叠加</strong>：桌面端的 profile（<code>$DSH_HOME/profiles/desktop</code>）由 <code>dsh-base</code>、<code>dsh-web-app</code> 两个官方组合包叠加而成（官方 <code>packages/boot/app-boot/src/profile.ts</code>）。每个组合包是一串&quot;行&quot;，每行是一个插件；后面的组合包可以按行 <code>id</code> 整行替换某个插件的配置，或者用 <code>disabled: true</code> 关掉它（官方 <code>vendor/include/src/index.ts</code>）。我们把自己的组合包加在最后（第 14.1 节），它的补丁最后生效。</p>
+<p><strong>已知的现状</strong>：<code>dsh-web-app</code> 已经把文件、命令、AGENTS.md 加载、子智能体等 Agent 工具从全局关掉，改由各 preset 自己挂载（官方 <code>packages/bundle/web-app/cordis.patch.yml</code> 中 &quot;the agent plane moves behind agent presets&quot; 一段）。所以：</p>
+<ul>
+<li>我们的 preset 不挂这些插件，律师工作台的会话里就没有这些工具；</li>
+<li>危险在于官方自带的 4 个 preset 都挂了这些工具，必须关掉（下面第 2 项）。</li>
+</ul>
+<p><strong>补丁内容</strong>：</p>
+<p><strong>1. 关掉的行</strong>（<code>disabled: true</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>行 id</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>官方 preset</td>
+<td><code>preset-standard</code>、<code>preset-ptc</code>、<code>preset-minimal</code>、<code>preset-cordis</code></td>
+<td>都带命令、文件工具（D4）</td>
+</tr>
+<tr>
+<td>联网</td>
+<td><code>web</code>、<code>web-search-deepseek</code>、<code>web-fetch-http</code>、<code>mcp-resources</code></td>
+<td>联网能力，全局挂载</td>
+</tr>
+<tr>
+<td>插件管理</td>
+<td><code>plugin-manager</code>、<code>ui-plugin-manager</code>、<code>plugin-package-inventory-deepseek</code></td>
+<td>会用 pnpm 在线安装插件</td>
+</tr>
+<tr>
+<td>DeepSeek 账号和官方模型</td>
+<td><code>deepseek-account</code>、<code>llm-deepseek</code>、<code>llm-deepseek-account</code></td>
+<td>连 DeepSeek 服务器</td>
+</tr>
+<tr>
+<td>遥测和反馈</td>
+<td><code>session-telemetry-otel</code>、<code>message-feedback</code>、<code>ui-message-feedback</code></td>
+<td>律师点&quot;反馈&quot;后会把整段会话记录上传到 <code>harness-telemetry.deepseeksvc.com</code>（官方 <code>packages/session/session-telemetry-otel/README.md</code>）；另在环境变量中设 <code>DSH_TELEMETRY_DISABLED=1</code></td>
+</tr>
+<tr>
+<td>标题生成</td>
+<td><code>session-title-llm</code></td>
+<td>用首条消息生成标题，标题会存到 <code>$DSH_HOME</code>；改由我方插件按&quot;&lt;入口&gt; · &lt;时间&gt;&quot;设标题</td>
+</tr>
+<tr>
+<td>文档预览</td>
+<td><code>ui-sidebar-documentpreview</code>、<code>office-to-pdf</code></td>
+<td>会在 DSH 目录缓存 PDF</td>
+</tr>
+<tr>
+<td>官方品牌</td>
+<td><code>ui-brand-official</code></td>
+<td>换成我方品牌（第 3.4 节）</td>
+</tr>
+</tbody>
+</table>
+<p>关掉某行导致其他插件加载失败的，按报错处理，结果记入 <code>dsh/PATCHES.md</code>。最后在开发机上导出实际的插件树（<code>dsh --profile desktop --dump-config</code>），存档核对。行 id 以固定提交为准，换提交要重新核对。</p>
+<p><strong>2. 改配置的行</strong>（注意：替换的是整行 <code>config</code>，没写的字段会丢，要把需要保留的字段一起写上）：</p>
+<table>
+<thead>
+<tr>
+<th>行 id</th>
+<th>配置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agent-preset-registry</code></td>
+<td><code>default: lawbench</code>（不改的话，默认 preset 仍指向已关掉的 <code>standard</code>，新建会话会报 <code>agent-preset/not-found</code>）</td>
+</tr>
+<tr>
+<td><code>llm-pi-ai</code></td>
+<td>律所模型路由（第 8.1 节）</td>
+</tr>
+<tr>
+<td><code>spill-policy</code></td>
+<td><code>maxInlineTokens: 1000000</code>（大于模型窗口），工具结果永远不溢出到文件（第 3.3 节）</td>
+</tr>
+<tr>
+<td><code>spill-local</code></td>
+<td><code>cleanupPeriodDays: 1</code>；按上一行配置不会产生文件，验收时检查其目录为空</td>
+</tr>
+<tr>
+<td><code>llm-retry</code></td>
+<td>最多重试 1 次，不对 401 / 403 重试（第 8.3 节）</td>
+</tr>
+<tr>
+<td><code>locale</code></td>
+<td><code>preference: zh</code>，界面固定中文（官方 <code>packages/client/locale</code>）</td>
+</tr>
+<tr>
+<td>工作区</td>
+<td><code>documentsDirectory</code> 指向应用数据目录下的空目录，避免在&quot;文档&quot;里自动建 <code>deepseek-harness/default-workspace</code>；首页不提供&quot;默认工作区&quot;入口，必须先打开案件</td>
+</tr>
+<tr>
+<td><code>credentials-local</code></td>
+<td>整行替换为我方凭据插件 <code>lawbench-dsh/credentials</code>（第 8.1 节）</td>
+</tr>
+<tr>
+<td><code>session-persistence-jsonl</code></td>
+<td>整行替换为我方会话记录插件，按案件存储（第 3.3 节，P-8）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>G-2 补充核对</strong>：除 AGENTS.md 和 <code>.dsh/skills</code> 外，逐一列出 DSH 在打开工作区时会从 <code>cwd</code> 读取的所有内容（项目级配置、插件、忽略文件等），写进 <code>dsh/PATCHES.md</code>，确认律师工作台 preset 下都不生效。</p>
+<p><strong>3. 律师工作台 preset</strong>（新增行 <code>preset-lawbench</code>，插件 <code>@deepseek-ai/dsh-agent-preset</code>，写法参照官方 <code>packages/bundle/web-app/presets/standard.patch.yml</code>）：</p>
+<pre><code class="language-yaml">- insert:
+    - id: preset-lawbench
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: lawbench
+        name: 律师工作台
+        order: 1
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config: {complete: true, includeRuntimeContext: false, prefix: &lt;通用规则，第 9.2 节&gt;}
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config: {providerName: lawbench-skills, includeDefaultRoots: false, watch: false,
+                     customSkillDirs: [&lt;内置目录&gt;, &lt;管理员下发目录&gt;]}      # 第 10.1 节
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: compaction            # 照抄 standard preset 的 compaction 组，保留长对话压缩
+            name: cordis:group
+            group: true
+            isolate: {compaction: true, toolResultPruner: true}
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config: {thresholdChars: 8192, headChars: 4096, tailChars: 1024}
+          - id: legal-agent
+            name: 'lawbench-dsh/agent'
+</code></pre>
+<ul>
+<li>preset 里不写 <code>agent-instructions</code>、<code>tool-bash</code>、<code>tool-pwsh</code>、<code>tool-fs</code>、<code>tool-fs-search</code>、<code>tool-jobs</code>、<code>tool-web</code>、<code>tool-subagent*</code>、<code>tool-workflow</code>、<code>tool-goal</code>、<code>tool-todo</code>、<code>plan-mode</code>。</li>
+<li>preset 里如果有插件对外提供服务，必须放在带 <code>isolate</code> 的组里，否则 DSH 拒绝挂载（官方 <code>packages/preset/agent-preset-registry/src/mount.ts</code>）。</li>
+<li>界面上选择 preset 的入口只在开发者模式下出现；我们保持开发者模式关闭。</li>
+</ul>
+<p><strong>验证</strong>：</p>
+<ul>
+<li>抓一次发给模型的请求，工具定义里只有 <code>skill</code>、<code>ask_user_question</code> 和 <code>case_*</code>；</li>
+<li>Agent 插件日志中没有&quot;拒绝不在白名单内的工具&quot;（出现就说明有工具漏进来）；</li>
+<li>案件内放 <code>AGENTS.md</code>、<code>.dsh/skills/&lt;恶意 Skill&gt;</code>、含越权指令的材料，都不起作用；</li>
+<li>界面上看不到其他 preset。</li>
+</ul>
+<h3 id="3-2-必须改-DSH-源码的地方">3.2 必须改 DSH 源码的地方</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>功能</th>
+<th>位置（官方仓库）</th>
+<th>改法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P-1</td>
+<td>自动更新</td>
+<td><code>apps/desktop/src/update-coordinator.ts</code>、<code>update-schedule.ts</code>、<code>main.ts</code>（<code>DesktopUpdateCoordinator</code>、<code>automaticCheck</code>、&quot;检查更新&quot;菜单）；设置页版本行 <code>packages/client/ui-settings-general/src/client/index.ts</code></td>
+<td>删除更新检查和菜单。打包时不写更新源（<code>electron-builder-config.mjs</code> 的 <code>publish: null</code>，不生成 <code>app-update.yml</code>）</td>
+</tr>
+<tr>
+<td>P-2</td>
+<td>强制更新策略查询</td>
+<td><code>apps/desktop/src/mandatory-update-policy.ts</code>；打包 <code>apps/desktop/scripts/electron-builder-config.mjs</code>（<code>resolveDesktopPolicyEnvironment</code> 调用、<code>extraMetadata.dshMandatoryUpdatePolicy</code>）</td>
+<td>删掉这两处；安装包里没有这个字段，运行时就不查询</td>
+</tr>
+<tr>
+<td>P-3</td>
+<td>欢迎窗口</td>
+<td><code>apps/desktop/src/welcome-window.ts</code>、<code>src/client/WelcomePage.tsx</code>、<code>welcome-backend.ts</code>、<code>main.ts</code> 中 <code>needsWelcome</code> 判断</td>
+<td>换成我方&quot;首次配置&quot;页：填 6000D 和 395 地址、个人 Key、测试连接（PRD 7.9）；判断条件改为&quot;没有配置过律所服务器&quot;</td>
+</tr>
+<tr>
+<td>P-4</td>
+<td>品牌</td>
+<td><code>apps/desktop/scripts/electron-builder-config.mjs</code>（<code>productName</code>、<code>appId</code> 来自 <code>DSH_DESKTOP_APP_ID</code>、<code>protocols</code>、图标）、<code>apps/desktop/resources/icon*</code>、<code>tray-windows.ico</code>、<code>src/locale.ts</code>（产品名文案）、<code>main.ts</code> 关于面板、<code>apps/desktop/installer/</code>（安装界面文案和图片）</td>
+<td>换成律所名称和 logo，&quot;技术支持&quot;放我方</td>
+</tr>
+<tr>
+<td>P-5</td>
+<td>聊天附件</td>
+<td><code>packages/client/ui-conversation/src/client/input/editor/apply.ts</code> 中 <code>addFiles</code></td>
+<td>置为 <code>undefined</code>，粘贴、选择、拖入文件一起关闭；材料一律走&quot;导入&quot;</td>
+</tr>
+<tr>
+<td>P-6</td>
+<td>远程命名空间</td>
+<td><code>packages/api/remotes/src/client/index.ts</code></td>
+<td>加一行导入我方 <code>lawbench</code> 命名空间（第 1.2 节）</td>
+</tr>
+<tr>
+<td>P-7</td>
+<td>网络白名单</td>
+<td><code>packages/util/http-proxy/src/install.ts</code>（全局 undici dispatcher）</td>
+<td>加地址白名单（第 14.3 节）</td>
+</tr>
+<tr>
+<td>P-8</td>
+<td>会话记录存到案件目录</td>
+<td><code>packages/session/session-persistence-jsonl</code></td>
+<td>复制为我方插件，改目录规则（第 3.3 节）；如果做成独立插件、通过补丁替换 <code>session-persistence-jsonl</code> 行，就不算改源码</td>
+</tr>
+<tr>
+<td>P-9</td>
+<td>Electron 后台请求</td>
+<td><code>apps/desktop/src/main.ts</code></td>
+<td>主窗口关闭拼写检查（<code>session.setSpellCheckerEnabled(false)</code>）；<code>session.defaultSession.webRequest.onBeforeRequest</code> 拦截白名单以外的请求</td>
+</tr>
+<tr>
+<td>P-10</td>
+<td>组合包进入桌面端</td>
+<td><code>packages/boot/app-boot/src/profile.ts</code>（<code>PROFILE_TEMPLATES.web</code>）；<code>@deepseek-ai/dsh</code> 的依赖列表</td>
+<td>加上 <code>lawbench-dsh</code>（第 14.1 节）</td>
+</tr>
+</tbody>
+</table>
+<p>完成后用抓包核对（第 14.3 节）。</p>
+<h3 id="3-3-数据落点-SEC-01-SEC-11；G-4">3.3 数据落点（SEC-01、SEC-11；G-4）</h3>
+<p>DSH 默认把以下数据写在 <code>$DSH_HOME</code> 或系统临时目录，其中几项含案卷内容：</p>
+<table>
+<thead>
+<tr>
+<th>数据</th>
+<th>默认位置</th>
+<th>含正文</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>会话记录（JSONL）</td>
+<td><code>$DSH_HOME/sessions</code>（<code>session-persistence-jsonl</code>，<code>root: dshHomePath('sessions')</code>）</td>
+<td>是</td>
+<td><strong>按案件存储</strong>：复制 <code>session-persistence-jsonl</code> 为我方插件，在组合包补丁里替换该行。官方实现中会话目录由 <code>sessionDir(root, header.cwd, id)</code> 决定，创建时就能拿到会话头的 <code>cwd</code>；改为 <code>&lt;cwd&gt;/工作区/会话/&lt;会话ID&gt;/</code>。<code>list</code> / <code>stat</code> 原本扫描 <code>root</code> 下的项目目录，改为遍历案件注册表中的案件。<code>cwd</code> 不是已登记案件的会话，拒绝创建</td>
+</tr>
+<tr>
+<td>会话列表缓存</td>
+<td><code>$DSH_HOME/storages</code>（<code>session-projection-cache</code>）</td>
+<td>可能含标题</td>
+<td>标题改为程序生成（第 3.1 节）后，抽查确认不含正文</td>
+</tr>
+<tr>
+<td>工作区列表</td>
+<td><code>$DSH_HOME/storages</code></td>
+<td>否（只有文件夹路径）</td>
+<td>保持</td>
+</tr>
+<tr>
+<td>会话全文检索索引</td>
+<td><code>session-query-sqlite</code></td>
+<td>—</td>
+<td>官方默认已是 <code>:memory:</code> 且不开启，保持不变</td>
+</tr>
+<tr>
+<td>大段工具输出的溢出文件</td>
+<td><code>spill-local</code>，系统临时目录</td>
+<td>是</td>
+<td>默认超过 12500 token 的工具结果会写成溢出文件。<strong>把 <code>spill-policy</code> 的阈值调到大于模型窗口</strong>（第 3.1 节），任何工具结果都不会溢出。另外 <code>tool-fs-search</code> 也会写溢出文件，律师工作台 preset 不挂它。验收时检查溢出目录为空</td>
+</tr>
+<tr>
+<td>聊天中粘贴的图片</td>
+<td><code>attachment-local</code>，<code>$DSH_HOME</code></td>
+<td>是</td>
+<td>界面上关闭附件（第 3.2 节 P-5）</td>
+</tr>
+<tr>
+<td>凭据（Key）</td>
+<td><code>$DSH_HOME/.credentials.yaml</code></td>
+<td>Key</td>
+<td>替换为我方凭据插件，存 Windows 凭据管理器；验收时确认该文件不存在或不含 Key（第 8.1 节）</td>
+</tr>
+<tr>
+<td>桌面端日志</td>
+<td>Electron <code>userData/logs</code>、Host 日志</td>
+<td>抽查</td>
+<td>确认不含正文；含正文的日志项关闭</td>
+</tr>
+<tr>
+<td>Electron 用户数据（缓存、localStorage）</td>
+<td><code>userData</code></td>
+<td>抽查</td>
+<td>关闭 HTTP 缓存；抽查确认</td>
+</tr>
+</tbody>
+</table>
+<p>验收方法：用测试案卷完整跑一遍后，在案件目录以外全盘搜索案卷中的特征字符串（第 16 节 SEC-01）。</p>
+<h3 id="3-4-界面">3.4 界面</h3>
+<p>界面扩展都做在我方界面插件 <code>legal-ui</code> 里，用官方提供的插槽，不改官方界面代码（除第 3.2 节列出的几处）。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>要求</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>U-1</td>
+<td>中文界面</td>
+<td>桌面端和界面都已支持中文；补丁里设 <code>locale.preference: zh</code>（第 3.1 节）；我方文字按官方方式注册中文词条（<code>ctx.locale.register</code>）；律师可见的文字不出现 token、context 等词</td>
+</tr>
+<tr>
+<td>U-2</td>
+<td>双品牌</td>
+<td>桌面壳部分见第 3.2 节 P-4；界面侧栏的品牌位（<code>sidebar.brand.mark</code>、<code>sidebar.brand.name</code> 插槽）由我方插件占用，律所为主，我方为&quot;技术支持&quot;</td>
+</tr>
+<tr>
+<td>U-3</td>
+<td>去掉无关入口</td>
+<td>插件管理、反馈、preset 选择、附件已在第 3.1、3.2 节关掉；其余入口（如终端、工作区依赖安装）按界面实际情况在补丁中关闭对应行</td>
+</tr>
+<tr>
+<td>U-4</td>
+<td>首页</td>
+<td>用&quot;整页&quot;插槽：<code>sidebar.panellist</code>（侧栏图标）+ <code>main</code>（页面），写法参照官方 <code>packages/client/ui-plugin-manager</code>。内容：最近案件、新建 / 打开案件、5 个入口</td>
+</tr>
+<tr>
+<td>U-5</td>
+<td>案件工作区</td>
+<td>左栏（材料、识别进度、wiki）和右栏（草稿、成果、自检结果）做成右侧栏标签页（<code>ctx.sidebarRightTabs.register</code> + <code>sidebar.right.pane.tab</code> 插槽，参照 <code>packages/client/ui-sidebar-documentpreview</code>）；中间的对话区沿用官方会话界面；Skill 选择、参数放在会话输入区上方</td>
+</tr>
+<tr>
+<td>U-6</td>
+<td>原文查看</td>
+<td>右侧栏标签页，按出处定位（第 9.3 节）</td>
+</tr>
+<tr>
+<td>U-7</td>
+<td>通知</td>
+<td>识别完成、流水线完成时发系统通知，只写&quot;识别任务已完成&quot;或&quot;整理任务已完成&quot;，<strong>不带案件名和材料名</strong></td>
+</tr>
+<tr>
+<td>U-8</td>
+<td>设置</td>
+<td><code>settings.section</code> 插槽：服务器和 Key、个人参数预设、Word 模板、关于（双 logo）</td>
+</tr>
+<tr>
+<td>U-9</td>
+<td>取消</td>
+<td>沿用官方的停止按钮（断开流式请求）；同时通知工作台服务停止正在运行的流水线（第 8.4 节）</td>
+</tr>
+<tr>
+<td>U-10</td>
+<td>关闭窗口</td>
+<td>官方行为是隐藏到托盘、Host 继续运行，正好满足后台识别；首次关闭时的提示改为说明&quot;识别会在后台继续&quot;</td>
+</tr>
+</tbody>
+</table>
+<p>界面布局是否能完全按 PRD 7.9 的三栏实现，要在第一阶段做出来后跟律师确认；官方界面的插槽决定了&quot;对话区在中间、面板在右侧栏&quot;这种布局最省事。</p>
+<hr />
+<h2 id="4-工作台服务">4. 工作台服务</h2>
+<h3 id="4-1-案件目录-完整结构和各文件格式见第-20-8-节-contracts-formats-md">4.1 案件目录（完整结构和各文件格式见第 20.8 节、<a href="../contracts/formats.md"><code>contracts/formats.md</code></a>）</h3>
+<pre><code>&lt;案件文件夹&gt;/                律师指定；即 DSH 的工作区、会话的工作目录
+├─ &lt;律师的原有文件和子文件夹&gt;  = 原件区，只读，程序不改动
+├─ 工作区/
+│  ├─ 材料/                 index.json（原件索引：路径、大小、修改时间、sha256）、_处理状态.md
+│  │  ├─ 文本/              每份材料一个 md，带位置标记（第 5.3 节）
+│  │  └─ 识别页/            395 返回的逐页结果
+│  ├─ wiki/                 case.json（案件卡片）、案件/*.md、材料/*.md、index.md、log.md、待确认.json
+│  ├─ 任务/&lt;任务ID&gt;/        task.json（任务单）、reads.json（读取记录）、草稿/、result.json（结果清单）
+│  ├─ 会话/                 DSH 会话记录（第 3.3 节）
+│  ├─ 临时/                 转换、渲染的中间文件，用完即删
+│  └─ case.db               SQLite：案件编号、识别任务、检索索引（contracts/case_db.sql）
+└─ 成果/                    律师确认后的成果，索引.json
+</code></pre>
+<ul>
+<li>
+<p><strong>材料编号</strong>（<code>material_id</code>）：<code>M</code> + 4 位序号，首次导入时按顺序分配，写入 <code>材料/index.json</code>，同一案件内不复用；原件改名或移动视为删除后新增。识别页、检索索引、出处记录都用它关联材料。</p>
+</li>
+<li>
+<p><strong>材料名</strong>：给 AI 和律师看的名字，在案件内唯一，规则见第 20.2 节。</p>
+</li>
+<li>
+<p><strong>原件区</strong> = 案件根目录下除 <code>工作区/</code>、<code>成果/</code> 和以 <code>.</code> 开头的项以外的所有文件。不复制原件。&quot;导入&quot;= 扫描原件区、解析新增或变化的文件。</p>
+</li>
+<li>
+<p><strong>原件哈希</strong>：记在 <code>材料/index.json</code>，按大小和修改时间做缓存，变了才重算。验收时比对哈希（SEC-08）。</p>
+</li>
+<li>
+<p><strong>案件编号</strong>：首次打开时生成 UUID，写进 <code>case.db</code>。整个文件夹复制到别处后，在新位置&quot;打开案件&quot;一次即可继续使用（F-CASE-04）；会话记录在案件目录内，跟着一起走。</p>
+</li>
+<li>
+<p><strong>案件注册表</strong>：工作台服务在应用数据目录维护 <code>cases.json</code>（<code>case_id → 案件目录</code>，只有路径，没有内容），&quot;最近案件&quot;也从这里读。</p>
+</li>
+<li>
+<p><code>case.db</code> 带 <code>schema_version</code>，升级前自动备份为 <code>case.db.bak-&lt;版本&gt;</code>。</p>
+</li>
+<li>
+<p><strong>会话和任务分开编号</strong>：会话是 DSH 的一段对话（<code>&lt;会话ID&gt;</code>），任务是一次执行。律师在一个会话里每发起一次请求就是一个新任务，<code>任务ID</code> 形如 <code>T-&lt;时间&gt;-&lt;4位随机&gt;</code>；流水线任务形如 <code>P-&lt;时间&gt;-&lt;4位随机&gt;</code>。任务单记录所属会话。这样同一会话的多次执行不会互相覆盖任务单、读取记录和结果清单。</p>
+</li>
+</ul>
+<h3 id="4-2-路径闸门-case-gate-py">4.2 路径闸门（<code>case/gate.py</code>）</h3>
+<p>所有读写案件文件的代码都必须经过闸门，没有其他写文件的途径。</p>
+<ol>
+<li><strong>案件根目录</strong>：只从案件注册表取（Agent 路径先用会话头的 <code>cwd</code> 查注册表），取 <code>realpath</code> 保存为 <code>ROOT</code>。根目录本身是链接或 junction 的，拒绝登记，提示&quot;请直接选择实际文件夹&quot;。
+<strong>云同步目录</strong>（SEC-14）：打开案件时，<code>ROOT</code> 位于以下位置之一即拒绝（错误码 <code>CASE_IN_SYNC_FOLDER</code>）：环境变量 <code>OneDrive</code>、<code>OneDriveCommercial</code>、<code>OneDriveConsumer</code> 指向的目录及其子目录；注册表 <code>HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder</code>；路径中任一级目录名包含 <code>OneDrive</code>、<code>坚果云</code>、<code>Nutstore</code>、<code>BaiduNetdisk</code>、<code>百度网盘</code>、<code>Dropbox</code>、<code>Google Drive</code>、<code>iCloudDrive</code>、<code>WPS云盘</code>。列表写在配置里，可以补充。</li>
+<li><strong>AI 传入的参数</strong>：
+<ul>
+<li>材料用 <code>case_list_materials</code> 返回的名称或相对路径；</li>
+<li>不能是绝对路径或带盘符，不能含 <code>..</code>，不能以 <code>.</code>、<code>工作区</code>、<code>成果</code> 开头。</li>
+</ul>
+</li>
+<li><strong>不跟随链接</strong>：对拼接后的路径及其每一级父目录执行 <code>lstat</code>；只要有一级是符号链接或 reparse point（Windows 下判断 <code>st_file_attributes &amp; FILE_ATTRIBUTE_REPARSE_POINT</code>，junction 在此范围内），就拒绝。</li>
+<li><strong>最终校验</strong>：<code>realpath</code> 必须以 <code>ROOT + 分隔符</code> 开头；Windows 下比较前统一大小写。</li>
+<li><strong>写权限</strong>：只允许写 <code>工作区/</code> 和 <code>成果/</code>；原件区没有任何写接口。写文件时先写临时文件再原子替换（<code>os.replace</code>）。</li>
+<li><strong>拒绝时</strong>：返回中文错误&quot;超出当前案件范围&quot;，本机日志记一条（只记工具名和原因，不记参数内容）。</li>
+</ol>
+<h3 id="4-3-给界面的接口-api-仅限界面调用">4.3 给界面的接口（<code>/api/*</code>，仅限界面调用）</h3>
+<p>以下操作<strong>只在这里提供</strong>，AI 的工具里没有（D7）。凡是会发数据到服务器的操作，界面在调用前必须先弹确认框，写明发给哪台服务器、多少页或多少字。</p>
+<p><strong>案件和任务的绑定</strong>：</p>
+<ul>
+<li><code>POST /api/case/open</code> 返回 <code>case_id</code>（案件的 UUID）。服务端维护 <code>case_id → 案件目录</code> 的注册表；除 <code>case/open</code> 和 <code>case/recent</code> 外，<strong>所有接口都必须带 <code>case_id</code></strong>，服务端只按注册表找目录，不接受界面传来的路径。</li>
+<li>服务端<strong>没有&quot;当前案件&quot;这种全局状态</strong>。界面切换案件只是换了请求里的 <code>case_id</code>。</li>
+<li>每次执行（识别、流水线、抽取、Agent 任务）创建时分配 <code>task_id</code>（识别为 <code>job_id</code>），同时固定所属案件、输入材料的版本和律师确认过的发送范围；之后的进度查询、取消都按 <code>task_id</code>，与界面当前显示哪个案件无关。</li>
+<li>插件调用 <code>/core/*</code> 时，由会话头的 <code>cwd</code> 查出 <code>case_id</code>；<code>cwd</code> 不在注册表中的会话，工具一律拒绝。</li>
+</ul>
+<p>共 19 个接口，请求和返回的字段见第 20.5 节和 <a href="../contracts/api/"><code>contracts/api/</code></a>，下表只说作用。</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>作用</th>
+<th>发往服务器</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/case/open</code></td>
+<td>打开案件（新建时初始化 <code>工作区/</code>），登记到注册表；拒绝链接根目录和云同步目录</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET /api/case/recent</code></td>
+<td>最近案件</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/materials/scan</code></td>
+<td>扫描原件区，在本机解析新增或变化的材料</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET /api/materials</code></td>
+<td>材料列表、状态、失败原因、需识别的页</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/ocr/jobs</code></td>
+<td>提交识别</td>
+<td>395</td>
+</tr>
+<tr>
+<td><code>GET /api/ocr/jobs</code>；<code>POST /api/ocr/jobs/{job_id}/cancel</code></td>
+<td>识别进度；取消</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>POST /api/task</code></td>
+<td>写任务单：律师选的入口、Skill、选用的前序成果和参数；Agent 插件在该会话下一次请求时使用</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/pipeline/run</code>；<code>GET /api/pipeline/{task_id}</code>；<code>POST /api/pipeline/{task_id}/cancel</code></td>
+<td>运行、查看、取消流水线（本次只有案件 wiki）；律师勾选&quot;使用 395 抽取&quot;时，字段抽取和分类走 395</td>
+<td>6000D（勾选时另有 395）</td>
+</tr>
+<tr>
+<td><code>GET /api/tasks</code></td>
+<td>本案任务、草稿列表（成果区）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/redline</code></td>
+<td>生成修订版 Word（第 12.2 节）</td>
+<td>否，本机生成</td>
+</tr>
+<tr>
+<td><code>GET /api/wiki/suggestions</code>；<code>POST /api/wiki/suggestions/{id}</code></td>
+<td>列出、处理 AI 提出的 wiki 修改建议</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/outputs/confirm</code></td>
+<td>草稿确认进成果目录并导出</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET /api/source</code></td>
+<td>原文查看：按出处返回定位单元的文本；PDF 另返回该页的页面图片（定位到页，不做文字高亮）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET /api/search</code></td>
+<td>律师检索</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET/PUT /api/settings</code>；<code>POST /api/connection/test</code></td>
+<td>设置；测试两台服务器连接</td>
+<td>测试时只发探测请求</td>
+</tr>
+</tbody>
+</table>
+<p>第一版中的独立接口 <code>POST /api/extract</code> 取消：9B 抽取只作为 wiki 流水线的一个选项使用（PRD 路由表）。</p>
+<h3 id="4-4-给-AI-的工具-case_-由-Agent-插件注册">4.4 给 AI 的工具（<code>case_*</code>，由 Agent 插件注册）</h3>
+<p>共 8 个工具。所有工具只作用于当前会话所在的案件；单次返回不超过 8000 字（DSH 的工具结果裁剪阈值是 8192 字符），超出的截断并提示分段读取。每个工具的定义按官方 <code>ToolDefinition</code>：<code>name</code>、<code>description</code>、<code>parameters</code>（JSON Schema，<code>additionalProperties: false</code>）、<code>output</code>（<code>schema</code> + <code>render</code>）、<code>execute</code>。</p>
+<p>参数和返回的字段以第 20.4 节和 <a href="../contracts/tools/"><code>contracts/tools/</code></a> 为准，下表是摘要。工具的 <code>parameters</code> 直接取契约文件中的 <code>$defs/args</code>。</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>参数</th>
+<th>返回</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>case_list_materials</code></td>
+<td>—</td>
+<td>材料清单：材料名、编号、类型、状态、位置单位和数量、是否识别所得、失败原因</td>
+<td>材料名在案件内唯一（第 20.2 节），AI 引用时照抄</td>
+</tr>
+<tr>
+<td><code>case_read_material</code></td>
+<td><code>name, start?, max_chars?</code></td>
+<td>带位置标记的原文、<code>start</code>、<code>end</code>、<code>has_more</code>、<code>next_start</code></td>
+<td>读 <code>工作区/材料/文本/</code> 下的解析结果；<code>start</code> 是页号、段号或行号；每次读取记入 <code>reads.json</code>，用于计算覆盖清单</td>
+</tr>
+<tr>
+<td><code>case_search</code></td>
+<td><code>query, max_hits?</code></td>
+<td>命中列表：材料名、出处文本、片段、是否识别所得</td>
+<td>第 11 节的全文检索</td>
+</tr>
+<tr>
+<td><code>case_read_input</code></td>
+<td><code>index, start?, max_chars?</code></td>
+<td>任务单里选用的第 <code>index</code> 个前序成果（按行分段）</td>
+<td>L1 放不下的输入用它读</td>
+</tr>
+<tr>
+<td><code>case_read_wiki</code></td>
+<td><code>section, name?</code></td>
+<td>wiki 分节全文、是否过期</td>
+<td>分节：卡片、概览、当事人、时间线、材料清单、争议焦点、材料摘要（需给材料名）</td>
+</tr>
+<tr>
+<td><code>case_save_draft</code></td>
+<td><code>title, content</code></td>
+<td>保存路径和版本、<code>citation_check</code>（含 <code>problems</code>）、<code>coverage</code>、<code>not_fully_read</code></td>
+<td>写入 <code>工作区/任务/&lt;任务ID&gt;/草稿/&lt;标题&gt;-v&lt;N&gt;.md</code>；同标题再存生成新版本，旧版本保留</td>
+</tr>
+<tr>
+<td><code>case_suggest_wiki</code></td>
+<td><code>field, value, source, reason?</code></td>
+<td>建议编号</td>
+<td>写入 <code>wiki/待确认.json</code>，律师在界面上确认后才改 wiki</td>
+</tr>
+<tr>
+<td><code>case_save_edit_list</code></td>
+<td><code>name, edits[]</code></td>
+<td>保存路径、接受条数、范围外条目</td>
+<td>保存合同修改清单（第 12.2 节），律师点&quot;生成修订版&quot;时使用</td>
+</tr>
+</tbody>
+</table>
+<p>测试链路中的 <code>case_wiki_plan</code>、<code>case_wiki_put_facts</code> 不再提供：案件 wiki 改为流水线（D6）。</p>
+<p>另外可用：DSH 的 <code>skill</code>（加载 Skill 正文）、<code>ask_user_question</code>（必问问题，第 10.2 节）。</p>
+<p><strong>不提供</strong>：写原件、删除文件、任意路径、执行命令、联网、提交识别或抽取、导出到成果目录。</p>
+<h3 id="4-5-本机日志">4.5 本机日志</h3>
+<ul>
+<li>工作台服务的日志在 <code>&lt;应用数据&gt;/logs/</code>，按天滚动，保留 14 天。</li>
+<li>只记：时间、模块、操作名、案件编号、耗时、状态、错误类型。<strong>不记</strong>：材料名、检索词、模型输入输出、异常的完整信息（只记异常类名）。调试模式也不放开。</li>
+<li>DSH 插件的日志用 <code>[lawbench]</code> 前缀，遵守同样的规则；只记数量（如&quot;注入上下文：L0 N 字&quot;），不记内容。</li>
+</ul>
+<h2 id="5-材料处理">5. 材料处理</h2>
+<h3 id="5-1-导入流程">5.1 导入流程</h3>
+<p>律师把文件放进案件文件夹（拖入或在界面上选择&quot;添加材料&quot;，后者把文件复制到案件根目录），再点&quot;导入&quot;：</p>
+<ol>
+<li>扫描原件区，对比 <code>材料/index.json</code>，找出新增、变化、删除的文件。</li>
+<li>新增或变化的文件，按扩展名和文件头判断格式，交给第 5.2 节对应的解析器。</li>
+<li>每份材料单独处理，互不影响；失败的写入失败原因（F-MAT-05、F-MAT-06）。</li>
+<li>输出 <code>工作区/材料/文本/&lt;原件相对路径&gt;.md</code>，更新检索索引，更新 <code>材料/_处理状态.md</code>。</li>
+<li>原件内容变了（路径相同、哈希不同）：重新解析，已有的识别结果标为&quot;过期&quot;，提示&quot;wiki 和已有成果需要复核&quot;（F-MAT-07）。原件被删除：材料标为&quot;原件已删除&quot;，保留文本，提示律师。</li>
+</ol>
+<h3 id="5-2-各格式怎么解析">5.2 各格式怎么解析</h3>
+<table>
+<thead>
+<tr>
+<th>格式</th>
+<th>解析</th>
+<th>位置单位</th>
+<th>特殊处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PDF</td>
+<td>pypdfium2 逐页取文字；按第 5.4 节判断每页是否需要识别</td>
+<td>页</td>
+<td>需要识别的页先占位 <code>（本页需识别）</code>，识别完成后替换</td>
+</tr>
+<tr>
+<td>docx</td>
+<td>python-docx 加 lxml 直接读 <code>document.xml</code></td>
+<td>段（正文中非空段落的顺序号，从 1 开始）；表格整体算一段，内部转成 md 表格</td>
+<td>有修订痕迹时：保留 <code>w:ins</code> 的内容、去掉 <code>w:del</code> 的内容，材料头部标&quot;含修订，已按修订后文本&quot;（F-MAT-04a）；页眉页脚、脚注附在文末，另标一段</td>
+</tr>
+<tr>
+<td>doc / wps</td>
+<td>LibreOffice 转成 docx 后按 docx 处理</td>
+<td>段</td>
+<td>转换所得的 docx 放在 <code>工作区/临时/</code>，用完删除；材料头部标&quot;由 doc 转换&quot;</td>
+</tr>
+<tr>
+<td>xlsx</td>
+<td>openpyxl 读两遍：<code>data_only=True</code> 取显示值，<code>data_only=False</code> 取公式</td>
+<td>单元格：<code>工作表名!A1</code></td>
+<td>每个工作表转成带行号、列字母的 md 表格；显示值为空而公式不为空（文件没存计算结果）时，先用 LibreOffice 重算后再读；公式单独存一份，律师需要时查看</td>
+</tr>
+<tr>
+<td>xls</td>
+<td>LibreOffice 转 xlsx 后按 xlsx 处理</td>
+<td>单元格</td>
+<td></td>
+</tr>
+<tr>
+<td>csv</td>
+<td>编码识别（先试 utf-8-sig，再试 gb18030），按行处理</td>
+<td>行</td>
+<td></td>
+</tr>
+<tr>
+<td>md / txt</td>
+<td>编码识别</td>
+<td>行</td>
+<td></td>
+</tr>
+<tr>
+<td>图片（jpg / png / tif / bmp）</td>
+<td>整份材料需要识别；一张图算一页</td>
+<td>页</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>LibreOffice 调用方式：<code>soffice --headless --norestore -env:UserInstallation=file:///&lt;案件&gt;/工作区/临时/lo_profile --convert-to &lt;格式&gt; --outdir &lt;临时目录&gt; &lt;文件&gt;</code>。用户配置目录放在案件临时目录，转换后删除，避免在系统里留下&quot;最近打开的文件&quot;记录（SEC-11）。超时 120 秒。</p>
+<p><strong>无法处理的文件</strong>（写入失败清单，并附原因）：</p>
+<ul>
+<li>加密：PDF 打开时报密码错误；Office 文件是 OLE 容器并且包含 <code>EncryptionInfo</code> 流。提示&quot;文件已加密，请提供未加密版本&quot;。</li>
+<li>损坏：解析器报错。提示&quot;文件无法打开，可能已损坏&quot;。</li>
+<li>超大：单个文件超过 300MB，或超过 2000 页。提示&quot;文件过大，请拆分后导入&quot;。</li>
+</ul>
+<h3 id="5-3-材料文本格式">5.3 材料文本格式</h3>
+<p>沿用 wiki 测试已验证的格式，完整规定见 <a href="../contracts/formats.md"><code>contracts/formats.md</code></a> 第 2 节：</p>
+<pre><code># &lt;材料名&gt;
+
+&gt; Source: &lt;原件相对路径&gt;（&lt;文字版 / 识别所得 / 部分识别&gt;，&lt;N&gt;页）
+&gt; Collected: &lt;导入日期&gt;
+
+【第1页】
+&lt;原文&gt;
+
+【第2页】
+&gt; 识别所得
+&lt;识别文本；看不清的字用 ■，整行看不清用 [看不清]&gt;
+</code></pre>
+<ul>
+<li>位置标记：PDF 和图片用 <code>【第N页】</code>，Word 用 <code>【第N段】</code>，Excel 用 <code>【表:工作表名】</code> 加带行列号的表格，txt / md / csv 用 <code>【第N行】</code>（每 50 行标一次，引用时写具体行号）。</li>
+<li>同一份 PDF 里既有本机解析的页又有识别的页时，识别页在标记下一行写 <code>&gt; 识别所得</code>。</li>
+<li><code>【】</code> 位置标记只出现在材料文本里；草稿和成果中的出处一律用 <code>〔〕</code>（第 9.3 节）。</li>
+</ul>
+<h3 id="5-4-PDF-页面类型判断">5.4 PDF 页面类型判断</h3>
+<p>对每一页：</p>
+<ul>
+<li>可提取文字 &lt; 30 个字 → <strong>需识别</strong>。</li>
+<li>可提取文字 ≥ 30 字，并且图片面积 &gt; 页面面积的 30% → <strong>图文混排</strong>：先用提取到的文字，材料列表里提示&quot;本页含图片，可提交识别&quot;。</li>
+<li>其余 → <strong>文字页</strong>。</li>
+</ul>
+<p>阈值写在配置里，用 G-8 的样本校准。</p>
+<hr />
+<h2 id="6-395-预处理服务-prep395">6. 395 预处理服务（<code>prep395/</code>）</h2>
+<p>395 是一台 <strong>Windows 11</strong> 电脑（AMD Ryzen AI Max+ 395，核显），直接在 Windows 上运行，不用 WSL2。</p>
+<h3 id="6-1-部署">6.1 部署</h3>
+<ul>
+<li><strong>进程</strong>：
+<ul>
+<li><code>prep395</code>：Python 3.12 + FastAPI + uvicorn，监听 <code>&lt;395 局域网 IP&gt;:9000</code>；</li>
+<li>OCR 后端、9B 模型：各自一个推理进程，只监听 <code>127.0.0.1</code>（端口 9101、9102）。</li>
+</ul>
+</li>
+<li><strong>推理后端</strong>：首选 llama.cpp 的 <code>llama-server</code>（Vulkan 后端，Windows 上对这块 AMD 核显支持最稳），OCR 用它能加载的视觉模型，9B 用 GGUF 量化模型；关闭请求日志（不开 <code>--verbose</code>，不开 <code>--log-file</code>，关闭 <code>--slots</code> 等调试接口）。〔待 G-5、G-6：在这台 Windows 上实测速度和准确率；Vulkan 不行时再试 AMD 的 ROCm for Windows（HIP SDK）〕</li>
+<li><strong>以 Windows 服务运行</strong>：三个进程都用 WinSW（MIT）包装成 Windows 服务，开机自启、崩溃自动重启；运行账号是专用的本地低权限账号 <code>prep395svc</code>，不是管理员。</li>
+<li><strong>目录</strong>：程序在 <code>C:\prep395\</code>（该账号只读）；日志在 <code>C:\prep395\logs\</code>（该账号可写）；不设其他可写目录。</li>
+<li><strong>防火墙</strong>：Windows Defender 防火墙入站规则只放行 9000 端口，来源限定律所局域网网段和 WireGuard 网段；9101、9102 不放行。关闭远程桌面以外的共享（文件和打印机共享关闭）。</li>
+<li><strong>系统盘开 BitLocker</strong>：Windows 的页面文件、休眠文件无法可靠关闭，内存中的内容可能被写到磁盘；开 BitLocker 后，即使写入也是加密的。同时关闭休眠（<code>powercfg /h off</code>）。页面文件的残余风险写进部署说明，告知甲方。</li>
+<li><strong>不装与服务无关的软件</strong>；Windows 更新由甲方按内网策略管理。</li>
+</ul>
+<h3 id="6-2-内存中处理-不落盘-SEC-12">6.2 内存中处理，不落盘（SEC-12）</h3>
+<p>PRD SEC-12 要求临时文件只放内存盘、不写硬盘。Windows 没有 tmpfs，改为<strong>全程不产生临时文件</strong>：</p>
+<ul>
+<li>上传的图片<strong>不用 multipart</strong>：请求体就是图片的原始字节（<code>Content-Type: image/png</code> 或 <code>image/jpeg</code>），服务端用 <code>await request.body()</code> 读成 <code>bytes</code>，先按 <code>Content-Length</code> 拒绝超过 10MB 的请求。原因：FastAPI 底层的 Starlette 解析 multipart 时，会把超过约 1MB 的部分写进磁盘临时文件。</li>
+<li>图片预处理（旋转、增强、去水印）用 Pillow / numpy 在内存中完成。</li>
+<li>调用推理后端时，图片以 base64 放在请求体里通过本机 HTTP 发送，后端不写文件。</li>
+<li>结果在内存中返回，处理完即释放。</li>
+<li><strong>启动清理</strong>：服务启动时检查系统临时目录和 <code>C:\prep395\</code> 下是否出现本服务产生的文件，有就删除并记日志（只记数量）。用来兜底进程被强制结束的情况。</li>
+<li><strong>验收</strong>：连续发送测试图片后，全盘搜索测试图片中的特征文字（针对 <code>C:\prep395\</code>、系统临时目录、推理后端的目录），不得命中。</li>
+</ul>
+<h3 id="6-3-鉴权">6.3 鉴权</h3>
+<ul>
+<li>每个请求带 <code>Authorization: Bearer &lt;律师 Key&gt;</code>，与 6000D 用的是同一个 Key。</li>
+<li><strong>395 不另存 Key</strong>：收到请求后，用这个 Key 调用 6000D 网关的 <code>GET /v1/models</code> 做校验；返回 200 视为有效。有效结果在内存中缓存 30 秒，无效结果不缓存。
+<ul>
+<li>效果：管理员在 <code>/admin</code> 停用 Key 后，395 最迟 30 秒内拒绝（PRD F-ACC-02）。</li>
+<li>前提：网关开启 <code>require_key</code> 后，<code>/v1/models</code> 也要校验 Key〔待验证；如果不校验，改为用一个 <code>max_tokens=1</code> 的请求来校验〕。</li>
+<li>6000D 不可用时无法校验，395 返回 503&quot;无法验证 Key&quot;。这是有意的：不能绕开 Key。</li>
+</ul>
+</li>
+<li>日志中的 Key 只记 SHA-256 的前 8 位。</li>
+</ul>
+<h3 id="6-4-接口">6.4 接口</h3>
+<p>所有接口都在同一个请求内处理完并返回，服务不保存任何跨请求的数据。字段以第 20.6 节和 <a href="../contracts/prep395/"><code>contracts/prep395/</code></a> 为准。</p>
+<p><strong><code>GET /health</code></strong>（不需要 Key，不含任何内容）</p>
+<pre><code class="language-json">{&quot;status&quot;: &quot;ok&quot;, &quot;ocr&quot;: &quot;ok&quot;, &quot;llm9b&quot;: &quot;ok&quot;, &quot;queue&quot;: 3, &quot;version&quot;: &quot;1.0.0&quot;, &quot;contract_version&quot;: &quot;1.0&quot;}
+</code></pre>
+<p><strong><code>POST /v1/ocr/page?dewatermark=false&amp;deskew=true&amp;return_image=false</code></strong>：单页识别</p>
+<ul>
+<li>请求体：单页 PNG 或 JPEG 的原始字节，长边不超过 2480 像素，大小不超过 10MB（第 6.2 节）</li>
+<li>返回 200：<pre><code class="language-json">{&quot;markdown&quot;: &quot;…&quot;, &quot;unclear&quot;: 2, &quot;elapsed_ms&quot;: 5400, &quot;backend&quot;: &quot;&lt;后端名&gt;&quot;, &quot;image_png_base64&quot;: null}
+</code></pre>
+<code>image_png_base64</code> 只在 <code>return_image=true</code> 时有值，是去水印后的工作副本，<strong>只用于验收去水印效果</strong>；客户端正常运行时不请求、不保存。</li>
+<li>识别不清的标注规则：后端能给出置信度的，低于阈值的字替换为 <code>■</code>、整行低于阈值的替换为 <code>[看不清]</code>；视觉大模型一类不给置信度的，在提示词中要求这样标注<span class="wait">〔待 G-5，用样本校准〕</span>。</li>
+<li>错误：<code>400</code> 图片格式或尺寸不对；<code>401</code> Key 无效；<code>413</code> 文件过大；<code>503</code> 排队已满（响应头带 <code>Retry-After</code>）或无法验证 Key；<code>504</code> 识别超时（单页 120 秒）。错误体为 <code>{&quot;error&quot;: {&quot;code&quot;, &quot;message&quot;}}</code>（第 20.6 节）。</li>
+</ul>
+<p><strong><code>POST /v1/extract</code></strong>：9B 抽取，两种任务</p>
+<ul>
+<li>字段抽取：<code>{&quot;task&quot;: &quot;fields&quot;, &quot;text&quot;: &quot;&lt;带位置标记的材料文本&gt;&quot;, &quot;fields&quot;: [&quot;当事人&quot;,&quot;日期&quot;,&quot;金额&quot;,&quot;案号&quot;]}</code> → <code>{&quot;task&quot;: &quot;fields&quot;, &quot;result&quot;: [{&quot;field&quot;: &quot;金额&quot;, &quot;value&quot;: &quot;60,000.00&quot;, &quot;loc&quot;: &quot;第6页&quot;}], &quot;elapsed_ms&quot;: 3200}</code></li>
+<li>材料分类：<code>{&quot;task&quot;: &quot;classify&quot;, &quot;text&quot;: &quot;…&quot;, &quot;categories&quot;: [&quot;起诉意见书&quot;,&quot;讯问笔录&quot;,&quot;询问笔录&quot;,&quot;书证&quot;,&quot;鉴定意见&quot;,&quot;合同&quot;,&quot;其他&quot;]}</code> → <code>{&quot;task&quot;: &quot;classify&quot;, &quot;result&quot;: {&quot;category&quot;: &quot;讯问笔录&quot;}, &quot;elapsed_ms&quot;: 900}</code></li>
+<li>第一版中的&quot;按卷提取目录&quot;（<code>volume_toc</code>）取消：卷宗整理不再是单独的 Skill。</li>
+<li>单次文本不超过 16K 字；客户端负责按页切分。</li>
+<li>客户端拿到结果后按原文核对（值必须能在所标位置原样找到），核对不上的丢弃并记数。核对不过的比例高于 20% 时，这次改由 27B 完成（F-ENT-04）。</li>
+</ul>
+<p><strong><code>GET /admin</code></strong>（HTTP Basic，管理员账号在部署时设置）：只读页面，显示队列长度、处理中的请求数、按 Key 前缀统计的今日页数和耗时。<strong>不改动甲方的网关</strong>（PRD F-ACC-02）。</p>
+<h3 id="6-5-并发-排队和取消">6.5 并发、排队和取消</h3>
+<ul>
+<li>识别同时处理 N 页（默认 2，按 G-5 实测调整），其余在内存队列中排队；排队超过 20 个时返回 503。9B 抽取同时处理 1 个。</li>
+<li><strong>取消</strong>（客户端断开连接）分两种情况，分别验证：
+<ul>
+<li>请求还在排队：检测到连接断开后直接出队，不做处理。</li>
+<li>请求已在推理：取消本服务对推理后端的请求（<code>llama-server</code> 在连接断开时停止生成）；单页识别最长 120 秒，最坏情况是这一页算完后结果被丢弃。</li>
+</ul>
+</li>
+<li>验证方法：提交 20 页后立即取消，确认 <code>/admin</code> 中排队数在 5 秒内归零、推理进程在一页的时间内空闲。</li>
+</ul>
+<h3 id="6-6-395-日志">6.6 395 日志</h3>
+<p>JSON Lines 格式，写到 <code>C:\prep395\logs\access.log</code>，按天滚动，保留 30 天：</p>
+<pre><code class="language-json">{&quot;ts&quot;: &quot;...&quot;, &quot;key&quot;: &quot;a1b2c3d4&quot;, &quot;api&quot;: &quot;ocr/page&quot;, &quot;pages&quot;: 1, &quot;bytes&quot;: 812345, &quot;elapsed_ms&quot;: 5400, &quot;status&quot;: 200, &quot;err&quot;: null}
+</code></pre>
+<p><code>err</code> 只写异常类名。关闭 uvicorn 自带的访问日志；推理后端的日志只保留启动和错误信息，不含请求内容（部署后抽查）。</p>
+<h3 id="6-7-去水印">6.7 去水印</h3>
+<ul>
+<li>只处理这次请求中的图片副本；律师电脑上的原件不变，引用仍指向原件页码。</li>
+<li>规则保守：只去除浅灰色、低饱和度、大面积重复的斜向文字或图案。<strong>红色和蓝色像素（印章、签名、批注笔迹）一律不动。</strong></li>
+<li>用带印章、签名、手写批注的样本验收（PRD 验收第 16a 项）；效果不稳定时，默认关闭去水印，由律师按需勾选。</li>
+</ul>
+<hr />
+<h2 id="7-识别任务-客户端-ocr-queue-py">7. 识别任务（客户端，<code>ocr/queue.py</code>）</h2>
+<h3 id="7-1-状态">7.1 状态</h3>
+<p>每个识别任务记在所属案件的 <code>case.db</code> 里，表结构见 <a href="../contracts/case_db.sql"><code>contracts/case_db.sql</code></a>：</p>
+<ul>
+<li>任务表 <code>ocr_jobs</code>：编号、材料编号、材料版本（sha256）、是否去水印、状态（排队中 / 识别中 / 已暂停 / 已完成 / 已取消 / 部分失败）、暂停原因、总页数、已完成、失败数、时间。</li>
+<li>页面表 <code>ocr_pages</code>：任务编号 + 页号（联合主键，写入幂等）、状态（待发送 / 发送中 / 已完成 / 失败 / 已取消）、尝试次数、失败原因、结果路径。</li>
+</ul>
+<p>任务创建时就固定了所属案件和材料版本，之后切换界面上的案件不影响它（第 4.3 节）。状态都在案件文件夹内，所以切换案件、关闭或重启软件后都能接着做（F-NODE-04）。</p>
+<h3 id="7-2-执行">7.2 执行</h3>
+<ol>
+<li>律师在材料区选定页面（默认选中&quot;需识别&quot;的页），点&quot;提交识别&quot;。确认框写明&quot;将把 N 页图片发送到 395 识别；识别在本机后台逐页进行，期间请保持电脑开机、联网，不要退出软件&quot;。</li>
+<li>工作台服务启动时，扫描&quot;最近案件&quot;注册表中所有案件的未完成任务，加入全局队列。每位律师同时发送 2 页。</li>
+<li>每一页的处理：用 pypdfium2 以 200 DPI 渲染为 PNG（长边不超过 2480 像素），<strong>在内存中</strong>直接发送到 <code>/v1/ocr/page</code>，不写临时文件；结果写入 <code>工作区/材料/识别页/&lt;材料编号&gt;/&lt;页号&gt;.md</code>，标记该页已完成。</li>
+<li>整份材料的页全部完成（或失败）后，重新生成材料文本（第 5.3 节），更新检索索引，发系统通知（第 3.4 节 U-7）。</li>
+</ol>
+<p><strong>不同情况下的行为</strong>（写进操作说明）：</p>
+<table>
+<thead>
+<tr>
+<th>律师的操作</th>
+<th>识别</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>关闭窗口（软件留在托盘）</td>
+<td>继续进行</td>
+</tr>
+<tr>
+<td>切换到其他案件</td>
+<td>继续进行（任务绑定原案件）</td>
+</tr>
+<tr>
+<td>从托盘完全退出软件、关机、合盖睡眠、断网</td>
+<td>暂停，不再发送后续页；正在发送的那一页作废</td>
+</tr>
+<tr>
+<td>重新打开软件、恢复网络</td>
+<td>自动继续，从第一个未完成的页开始；&quot;发送中&quot;的页重新发送</td>
+</tr>
+<tr>
+<td>395 停机</td>
+<td>暂停，显示&quot;等待 395 恢复&quot;，每 30 秒探测一次，恢复后自动继续</td>
+</tr>
+</tbody>
+</table>
+<p>395 不保存任何结果，所以识别只在律师电脑开着软件时进行；这与 PRD F-NODE-03～07 一致，不承诺&quot;关机后服务端继续处理&quot;。</p>
+<h3 id="7-3-出错和中断">7.3 出错和中断</h3>
+<table>
+<thead>
+<tr>
+<th>情况</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>连接失败或超时</td>
+<td>任务转为&quot;已暂停&quot;；每 30 秒探测一次 <code>/health</code>，恢复后自动继续（F-NODE-05、F-NODE-07）</td>
+</tr>
+<tr>
+<td>503</td>
+<td>按 <code>Retry-After</code> 等待后重试，不计入失败次数</td>
+</tr>
+<tr>
+<td>504 或 5xx</td>
+<td>该页重试，最多 3 次；3 次都失败则标为失败，继续处理下一页</td>
+</tr>
+<tr>
+<td>401</td>
+<td>整个任务暂停，提示&quot;Key 无效或已停用，请联系管理员&quot;</td>
+</tr>
+<tr>
+<td>400 或 413</td>
+<td>该页标为失败，附原因</td>
+</tr>
+<tr>
+<td>取消</td>
+<td>未发送的页标为已取消，正在发送的请求立即断开（395 端的处理见第 6.5 节），已完成的页保留（F-NODE-06）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>每页有唯一编号（<code>job_id + page_no</code>），结果写入是幂等的，重发不会重复写入。</li>
+<li>原件哈希变了、而识别结果还是基于旧版本时，材料列表中标&quot;过期&quot;。</li>
+</ul>
+<h3 id="7-4-6000D-临时接管识别-可选">7.4 6000D 临时接管识别（可选）</h3>
+<p>管理员在设置中开启后，395 不可用时改为发到 6000D：模型支持图片输入，请求格式为 OpenAI 的 <code>image_url</code>（base64），提示词与 395 的视觉模型一致。默认关闭。<span class="wait">〔待 G-5 之后决定是否做〕</span></p>
+<hr />
+<h2 id="8-6000D-接入">8. 6000D 接入</h2>
+<h3 id="8-1-请求约定">8.1 请求约定</h3>
+<p>两条调用路径用同一套约定：</p>
+<ul>
+<li><strong>Agent</strong>：DSH 的 <code>dsh-llm-pi-ai</code> 适配器，按 OpenAI 兼容接口配置一条路由（写在组合包补丁的 <code>llm-pi-ai</code> 行）：<pre><code class="language-yaml">providers:
+  lawfirm:
+    displayName: 律所模型
+    api: openai-completions
+    baseURL: http://&lt;6000D&gt;:8000/v1
+    apiKeyEnv: LAWFIRM_KEY            # 通过 ctx.credentials 解析
+    timeoutMs: 1200000
+    models:                           # 三个条目只差 contextWindow，对应律师选的窗口（第 8.2 节）
+      - id: lawfirm-32k               # DSH 内部标识；发给网关的模型名必须是 qwen38-27b（见第 8.2 节<span class="wait">〔待验证〕</span>）
+        name: 律所模型（32K）
+        contextWindow: 32768
+        input: [text]                 # 图片走 395，不给 Agent 发图
+        reasoningEfforts: {off: null, low: low, medium: medium, high: high}
+      # - 64K、128K 两个条目写法相同，contextWindow 分别为 65536、131072
+    compat:
+      supportsStore: false
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+      thinkingFormat: qwen-chat-template   # pi-ai 支持的取值之一：按思考档位发送 chat_template_kwargs.enable_thinking
+</code></pre>
+配好后抓一次请求核对：关闭档是否发出 <code>enable_thinking: false</code>，低 / 中 / 高是否带上 <code>reasoning_effort</code>；带不上的，用 <code>chatTemplateKwargs</code> 补<span class="wait">〔待验证〕</span>。</li>
+<li><strong>流水线</strong>：工作台服务直接调用 <code>http://&lt;6000D&gt;:8000/v1/chat/completions</code>，流式输出，请求体沿用 wiki 测试的 <code>run_pipeline_v2.py</code>。</li>
+<li>请求头：<code>Authorization: Bearer &lt;律师 Key&gt;</code>。流水线另加 <code>X-Session-Id: &lt;案件编号前 8 位&gt;-&lt;任务编号&gt;</code>，让同一任务的请求落到同一张卡，命中前缀缓存；Agent 路由在 profile 里配置的请求头是固定的；DSH 会把会话 ID 作为 <code>sessionId</code> 交给 pi-ai，它是否会变成请求头，抓请求核对<span class="wait">〔待验证〕</span>，不会就不带，由网关按默认规则分卡。</li>
+<li>温度：流水线用 0.2；Agent 用 Skill 推荐值，默认 0.3。</li>
+</ul>
+<p><strong>律师 Key 的存放</strong>（D9，PRD F-ACC-01a）：DSH 从 <code>ctx.credentials</code> 取 Key，默认实现 <code>credentials-local</code> 把 Key 明文存在 <code>$DSH_HOME/.credentials.yaml</code>，本项目不用它。</p>
+<ul>
+<li><strong>我方凭据插件</strong> <code>lawbench-dsh/credentials</code>：实现与 <code>credentials-local</code> 相同的服务接口，通过组合包补丁替换 <code>credentials-local</code> 行（第 3.1 节）。Key 存在 Windows 凭据管理器的&quot;普通凭据&quot;中，目标名固定为 <code>lawbench/LAWFIRM_KEY</code>，用户名字段写 <code>lawbench</code>。Node 侧用 Windows 的 <code>CredWriteW</code> / <code>CredReadW</code>（经 N-API 原生模块或 PowerShell 调用均可，由开发工单选定并在安装包中内置，不在运行时下载）。</li>
+<li><strong>首次配置页</strong>写入 Key；设置页可以更换 Key。</li>
+<li><strong>工作台服务</strong>用 Python <code>keyring</code>（Windows 后端）读同一条目：<code>keyring.get_password(&quot;lawbench/LAWFIRM_KEY&quot;, &quot;lawbench&quot;)</code>〔待验证：keyring 的 Windows 后端与 <code>CredWriteW</code> 写入的目标名、用户名能否对上；对不上时两边统一改用 keyring 约定的格式〕。只读，不缓存到文件。</li>
+<li><strong>验收</strong>：<code>$DSH_HOME/.credentials.yaml</code> 不存在或不含 Key；在&quot;凭据管理器 → Windows 凭据&quot;中能看到该条目；换一个 Windows 账号登录读不到。</li>
+</ul>
+<h3 id="8-2-参数映射">8.2 参数映射</h3>
+<table>
+<thead>
+<tr>
+<th>界面</th>
+<th>Agent（DSH）</th>
+<th>流水线（请求体）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>思考：关闭</td>
+<td><code>reasoningEffort: off</code></td>
+<td><code>chat_template_kwargs: {&quot;enable_thinking&quot;: false}</code></td>
+</tr>
+<tr>
+<td>思考：低 / 中 / 高</td>
+<td><code>reasoningEffort: low / medium / high</code>（Agent 插件在 <code>agent/request</code> 中按任务单设置）</td>
+<td><code>chat_template_kwargs: {&quot;enable_thinking&quot;: true, &quot;reasoning_effort&quot;: &quot;low&quot; / &quot;medium&quot; / &quot;high&quot;}</code></td>
+</tr>
+<tr>
+<td>窗口 32K / 64K / 128K</td>
+<td>插件在 <code>agent/request</code> 中按任务单选择对应窗口的模型条目（<code>LlmCallConfig.model</code>）；控制 L1 长度；DSH 按该条目的 <code>contextWindow</code> 压缩历史（见下）</td>
+<td>客户端按窗口控制&quot;输入 token + max_tokens&quot;</td>
+</tr>
+<tr>
+<td>最大生成量</td>
+<td><code>maxTokens</code>（插件设置）</td>
+<td><code>max_tokens</code></td>
+</tr>
+</tbody>
+</table>
+<p>思考三档是否有实际差异<span class="wait">〔待 G-7〕</span>；没有差异就合并为&quot;开&quot;。服务器上限是 262144。</p>
+<ul>
+<li><strong>流水线</strong>：token 数用内置的 tokenizer.json 计算（<code>llm/tokens.py</code>），按整条请求计：系统提示 + 本步输入 + <code>max_tokens</code>，超过窗口就先切小再发。</li>
+<li><strong>Agent</strong>：整条请求由 DSH 组装（系统提示、工具定义、历史消息、已加载的 Skill、工具返回），插件拿不到完整请求，所以分两层控制：
+<ul>
+<li>插件控制自己加进去的内容：L0 不超过 6000 字；L1 不超过窗口的 40%（按 token 计），即 32K 窗口约 13000 token、64K 约 26000 token、128K 约 52000 token（按 tokenizer.json 计，不按字数），超出的输入只列目录；</li>
+<li>整体交给 DSH：律师选的窗口对应路由中的一个模型条目（三个条目只差 <code>contextWindow</code>），插件在 <code>agent/request</code> 中设置 <code>model</code> 为该条目；DSH 的用量统计（<code>token-meter</code>）和上下文压缩（preset 里的 compaction 组）按它工作；仍然超限时，网关返回超出上下文的错误，按第 8.3 节提示律师。</li>
+<li><span class="wait">〔待验证〕</span>pi-ai 能否让三个条目发给网关的模型名都是 <code>qwen38-27b</code>（条目 id 不同、请求中的 model 相同）。不能时的备选：只配一个 128K 条目，律师选的窗口只控制 L1 长度和最大生成量，历史压缩统一按 128K。</li>
+</ul>
+</li>
+<li>超出窗口时，发送前就在界面提示&quot;材料超出当前窗口，请缩小范围或调大窗口&quot;（F-PARAM-04），不截断。</li>
+<li>参数取值的优先级按 PRD F-PARAM-03 实现；个人预设存在 <code>&lt;应用数据&gt;/settings.json</code>。</li>
+</ul>
+<h3 id="8-3-超时和错误提示">8.3 超时和错误提示</h3>
+<table>
+<thead>
+<tr>
+<th>情况</th>
+<th>判断方式</th>
+<th>提示（中文）</th>
+<th>重试</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>连不上</td>
+<td>连接被拒绝或超时（10 秒）</td>
+<td>无法连接服务器，请检查网络</td>
+<td>1 次</td>
+</tr>
+<tr>
+<td>Key 无效或已停用</td>
+<td>401 / 403</td>
+<td>Key 无效或已停用，请联系管理员</td>
+<td>否</td>
+</tr>
+<tr>
+<td>繁忙</td>
+<td>503</td>
+<td>服务器繁忙，排队已超过 5 分钟，请稍后再试</td>
+<td>否</td>
+</tr>
+<tr>
+<td>超出上下文</td>
+<td>400，且错误信息包含 context length</td>
+<td>内容超出模型上限</td>
+<td>否</td>
+</tr>
+<tr>
+<td>输出被截断</td>
+<td><code>finish_reason == &quot;length&quot;</code></td>
+<td>输出达到上限，已保存为草稿，可调大&quot;最大生成量&quot;后继续</td>
+<td>否</td>
+</tr>
+<tr>
+<td>单次请求过长</td>
+<td>客户端计时超过 1200 秒</td>
+<td>本次生成时间过长，已停止并保存草稿</td>
+<td>否</td>
+</tr>
+</tbody>
+</table>
+<p>排队时长取响应头 <code>X-Queue-Wait-Ms</code>，显示在运行状态中（F-RUN-01）。</p>
+<p>上表是流水线（工作台服务）的处理。Agent 路径的错误由 DSH 的 LLM 适配器报出：插件在 <code>session/event</code> 中把结束原因写进结果清单；DSH 界面上的错误文字按上表改为中文〔核对 DSH 现有文案，缺的补〕。DSH 的 <code>llm-retry</code> 默认会重试，改为最多 1 次，不对 401 / 403 重试。</p>
+<h3 id="8-4-取消">8.4 取消</h3>
+<ul>
+<li>客户端断开连接后，网关记录状态 499，vLLM 随之中止生成（服务器报告 4.1 节）。</li>
+<li>流水线取消：设置取消标志，中止所有正在进行的请求，已完成的步骤保存为草稿。</li>
+<li><strong>确认服务端真的停了（F-RUN-02）</strong>：取消后 10 秒内，客户端调用网关的 <code>/status</code>，确认本 Key 没有在途请求（〔待验证 <code>/status</code> 是否按 Key 返回；如果不能，就只在验收时用 <code>/admin</code> 和 vLLM 的 <code>num_requests_running</code> 指标人工确认〕）。</li>
+</ul>
+<h3 id="8-5-并发">8.5 并发</h3>
+<p>每位律师在客户端同时最多 2 个 6000D 请求（与计划中网关&quot;每人 2 路&quot;一致）；流水线的并行度也是 2。</p>
+<h3 id="8-6-需要甲方在-6000D-上改的配置">8.6 需要甲方在 6000D 上改的配置</h3>
+<ol>
+<li>网关 <code>require_key=true</code>，为每位律师发 Key，删除默认 Key <code>bld</code>。</li>
+<li>两个 vLLM 实例改为 <code>--host 127.0.0.1</code>。</li>
+<li><code>keys.json</code> 改为 <code>chmod 600</code>。</li>
+</ol>
+<p>建议但本次不强制：每 Key 并发限制、上游超时（<code>sock_read=1200</code>）、ufw 防火墙。</p>
+<hr />
+<h2 id="9-上下文编排和出处">9. 上下文编排和出处</h2>
+<h3 id="9-1-流水线-D6">9.1 流水线（D6）</h3>
+<p>参照 wiki 测试的 <code>run_pipeline_v2.py</code>，把它改成 <code>pipeline/runner.py</code> 通用框架：</p>
+<ul>
+<li><strong>每个步骤</strong> = 取输入 → 拼提示词 → 调用模型 → 清理输出 → 核对出处 → 不通过时只把有问题的部分交回模型修改（最多 2 轮；改完内容没变化就停止）→ 写入草稿。</li>
+<li><strong>提示词</strong>：放在 Skill 目录的 <code>流水线提示词.md</code> 里，按 <code>## 标题</code> 分段；系统提示 = &quot;通用规则&quot;段 + 本步骤段。修改规则只改这个文件，不改程序。</li>
+<li><strong>长材料</strong>：按页切段，每段约 8000 字，一段一次调用。</li>
+<li><strong>表格类材料</strong>（银行流水、通话详单）的摘要页：<strong>只用于 wiki 摘要这一步</strong>，目的是让摘要篇幅可控。由程序按筛选条件列出部分行（wiki 测试用的是：对方为个人、金额 ≥ 10,000、取现、含 ■ 的行），其余只计数；筛选条件写在 Skill 的配置里，可按案件调整。规则：
+<ul>
+<li>摘要页开头写明筛选条件和&quot;已列出 X 行 / 共 Y 行&quot;，材料清单中该材料标&quot;摘要为筛选结果，非全量&quot;；</li>
+<li>原文不删，全部行都在检索索引里，AI 和律师都能查到；</li>
+<li>阅卷笔录、证据矛盾等其他 Skill <strong>默认不筛选</strong>，需要筛选时由该 Skill 定义并在成果中注明范围；筛选过的材料不计为&quot;已读完&quot;。
+判断是否为表格类材料：以 <code>|</code> 开头的行占全部行数的 60% 以上。</li>
+</ul>
+</li>
+<li><strong>材料清单、目录、日志</strong>由程序生成，不经过模型，覆盖情况一定准确（F-CITE-03）。</li>
+<li><strong>进度</strong>：界面显示&quot;第 k 步 / 共 n 步，当前处理：&lt;材料名&gt;&quot;。</li>
+<li><strong>任务记录</strong>：流水线也是一个任务，编号形如 <code>P-&lt;时间&gt;</code>，与 Agent 任务一样使用 <code>工作区/任务/&lt;任务编号&gt;/</code>（task.json、草稿/、result.json），成果确认流程相同。</li>
+</ul>
+<p>案件 wiki 的步骤：逐份材料写摘要 → 程序生成材料清单 → 当事人、时间线、争议焦点、概览（每篇一次调用）→ 生成案件卡片 <code>case.json</code>（一次调用，从四篇文章中摘取当事人、争议焦点、关键事实，每条带出处，状态为&quot;原文摘录&quot;或&quot;模型生成（未确认）&quot;）→ 程序写目录和日志 → 全文核对。卡片中的&quot;本方立场&quot;由律师在界面上填写；律师在界面上确认某条后，状态改为&quot;律师确认&quot;。各步骤的提示词在 <code>skills/case-wiki-build/流水线提示词.md</code>，步骤名固定（<a href="../contracts/formats.md"><code>contracts/formats.md</code></a> 第 6 节）。案件类型（刑事 / 民事 / 合同 / 其他）在生成卡片时判断，写入 <code>case.json</code> 的 <code>case_type</code>。</p>
+<p><strong>使用 395 的 9B</strong>（律师勾选&quot;使用 395 抽取&quot;时，F-ENT-04）：在&quot;逐份材料写摘要&quot;之前，先把每份材料按页切成不超过 16000 字的段，调用 395 <code>/v1/extract</code> 做材料分类（<code>classify</code>）和字段抽取（<code>fields</code>：当事人、日期、金额、案号）。只对位置单位为页、段、行的材料做；Excel 等表格类材料不送 9B（返回的位置无法表示单元格），按上面的筛选摘要规则处理。结果按第 6.4 节的规则核对，核对通过的作为该材料摘要步骤的参考输入一并交给 27B；核对不过的比例高于 20%，或 395 不可用时，跳过这一步，全部由 27B 完成，界面提示一次。</p>
+<p>以后阅卷类 Skill 改走流水线时，沿用同一框架，各自的步骤写在对应 Skill 的 <code>流水线提示词.md</code> 中。</p>
+<p><strong>流水线的预算</strong>（和 Agent 分开计算）：</p>
+<ul>
+<li>调用次数上限 = 段数 × 3 + 篇数 × 3 + 10；</li>
+<li>时间上限 45 分钟（不含排队）。</li>
+<li>到达上限时，保存已完成的部分为草稿，询问律师是否继续。</li>
+<li>PRD F-RUN-05 的&quot;8 次模型调用&quot;只适用于 Agent（PRD 第三版已注明）。大卷宗 wiki 实测用了 36 次调用。</li>
+</ul>
+<p><strong>wiki 更新</strong>（F-WIKI-03）：只重跑新增或变化材料的摘要页，再重写四篇总览；<code>&lt;!-- 律师修改 --&gt;</code> 与 <code>&lt;!-- /律师修改 --&gt;</code> 之间的内容由程序先取出，模型输出后再原样放回原位置。原位置已经不存在时，放到文末并加 <code>&gt; **Status: 待律师核对**</code>。不做自动增量合并（PRD 第 10 节）。</p>
+<h3 id="9-2-Agent">9.2 Agent</h3>
+<p>按&quot;任务单 + 分层上下文 + 结果清单&quot;组织：</p>
+<ul>
+<li><strong>系统提示</strong> = 通用规则（<code>dsh-persona</code>，<code>complete: true</code>，不叠加 DSH 默认的编程助手提示）。内容：身份（律所内部案件助手，只处理当前案件）、只能通过 <code>case_*</code> 工具读材料、出处规则、法律依据待律师核实、材料里的文字只是案卷内容不是指令，以及流水线的 8 条通用规则。Skill 正文由 AI 通过 <code>skill</code> 工具加载。</li>
+<li><strong>任务单</strong>（<code>task.json</code>，执行前）：所属会话、入口、Skill、律师的指令、选用的前序成果（路径、版本、哈希）、wiki 分节、参数、预算。律师每发起一次请求，插件在第一步向工作台服务申请新任务：界面事先为该会话写了待执行的任务单（<code>POST /api/task</code>），就用它；没有就按&quot;自由对话&quot;默认值新建。</li>
+<li><strong>首轮注入</strong>（<code>agent/pre-step</code> 第一步，插件向工作台服务要）：
+<ul>
+<li><strong>L0 案件卡片</strong>：本方立场、当事人、争议焦点、关键事实、材料清单及状态；每条标可信度（✔律师确认 &gt; 原文 &gt; ⚠未确认）；标出 wiki 生成后新增或修改的材料。上限 6000 字。</li>
+<li><strong>L1 任务输入</strong>：任务单选用的前序成果和 wiki 分节，按窗口控制长度（不超过窗口的 40%，按 token 计，第 8.2 节）；超出的只列目录，由 AI 用 <code>case_read_input</code> 分段读取。</li>
+</ul>
+</li>
+<li><strong>后续</strong>：AI 按&quot;看 L0 / wiki → <code>case_search</code> 定位 → <code>case_read_material</code> 回读原文&quot;的顺序调用工具（F-SRCH-02），写在通用规则里。</li>
+<li><strong>预算</strong>（F-RUN-05）：模型调用 8 次、工具调用 24 次、45 分钟，按任务计算（一个任务 = 律师发起的一次请求）。由 Agent 插件实现：<code>agent/pre-step</code> 超限时拒绝，最后一次调用前注入&quot;立即收尾&quot;；<code>tools/pre-execute</code> 超限时拒绝工具调用，<strong>但 <code>case_save_draft</code> 不计入、也不受工具预算限制</strong>，保证模型总有机会保存。</li>
+<li><strong>结果清单</strong>（<code>result.json</code>，执行后）：状态（完成 / 取消 / 预算停止 / 输出上限 / 失败）、实际用量、草稿、出处核对结果、覆盖清单。覆盖清单按 <code>reads.json</code> 的实际读取记录计算，不采信模型自报。</li>
+<li>正常完成前应调用 <code>case_save_draft</code>；返回有 A–E、G 类问题或有未读完的材料时，修正后用同一标题再保存（最多 2 轮）。</li>
+<li><strong>中断时由程序保存</strong>（F-RUN-04）：不依赖模型调用工具。
+<ul>
+<li>执行中：插件监听 <code>session/event</code> 中的 <code>assistant/message</code> 事件（模型每完成一次回复就有一条），把回复文本交给工作台服务，覆盖写入 <code>草稿/进行中.md</code>，并更新结果清单中的进度（已用调用次数、已读材料）。</li>
+<li>结束时（<code>turn/end</code>，含取消、预算停止、输出上限、出错）：由程序写结果清单的最终状态；本任务没有保存过正式草稿的，把 <code>进行中.md</code> 改名为 <code>未完成-&lt;时间&gt;.md</code>。</li>
+<li>硬退出（进程被结束、断电）：下次打开案件时，发现状态仍为&quot;执行中&quot;的任务，标为&quot;异常中断&quot;，保留已有的 <code>进行中.md</code>。</li>
+<li>模型主动调用 <code>case_save_draft</code> 用于保存结构化的正式草稿，不是异常情况下唯一的保存途径。</li>
+</ul>
+</li>
+</ul>
+<h3 id="9-3-出处格式">9.3 出处格式</h3>
+<ul>
+<li>正文中的写法：<code>〔材料名 第N页〕</code>、<code>〔材料名 第N段〕</code>、<code>〔材料名 工作表!B12〕</code>、<code>〔材料名 第N行〕</code>；范围写 <code>第N-M页</code>；同一括号内多处用顿号分隔，每处都写材料名。严格写法（正则）见第 20.2 节，Skill 的共用规则与之一致。</li>
+<li><strong>材料名唯一</strong>：规则见第 20.2 节（先用文件名，重名时依次改用相对路径、带扩展名的相对路径），由 <code>case_list_materials</code> 给出，AI 照抄。底层每条出处都解析为 <code>材料编号 + 版本（原件哈希）+ 位置</code>，记录在任务的结果清单里；原件之后变了（哈希不同），点这条出处时提示&quot;原件已更新，出处可能对不上，请重新核对&quot;；不保留旧版本的材料文本。</li>
+<li><strong>出处用六角括号 <code>〔〕</code></strong>，与材料文本里的位置标记 <code>【第N页】</code> 区分开（wiki 测试已验证这种写法）。</li>
+<li>找不到依据写 <code>〔未找到依据〕</code>，推断写 <code>〔推断〕</code>。</li>
+<li>法律内容没有律师提供的依据的，加&quot;（法律依据待律师核实）&quot;（F-CITE-04）。</li>
+<li>在界面上，出处渲染为可点击链接，点击后打开原文查看并定位：PDF 显示对应页的页面图片，其他格式滚动到对应段、行或单元格（F-CITE-01）。不做文字高亮（PRD 第 10 节）。</li>
+<li>导出为 Word 时，出处保留为纯文本。</li>
+</ul>
+<h3 id="9-4-出处核对-checks">9.4 出处核对（<code>checks/</code>）</h3>
+<p>把 wiki 测试中的 <code>check_evidence.py</code> 和 <code>check_citations.py</code> 改成库函数（输入一篇文本和材料集合，输出问题列表），流水线和 <code>case_save_draft</code> 共用：</p>
+<table>
+<thead>
+<tr>
+<th>类</th>
+<th>含义</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>疑似补全：原文是&quot;8■,000.00&quot;，文中写成完整值</td>
+<td>必须修改</td>
+</tr>
+<tr>
+<td>B</td>
+<td>页码不对：值存在，但不在所标的那一页</td>
+<td>必须修改</td>
+</tr>
+<tr>
+<td>C</td>
+<td>所引材料中找不到这个值</td>
+<td>必须修改</td>
+</tr>
+<tr>
+<td>D</td>
+<td>头部 Raw 字段漏了正文引用的材料（仅 wiki）</td>
+<td>必须修改</td>
+</tr>
+<tr>
+<td>E</td>
+<td>出处格式错误</td>
+<td>必须修改</td>
+</tr>
+<tr>
+<td>F</td>
+<td>含金额或日期但没有出处</td>
+<td>提示</td>
+</tr>
+<tr>
+<td>G</td>
+<td>评价性用语（可信度、佐证、预谋、构成犯罪…），引号内的原文不算</td>
+<td>按成果类型，见下</td>
+</tr>
+</tbody>
+</table>
+<p><strong>按成果类型区分</strong>：在 Skill 头部用 <code>kind</code> 声明成果类型。</p>
+<ul>
+<li><code>excerpt</code>（摘录类：wiki、阅卷笔录、时间线）：要求忠实原文。A–E、G 类都必须修改。</li>
+<li><code>analysis</code>（分析类：证据矛盾分析、合同审查意见）和 <code>draft</code>（文书类：辩护意见、律师函、合同）：允许有依据的判断。A–E 类必须修改；G 类只提示，但判断性的句子要标明是&quot;分析意见&quot;并带出处。</li>
+</ul>
+<p><strong>核对能证明什么</strong>：这套核对只能证明&quot;这个数字、日期、引语在所标的材料位置原样存在&quot;，不能证明那一页支持整句话的结论。所以界面上叫&quot;数值与出处位置核对&quot;，不叫&quot;事实已核验&quot;；结论是否成立由律师判断。</p>
+<p>需要扩展的地方：支持单元格和行号出处；中文数字金额（如&quot;十八万元&quot;）的比对〔先列为提示，不做自动比对〕。</p>
+<p>核对结果随成果一起显示在&quot;自检结果&quot;中（F-SKILL-03）。</p>
+<hr />
+<h2 id="10-Skill-和入口">10. Skill 和入口</h2>
+<h3 id="10-1-加载位置">10.1 加载位置</h3>
+<p>只从以下两处加载，按顺序，同名时后者覆盖前者（F-SKILL-06）：</p>
+<ol>
+<li><code>&lt;安装目录&gt;/skills/</code>：随安装包内置，只读。</li>
+<li><code>%ProgramData%\&lt;产品名&gt;\skills\</code>：管理员下发。普通用户账号不可写（由安装程序设置权限）。</li>
+</ol>
+<p>实现：<code>dsh-skill-filesystem</code> 设 <code>includeDefaultRoots: false</code>，<code>customSkillDirs</code> 只列这两个目录（第 3.1 节）。这样<strong>不会</strong>扫描 <code>&lt;案件&gt;/.dsh/skills</code>、<code>&lt;案件&gt;/.agents/skills</code> 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。</p>
+<p>Skill 中的 <code>scripts/</code> 只由工作台服务从以上位置导入执行，AI 不能执行。</p>
+<p><strong>DSH 对 Skill 的要求</strong>：<code>SKILL.md</code> 头部必须有 DSH 识别的 <code>name</code>（英文短名，即目录名）和 <code>description</code>（触发说明）；下面的扩展字段 DSH 不读，由工作台服务读取。</p>
+<h3 id="10-2-目录结构">10.2 目录结构</h3>
+<pre><code>skills/
+├─ _shared/共用规则.md   所有业务 Skill 共用的规则，由 build_skills.py 同步进每个 SKILL.md，不在单个 Skill 里改
+├─ _scripts/            build_skills.py（同步共用规则并校验）、install.py（复制到安装目录）、skill_manifest.py（校验规则）
+├─ entries/             入口清单（第 10.3 节）
+└─ &lt;skill-id&gt;/          每个 Skill 一个文件夹，平铺
+   ├─ SKILL.md          头部信息 + 六部分正文
+   ├─ 流水线提示词.md    流水线类 Skill 才有（本次只有 case-wiki-build），分段约定见 contracts/formats.md 第 6 节
+   ├─ references/       输出模板、文书模板
+   ├─ scripts/          专用核对脚本（可选）
+   └─ tests/
+      ├─ 样本01/ …      至少 4 个样本（虚构或脱敏材料）
+      └─ 要点.md        每个样本必须找出的要点和扣分项（格式参照大卷宗的&quot;标准答案.md&quot;）
+</code></pre>
+<p><code>SKILL.md</code> 头部信息（契约 <a href="../contracts/skill/frontmatter.schema.json"><code>contracts/skill/frontmatter.schema.json</code></a>）：</p>
+<pre><code class="language-yaml">---
+name: criminal-reading-notes   # DSH 用；与目录名一致
+title: 刑事阅卷笔录             # 界面显示
+description: 刑事阅卷笔录。律师要求对刑事案件卷宗阅卷、制作阅卷笔录……时使用。
+mode: agent               # pipeline 或 agent
+kind: excerpt             # 成果类型：excerpt 摘录 / analysis 分析 / draft 文书（决定 G 类核对规则，第 9.4 节）
+entry: 刑事阅卷            # 入口名；可以是列表（如 [合同审查, 合同起草]）；&quot;共用&quot;表示每个入口都有
+order: 2                  # 在入口中的推荐顺序
+params: {thinking: 低, window: 64K, max_tokens: 16384}
+owner: 待定               # 责任律师；发版校验（build_skills.py --strict）时不能是&quot;待定&quot;
+inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior 前序成果
+---
+</code></pre>
+<p>正文必须包含六个二级标题：<code>## 适用场景</code>、<code>## 输入</code>、<code>## 必问问题</code>、<code>## 处理步骤</code>、<code>## 输出模板</code>、<code>## 自检清单</code>（F-SKILL-01）。加载时检查，缺少任何一个就不加载，并在设置页提示管理员。</p>
+<ul>
+<li><strong>必问问题</strong>：每条写成 <code>- key：问题（可从材料中获取：是/否）</code>。Agent 在开始时调用 DSH 的 <code>ask_user_question</code>，把能从材料里找到的值预先填好，请律师确认（F-SKILL-02）。</li>
+<li><strong>自检清单</strong>：每条是一句可以检查的规则。AI 在输出前逐项自查并写出结果；另外，<code>case_save_draft</code> 的核对结果一并显示。</li>
+</ul>
+<p><strong>本次的 Skill</strong>：按《五个业务能力编排》写好的 13 个 Skill，唯一存放位置是仓库的 <code>skills/</code>（<code>D:\lawbench\skills</code>；原来的 <code>D:\新建文件夹\skill临时文件夹</code> 只作存档，不再修改），全部按本节格式，<code>build_skills.py</code> 和契约自检（<code>contracts/check_examples.py --skills</code>）都已通过。律师提供的 11 个参考 Skill 不放进仓库、不被加载（第 2 节&quot;不用的组件&quot;），仍在存档目录中供参考。</p>
+<p><strong>Skill 的工作流程</strong>：改了 Skill 或入口清单后，运行 <code>python skills/_scripts/build_skills.py</code>（同步共用规则并校验，发版时加 <code>--strict</code>），再由打包脚本运行 <code>install.py --out &lt;安装目录&gt;/skills</code>。</p>
+<h3 id="10-3-入口清单">10.3 入口清单</h3>
+<p><code>skills/entries/&lt;序号&gt;-&lt;id&gt;.yaml</code>（契约 <a href="../contracts/skill/entry.schema.json"><code>contracts/skill/entry.schema.json</code></a>），文件名排序即首页顺序：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>入口</th>
+<th>Skill（按推荐顺序）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>1-criminal-reading.yaml</code></td>
+<td>刑事阅卷</td>
+<td>case-wiki-build → criminal-reading-notes → criminal-evidence-review → pre-issue-check → doc-revise → legal-workflow</td>
+</tr>
+<tr>
+<td><code>2-criminal-docs.yaml</code></td>
+<td>刑事文书</td>
+<td>case-wiki-build → defense-opinion / cross-exam-opinion / criminal-applications → pre-issue-check → doc-revise → legal-workflow</td>
+</tr>
+<tr>
+<td><code>3-contract-review.yaml</code></td>
+<td>合同审查</td>
+<td>case-wiki-build → contract-review → pre-issue-check → doc-revise → legal-workflow</td>
+</tr>
+<tr>
+<td><code>4-contract-draft.yaml</code></td>
+<td>合同起草</td>
+<td>case-wiki-build → contract-draft → contract-review → pre-issue-check → doc-revise → legal-workflow</td>
+</tr>
+<tr>
+<td><code>5-general.yaml</code></td>
+<td>通用文书</td>
+<td>case-wiki-build → case-reading-notes → general-drafting → pre-issue-check → doc-revise → legal-workflow</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-yaml">id: criminal-reading
+name: 刑事阅卷
+skills: [case-wiki-build, criminal-reading-notes, criminal-evidence-review, pre-issue-check, doc-revise, legal-workflow]
+outputs: [刑事阅卷笔录, 证据审查意见]
+</code></pre>
+<ul>
+<li><code>case-wiki-build</code> 是流水线 Skill：在入口中显示为&quot;生成 / 更新案件 wiki&quot;按钮，调用 <code>POST /api/pipeline/run</code>，不进入对话。其余 Skill 都在对话中运行（写任务单后由 Agent 执行）。</li>
+<li>首页显示 5 个入口，顺序和名称都来自清单文件，增减入口不改程序。</li>
+<li>入口内按顺序列出 Skill，律师可以跳过或单独运行任何一个，也可以自由对话。</li>
+<li><strong>选用前序成果</strong>（F-ENT-02、F-ENT-03）：运行时，律师可以勾选本案的任意草稿或成果（包括其他入口产生的）作为输入。任务单的 <code>inputs</code> 记录每个输入的路径、版本号和 sha256；执行时核对哈希，选用后被改过的，提示律师复核。上游修改后生成新版本，不覆盖下游。</li>
+</ul>
+<hr />
+<h2 id="11-全文检索-search">11. 全文检索（<code>search/</code>）</h2>
+<ul>
+<li>每个案件一个 FTS5 表，放在 <code>case.db</code> 中，使用 <code>tokenize='trigram'</code>。</li>
+<li><strong>索引单位</strong>：一页、一段、一个工作表的每 20 行，或文本文件的每 50 行；每条记录包含 <code>material_id, loc, text, text_norm</code>。</li>
+<li><strong>归一化</strong>（<code>text_norm</code>，查询词也做同样处理）：全角转半角；去掉数字中的千分位逗号；统一空白字符。</li>
+<li><strong>短词</strong>：trigram 要求至少 3 个字。查询词 1–2 个字时，改为在 <code>text_norm</code> 上用 <code>instr</code> 逐条扫描。单个案件的数据量在几十 MB 以内，速度可以接受。<strong>保证不会静默搜不到</strong>（F-SRCH-03）。</li>
+<li><strong>查询扩展</strong>：
+<ul>
+<li>日期&quot;2025年3月10日&quot; ↔ &quot;2025-03-10&quot; ↔ &quot;2025.3.10&quot;；</li>
+<li>金额&quot;8万&quot; ↔ &quot;80000&quot; ↔ &quot;80,000&quot;；</li>
+<li>以上各写法同时查询，结果合并。</li>
+</ul>
+</li>
+<li><strong>返回</strong>：命中文字前后各 40 字作为片段，附出处；排序为：完全匹配 &gt; 扩展匹配，再按材料顺序。</li>
+<li><strong>验证集</strong>：用 G-9 的检索验证集（两字姓名、简称、日期、金额、案号）做自动测试，全部命中才算通过。</li>
+</ul>
+<hr />
+<h2 id="12-导出和修订版">12. 导出和修订版</h2>
+<h3 id="12-1-导出-export-pandoc-py">12.1 导出（<code>export/pandoc.py</code>）</h3>
+<ul>
+<li><strong>Word</strong>：<code>pandoc &lt;草稿&gt;.md -o &lt;成果&gt;.docx --reference-doc=&lt;律所模板&gt;.docx</code>。模板分为文书模板和合同模板，在设置中选择。出处保留为纯文本；可选择在文末附&quot;出处索引&quot;表。</li>
+<li><strong>Markdown</strong>：去掉指向工作区的链接，出处保留为纯文本。</li>
+<li><strong>确认流程</strong>（F-OUT-03）：草稿只存在 <code>工作区/任务/&lt;任务编号&gt;/草稿/</code>；律师点&quot;确认保存&quot;后，才导出到 <code>成果/&lt;标题&gt;-v&lt;N&gt;.&lt;md|docx&gt;</code>，版本号自动递增，并写入 <code>成果/索引.json</code>（来源任务、选用的输入、出处核对结果）。</li>
+</ul>
+<h3 id="12-2-修订版-Word-export-redline-py">12.2 修订版 Word（<code>export/redline.py</code>）</h3>
+<p><strong>修改清单格式</strong>（<code>contract-review</code> Skill 在保存审查意见后调用 <code>case_save_edit_list</code> 保存到 <code>工作区/任务/&lt;任务ID&gt;/修改清单/&lt;合同材料名&gt;.json</code>；契约 <a href="../contracts/tools/case_save_edit_list.schema.json"><code>contracts/tools/case_save_edit_list.schema.json</code></a>）。生成的修订版存为该任务的草稿 <code>草稿/&lt;合同材料名&gt;-修订版-v&lt;N&gt;.docx</code>，律师确认后与其他成果一样进入 <code>成果/</code>：</p>
+<pre><code class="language-json">[{&quot;id&quot;: 1, &quot;para&quot;: 37, &quot;action&quot;: &quot;replace&quot;, &quot;find&quot;: &quot;乙方应于收到货物后九十日内付款&quot;,
+  &quot;text&quot;: &quot;乙方应于收到货物后三十日内付款&quot;, &quot;comment&quot;: &quot;付款期限过长，建议缩短（理由……）&quot;}]
+</code></pre>
+<p><code>action</code> 取值：<code>replace</code>（替换）、<code>insert_after</code>（在 <code>find</code> 之后插入）、<code>delete</code>（删除）。<code>para</code> 与第 5.2 节 docx 的段号一致。</p>
+<p><strong>生成方法</strong>（lxml 直接操作 OOXML）：</p>
+<ol>
+<li>定位第 <code>para</code> 段，要求 <code>find</code> 在该段中<strong>恰好出现一次</strong>。</li>
+<li>按字符位置拆分 run，保留原来的格式属性（<code>w:rPr</code>）。</li>
+<li>被删除的部分包在 <code>&lt;w:del w:id w:author=&quot;AI审查（待律师确认）&quot; w:date&gt;</code> 中，并把 <code>w:t</code> 改为 <code>w:delText</code>；新文字包在 <code>&lt;w:ins&gt;</code> 中。</li>
+<li>批注：没有 <code>comments.xml</code> 时新建（同时补上关系文件和内容类型登记）；在修改处加 <code>commentRangeStart</code> / <code>commentRangeEnd</code> 和批注引用。</li>
+</ol>
+<p><strong>范围外的情况</strong>（PRD 4.7）：以下情况不修改该条，放入&quot;需人工修改&quot;清单，只在审查意见表中给出建议：</p>
+<ul>
+<li>目标段落在表格、文本框、页眉页脚中；</li>
+<li><code>find</code> 跨越域代码或超链接；</li>
+<li><code>find</code> 找不到或出现多次。</li>
+</ul>
+<p>原文<strong>已有修订痕迹</strong>的文件：整份不生成修订版，提示&quot;原文件含未处理的修订，请先接受或拒绝后再生成&quot;。</p>
+<p><strong>在本机生成</strong>（工作台服务）。甲方提纲原本放在 395，改动原因：修订版生成不需要模型，是纯程序处理；在本机做，合同不必发往服务器，也少一个依赖 395 的环节。<code>redline.py</code> 是独立的库，将来需要放到 395（例如客户门户）时，包一层接口即可。</p>
+<p><strong>验收</strong>：G-10 的样本在 Word 和 WPS 中都能显示修订，并能逐条接受或拒绝。</p>
+<hr />
+<h2 id="13-小工具-tools">13. 小工具（<code>tools/</code>）</h2>
+<p>两个小工具都是独立程序：Python 加 tkinter 界面，用 PyInstaller 打包；不连网，不调用模型。LibreOffice 和 pandoc 与客户端共用同一份安装。</p>
+<h3 id="13-1-长截图切分-F-TOOL-01">13.1 长截图切分（F-TOOL-01）</h3>
+<ol>
+<li>转为灰度图。对每一行计算该行像素与该行众数颜色的差值；差值 &lt; 8 的像素占 98% 以上的行，记为&quot;空白行&quot;。这样可以兼容聊天界面的彩色背景。</li>
+<li>设目标段高 H（默认 2000 像素，可以调整）。在 [0.6H, H] 的范围内找连续空白行（至少 6 行），选其中最长的一段，在中间切开。最长的空白段通常就是两条消息之间的间隔。</li>
+<li>范围内找不到空白段时，在 H 处切开，下一段向上重叠 120 像素，并在结果列表中标注&quot;此处可能切到文字&quot;。</li>
+<li>输出按 <code>原名_01.png</code> … 命名，放在原图旁的&quot;切分结果&quot;文件夹；可以选择合并为 PDF（用 Pillow）；支持批量处理；原图不动。</li>
+</ol>
+<h3 id="13-2-格式互转-F-TOOL-02">13.2 格式互转（F-TOOL-02）</h3>
+<table>
+<thead>
+<tr>
+<th>转换</th>
+<th>实现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>doc / wps → docx，xls → xlsx，Word → PDF</td>
+<td>LibreOffice headless</td>
+</tr>
+<tr>
+<td>PDF → Word</td>
+<td>仅限文字版 PDF：pypdfium2 取文字 → 按段落组织 → pandoc 输出 docx。<strong>只保留文字和段落，不保留版式</strong>，界面中写明</td>
+</tr>
+<tr>
+<td>Markdown ↔ Word</td>
+<td>pandoc</td>
+</tr>
+<tr>
+<td>图片 → PDF</td>
+<td>Pillow</td>
+</tr>
+</tbody>
+</table>
+<p>扫描件转 Word 不在本次范围内。</p>
+<hr />
+<h2 id="14-打包-安装-升级">14. 打包、安装、升级</h2>
+<h3 id="14-1-安装包">14.1 安装包</h3>
+<ul>
+<li>本次只出 <strong>Windows</strong>（Win10 / 11 x64）安装包；macOS 预留（PRD 9.4），我方插件和工作台服务按跨平台写法开发，但不做 macOS 的打包和测试。</li>
+<li>用 DSH 桌面端自带的打包流程（electron-builder，Windows 为 NSIS），命令如 <code>pnpm run package:desktop:win:x64:unsigned</code>。打包前设置我方的应用 ID、产品名、图标；更新地址留空（第 3.2 节）。</li>
+<li><strong>我方组合包怎么进安装包</strong>：桌面端的运行时是一棵打包好的依赖树（<code>app.asar/dsh</code>），启动时不运行 pnpm。做法是：
+<ol>
+<li>把 <code>lawbench-dsh</code> 加为 <code>@deepseek-ai/dsh</code> 的运行时依赖，使它被打进运行时（官方可选组合包就是这样打进去的）；</li>
+<li>把它加到桌面端 profile 模板的组合包列表末尾（官方 <code>packages/boot/app-boot/src/profile.ts</code> 中 <code>PROFILE_TEMPLATES.web</code>，桌面端 <code>apps/desktop/src/project-manager.ts</code> 用它初始化 profile），记为 DSH 源码修改 P-10。
+注意：已经存在的 profile 不会被重写，所以测试机要删掉旧的 <code>$DSH_HOME/profiles/desktop</code> 再装。</li>
+</ol>
+</li>
+<li>包内包含：DSH 定制版（含我方组合包）、Python 运行时及全部依赖（构建时离线安装好）、LibreOffice、pandoc、tokenizer.json、内置 Skill、Word 模板、第三方许可证清单。<strong>运行时不下载任何东西</strong>，也不执行任何包安装。</li>
+<li>桌面端安装器只面向当前用户安装；管理员下发 Skill 的公共目录由我方安装步骤单独创建并设权限。</li>
+<li>小工具单独打包，检测到已安装客户端时复用客户端的 LibreOffice 和 pandoc；没有安装客户端时自带一份。</li>
+<li>没有代码签名证书时（PRD 待确认 #5），在操作说明中写明 Windows SmartScreen 的放行步骤。</li>
+</ul>
+<h3 id="14-2-升级和回退">14.2 升级和回退</h3>
+<ul>
+<li>程序文件在安装目录，设置在 <code>&lt;应用数据&gt;</code>，案件数据在案件文件夹，三者分开存放；升级只替换安装目录。</li>
+<li><code>case.db</code> 的结构升级见第 4.1 节（升级前自动备份）；回退到旧版本时，使用备份的 <code>case.db.bak-&lt;版本&gt;</code>。</li>
+<li>每个版本的安装包都保留，用于回退。</li>
+</ul>
+<h3 id="14-3-只连两台服务器-SEC-03">14.3 只连两台服务器（SEC-03）</h3>
+<p>所有发出网络请求的地方都要做地址白名单检查（只允许首次配置中的 6000D、395 地址和 <code>127.0.0.1</code>），并且<strong>不自动跟随重定向</strong>（收到 3xx 视为错误），防止跳转到白名单外的地址：</p>
+<table>
+<thead>
+<tr>
+<th>请求来源</th>
+<th>怎么限制</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作台服务（Python）</td>
+<td>统一的 httpx 客户端，发送前检查目标主机；<code>follow_redirects=False</code></td>
+</tr>
+<tr>
+<td>DSH Desktop Host（Node 进程，含 pi-ai 模型适配器）</td>
+<td>DSH 已有一个全局的 undici dispatcher（官方 <code>packages/util/http-proxy/src/install.ts</code>，Host 启动时安装，所有 <code>fetch</code> 都经过它），在其中加地址白名单：目标不在白名单就直接拒绝连接，重定向同样检查（第 3.2 节 P-7）。另外包装 <code>http</code> / <code>https</code> 的 <code>request</code>，覆盖不走 <code>fetch</code> 的代码。<code>webRequest</code> 管不到这个进程，不能依赖它</td>
+</tr>
+<tr>
+<td>Electron 渲染进程（界面）</td>
+<td><code>session.webRequest</code> 拦截白名单以外的请求；界面只加载本地资源</td>
+</tr>
+<tr>
+<td>其他子进程（LibreOffice、pandoc）</td>
+<td>本身不联网；启动时不传任何网络参数</td>
+</tr>
+</tbody>
+</table>
+<p>另外可选：安装时加一条 Windows 防火墙出站规则，只允许本程序连接两台服务器的地址（作为第二道保险，不替代上面的检查）。</p>
+<ul>
+<li>DSH 的其他外连来源按第 3.2 节处理。</li>
+<li>验收（G-11）：在断网的机器上安装和运行；抓包 30 分钟，覆盖导入、识别、生成 wiki、对话、导出等全部流程，只能看到两台服务器的地址。</li>
+</ul>
+<hr />
+<h2 id="15-网络">15. 网络</h2>
+<ul>
+<li>两台服务器都在律所局域网内。律师在所外时，经 WireGuard 访问：WireGuard 服务端设在律所网关或其中一台服务器上，律师电脑是对等端，<code>AllowedIPs</code> 只包含两台服务器的地址（分流模式，其他流量不走 VPN）。</li>
+<li>客户端配置的服务器地址，在所内和所外相同（WireGuard 路由到同一网段），律师不需要切换。</li>
+<li>局域网内使用 HTTP（与 6000D 网关现状一致），所外的流量由 WireGuard 加密。</li>
+<li>范围：给出配置模板和一份测试通过的对等端配置；不负责律所 VPN 的整体规划（PRD 4.7）。<span class="wait">〔待甲方确认 WireGuard 是否已部署〕</span></li>
+</ul>
+<hr />
+<h2 id="16-保密要求的实现对照">16. 保密要求的实现对照</h2>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>实现位置</th>
+<th>验证方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SEC-01</td>
+<td>第 4.1 节目录；第 3.3 节 DSH 数据落点；第 4.5 节日志不含正文</td>
+<td>用测试案卷完整走一遍，在案件目录以外全盘搜索案卷中的特征字符串</td>
+</tr>
+<tr>
+<td>SEC-02</td>
+<td>D7：外发操作只在界面接口中提供，调用前弹确认框</td>
+<td>检查 AI 工具列表；抓包比对发出的请求与确认框中显示的内容</td>
+</tr>
+<tr>
+<td>SEC-03</td>
+<td>第 14.3 节；第 3.2 节</td>
+<td>G-11 抓包</td>
+</tr>
+<tr>
+<td>SEC-04</td>
+<td>没有向量检索组件；服务器不建立任何索引</td>
+<td>代码审查；检查服务器的磁盘</td>
+</tr>
+<tr>
+<td>SEC-05</td>
+<td>D3、D4；第 4.2 节路径闸门</td>
+<td>自动测试：<code>../</code>、绝对路径、符号链接、junction、大小写变体、超长名字</td>
+</tr>
+<tr>
+<td>SEC-06</td>
+<td>第 6.3 节；第 8.1 节 Key 存 Windows 凭据管理器</td>
+<td>用无 Key、停用的 Key 分别调用两台服务器；换 Windows 账号读不到 Key</td>
+</tr>
+<tr>
+<td>SEC-07</td>
+<td>第 3.1 节（律师工作台 preset 不挂 agent-instructions，官方 preset 全部关掉，Skill 不扫默认目录）；第 10.1 节</td>
+<td>测试案件内放 AGENTS.md、<code>.dsh/skills/&lt;恶意 Skill&gt;</code>、含越权指令的材料，确认都不起作用</td>
+</tr>
+<tr>
+<td>SEC-08</td>
+<td>原件区没有写接口；<code>材料/index.json</code> 记录哈希</td>
+<td>验收前后比对原件哈希</td>
+</tr>
+<tr>
+<td>SEC-09</td>
+<td>甲方网关现状（不记正文）；第 8.6 节</td>
+<td>检查网关的 <code>usage.db</code> 和日志</td>
+</tr>
+<tr>
+<td>SEC-10</td>
+<td>第 14.3 节地址白名单；代码中不存在其他模型地址</td>
+<td>代码审查 + 抓包</td>
+</tr>
+<tr>
+<td>SEC-11</td>
+<td>第 4.5 节日志；LibreOffice 配置目录放在案件临时目录；临时文件都在 <code>工作区/临时/</code></td>
+<td>同 SEC-01 的全盘搜索</td>
+</tr>
+<tr>
+<td>SEC-12</td>
+<td>第 6.2 节全程在内存中处理、启动清理；第 6.1 节 BitLocker、关闭休眠；第 6.6 节日志</td>
+<td>第 6.2 节的全盘搜索；检查日志中是否有测试文本</td>
+</tr>
+<tr>
+<td>SEC-13</td>
+<td>第 6.1 节 Windows 防火墙；第 8.6 节 vLLM 只监听本机；第 15 节</td>
+<td>从外网和律所局域网分别扫描端口</td>
+</tr>
+<tr>
+<td>SEC-14</td>
+<td>第 4.2 节云同步目录检测</td>
+<td>在 OneDrive 同步目录、名字含&quot;坚果云&quot;的目录下各建一个案件，打开时都被拒绝</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="17-待验证项对设计的影响">17. 待验证项对设计的影响</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>主方案</th>
+<th>测不通时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G-1 DSH 桌面版</td>
+<td><strong>已基本确定</strong>：用官方桌面端（D1）。剩余：第 3.2 节的对外连接全部去掉后能正常运行</td>
+<td>保留 DSH 的 Web 版（<code>dsh web</code>，本机浏览器打开），外面包一个最小的 Electron 壳</td>
+</tr>
+<tr>
+<td>G-2 案件隔离</td>
+<td>律师工作台 preset 不挂文件、命令、指令文件插件，官方 preset 全部关掉，加上白名单和路径闸门（D3、D4），不依赖 DSH 沙箱</td>
+<td>抓包发现有其他工具出现在请求里时，找到挂载它的配置行关掉；关不掉的，由 <code>tools/pre-execute</code> 拦截执行</td>
+</tr>
+<tr>
+<td>G-3 工具接入</td>
+<td>我方 Agent 插件注册 <code>case_*</code>，经 HTTP 调用常驻的工作台服务（第 1.2 节）；本地试验已验证 DSH 插件注册工具可行</td>
+<td>插件每次调用时启动一个 Python 子进程（不常驻，慢但简单）</td>
+</tr>
+<tr>
+<td>G-4 数据落点</td>
+<td>第 3.3 节逐项处理；会话记录按案件存储（源码已确认可行）</td>
+<td>关闭 DSH 的会话持久化，由工作台服务把对话记录另存到案件目录</td>
+</tr>
+<tr>
+<td>G-5 395 OCR</td>
+<td>在 Windows 上用 llama.cpp（Vulkan）跑通视觉模型，定下模型、并发数 N 和&quot;看不清&quot;的标注方式</td>
+<td>试 ROCm for Windows；仍不行则 6000D 接管识别（第 7.4 节）</td>
+</tr>
+<tr>
+<td>G-6 395 小模型</td>
+<td>Windows 上用 llama.cpp（Vulkan）跑 9B，客户端逐条核对</td>
+<td>由 27B 完成</td>
+</tr>
+<tr>
+<td>G-7 模型能力</td>
+<td>思考分四档</td>
+<td>只保留开和关两档</td>
+</tr>
+<tr>
+<td>G-8 原文引用</td>
+<td>第 5.2、5.3 节的位置规则</td>
+<td>调整页面类型判断的阈值；Word 表格改为按行编段</td>
+</tr>
+<tr>
+<td>G-9 中文检索</td>
+<td>trigram + 短词逐条扫描 + 查询扩展</td>
+<td>增加 bigram 辅助索引</td>
+</tr>
+<tr>
+<td>G-10 修订版</td>
+<td>第 12.2 节</td>
+<td>缩小范围到只做&quot;替换&quot;</td>
+</tr>
+<tr>
+<td>G-11 离线安装</td>
+<td>第 14 节</td>
+<td>逐个找出并去掉联网的来源</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="18-与-PRD-的对应">18. 与 PRD 的对应</h2>
+<p>第一版 Spec 列出的 14 条 PRD 变更已全部写入 PRD 第三版（DSH 官方桌面端、插件不用 MCP、原件不复制、修订版本机生成、PDF 本机拆页、预算区分 Agent 和流水线、组件表、395 的 Key 和 <code>/admin</code>、PDF 转 Word 只保留文字、395 为 Windows、识别的各种情况、通知不带案件名、界面布局）。另外本版按以下决定同步修改：</p>
+<ol>
+<li>本次只交付 Windows 客户端，macOS 预留（PRD 1.1、9.4）。</li>
+<li>Key 存 Windows 凭据管理器（PRD F-ACC-01a，本文 D9、第 8.1 节）。</li>
+<li>案件文件夹不得位于云同步目录（PRD SEC-14，本文第 4.2 节）。</li>
+<li>五个入口和 Skill 按《五个业务能力编排》（PRD 6.3，本文第 10 节）。</li>
+<li>案件 wiki 走流水线，其余 Skill 走 Agent（本文 D6）。</li>
+<li>出处统一为 <code>〔材料名 位置〕</code>（本文第 9.3、20.2 节；Skill 的共用规则已同步）。</li>
+<li>395 的 9B 只用于 wiki 生成中的字段抽取和分类，取消&quot;按卷提取目录&quot;（PRD F-ENT-04，本文第 6.4、9.1 节）。</li>
+</ol>
+<hr />
+<h2 id="19-实施顺序">19. 实施顺序</h2>
+<p>先打通一条最细的完整链路，再逐块做全。本节是方向；具体工单、执行者、依赖和验收标准由编排计划（<code>/orch-plan</code> 产出的三件套）给出，工单按本节顺序拆，并以第 20 节契约为输入。</p>
+<p><strong>第一阶段：细链路</strong>。目标是&quot;一个案件、两份材料（一份文字版 PDF、一份扫描页）、一次识别、一次分析、一次导出&quot;从头到尾跑通，每个环节只做最简单的版本：</p>
+<table>
+<thead>
+<tr>
+<th>步</th>
+<th>内容</th>
+<th>验证</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>契约落地：<code>contracts/</code> 放进仓库，<code>check_examples.py</code> 通过；Python 和 TypeScript 两边的校验工具接好（第 20 节）</td>
+<td>自检脚本退出码 0</td>
+</tr>
+<tr>
+<td>1</td>
+<td>从官方仓库拉取 DSH（固定提交），桌面端能在开发机跑起来；写组合包的配置补丁：关掉官方 preset 和联网、遥测等插件，新增律师工作台 preset，律所模型路由（第 3.1、8.1 节）</td>
+<td>第 3.1 节的验证项；抓请求核对思考档位</td>
+</tr>
+<tr>
+<td>2</td>
+<td>我方组合包骨架（Agent、Host、凭据、界面四个插件的空壳）；工作台服务骨架（Host 插件启动看护、<code>/core/*</code>、<code>case_id</code> / <code>task_id</code> 绑定、路径闸门）（第 1.2、1.3、4.2、4.3 节）</td>
+<td><code>case_list_materials</code>、<code>case_read_material</code> 在会话里能用；闸门自动测试；越权植入测试；<code>/core/*</code> 的请求和返回通过契约校验</td>
+</tr>
+<tr>
+<td>3</td>
+<td>只做 PDF 的解析（文字页 + 需识别页判断）和最简检索</td>
+<td>两份材料能导入、能搜到</td>
+</tr>
+<tr>
+<td>4</td>
+<td>395 最小服务（<code>/health</code>、<code>/v1/ocr/page</code>，Windows 服务）和客户端识别队列</td>
+<td>扫描页识别完成，结果合并进材料文本；中途退出再打开能接着做</td>
+</tr>
+<tr>
+<td>5</td>
+<td>一个 Agent 任务：用已写好的 <code>criminal-reading-notes</code> Skill；上下文注入、预算、程序保存进度和结果清单</td>
+<td>草稿里的出处能点回原文；取消后有草稿；<code>case_save_draft</code> 返回通过契约校验</td>
+</tr>
+<tr>
+<td>6</td>
+<td>确认保存并导出 Word（pandoc + 模板）</td>
+<td>成果目录里有 docx，索引有记录</td>
+</tr>
+</tbody>
+</table>
+<p><strong>第二阶段：逐块做全</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>步</th>
+<th>内容</th>
+<th>验证</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>7</td>
+<td>会话记录按案件存储；第 3.3 节其余数据落点；第 14.3 节网络白名单</td>
+<td>全盘搜索测试案卷特征字符串；抓包</td>
+</tr>
+<tr>
+<td>8</td>
+<td>全部格式的解析、完整检索（第 5、11 节）</td>
+<td>G-8、G-9 验证集</td>
+</tr>
+<tr>
+<td>9</td>
+<td>出处核对库、流水线框架、案件 wiki 流水线（第 9 节）</td>
+<td>大卷宗对照标准答案打分，A–E 类问题为 0</td>
+</tr>
+<tr>
+<td>10</td>
+<td>395 完整功能：9B 抽取、去水印、取消、<code>/admin</code>（第 6 节）</td>
+<td>G-5、G-6；取消测试</td>
+</tr>
+<tr>
+<td>11</td>
+<td>界面：首次配置、首页、案件工作区面板、原文查看；去掉对外连接和无关入口（第 3.2、3.4 节）</td>
+<td>G-11 抓包</td>
+</tr>
+<tr>
+<td>12</td>
+<td>修订版（第 12.2 节）；5 个入口的 13 个 Skill 逐个在链路中跑通</td>
+<td>G-10；各 Skill 测试集（律所样本到位前用虚构样本）</td>
+</tr>
+<tr>
+<td>13</td>
+<td>小工具（第 13 节）；打包（第 14 节）</td>
+<td>断网安装；Windows 10、Windows 11 各装一遍</td>
+</tr>
+</tbody>
+</table>
+<p><strong>贯穿两个阶段的测试样本</strong>：律所材料暂时拿不到，由一张单独的工单造虚构测试案卷，放在仓库 <code>tests/fixtures/</code>：刑事卷宗（文字版 PDF + 扫描页 + 图片）、民事借贷案（docx 含修订痕迹、银行流水 xlsx、csv）、一份合同 docx（含表格、页眉页脚，用于修订版的范围外测试）、G-9 检索验证集、越权植入材料（AGENTS.md、<code>.dsh/skills/</code>、&quot;忽略以上要求&quot;文字）。各步骤的验收都用这套样本；wiki 测试的大卷宗（<code>D:\pycharm\test\wiki</code>）作为流水线的对照样本。</p>
+<hr />
+<h2 id="20-契约">20. 契约</h2>
+<p>本节规定模块之间约定好、谁都不能单方面改的接口和数据格式。<strong>正文只写规则，字段以 <code>contracts/</code> 目录下的文件为准</strong>；正文其他章节中出现的接口和格式与这里不一致时，以这里和 <code>contracts/</code> 为准。</p>
+<h3 id="20-1-通用约定">20.1 通用约定</h3>
+<ul>
+<li><strong>写法</strong>：JSON Schema Draft 2020-12。每个文件的 <code>$id</code> 以 <code>lawbench://contracts/</code> 开头，引用一律写完整 <code>$id</code>。接口类契约在同一个文件的 <code>$defs</code> 下分 <code>request</code> / <code>response</code>（或 <code>args</code> / <code>result</code>）；落盘文件的契约就是整个文件本身。</li>
+<li><strong>版本</strong>：整套契约一个版本号，写在 <a href="../contracts/VERSION"><code>contracts/VERSION</code></a>（当前 <code>1.0</code>）。工作台服务的 <code>/health</code> 和 395 的 <code>/health</code> 都返回 <code>contract_version</code>；Host 插件启动工作台服务后先比对版本，不一致就提示&quot;组件版本不一致，请重新安装&quot;，不继续。落盘的 JSON 文件带 <code>&quot;v&quot;: 1</code>，读到不认识的 <code>v</code> 时只读、不写。</li>
+<li><strong>改契约的规矩</strong>：先改 <code>contracts/</code>（<code>*.schema.json</code> 由 <a href="../contracts/_build/gen_schemas.py"><code>contracts/_build/gen_schemas.py</code></a> 生成，改契约就改这个脚本再运行，不手改生成的文件；样例由 <code>_build/gen_examples.py</code> 生成），再升 <code>VERSION</code>，再在本节末尾&quot;变更记录&quot;加一行，最后才改代码。开发工单不得在代码里私自增减字段。</li>
+<li><strong>本机接口的返回体</strong>（<code>/core/*</code>、<code>/api/*</code>）：成功 <code>{&quot;ok&quot;: true, &quot;value&quot;: …}</code>；失败 <code>{&quot;ok&quot;: false, &quot;error&quot;: {&quot;code&quot;: …, &quot;message&quot;: …}}</code>。业务错误一律 HTTP 200；缺少或错误的启动令牌返回 HTTP 401（无返回体）；服务内部异常返回 HTTP 500，返回体仍按失败格式，<code>code</code> 为 <code>INTERNAL</code>。</li>
+<li><strong>错误码</strong>（<code>common.schema.json#/$defs/error_code</code>）和给律师看的提示：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>code</th>
+<th>什么时候</th>
+<th>message（中文，不含材料名、检索词、正文）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INVALID_ARGUMENT</code></td>
+<td>参数不符合契约</td>
+<td>请求参数有误</td>
+</tr>
+<tr>
+<td><code>OUT_OF_CASE</code></td>
+<td>路径闸门拒绝</td>
+<td>超出当前案件范围</td>
+</tr>
+<tr>
+<td><code>CASE_NOT_FOUND</code></td>
+<td>case_id 不在注册表，或会话 cwd 不是已登记案件</td>
+<td>找不到该案件，请重新打开</td>
+</tr>
+<tr>
+<td><code>CASE_ROOT_IS_LINK</code></td>
+<td>案件根目录是链接或 junction</td>
+<td>请直接选择实际文件夹</td>
+</tr>
+<tr>
+<td><code>CASE_IN_SYNC_FOLDER</code></td>
+<td>案件在云同步目录（SEC-14）</td>
+<td>该文件夹在云同步目录中，请移到本机普通文件夹后再打开</td>
+</tr>
+<tr>
+<td><code>MATERIAL_NOT_FOUND</code></td>
+<td>材料名不存在</td>
+<td>没有这份材料，请先查看材料清单</td>
+</tr>
+<tr>
+<td><code>MATERIAL_NOT_READY</code></td>
+<td>材料未解析完、待识别或失败</td>
+<td>这份材料还不能读取（待识别或处理失败）</td>
+</tr>
+<tr>
+<td><code>TASK_NOT_FOUND</code></td>
+<td>task_id / job_id 不存在</td>
+<td>找不到该任务</td>
+</tr>
+<tr>
+<td><code>INPUT_CHANGED</code></td>
+<td>选用的输入在选用后被修改（sha256 不一致）</td>
+<td>选用的材料已被修改，请复核后重新选择</td>
+</tr>
+<tr>
+<td><code>BUDGET_EXCEEDED</code></td>
+<td>超出任务预算</td>
+<td>已达到本次任务的上限，已保存草稿</td>
+</tr>
+<tr>
+<td><code>SERVER_UNREACHABLE</code></td>
+<td>连不上 6000D 或 395</td>
+<td>无法连接服务器，请检查网络</td>
+</tr>
+<tr>
+<td><code>KEY_INVALID</code></td>
+<td>401 / 403</td>
+<td>Key 无效或已停用，请联系管理员</td>
+</tr>
+<tr>
+<td><code>SERVER_BUSY</code></td>
+<td>6000D 排队超时（503）</td>
+<td>服务器繁忙，排队已超过 5 分钟，请稍后再试</td>
+</tr>
+<tr>
+<td><code>CONTEXT_TOO_LONG</code></td>
+<td>超出上下文</td>
+<td>内容超出模型上限，请缩小范围或调大窗口</td>
+</tr>
+<tr>
+<td><code>OUTPUT_TRUNCATED</code></td>
+<td><code>finish_reason == &quot;length&quot;</code></td>
+<td>输出达到上限，已保存为草稿，可调大&quot;最大生成量&quot;后继续</td>
+</tr>
+<tr>
+<td><code>TIMEOUT</code></td>
+<td>单次请求超过 1200 秒</td>
+<td>本次生成时间过长，已停止并保存草稿</td>
+</tr>
+<tr>
+<td><code>HOST_NOT_ALLOWED</code></td>
+<td>目标地址不在白名单</td>
+<td>不允许连接该地址</td>
+</tr>
+<tr>
+<td><code>PREP_UNAVAILABLE</code></td>
+<td>395 不可用</td>
+<td>395 暂时不可用，恢复后会自动继续</td>
+</tr>
+<tr>
+<td><code>CANCELLED</code></td>
+<td>已取消</td>
+<td>已取消</td>
+</tr>
+<tr>
+<td><code>SERVICE_UNAVAILABLE</code></td>
+<td>工作台服务未启动（由插件返回）</td>
+<td>工作台服务未启动，请稍后重试</td>
+</tr>
+<tr>
+<td><code>INTERNAL</code></td>
+<td>其他</td>
+<td>内部错误，请重试；多次出现请联系技术支持</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>编号</strong>（<code>common.schema.json</code>）：<code>case_id</code> 为 UUID v4；<code>material_id</code> 为 <code>M</code> + 4 位序号；<code>task_id</code> 为 <code>T-</code>（Agent）或 <code>P-</code>（流水线）+ <code>YYYYMMDDHHMMSS</code> + <code>-</code> + 4 位小写十六进制；<code>job_id</code> 为 <code>J-</code> + 同样格式；wiki 事实 <code>F</code> + 4 位、wiki 建议 <code>S</code> + 4 位。</li>
+<li><strong>时间</strong>：ISO 8601 带时区（如 <code>2026-09-28T09:30:00+08:00</code>）。</li>
+<li><strong>路径</strong>：契约中的路径一律是相对案件根目录的路径，分隔符用 <code>/</code>，不以 <code>/</code> 开头、不含 <code>..</code>；只有 <code>cases.json</code> 的 <code>root</code> 和 <code>/api/case/open</code> 的 <code>path</code> 是绝对路径。</li>
+</ul>
+<h3 id="20-2-出处和材料名">20.2 出处和材料名</h3>
+<ul>
+<li><strong>出处文本</strong>（AI 和律师看到的写法）：<code>〔材料名 位置〕</code>，严格写法为 <code>common.schema.json#/$defs/citation_text</code> 的正则。位置：<code>第N页</code>、<code>第N-M页</code>、<code>第N段</code>、<code>第N-M段</code>、<code>第N行</code>、<code>第N-M行</code>、<code>工作表名!B12</code>、<code>工作表名!B12:D12</code>。同一括号内多处用顿号分隔，每处都写材料名。固定写法 <code>〔未找到依据〕</code>、<code>〔推断〕</code>。</li>
+<li><strong>结构化出处</strong>（程序记录用，<code>$defs/citation</code>）：材料编号 + 原件 sha256 + 位置对象（<code>$defs/loc</code>）。核对程序把出处文本解析成结构化出处，写入 <code>result.json</code> 的 <code>citations</code>。</li>
+<li><strong>括号的分工</strong>：<code>〔〕</code> 只用于出处；<code>【第N页】</code> 等位置标记只出现在材料文本里；草稿中的 <code>【】</code> 只用于占位和标签（如 <code>【待补充：…】</code>、<code>【待确认我方立场】</code>、<code>【律师提供】</code>），形如 <code>【材料名 第N页】</code> 的写法按 E 类出处格式错误处理。</li>
+<li><strong>材料名唯一规则</strong>：① 原件文件名去掉扩展名；② 案件内重复时，改用去掉扩展名的相对路径（如 <code>证据/借条</code>）；③ 仍重复时用带扩展名的相对路径（如 <code>证据/借条.pdf</code>）。材料名中的空格和顿号替换为下划线。材料名在导入时确定，写入 <code>index.json</code>；新材料导致重名时，已有材料的名字也按规则改长，并提示&quot;材料名有变化&quot;。</li>
+<li>详细格式见 <a href="../contracts/formats.md"><code>contracts/formats.md</code></a> 第 2、3 节。Skill 的共用规则（<code>skills/_shared/共用规则.md</code>）与本节一致。</li>
+</ul>
+<h3 id="20-3-Agent-插件-→-工作台服务-contracts-core">20.3 Agent 插件 → 工作台服务（<a href="../contracts/core/"><code>contracts/core/</code></a>）</h3>
+<p>请求头 <code>Authorization: Bearer &lt;LB_TOKEN&gt;</code>；只监听 <code>127.0.0.1</code>。</p>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>契约文件</th>
+<th>调用时机</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /core/task/begin</code></td>
+<td><code>task_begin.schema.json</code></td>
+<td><code>agent/pre-step</code> 每轮第一步</td>
+<td>由 <code>cwd</code> 查注册表得到案件；取该会话待执行的任务单，没有则按&quot;自由对话&quot;默认值新建；返回参数和预算</td>
+</tr>
+<tr>
+<td><code>POST /core/context</code></td>
+<td><code>context.schema.json</code></td>
+<td>紧接上一步</td>
+<td>返回 L0、L1 文本，以及没放进 L1 的输入目录</td>
+</tr>
+<tr>
+<td><code>POST /core/tool</code></td>
+<td><code>tool.schema.json</code></td>
+<td>每次 <code>case_*</code> 工具执行</td>
+<td><code>args</code> 和 <code>value</code> 的结构见 20.4；服务端按工具契约校验 <code>args</code>，不合格返回 <code>INVALID_ARGUMENT</code></td>
+</tr>
+<tr>
+<td><code>POST /core/progress</code></td>
+<td><code>progress.schema.json</code></td>
+<td><code>session/event</code> 收到 <code>assistant/message</code></td>
+<td>覆盖写 <code>进行中.md</code>，更新用量</td>
+</tr>
+<tr>
+<td><code>POST /core/task/end</code></td>
+<td><code>task_end.schema.json</code></td>
+<td><code>turn/end</code></td>
+<td>写 <code>result.json</code> 最终状态；返回写入的状态</td>
+</tr>
+<tr>
+<td><code>GET /health</code></td>
+<td>—</td>
+<td>Host 插件每 5 秒</td>
+<td><code>{&quot;status&quot;:&quot;ok&quot;,&quot;contract_version&quot;:&quot;1.0&quot;}</code>，不需要令牌</td>
+</tr>
+</tbody>
+</table>
+<h3 id="20-4-AI-工具-contracts-tools">20.4 AI 工具（<a href="../contracts/tools/"><code>contracts/tools/</code></a>）</h3>
+<p>8 个工具，每个文件的 <code>$defs/args</code> 直接用作 DSH <code>ToolDefinition.parameters</code>，<code>$defs/result</code> 是 <code>/core/tool</code> 成功时 <code>value</code> 的结构。Skill 正文里引用的返回字段（<code>has_more</code>、<code>next_start</code>、<code>citation_check.problems</code>、<code>not_fully_read</code> 等）必须和这里一致，<code>build_skills.py</code> 校验工具名，契约自检校验 Skill 头部。</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>契约文件</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>case_list_materials</code></td>
+<td><code>case_list_materials.schema.json</code></td>
+<td><code>materials[]</code>（材料名、编号、类型、状态、位置单位和数量、是否识别所得、失败原因）</td>
+</tr>
+<tr>
+<td><code>case_read_material</code></td>
+<td><code>case_read_material.schema.json</code></td>
+<td>参数 <code>name</code>、<code>start</code>、<code>max_chars</code>；返回 <code>start</code>、<code>end</code>、<code>text</code>、<code>has_more</code>、<code>next_start</code></td>
+</tr>
+<tr>
+<td><code>case_search</code></td>
+<td><code>case_search.schema.json</code></td>
+<td><code>hits[]</code>，每条带现成的出处文本 <code>citation</code></td>
+</tr>
+<tr>
+<td><code>case_read_input</code></td>
+<td><code>case_read_input.schema.json</code></td>
+<td>按行分段读前序成果</td>
+</tr>
+<tr>
+<td><code>case_read_wiki</code></td>
+<td><code>case_read_wiki.schema.json</code></td>
+<td>分节枚举；<code>材料摘要</code> 需给材料名；<code>stale</code></td>
+</tr>
+<tr>
+<td><code>case_save_draft</code></td>
+<td><code>case_save_draft.schema.json</code></td>
+<td><code>path</code>、<code>version</code>、<code>citation_check{passed, problems[], stats}</code>、<code>coverage</code>、<code>not_fully_read</code></td>
+</tr>
+<tr>
+<td><code>case_suggest_wiki</code></td>
+<td><code>case_suggest_wiki.schema.json</code></td>
+<td>字段枚举；<code>source</code> 必须是合格的出处文本</td>
+</tr>
+<tr>
+<td><code>case_save_edit_list</code></td>
+<td><code>case_save_edit_list.schema.json</code></td>
+<td>修改条目 <code>edit_item</code>；返回 <code>out_of_scope</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="20-5-界面-→-工作台服务-contracts-api">20.5 界面 → 工作台服务（<a href="../contracts/api/"><code>contracts/api/</code></a>）</h3>
+<p>界面插件 → <code>ctx.remote.lawbench.&lt;方法&gt;()</code> → Host 插件 → 工作台服务 <code>/api/*</code>。每个接口一个文件，<code>$defs/request</code> 对 GET 接口表示查询参数。19 个接口见第 4.3 节表格，文件名与接口一一对应：<code>case_open</code>、<code>case_recent</code>、<code>materials_scan</code>、<code>materials_list</code>、<code>ocr_submit</code>、<code>ocr_list</code>、<code>ocr_cancel</code>、<code>task_create</code>、<code>pipeline_run</code>、<code>pipeline_status</code>、<code>pipeline_cancel</code>、<code>tasks_list</code>、<code>redline</code>、<code>wiki_suggestions</code>、<code>outputs_confirm</code>、<code>source</code>、<code>search</code>、<code>settings</code>、<code>connection_test</code>。Host 插件的 <code>@Remote</code> 方法名与文件名相同（改成驼峰）。</p>
+<h3 id="20-6-工作台服务-→-395-contracts-prep395">20.6 工作台服务 → 395（<a href="../contracts/prep395/"><code>contracts/prep395/</code></a>）</h3>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>契约文件</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /health</code></td>
+<td><code>health.schema.json</code></td>
+<td>不需要 Key</td>
+</tr>
+<tr>
+<td><code>POST /v1/ocr/page</code></td>
+<td><code>ocr_page.schema.json</code></td>
+<td>请求体是图片原始字节，选项在查询参数（<code>$defs/query</code>）；返回 <code>$defs/response</code></td>
+</tr>
+<tr>
+<td><code>POST /v1/extract</code></td>
+<td><code>extract.schema.json</code></td>
+<td><code>fields</code> 和 <code>classify</code> 两种任务</td>
+</tr>
+</tbody>
+</table>
+<p>错误体 <code>$defs/error</code>：<code>{&quot;error&quot;: {&quot;code&quot;, &quot;message&quot;}}</code>。HTTP 状态与 code 对应：400 <code>BAD_IMAGE</code> / <code>BAD_REQUEST</code>，401 <code>KEY_INVALID</code>，413 <code>TOO_LARGE</code>，503 <code>QUEUE_FULL</code>（带 <code>Retry-After</code>）/ <code>KEY_CHECK_UNAVAILABLE</code>，504 <code>TIMEOUT</code>，500 <code>INTERNAL</code>。客户端按第 7.3 节处理。</p>
+<h3 id="20-7-工作台服务-DSH-→-6000D">20.7 工作台服务、DSH → 6000D</h3>
+<p>6000D 网关是甲方已有的 OpenAI 兼容接口，不由我方定义，不写 JSON Schema。我方依赖的部分如下，换网关或升级时逐项核对：</p>
+<ul>
+<li>请求：<code>POST /v1/chat/completions</code>，字段 <code>model</code>（固定 <code>qwen38-27b</code>）、<code>messages</code>、<code>stream: true</code>、<code>max_tokens</code>、<code>temperature</code>、<code>chat_template_kwargs.enable_thinking</code>、<code>chat_template_kwargs.reasoning_effort</code>；请求头 <code>Authorization: Bearer &lt;律师 Key&gt;</code>、<code>X-Session-Id</code>（流水线）。</li>
+<li>响应：流式 <code>choices[0].delta</code>、<code>finish_reason</code>；响应头 <code>X-Queue-Wait-Ms</code>。</li>
+<li>错误到错误码的映射：第 8.3 节的表格，对应 20.1 的 <code>SERVER_UNREACHABLE</code>、<code>KEY_INVALID</code>、<code>SERVER_BUSY</code>、<code>CONTEXT_TOO_LONG</code>、<code>OUTPUT_TRUNCATED</code>、<code>TIMEOUT</code>。</li>
+<li>Key 校验（395 使用）：<code>GET /v1/models</code> 返回 200 视为有效<span class="wait">〔待验证，第 6.3 节〕</span>。</li>
+</ul>
+<h3 id="20-8-落盘文件-contracts-files-contracts-case_db-sql-contracts-formats-md">20.8 落盘文件（<a href="../contracts/files/"><code>contracts/files/</code></a>、<a href="../contracts/case_db.sql"><code>contracts/case_db.sql</code></a>、<a href="../contracts/formats.md"><code>contracts/formats.md</code></a>）</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>契约</th>
+<th>谁写</th>
+<th>谁读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>工作区/材料/index.json</code></td>
+<td><code>files/material_index.schema.json</code></td>
+<td>导入</td>
+<td>工具、检索、识别队列、界面</td>
+</tr>
+<tr>
+<td><code>工作区/材料/文本/*.md</code></td>
+<td><code>formats.md</code> 第 2 节</td>
+<td>导入、识别合并</td>
+<td><code>case_read_material</code>、检索、流水线</td>
+</tr>
+<tr>
+<td><code>工作区/case.db</code></td>
+<td><code>case_db.sql</code></td>
+<td>案件、识别队列、检索</td>
+<td>同左</td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/task.json</code></td>
+<td><code>files/task.schema.json</code></td>
+<td><code>/api/task</code>、<code>/core/task/begin</code>、流水线</td>
+<td>插件（经 <code>/core</code>）、上下文</td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/reads.json</code></td>
+<td><code>files/reads.schema.json</code></td>
+<td><code>case_read_material</code></td>
+<td>覆盖清单计算</td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/result.json</code></td>
+<td><code>files/result.schema.json</code></td>
+<td><code>/core/progress</code>、<code>/core/task/end</code>、<code>case_save_draft</code>、流水线</td>
+<td>界面成果区</td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/草稿/*.md</code></td>
+<td><code>formats.md</code> 第 5 节</td>
+<td><code>case_save_draft</code>、<code>/core/progress</code>、流水线</td>
+<td>界面、<code>/api/outputs/confirm</code></td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/修改清单/*.json</code></td>
+<td><code>tools/case_save_edit_list.schema.json#/$defs/args</code></td>
+<td><code>case_save_edit_list</code></td>
+<td><code>/api/redline</code></td>
+</tr>
+<tr>
+<td><code>工作区/wiki/case.json</code></td>
+<td><code>files/case_card.schema.json</code></td>
+<td>wiki 流水线、界面（本方立场、律师确认）</td>
+<td>L0 注入、<code>case_read_wiki</code></td>
+</tr>
+<tr>
+<td><code>工作区/wiki/案件/*.md</code>、<code>材料/*.md</code></td>
+<td><code>formats.md</code> 第 4 节</td>
+<td>wiki 流水线</td>
+<td><code>case_read_wiki</code>、界面</td>
+</tr>
+<tr>
+<td><code>工作区/wiki/待确认.json</code></td>
+<td><code>files/wiki_pending.schema.json</code></td>
+<td><code>case_suggest_wiki</code></td>
+<td><code>/api/wiki/suggestions</code></td>
+</tr>
+<tr>
+<td><code>成果/索引.json</code></td>
+<td><code>files/outputs_index.schema.json</code></td>
+<td><code>/api/outputs/confirm</code></td>
+<td>界面、选用前序成果</td>
+</tr>
+<tr>
+<td><code>&lt;应用数据&gt;/cases.json</code></td>
+<td><code>files/cases.schema.json</code></td>
+<td><code>/api/case/open</code></td>
+<td>注册表、最近案件</td>
+</tr>
+<tr>
+<td><code>&lt;应用数据&gt;/settings.json</code></td>
+<td><code>files/settings.schema.json</code></td>
+<td><code>/api/settings</code></td>
+<td>工作台服务、界面</td>
+</tr>
+</tbody>
+</table>
+<p><code>&lt;应用数据&gt;</code> 为 <code>%APPDATA%\&lt;产品名&gt;\</code>。所有 JSON 文件写入时先写临时文件再原子替换（第 4.2 节）；写入前按契约校验，不合格不写并记日志（只记契约名和字段路径）。</p>
+<h3 id="20-9-文本格式">20.9 文本格式</h3>
+<p>目录树、材料文本、出处、wiki 分节、草稿、流水线提示词的分段约定见 <a href="../contracts/formats.md"><code>contracts/formats.md</code></a>。</p>
+<h3 id="20-10-Skill-和入口-contracts-skill">20.10 Skill 和入口（<a href="../contracts/skill/"><code>contracts/skill/</code></a>）</h3>
+<p><code>SKILL.md</code> 头部按 <code>skill/frontmatter.schema.json</code>，入口清单按 <code>skill/entry.schema.json</code>。正文六部分、必问问题的写法、允许的工具名由 <code>skills/_scripts/skill_manifest.py</code> 规定，与本契约一起维护。</p>
+<h3 id="20-11-怎么校验">20.11 怎么校验</h3>
+<ul>
+<li><strong>自检</strong>：<code>python contracts/check_examples.py --skills skills</code>。它把 <code>contracts/</code> 下所有 schema 注册进去，校验 <code>examples/</code> 中的正例和反例（<code>manifest.json</code> 写明每个样例应当通过还是失败），再校验全部 Skill 头部和入口清单。退出码 0 才算通过。当前：39 个样例全部符合预期，13 个 Skill 和 5 个入口清单全部通过。</li>
+<li><strong>Python</strong>：<code>jsonschema</code> 的 <code>Draft202012Validator</code> + <code>referencing.Registry</code>（写法照 <code>check_examples.py</code> 的 <code>validator()</code>）。工作台服务在 <code>/core/tool</code> 收到参数时、写落盘文件前校验；开发和测试环境下对所有返回也校验，生产环境关闭返回校验以省时间。</li>
+<li><strong>TypeScript</strong>：<code>ajv/dist/2020</code>，启动时 <code>addSchema</code> 整个 <code>contracts/</code> 目录。Agent 插件用 <code>tools/*</code> 的 <code>$defs/args</code> 注册工具；界面插件的类型由 schema 生成（如 <code>json-schema-to-typescript</code>），不手写。</li>
+<li><strong>契约测试</strong>：每张开发工单的验收里，凡涉及接口或落盘文件的，都包含&quot;实际请求 / 返回 / 文件通过对应契约校验&quot;。</li>
+</ul>
+<h3 id="20-12-变更记录">20.12 变更记录</h3>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>日期</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.0</td>
+<td>2026-09-28</td>
+<td>首版</td>
+</tr>
+</tbody>
+</table>
+
+</main></div></body></html>

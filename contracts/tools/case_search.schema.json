@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_search.schema.json",
+  "title": "case_search",
+  "description": "全文检索（Spec 第 11 节）",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "max_hits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "默认 20"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "query"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "material_id": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+              },
+              "citation": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_text"
+              },
+              "snippet": {
+                "type": "string",
+                "description": "命中处前后各 40 字"
+              },
+              "is_ocr": {
+                "type": "boolean"
+              },
+              "match": {
+                "enum": [
+                  "exact",
+                  "expanded"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "material_id",
+              "citation",
+              "snippet",
+              "is_ocr",
+              "match"
+            ]
+          }
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "hits",
+        "total",
+        "truncated"
+      ]
+    }
+  }
+}

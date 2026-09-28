@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "outputs": [
+    {
+      "title": "刑事阅卷笔录",
+      "version": 1,
+      "files": [
+        {
+          "format": "docx",
+          "path": "成果/刑事阅卷笔录-v1.docx"
+        }
+      ],
+      "task_id": "T-20260928093000-7c1f",
+      "inputs": [],
+      "citation_passed": true,
+      "confirmed_at": "2026-09-28T09:30:00+08:00"
+    }
+  ]
+}

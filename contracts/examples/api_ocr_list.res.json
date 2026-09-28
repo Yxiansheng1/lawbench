@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "value": {
+    "jobs": [
+      {
+        "job_id": "J-20260928094500-3e9d",
+        "material_id": "M0001",
+        "name": "借条",
+        "status": "paused",
+        "pause_reason": "prep_down",
+        "total": 2,
+        "done": 1,
+        "failed": 0,
+        "created_at": "2026-09-28T09:30:00+08:00"
+      }
+    ]
+  }
+}

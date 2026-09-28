@@ -1,0 +1,4 @@
+id: general
+name: 通用文书
+skills: [case-wiki-build, case-reading-notes, general-drafting, pre-issue-check, doc-revise, legal-workflow]
+outputs: [律师函, 法律意见书, 分析报告, 工作函]

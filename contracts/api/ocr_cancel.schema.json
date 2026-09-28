@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/ocr_cancel.schema.json",
+  "title": "POST /api/ocr/jobs/{job_id}/cancel",
+  "description": "取消识别；已完成的页保留",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "job_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "job_id": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "job_id",
+                "status"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "status"
+      ]
+    }
+  }
+}

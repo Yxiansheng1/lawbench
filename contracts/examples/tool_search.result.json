@@ -1,0 +1,14 @@
+{
+  "hits": [
+    {
+      "name": "银行流水",
+      "material_id": "M0002",
+      "citation": "〔银行流水 Sheet1!B12〕",
+      "snippet": "…转账 80,000.00 …",
+      "is_ocr": false,
+      "match": "expanded"
+    }
+  ],
+  "total": 1,
+  "truncated": false
+}

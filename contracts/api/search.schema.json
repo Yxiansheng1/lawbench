@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/search.schema.json",
+  "title": "GET /api/search?case_id=&q=",
+  "description": "律师检索；返回结构同 case_search",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "q": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "q"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "$ref": "lawbench://contracts/tools/case_search.schema.json#/$defs/result"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "$ref": "lawbench://contracts/tools/case_search.schema.json#/$defs/result"
+    }
+  }
+}

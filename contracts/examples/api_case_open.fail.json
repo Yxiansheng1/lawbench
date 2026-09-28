@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "CASE_IN_SYNC_FOLDER",
+    "message": "该文件夹在 OneDrive 同步目录中，请移到本机普通文件夹后再打开"
+  }
+}

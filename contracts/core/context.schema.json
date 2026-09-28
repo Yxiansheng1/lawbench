@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/core/context.schema.json",
+  "title": "POST /core/context",
+  "description": "取首轮注入的 L0（案件卡片）和 L1（任务输入）文本",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "task_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "l0": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "chars": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "text",
+                    "chars"
+                  ]
+                },
+                "l1": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "tokens": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "toc": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "index",
+                          "title",
+                          "tokens"
+                        ]
+                      },
+                      "description": "未放入 L1 的输入目录，AI 用 case_read_input 读"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "text",
+                    "tokens",
+                    "truncated",
+                    "toc"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "l0",
+                "l1"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "l0": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "chars": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "chars"
+          ]
+        },
+        "l1": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "toc": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "index": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "tokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "index",
+                  "title",
+                  "tokens"
+                ]
+              },
+              "description": "未放入 L1 的输入目录，AI 用 case_read_input 读"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "tokens",
+            "truncated",
+            "toc"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "l0",
+        "l1"
+      ]
+    }
+  }
+}

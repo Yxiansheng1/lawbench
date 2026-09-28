@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "case_id": "3f2b9c1e-7a4d-4e8b-9c2a-1b5d6e7f8a90",
+  "case_type": "criminal",
+  "stance": null,
+  "parties": [
+    {
+      "id": "F0001",
+      "text": "张某，犯罪嫌疑人",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    }
+  ],
+  "issues": [],
+  "key_facts": [],
+  "generated_by": "P-20260928100000-02ab",
+  "generated_at": "2026-09-28T09:30:00+08:00",
+  "materials_at_generation": [
+    {
+      "material_id": "M0001",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

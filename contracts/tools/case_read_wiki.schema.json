@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_read_wiki.schema.json",
+  "title": "case_read_wiki",
+  "description": "读 wiki 的一节",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "enum": [
+            "卡片",
+            "概览",
+            "当事人",
+            "时间线",
+            "材料清单",
+            "争议焦点",
+            "材料摘要"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "description": "section 为 材料摘要 时必填：材料名"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stale": {
+          "type": "boolean",
+          "description": "wiki 生成后有材料新增或变化"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "text",
+        "updated_at",
+        "stale"
+      ]
+    }
+  }
+}

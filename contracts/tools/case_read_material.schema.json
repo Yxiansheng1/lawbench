@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_read_material.schema.json",
+  "title": "case_read_material",
+  "description": "读一份材料的解析文本（带位置标记）。每次读取记入 reads.json",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "起始位置号（页 / 段 / 行；Excel 为工作表内的行号），默认 1"
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 8000,
+          "description": "单次最多返回的字数，默认且最大 8000"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "material_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+        },
+        "unit": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/unit"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_start": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "material_id",
+        "unit",
+        "start",
+        "end",
+        "text",
+        "has_more",
+        "next_start"
+      ]
+    }
+  }
+}

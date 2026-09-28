@@ -1,0 +1,7 @@
+{
+  "task_id": "T-20260928093000-7c1f",
+  "reason": "budget",
+  "model_calls": 8,
+  "tool_calls": 19,
+  "elapsed_s": 600
+}

@@ -1,0 +1,16 @@
+{
+  "materials": [
+    {
+      "material_id": "M0001",
+      "name": "借条",
+      "type": "pdf",
+      "status": "parsed",
+      "unit": "page",
+      "unit_count": 3,
+      "is_ocr": "partial",
+      "stale_ocr": false,
+      "error": null
+    }
+  ],
+  "total": 1
+}

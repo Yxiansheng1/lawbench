@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/skill/frontmatter.schema.json",
+  "title": "SKILL.md 头部",
+  "description": "DSH 只读 name 和 description；其余字段由工作台服务读取",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "mode": {
+      "enum": [
+        "agent",
+        "pipeline"
+      ]
+    },
+    "kind": {
+      "enum": [
+        "excerpt",
+        "analysis",
+        "draft"
+      ]
+    },
+    "entry": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      ],
+      "description": "入口名、入口名列表或'共用'"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "params": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "materials",
+          "wiki",
+          "prior"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "title",
+    "description",
+    "mode",
+    "kind",
+    "entry",
+    "order",
+    "params",
+    "owner",
+    "inputs"
+  ]
+}

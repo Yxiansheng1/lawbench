@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/result.schema.json",
+  "title": "工作区/任务/<任务ID>/result.json",
+  "description": "结果清单（执行中更新进度，结束时写最终状态）",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "task_id": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+    },
+    "status": {
+      "enum": [
+        "running",
+        "completed",
+        "cancelled",
+        "budget_stopped",
+        "output_limit",
+        "failed",
+        "interrupted",
+        "abnormal"
+      ]
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_s": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model_calls",
+        "tool_calls",
+        "elapsed_s"
+      ]
+    },
+    "drafts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "path": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "path",
+          "version"
+        ]
+      }
+    },
+    "citation_check": {
+      "anyOf": [
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_check"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coverage": {
+      "anyOf": [
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/coverage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "$ref": "lawbench://contracts/common.schema.json#/$defs/citation"
+      }
+    },
+    "finished_at": {
+      "anyOf": [
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "task_id",
+    "status",
+    "usage",
+    "drafts",
+    "citation_check",
+    "coverage",
+    "citations",
+    "finished_at"
+  ]
+}

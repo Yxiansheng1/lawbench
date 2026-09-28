@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/pipeline_status.schema.json",
+  "title": "GET /api/pipeline/{task_id}",
+  "description": "流水线进度",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "task_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "running",
+                    "completed",
+                    "cancelled",
+                    "budget_stopped",
+                    "failed",
+                    "interrupted"
+                  ]
+                },
+                "step_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "step_total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "current": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "当前处理的材料名"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "queue_wait_ms": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "step_index",
+                "step_total",
+                "current",
+                "queue_wait_ms"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "running",
+            "completed",
+            "cancelled",
+            "budget_stopped",
+            "failed",
+            "interrupted"
+          ]
+        },
+        "step_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "step_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "current": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "当前处理的材料名"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "queue_wait_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "step_index",
+        "step_total",
+        "current",
+        "queue_wait_ms"
+      ]
+    }
+  }
+}

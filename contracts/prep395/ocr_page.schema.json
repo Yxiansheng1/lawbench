@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/prep395/ocr_page.schema.json",
+  "title": "POST /v1/ocr/page",
+  "description": "请求体是单页图片的原始字节（Content-Type: image/png 或 image/jpeg，≤10MB，长边≤2480 像素）；选项放在查询参数",
+  "$defs": {
+    "query": {
+      "type": "object",
+      "properties": {
+        "dewatermark": {
+          "type": "boolean"
+        },
+        "deskew": {
+          "type": "boolean"
+        },
+        "return_image": {
+          "type": "boolean",
+          "description": "仅验收去水印时用"
+        }
+      },
+      "additionalProperties": false,
+      "required": []
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "type": "string",
+          "description": "识别文本；看不清的字为 ■，整行看不清为 [看不清]"
+        },
+        "unclear": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "backend": {
+          "type": "string"
+        },
+        "image_png_base64": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "markdown",
+        "unclear",
+        "elapsed_ms",
+        "backend",
+        "image_png_base64"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "BAD_IMAGE",
+                "KEY_INVALID",
+                "TOO_LARGE",
+                "QUEUE_FULL",
+                "TIMEOUT",
+                "KEY_CHECK_UNAVAILABLE",
+                "BAD_REQUEST",
+                "INTERNAL"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "description": "395 的错误体；HTTP 状态见 Spec 20.5"
+    }
+  }
+}

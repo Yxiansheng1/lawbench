@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/prep395/extract.schema.json",
+  "title": "POST /v1/extract",
+  "description": "9B 抽取；单次 text ≤16000 字，由客户端按页切分",
+  "$defs": {
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "const": "fields"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 16000
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "task",
+            "text",
+            "fields"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "const": "classify"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 16000
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 2
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "task",
+            "text",
+            "categories"
+          ]
+        }
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "const": "fields"
+            },
+            "result": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "loc": {
+                    "type": "string",
+                    "pattern": "^第[0-9]+[页段行]$",
+                    "description": "材料文本中的位置标记，如 第6页；表格类材料不送 9B，所以没有单元格位置"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "field",
+                  "value",
+                  "loc"
+                ]
+              }
+            },
+            "elapsed_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "task",
+            "result",
+            "elapsed_ms"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "const": "classify"
+            },
+            "result": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "category"
+              ]
+            },
+            "elapsed_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "task",
+            "result",
+            "elapsed_ms"
+          ]
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "BAD_IMAGE",
+                "KEY_INVALID",
+                "TOO_LARGE",
+                "QUEUE_FULL",
+                "TIMEOUT",
+                "KEY_CHECK_UNAVAILABLE",
+                "BAD_REQUEST",
+                "INTERNAL"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "description": "395 的错误体；HTTP 状态见 Spec 20.5"
+    }
+  }
+}

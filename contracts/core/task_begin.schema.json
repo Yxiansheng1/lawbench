@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/core/task_begin.schema.json",
+  "title": "POST /core/task/begin",
+  "description": "Agent 插件在每轮第一步调用：由会话头 cwd 找到案件，取该会话待执行的任务单；没有则按'自由对话'默认值新建",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/session_id"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "会话头的 cwd，原样传入；服务只用它查注册表"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "cwd"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "task_id": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+                },
+                "case_id": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+                },
+                "skill": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "params": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+                },
+                "budget": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/budget"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "task_id",
+                "case_id",
+                "skill",
+                "params",
+                "budget"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        },
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "params": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+        },
+        "budget": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/budget"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "case_id",
+        "skill",
+        "params",
+        "budget"
+      ]
+    }
+  }
+}

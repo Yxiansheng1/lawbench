@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/settings.schema.json",
+  "title": "<应用数据>/settings.json",
+  "description": "设置；Key 不在这里（在 Windows 凭据管理器）",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "servers": {
+      "type": "object",
+      "properties": {
+        "llm_base_url": {
+          "type": "string",
+          "pattern": "^http://"
+        },
+        "prep_base_url": {
+          "type": "string",
+          "pattern": "^http://"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "llm_base_url",
+        "prep_base_url"
+      ]
+    },
+    "defaults": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+    },
+    "skill_presets": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+      }
+    },
+    "templates": {
+      "type": "object",
+      "properties": {
+        "文书": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "合同": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "文书",
+        "合同"
+      ]
+    },
+    "ocr_fallback_llm": {
+      "type": "boolean",
+      "description": "395 不可用时由 6000D 接管识别；管理员开启，默认 false"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "servers",
+    "defaults",
+    "skill_presets",
+    "templates",
+    "ocr_fallback_llm"
+  ]
+}

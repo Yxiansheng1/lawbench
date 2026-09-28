@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "case_id": "3f2b9c1e-7a4d-4e8b-9c2a-1b5d6e7f8a90",
+  "next_seq": 2,
+  "materials": [
+    {
+      "material_id": "M0001",
+      "rel_path": "证据/借条.pdf",
+      "name": "借条",
+      "type": "pdf",
+      "size": 812345,
+      "mtime": "2026-09-28T09:30:00+08:00",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "needs_ocr",
+      "unit": "page",
+      "unit_count": 3,
+      "is_ocr": "none",
+      "text_path": "工作区/材料/文本/证据/借条.pdf.md",
+      "pages_need_ocr": [
+        2,
+        3
+      ],
+      "pages_mixed": [],
+      "note": null,
+      "error": null,
+      "imported_at": "2026-09-28T09:30:00+08:00",
+      "updated_at": "2026-09-28T09:30:00+08:00"
+    }
+  ]
+}

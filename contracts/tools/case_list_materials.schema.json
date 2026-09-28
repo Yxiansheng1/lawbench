@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_list_materials.schema.json",
+  "title": "case_list_materials",
+  "description": "列出当前案件的材料。name 在案件内唯一，引用时照抄",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "required": []
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "materials": {
+          "type": "array",
+          "items": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/material_row"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "materials",
+        "total"
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "value": {
+    "task_id": "T-20260928093000-7c1f",
+    "case_id": "3f2b9c1e-7a4d-4e8b-9c2a-1b5d6e7f8a90",
+    "skill": "criminal-reading-notes",
+    "params": {
+      "thinking": "低",
+      "window": "64K",
+      "max_tokens": 16384
+    },
+    "budget": {
+      "model_calls": 8,
+      "tool_calls": 24,
+      "minutes": 45
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/prep395/health.schema.json",
+  "title": "GET /health（395）",
+  "description": "不需要 Key，不含任何内容",
+  "type": "object",
+  "properties": {
+    "status": {
+      "enum": [
+        "ok",
+        "degraded"
+      ]
+    },
+    "ocr": {
+      "enum": [
+        "ok",
+        "down"
+      ]
+    },
+    "llm9b": {
+      "enum": [
+        "ok",
+        "down"
+      ]
+    },
+    "queue": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "version": {
+      "type": "string"
+    },
+    "contract_version": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "ocr",
+    "llm9b",
+    "queue",
+    "version",
+    "contract_version"
+  ]
+}

@@ -1,0 +1,4 @@
+id: criminal-reading
+name: 刑事阅卷
+skills: [case-wiki-build, criminal-reading-notes, criminal-evidence-review, pre-issue-check, doc-revise, legal-workflow]
+outputs: [刑事阅卷笔录, 证据审查意见]

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/wiki_pending.schema.json",
+  "title": "工作区/wiki/待确认.json",
+  "description": "AI 提出的 wiki 修改建议",
+  "$defs": {
+    "suggestion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^S[0-9]{4}$"
+        },
+        "field": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_text"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        },
+        "created_at": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "accepted",
+            "rejected"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "field",
+        "value",
+        "source",
+        "reason",
+        "task_id",
+        "created_at",
+        "status"
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/suggestion"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "suggestions"
+  ]
+}

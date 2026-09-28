@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/ocr_submit.schema.json",
+  "title": "POST /api/ocr/jobs",
+  "description": "提交识别（调用前界面已弹确认框，写明页数和发往 395）",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "material_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "dewatermark": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "material_id",
+        "pages",
+        "dewatermark"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "job_id": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+                },
+                "pages": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "estimated_minutes": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "job_id",
+                "pages",
+                "estimated_minutes"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "estimated_minutes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "pages",
+        "estimated_minutes"
+      ]
+    }
+  }
+}

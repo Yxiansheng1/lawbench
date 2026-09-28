@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "task_id": "T-20260928093000-7c1f",
+  "reads": [
+    {
+      "material_id": "M0001",
+      "material_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "unit": "page",
+      "from": 1,
+      "to": 3,
+      "at": "2026-09-28T09:30:00+08:00"
+    }
+  ]
+}

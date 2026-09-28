@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/cases.schema.json",
+  "title": "<应用数据>/cases.json",
+  "description": "案件注册表：只有编号和路径，没有内容",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "case_id": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+          },
+          "root": {
+            "type": "string",
+            "description": "realpath，Windows 反斜杠原样保存"
+          },
+          "name": {
+            "type": "string"
+          },
+          "last_opened": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "root",
+          "name",
+          "last_opened"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "cases"
+  ]
+}

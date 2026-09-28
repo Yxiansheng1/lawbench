@@ -1,0 +1,8 @@
+{
+  "status": "ok",
+  "ocr": "ok",
+  "llm9b": "ok",
+  "queue": 3,
+  "version": "1.0.0",
+  "contract_version": "1.0"
+}

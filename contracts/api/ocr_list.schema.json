@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/ocr_list.schema.json",
+  "title": "GET /api/ocr/jobs?case_id=",
+  "description": "识别任务进度",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "jobs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "job_id": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+                      },
+                      "material_id": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "queued",
+                          "running",
+                          "paused",
+                          "done",
+                          "cancelled",
+                          "partial_failed"
+                        ]
+                      },
+                      "pause_reason": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "offline",
+                              "prep_down",
+                              "key_invalid",
+                              "app_exit"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "total": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "done": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "created_at": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "job_id",
+                      "material_id",
+                      "name",
+                      "status",
+                      "pause_reason",
+                      "total",
+                      "done",
+                      "failed",
+                      "created_at"
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "jobs"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "job_id": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/job_id"
+              },
+              "material_id": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "queued",
+                  "running",
+                  "paused",
+                  "done",
+                  "cancelled",
+                  "partial_failed"
+                ]
+              },
+              "pause_reason": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "offline",
+                      "prep_down",
+                      "key_invalid",
+                      "app_exit"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "done": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "created_at": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "job_id",
+              "material_id",
+              "name",
+              "status",
+              "pause_reason",
+              "total",
+              "done",
+              "failed",
+              "created_at"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "jobs"
+      ]
+    }
+  }
+}

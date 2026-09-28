@@ -1,0 +1,236 @@
+[
+ {
+  "file": "citation_0.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_1.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_2.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_3.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_4.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_5.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_6.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "invalid"
+ },
+ {
+  "file": "citation_7.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "invalid"
+ },
+ {
+  "file": "citation_8.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "invalid"
+ },
+ {
+  "file": "core_task_begin.req.json",
+  "schema": "core/task_begin.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "core_task_begin.res.json",
+  "schema": "core/task_begin.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "core_task_begin.fail.json",
+  "schema": "core/task_begin.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "core_context.res.json",
+  "schema": "core/context.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "core_task_end.req.json",
+  "schema": "core/task_end.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_list.result.json",
+  "schema": "tools/case_list_materials.schema.json",
+  "pointer": "#/$defs/result",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_read.args.json",
+  "schema": "tools/case_read_material.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_read.args_path.json",
+  "schema": "tools/case_read_material.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "invalid"
+ },
+ {
+  "file": "tool_read.result.json",
+  "schema": "tools/case_read_material.schema.json",
+  "pointer": "#/$defs/result",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_search.result.json",
+  "schema": "tools/case_search.schema.json",
+  "pointer": "#/$defs/result",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_save_draft.result.json",
+  "schema": "tools/case_save_draft.schema.json",
+  "pointer": "#/$defs/result",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_edit_list.args.json",
+  "schema": "tools/case_save_edit_list.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "valid"
+ },
+ {
+  "file": "api_case_open.fail.json",
+  "schema": "api/case_open.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_ocr_submit.req.json",
+  "schema": "api/ocr_submit.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_ocr_list.res.json",
+  "schema": "api/ocr_list.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_source.res.json",
+  "schema": "api/source.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_wiki_suggestions.res.json",
+  "schema": "api/wiki_suggestions.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "prep_ocr.res.json",
+  "schema": "prep395/ocr_page.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "prep_ocr.err.json",
+  "schema": "prep395/ocr_page.schema.json",
+  "pointer": "#/$defs/error",
+  "expect": "valid"
+ },
+ {
+  "file": "prep_extract.req.json",
+  "schema": "prep395/extract.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "prep_extract.res.json",
+  "schema": "prep395/extract.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "prep_health.json",
+  "schema": "prep395/health.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_material_index.json",
+  "schema": "files/material_index.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_task.json",
+  "schema": "files/task.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_reads.json",
+  "schema": "files/reads.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_result.json",
+  "schema": "files/result.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_case_card.json",
+  "schema": "files/case_card.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_outputs_index.json",
+  "schema": "files/outputs_index.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_cases.json",
+  "schema": "files/cases.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "file_settings.json",
+  "schema": "files/settings.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ }
+]

@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "value": {
+    "name": "借条",
+    "loc": {
+      "unit": "page",
+      "from": 2
+    },
+    "text": "…",
+    "page_png_base64": "iVBOR…",
+    "source_changed": false
+  }
+}

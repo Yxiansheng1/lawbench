@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/files/reads.schema.json",
+  "title": "工作区/任务/<任务ID>/reads.json",
+  "description": "读取记录：每次 case_read_material 追加一条",
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "task_id": {
+      "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+    },
+    "reads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "material_id": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/material_id"
+          },
+          "material_version": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/sha256"
+          },
+          "unit": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/unit"
+          },
+          "from": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "to": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "at": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "material_id",
+          "material_version",
+          "unit",
+          "from",
+          "to",
+          "at"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "task_id",
+    "reads"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "CASE_NOT_FOUND",
+    "message": "当前会话不属于任何已打开的案件"
+  }
+}

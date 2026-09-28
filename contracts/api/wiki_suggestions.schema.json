@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/wiki_suggestions.schema.json",
+  "title": "GET /api/wiki/suggestions?case_id= ；POST /api/wiki/suggestions/{id}",
+  "description": "列出 / 处理 AI 提出的 wiki 修改建议",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^S[0-9]{4}$"
+        },
+        "accept": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "suggestions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "lawbench://contracts/files/wiki_pending.schema.json#/$defs/suggestion"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "suggestions"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "$ref": "lawbench://contracts/files/wiki_pending.schema.json#/$defs/suggestion"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "suggestions"
+      ]
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_read_input.schema.json",
+  "title": "case_read_input",
+  "description": "分段读取任务单选用的第 index 个输入（L1 放不下时用）",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "起始行号，默认 1"
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 8000,
+          "description": "单次最多返回的字数，默认且最大 8000"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "index"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_start": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "title",
+        "start",
+        "end",
+        "text",
+        "has_more",
+        "next_start"
+      ]
+    }
+  }
+}

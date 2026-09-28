@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "QUEUE_FULL",
+    "message": "排队已满"
+  }
+}

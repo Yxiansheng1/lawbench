@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "value": {
+    "l0": {
+      "text": "## 案件卡片 …",
+      "chars": 3200
+    },
+    "l1": {
+      "text": "## 输入1 刑事阅卷笔录-v2 …",
+      "tokens": 18000,
+      "truncated": true,
+      "toc": [
+        {
+          "index": 2,
+          "title": "证据审查意见-v1",
+          "tokens": 9000
+        }
+      ]
+    }
+  }
+}

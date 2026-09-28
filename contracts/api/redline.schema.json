@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/redline.schema.json",
+  "title": "POST /api/redline",
+  "description": "按修改清单在本机生成修订版 Word，存为该任务的草稿",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        },
+        "edit_list": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "task_id",
+        "edit_list"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+                },
+                "applied": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "manual": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "reason": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "reason"
+                    ]
+                  },
+                  "description": "需人工修改的条目"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "applied",
+                "manual"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        },
+        "applied": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manual": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "reason"
+            ]
+          },
+          "description": "需人工修改的条目"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "applied",
+        "manual"
+      ]
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_save_draft.schema.json",
+  "title": "case_save_draft",
+  "description": "保存草稿到 工作区/任务/<任务ID>/草稿/，同标题再存生成新版本（旧版本保留）；返回核对结果",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^\\\\/:*?\"<>|]+$"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "content"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "citation_check": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_check"
+        },
+        "coverage": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/coverage"
+        },
+        "not_fully_read": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "材料名"
+          },
+          "description": "coverage.partially_read 与 coverage.not_read 的材料名合并；不含 unreadable"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "version",
+        "citation_check",
+        "coverage",
+        "not_fully_read"
+      ]
+    }
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_save_edit_list.schema.json",
+  "title": "case_save_edit_list",
+  "description": "保存合同修改清单（Spec 12.2），律师点'生成修订版'时使用",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "合同材料名"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "para": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "与材料文本的段号一致"
+              },
+              "action": {
+                "enum": [
+                  "replace",
+                  "insert_after",
+                  "delete"
+                ]
+              },
+              "find": {
+                "type": "string",
+                "minLength": 1,
+                "description": "该段中恰好出现一次的原文"
+              },
+              "text": {
+                "type": "string",
+                "description": "replace / insert_after 时必填"
+              },
+              "comment": {
+                "type": "string",
+                "minLength": 1,
+                "description": "批注：修改理由"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "para",
+              "action",
+              "find",
+              "comment"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "edits"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        },
+        "accepted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "out_of_scope": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "reason"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "accepted",
+        "out_of_scope"
+      ]
+    },
+    "edit_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "para": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "与材料文本的段号一致"
+        },
+        "action": {
+          "enum": [
+            "replace",
+            "insert_after",
+            "delete"
+          ]
+        },
+        "find": {
+          "type": "string",
+          "minLength": 1,
+          "description": "该段中恰好出现一次的原文"
+        },
+        "text": {
+          "type": "string",
+          "description": "replace / insert_after 时必填"
+        },
+        "comment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "批注：修改理由"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "para",
+        "action",
+        "find",
+        "comment"
+      ]
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/core/task_end.schema.json",
+  "title": "POST /core/task/end",
+  "description": "turn/end 时调用：写 result.json 最终状态；没存过正式草稿时把 进行中.md 改名为 未完成-<时间>.md",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        },
+        "reason": {
+          "enum": [
+            "completed",
+            "aborted",
+            "blocked",
+            "error",
+            "max-tokens",
+            "interrupted",
+            "budget"
+          ],
+          "description": "DSH turn/end 的 reason.kind，外加插件自己的 budget"
+        },
+        "model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_s": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "reason",
+        "model_calls",
+        "tool_calls",
+        "elapsed_s"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "completed",
+                    "cancelled",
+                    "budget_stopped",
+                    "output_limit",
+                    "failed",
+                    "interrupted"
+                  ],
+                  "description": "写入 result.json 的状态"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "completed",
+            "cancelled",
+            "budget_stopped",
+            "output_limit",
+            "failed",
+            "interrupted"
+          ],
+          "description": "写入 result.json 的状态"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ]
+    }
+  }
+}

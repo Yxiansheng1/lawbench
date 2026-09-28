@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "servers": {
+    "llm_base_url": "http://192.168.8.77:8000/v1",
+    "prep_base_url": "http://192.168.8.78:9000"
+  },
+  "defaults": {
+    "thinking": "中",
+    "window": "64K",
+    "max_tokens": 16384,
+    "temperature": 0.3
+  },
+  "skill_presets": {
+    "contract-review": {
+      "thinking": "高",
+      "window": "128K",
+      "max_tokens": 32768
+    }
+  },
+  "templates": {
+    "文书": null,
+    "合同": null
+  },
+  "ocr_fallback_llm": false
+}

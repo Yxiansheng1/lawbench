@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_suggest_wiki.schema.json",
+  "title": "case_suggest_wiki",
+  "description": "提出一条 wiki 修改建议，写入 wiki/待确认.json，律师确认后才生效",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "enum": [
+            "本方立场",
+            "当事人",
+            "争议焦点",
+            "关键事实",
+            "时间线"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_text"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "value",
+        "source"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "suggestion_id": {
+          "type": "string",
+          "pattern": "^S[0-9]{4}$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "suggestion_id"
+      ]
+    }
+  }
+}

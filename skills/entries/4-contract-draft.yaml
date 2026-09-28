@@ -1,0 +1,4 @@
+id: contract-draft
+name: 合同起草
+skills: [case-wiki-build, contract-draft, contract-review, pre-issue-check, doc-revise, legal-workflow]
+outputs: [合同初稿, 待补事实清单]

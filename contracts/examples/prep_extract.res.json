@@ -1,0 +1,11 @@
+{
+  "task": "fields",
+  "result": [
+    {
+      "field": "金额",
+      "value": "60,000.00",
+      "loc": "第6页"
+    }
+  ],
+  "elapsed_ms": 3200
+}
