@@ -1,0 +1,7 @@
+﻿=== agent-browser ===
+NOT FOUND
+=== browsers ===
+OK  C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe  v121.0.2277.112
+--  C:\Program Files\Microsoft\Edge\Application\msedge.exe
+OK  C:\Program Files\Google\Chrome\Application\chrome.exe  v152.0.7977.83
+--  C:\Program Files (x86)\Google\Chrome\Application\chrome.exe

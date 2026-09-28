@@ -1,0 +1,8 @@
+﻿=== tools\ocr-driver 交付脚本 ===
+  start-engine.bat          704 B
+  stop-engine.bat           207 B
+  stop-engine.ps1           688 B
+
+=== 临时文件是否已清 ===
+  _tmp_launcher.bat 存在=False
+  _bat_enc.txt 存在=False

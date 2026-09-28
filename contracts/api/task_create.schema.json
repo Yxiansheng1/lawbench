@@ -16,7 +16,8 @@
         "entry": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "string",
+              "description": "发起任务的胶囊 id（capsules.json 中的 id，改名不影响）；自由对话为 null"
             },
             {
               "type": "null"

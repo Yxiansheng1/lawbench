@@ -39,6 +39,11 @@
       "format": "date-time",
       "description": "ISO 8601，带时区，如 2026-09-28T09:30:00+08:00"
     },
+    "abs_path": {
+      "type": "string",
+      "minLength": 3,
+      "description": "本机绝对路径（仅界面与工作台服务之间使用，不进 AI 工具）"
+    },
     "rel_path": {
       "type": "string",
       "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$",
@@ -108,7 +113,12 @@
         "PREP_UNAVAILABLE",
         "CANCELLED",
         "SERVICE_UNAVAILABLE",
-        "INTERNAL"
+        "INTERNAL",
+        "OFFICE_DIR_NOT_SET",
+        "CONVERTER_UNAVAILABLE",
+        "TEMPLATE_MISSING",
+        "ENGINE_FAILED",
+        "PLAN_NOT_CONFIRMED"
       ],
       "description": "错误码；含义与对应的中文提示见 Spec 20.1"
     },

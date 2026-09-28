@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/capsules_reset.schema.json",
+  "title": "POST /api/capsules/reset",
+  "description": "恢复默认胶囊（用安装目录里的 capsules.default.json 覆盖本机配置）",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "required": []
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "$ref": "lawbench://contracts/skill/capsules.schema.json"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "$ref": "lawbench://contracts/skill/capsules.schema.json"
+    }
+  }
+}

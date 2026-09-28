@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/retainer_driver.schema.json",
+  "title": "POST /api/retainer/driver",
+  "description": "委托材料窗口打开时启动、关闭时停止本机证件识别驱动（127.0.0.1:17801）",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "enum": [
+            "start",
+            "stop",
+            "status"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "running": {
+                  "type": "boolean"
+                },
+                "port": {
+                  "const": 17801
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "running",
+                "port",
+                "message"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean"
+        },
+        "port": {
+          "const": 17801
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "running",
+        "port",
+        "message"
+      ]
+    }
+  }
+}

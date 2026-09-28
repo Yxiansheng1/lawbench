@@ -1,0 +1,42 @@
+﻿=== 归档 ===
+_archive.txt
+_bat_env_verify.txt
+_build_out.txt
+_builtin_check.txt
+_checksum.log
+_checksum_check.txt
+_clause6.log
+_clause6_read.txt
+_cleanup.txt
+_compat.txt
+_final_check.txt
+_final_zip.txt
+_go_build.txt
+_go_check.txt
+_go_dl.txt
+_go_env.txt
+_go_extract.txt
+_go_final.txt
+_go_portable_check.txt
+_go_state.txt
+_go_ver.txt
+_go_versions.txt
+_go_versions2.txt
+_portable_prep.txt
+_portable_verify.txt
+_proxy_check.txt
+_rebuild.txt
+_tar_log.txt
+_tpl_clean.txt
+_ui_refactor.txt
+_untar_log.txt
+_untar_progress.txt
+_v340.txt
+_version_check.txt
+_zip_copy.txt
+_zip_diag.txt
+_zip_result.txt
+改造执行计划.md
+
+=== 根目录残留 ===
+_after_cleanup.txt, _cc_ls.txt, _cc_ls2.txt, _cc_sizes.txt, _del_err.txt, _mem_list.txt, _tmp_verify.py, _verify.txt, _verify_run.txt

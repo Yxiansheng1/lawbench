@@ -1,0 +1,12 @@
+﻿=== winget ===
+C:\Users\0\AppData\Local\Microsoft\WindowsApps\winget.exe
+=== existing go ===
+NOT FOUND
+=== common paths ===
+C:\Program Files\Go\bin\go.exe : False
+C:\Go\bin\go.exe : False
+C:\Users\0\AppData\Local\Programs\Go\bin\go.exe : False
+=== 官方版本接口 ===
+ERR: 操作超时。
+=== 国内镜像可用性 ===
+aliyun OK status=200

@@ -1,0 +1,7 @@
+{
+  "action": "plan",
+  "period": "2026-09",
+  "channel": "imap",
+  "history": "exclude",
+  "history_numbers": []
+}

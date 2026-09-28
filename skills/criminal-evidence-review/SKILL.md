@@ -4,8 +4,6 @@ title: 证据审查意见
 description: 刑事证据审查。律师要求审查控方证据、找证据矛盾、找程序瑕疵、分析证据链是否完整时使用。以阅卷笔录为线索、回读原件核实，从真实性、合法性、关联性和证明力四个方面逐项列出问题，并汇总证据链缺口，供律师形成辩护观点。
 mode: agent
 kind: analysis
-entry: 刑事阅卷
-order: 3
 params: {thinking: 高, window: 128K, max_tokens: 32768}
 owner: 待定
 inputs: [materials, wiki, prior]

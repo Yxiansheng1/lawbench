@@ -1,0 +1,18 @@
+[
+  {
+    "browser": "msedge",
+    "selftest": true,
+    "uiGeneration": true,
+    "files": 4,
+    "externalRequests": [],
+    "pageErrors": []
+  },
+  {
+    "browser": "chrome",
+    "selftest": true,
+    "uiGeneration": true,
+    "files": 4,
+    "externalRequests": [],
+    "pageErrors": []
+  }
+]

@@ -1,0 +1,11 @@
+﻿=== external OCR binaries ===
+tesseract -> NOT FOUND
+rapidocr -> NOT FOUND
+paddleocr -> C:\Users\0\AppData\Local\Programs\Python\Python312\Scripts\paddleocr.exe
+mineru -> NOT FOUND
+magic-pdf -> NOT FOUND
+=== python packages ===
+PY C:\Users\0\AppData\Local\Programs\Python\Python312\python.exe
+    File "<string>", line 1     import importlib.util as u;mods=[fitz,pdfplumber,pypdf,onnxruntime,rapidocr_onnxruntime,paddleocr,PIL,numpy,cv2,pyzbar];print(;.join(m+=+(OK if u.find_spec(m) else MISS) for m in mods))                                                                                                                                   ^ SyntaxError: invalid syntax
+PY C:\Users\0\.workbuddy\binaries\python\versions\3.13.12\python.exe
+    File "<string>", line 1     import importlib.util as u;mods=[fitz,pdfplumber,pypdf,onnxruntime,rapidocr_onnxruntime,paddleocr,PIL,numpy,cv2,pyzbar];print(;.join(m+=+(OK if u.find_spec(m) else MISS) for m in mods))                                                                                                                                   ^ SyntaxError: invalid syntax

@@ -1,0 +1,24 @@
+paddleocr import OK
+engine init OK with [enable_mkldnn=False] seconds=1.7
+IMAGE _tmp_ocr_license.png seconds=16.98 lines=10
+  | 营业执照
+  | 名称深圳市示例科技有限公司
+  | 统一社会信用代码91440300MA5EXAMPLA
+  | 类
+  | 美型有限责任公司
+  | 法定代表人张三
+  | 住
+  | 所广东省深圳市福田区示例路1号
+  | 成立日期
+  | 月2020年09月01日
+IMAGE _tmp_ocr_idcard.png seconds=12.64 lines=10
+  | 居民身份证
+  | 姓名
+  | 李四
+  | 性别男民族汉
+  | 出生
+  | 1985年3月12日
+  | 住址
+  | 广东省深圳市南山区示例路2号
+  | 公民身份号码
+  | 11010519491231002X

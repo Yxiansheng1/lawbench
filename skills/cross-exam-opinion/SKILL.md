@@ -4,8 +4,6 @@ title: 质证意见
 description: 质证意见。律师要求针对公诉机关证据目录或具体证据写质证意见、准备庭审质证提纲时使用。逐项对每份（每组）证据从真实性、合法性、关联性和证明力发表意见，每条意见都带卷宗出处，输出质证意见表和庭审发问提纲。
 mode: agent
 kind: draft
-entry: 刑事文书
-order: 4
 params: {thinking: 中, window: 128K, max_tokens: 49152}
 owner: 待定
 inputs: [materials, wiki, prior]

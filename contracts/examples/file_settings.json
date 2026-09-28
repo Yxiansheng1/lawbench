@@ -21,5 +21,13 @@
     "文书": null,
     "合同": null
   },
-  "ocr_fallback_llm": false
+  "ocr_fallback_llm": false,
+  "profile": {
+    "lawyer_name": "李律师"
+  },
+  "office": {
+    "dir": "D:\\日常办公",
+    "invoice_buyer": "某某律师事务所"
+  },
+  "converter": "auto"
 }

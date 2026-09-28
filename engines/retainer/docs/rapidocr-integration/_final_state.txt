@@ -1,0 +1,20 @@
+﻿=== app 目录 ===
+  core.js            21704 B
+  excel.js            9915 B
+  idscan.js          32246 B
+  packages.js         7026 B
+  selftest.js        11204 B
+  style.css           6307 B
+  ui.js              25070 B
+  uitest.js           2271 B
+=== tests 结果 ===
+  formats.json
+  round-1.json
+  round-2.json
+=== 根目录残留 ===
+  _after_cleanup.txt
+  _del_err.txt
+  _mem_list.txt
+  _tmp_verify.py
+  _verify.txt
+  _verify_run.txt

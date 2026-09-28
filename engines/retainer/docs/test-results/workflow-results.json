@@ -1,0 +1,50 @@
+[
+  {
+    "name": "默认刷新不保留案件",
+    "passed": true
+  },
+  {
+    "name": "Excel逐案切换与重新生成",
+    "passed": true
+  },
+  {
+    "name": "页面工作包导出与恢复",
+    "passed": true
+  },
+  {
+    "name": "本地自动保存、刷新恢复与清除",
+    "passed": true
+  },
+  {
+    "name": "存储失败不显示保存成功",
+    "passed": true
+  },
+  {
+    "name": "资源包导入及损坏失败保留原资源",
+    "passed": true
+  },
+  {
+    "name": "导入自定义模板、清理并采纳副本",
+    "passed": true
+  },
+  {
+    "name": "收费转换预览、采纳至正确模板组",
+    "passed": true
+  },
+  {
+    "name": "原模板源导入与重建副本下载",
+    "passed": true
+  },
+  {
+    "name": "原模板恢复与完整性检查",
+    "passed": true
+  },
+  {
+    "name": "模板缺少关键字段被阻止",
+    "passed": true
+  },
+  {
+    "name": "无外网请求（本机识别引擎健康探测除外）",
+    "passed": true
+  }
+]

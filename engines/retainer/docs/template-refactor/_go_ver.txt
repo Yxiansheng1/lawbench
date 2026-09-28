@@ -1,0 +1,6 @@
+﻿=== go version ===
+go version go1.27.1 windows/amd64
+=== GOROOT ===
+C:\Users\0\go-sdk\go
+=== GOPATH ===
+C:\Users\0\go

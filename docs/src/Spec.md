@@ -1,11 +1,15 @@
-# 律所本地 AI 平台 — Spec（第二版）
+# 律所本地 AI 平台 — Spec（第三版）
 
 依据：
-- PRD 第三版（本文引用的需求编号 `F-*`、`SEC-*`、`G-*` 和章节号都以第三版为准）、《服务器现状报告》；
+- PRD 第四版（本文引用的需求编号 `F-*`、`SEC-*`、`G-*` 和章节号都以第四版为准）、《服务器现状报告》；
 - **DSH 官方仓库** `github.com/deepseek-ai/deepseek-harness`，按提交 `477b4f4`（2026-09-24）核对。开发时从官方仓库重新拉取并固定在这个提交（编排计划的事实索引中写完整 hash）；换提交前要重新核对第 3 节列出的配置行和文件位置；
 - 案件 wiki 测试（`D:\pycharm\test\wiki`，含大卷宗流水线实测）；本地最小链路试验（只用来验证思路，不作为代码基础）；
-- 《五个业务能力编排》（`docs/src/业务编排.md`）和仓库中的 `skills/`（第 10 节）；
+- 《业务能力编排》（`docs/src/业务编排.md`）和仓库中的 `skills/`（第 10 节）；
+- 律所周海沺律师提供的三个 Skill：发票整理（invoice-ledger-db 3.9.4）、委托材料（retainer-offline 3.4.1）、案卷归档（lawyer-archiving 1.0.0），见第 12.4、13.3、13.5 节；
+- 甲方《EasyTier 律所工作台远程接入方案 V2》及部署参数台账（第 15 节）；
 - 补充情况：395 是一台 Windows 11 电脑（第 6 节）；本次只交付 Windows 客户端。
+
+**相对第二版的主要变化**（2026-09-28 甲方需求变更）：首页改为两级胶囊（D11、第 10.3 节）；聊天附件改为"拖入即导入"（D13、第 5.1 节）；新增诉讼文书、刑期计算、招投标、案卷归档四类 Skill，接入发票整理和委托材料两个现成工具（D12）；远程访问改为 EasyTier（服务器侧由我方配置，第 15 节）；契约升到 1.1。
 
 **本文写"怎么做"**：技术选型、模块划分、接口、关键规则。读者是写代码的人（包括 Claude Code）。开发按编排计划的工单进行，工单引用本文的章节号和 `contracts/` 下的契约文件。
 - **模块之间的接口和共用的数据格式都以第 20 节契约和 `contracts/` 目录为准**，写到字段级、可以用程序校验；正文中出现的接口和格式是说明，与契约不一致时以契约为准。
@@ -25,11 +29,14 @@
 | D3 | **律师工作台是一个 preset**（DSH 里"一个会话的 AI 挂哪些插件"的配置），里面只有：系统提示、Skill 加载、`ask_user_question`、上下文压缩和我方 Agent 插件。不挂文件读写、命令、网页、AGENTS.md 加载。AI 只能用我方的 `case_*` 工具，而且看不到案件路径。 | 桌面端用的 `dsh-web-app` 组合包已经把文件、命令等工具从全局关掉、改由各 preset 自己挂；我们的 preset 不挂，AI 就没有这些工具。案件隔离不依赖 DSH 沙箱。 |
 | D4 | **只保留律师工作台这一个 preset**：官方自带的 4 个 preset（`standard`、`ptc`、`minimal`、`cordis`，都能执行命令、读写文件）全部关掉，默认 preset 改成我们的。 | 否则律师切换 preset 就能拿到命令和文件工具。 |
 | D5 | **业务逻辑都在 Python（工作台服务）**；DSH 插件只做转发和闸门。工作台服务是常驻的本机进程，由我方 Host 插件启动和看护。 | 解析、检索、流水线、识别队列用 Python 写最合适；识别队列需要常驻进程。 |
-| D6 | **两种执行方式**：**流水线**——程序控制流程，模型只写每一步的内容，每步写完程序核对出处；**Agent**——由 DSH 的 Agent 循环调用 `case_*` 工具。每个 Skill 在头部用 `mode` 声明走哪种。本次**只有案件 wiki 走流水线**，其余 12 个业务 Skill 都是 Agent（按《五个业务能力编排》）；流水线框架是通用的，以后阅卷类 Skill 实测预算不够时可改为流水线。 | wiki 测试证明流水线可行：大卷宗 21 份材料、74 页，36 次调用、290 秒，单次最大输入 15K token，无截断，核对修正后只剩 1 处页码疑点。wiki 若走 Agent，一份材料至少一次模型调用，会超出 8 次的预算。 |
+| D6 | **两种执行方式**：**流水线**——程序控制流程，模型只写每一步的内容，每步写完程序核对出处；**Agent**——由 DSH 的 Agent 循环调用 `case_*` 工具。每个 Skill 在头部用 `mode` 声明走哪种。本次**只有案件 wiki 走流水线**，其余 17 个业务 Skill 都是 Agent；流水线框架是通用的，以后阅卷类 Skill 实测预算不够时可改为流水线。 | wiki 测试证明流水线可行：大卷宗 21 份材料、74 页，36 次调用、290 秒，单次最大输入 15K token，无截断，核对修正后只剩 1 处页码疑点。wiki 若走 Agent，一份材料至少一次模型调用，会超出 8 次的预算。 |
 | D7 | **发往服务器的操作不开放给 AI**。提交识别、9B 抽取、生成 wiki 只能由律师在界面上点击触发；AI 的工具里没有这些。 | SEC-02：每次外发都由律师的操作授权，AI 无法自行外发。 |
 | D8 | **PDF 在本机拆页和渲染**，只把律师选定的页面图片发给 395。 | 发送量最小；395 只处理单页图片，接口简单。 |
 | D9 | **律师 Key 存 Windows 凭据管理器**：写一个凭据插件替换 DSH 的 `credentials-local`，工作台服务用 Python `keyring` 读同一条目（第 8.1 节）。 | PRD F-ACC-01a；明文文件在硬盘被拆下时可读。 |
 | D10 | **模块之间的接口和共用数据格式以契约为准**（第 20 节、`contracts/`）：JSON Schema 文件，Python 和 TypeScript 用同一份文件校验。 | 各模块由不同开发会话并行编写，只靠契约对齐。 |
+| D11 | **首页是两级胶囊，由配置文件驱动**：一级分组（民事与商事、刑事案件、日常办公），二级胶囊打开一组 Skill 或一个内置工具。默认配置随安装包（`skills/capsules.default.json`），律师本机的配置在 `<应用数据>/capsules.json`，胶囊管理器只能排序、改名、隐藏、新增和恢复默认，不能删除，不设密码（第 10.3 节）。 | 甲方需求变更；每位律师用自己的电脑，改动只影响本机；"隐藏"代替"删除"，误操作可以恢复。 |
+| D12 | **律所已有的成熟工具原样接入，不改写成 Agent**：发票整理引擎由工作台服务按白名单动作调用（第 13.3 节）；委托材料是离线网页，在独立窗口打开（第 13.5 节）。**案卷归档按我方格式重写**：判断和写作交给 AI，合并卷宗、页码、Word 由程序完成（第 12.4 节）。与我方规则冲突处以我方为准：发票引擎经作者同意去掉设备授权、不用邮箱联网收取；归档不执行命令。 | 前两个工具已经完整可用，改写只增加风险；归档原 Skill 依赖 AI 执行命令，与 D3 冲突，且需要案件上下文。 |
+| D13 | **聊天附件改为"拖入即导入"**：拖到对话框或材料面板的文件、文件夹，都复制进当前案件文件夹再解析（`/api/materials/import`），不再进入 DSH 的附件目录；"+"附件按钮去掉，改为"导入"按钮（可选文件或文件夹）。 | 附件存在 `$DSH_HOME`，不在案件文件夹，不经过识别、检索和出处；导入后全部走统一流程（SEC-01）。 |
 
 ---
 
@@ -53,12 +60,16 @@
 │ 工作台服务（Python，常驻，127.0.0.1 随机端口）                       │
 │   ├ 案件与路径闸门   ├ 材料解析    ├ 全文检索（SQLite FTS5）          │
 │   ├ 任务单与上下文   ├ 识别队列    ├ 流水线      ├ 出处核对            │
-│   ├ 导出 / 修订版    └ 6000D、395 客户端（只允许两个地址）             │
+│   ├ 导出 / 修订版    ├ 归档生成    ├ 刑期计算    ├ Word/PDF 转换       │
+│   ├ 发票引擎（子进程，白名单动作）  ├ 证件识别驱动（127.0.0.1:17801）  │
+│   └ 6000D、395 客户端（只允许两个地址）                              │
 │             │ 读写                                                   │
 │             ▼                                                        │
 │ 案件文件夹（律师指定位置；即 DSH 的"工作区"，会话的工作目录）          │
+│ 日常办公文件夹（发票台账，不是案件）                                 │
+│ 委托材料窗口（独立 Electron 窗口，加载本地网页）                     │
 └──────────────────────────────────────────────────────────────────┘
-        │ HTTP（局域网 / WireGuard）          │
+        │ HTTP（局域网 / EasyTier 虚拟网）     │
         ▼                                     ▼
 6000D 网关 :8000 → vLLM ×2（仅本机）     395 预处理服务 :9000（Windows）
                                            ├ OCR 后端（仅本机）
@@ -98,7 +109,7 @@
 
 ### 1.3 工作台服务的启动和看护
 
-- Host 插件启动时用 `ctx.subprocess.spawn` 拉起工作台服务，传入随机端口和 32 字节随机令牌（`LB_PORT`、`LB_TOKEN`）。DSH 会清掉子进程继承的环境变量，所以服务需要的变量（端口、令牌、应用数据目录、Key 文件位置）都要在 `env` 里显式传。
+- Host 插件启动时用 `ctx.subprocess.spawn` 拉起工作台服务，传入随机端口和 32 字节随机令牌（`LB_PORT`、`LB_TOKEN`）。DSH 会清掉子进程继承的环境变量，所以服务需要的变量（端口、令牌、应用数据目录、Key 文件位置）都要在 `env` 里显式传；另外把 Windows 的 `SYSTEMROOT`、`LOCALAPPDATA`、`APPDATA`、`USERPROFILE`、`TEMP`、`TMP` 原样传入（Python、Word / WPS 调用和发票引擎都需要，第 12.3、13.3 节）。
 - DSH 没有现成的进程看护，由 Host 插件自己做：每 5 秒探测一次服务的 `/health`；进程退出或连续 3 次没有响应就重启，1 分钟内重启超过 3 次就停止重启，界面提示"工作台服务异常"。Host 退出时一起结束服务。
 - 服务只监听 `127.0.0.1`；每个请求必须带 `Authorization: Bearer <LB_TOKEN>`，否则返回 401，防止本机其他程序调用。
 - 关闭窗口时桌面端默认留在托盘，Host 和工作台服务继续运行，后台识别不中断（第 7.2 节）。
@@ -126,9 +137,16 @@ lawbench/                 我方仓库
 │     ├─ llm/         client6000d.py、tokens.py
 │     ├─ pipeline/    runner.py、prompts.py、steps/（本次只有 wiki）
 │     ├─ checks/      citations.py、evidence.py（由 wiki 测试的两个检查脚本改成库）
-│     └─ export/      pandoc.py、redline.py
+│     ├─ export/      pandoc.py、redline.py
+│     ├─ office/      convert.py（Word / WPS / LibreOffice 转 PDF，第 12.3 节）
+│     ├─ archive/     match.py、build.py、templates/（第 12.4 节）
+│     ├─ calc/        sentence.py（刑期计算规则表，第 13.4 节）
+│     ├─ invoice/     runner.py（发票引擎白名单调用，第 13.3 节）
+│     └─ retainer/    driver.py（证件识别驱动的启停，第 13.5 节）
 ├─ prep395/               395 预处理服务（Python，Windows）
-├─ skills/                内置 Skill（平铺）、_shared/共用规则.md、entries/、_scripts/（第 10 节）
+├─ skills/                内置 Skill（平铺）、_shared/共用规则.md、capsules.default.json、_scripts/（第 10 节）
+├─ engines/               律所提供的现成工具：invoice-ledger/（发票引擎）、retainer/（委托材料网页和证件识别驱动）
+├─ docs/reference/        律所提供的原始 Skill（只作参考，不打包），如 client-skills/lawyer-archiving-1.0.0
 ├─ tools/                 splitter/（长截图切分）、convert/（格式互转）
 ├─ packaging/             安装包脚本、versions.lock、第三方许可证清单
 ├─ contracts/             契约：JSON Schema、case_db.sql、formats.md、样例和自检脚本（第 20 节）
@@ -165,12 +183,19 @@ lawbench/                 我方仓库
 | keyring | 客户端 | 读 Windows 凭据管理器中的 Key | MIT | |
 | jsonschema（Python）、ajv（TypeScript） | 客户端、395 | 按契约校验请求、返回和落盘文件 | MIT | 第 20 节 |
 | md2word 的脚本（律师提供的 Skill，MIT） | 客户端 | Word 导出的参考实现，可选 | MIT | 采用时列入许可证清单 |
+| pypdf | 客户端 | 归档：合并卷宗 PDF、叠加页码 | BSD-3-Clause | 替代原归档 Skill 用的 PyMuPDF（AGPL） |
+| reportlab | 客户端 | 归档：生成页码层（内置中文字体 STSong-Light） | BSD | |
+| pywin32 | 客户端 | 调用本机 Word / WPS 转 PDF（第 12.3 节） | PSF | |
+| 发票整理引擎（invoice-ledger-db 3.9.4.1） | 客户端 | 发票归档、查重、台账、报销批次（第 13.3 节） | 周海沺律师提供，律所内部使用，署名保留 | 自带 Python 3.12 嵌入式运行环境及 openpyxl、pdfplumber、pdfminer.six、pillow、pypdfium2、cryptography、charset-normalizer、winsdk，清单见其 `THIRD_PARTY.json` |
+| 委托材料工具（retainer-offline 3.4.1） | 客户端 | 委托合同、授权委托书、所函生成（第 13.5 节） | 周海沺律师提供，律所内部使用，署名保留 | 网页部分用 JSZip（MIT） |
+| RapidOCR + PP-OCRv6 模型、onnxruntime、opencv-python-headless | 客户端 | 委托材料的证件识别驱动（本机 CPU） | Apache-2.0 / MIT / Apache-2.0 | 驱动随委托材料工具提供，依赖装进客户端的 Python |
 
 **不用的组件**：
 - 律师提供的 Skill 中 CC-BY-NC 许可的 4 个（contract-copilot、legal-proposal-generator、legal-text-format、legal-visualization）：授权明确前不吸收文本和脚本；legal-ocr 调用公网 OCR（MinerU、PaddleOCR 云端），违反 SEC-10，只可参考其 MIT 许可的后处理代码，不得打包其联网部分和 `config/.env`。
 - MCP（Python SDK、DSH 的 `mcp-client`）：改用 DSH 插件注册工具（D2）。
 - MarkItDown：转换时丢掉页码和段落位置，满足不了 F-MAT-04。
-- pdf2docx、PyMuPDF：AGPL（或依赖 AGPL）。
+- pdf2docx、PyMuPDF：AGPL（或依赖 AGPL）。律所归档 Skill 原来用 PyMuPDF 合并卷宗，改用 pypdf + reportlab。
+- 发票引擎的邮箱收取部分（IMAP、MCP 连接器、正文链接下载）：联网，违反 SEC-03；代码保留在引擎里，但工作台不提供调用入口（第 13.3 节）。
 - DSH 的 `office-to-pdf`、文档预览侧栏：会在 DSH 目录缓存案卷转成的 PDF；原文查看由我方实现（第 9.3 节）。
 
 ---
@@ -198,7 +223,7 @@ lawbench/                 我方仓库
 | 插件管理 | `plugin-manager`、`ui-plugin-manager`、`plugin-package-inventory-deepseek` | 会用 pnpm 在线安装插件 |
 | DeepSeek 账号和官方模型 | `deepseek-account`、`llm-deepseek`、`llm-deepseek-account` | 连 DeepSeek 服务器 |
 | 遥测和反馈 | `session-telemetry-otel`、`message-feedback`、`ui-message-feedback` | 律师点"反馈"后会把整段会话记录上传到 `harness-telemetry.deepseeksvc.com`（官方 `packages/session/session-telemetry-otel/README.md`）；另在环境变量中设 `DSH_TELEMETRY_DISABLED=1` |
-| 标题生成 | `session-title-llm` | 用首条消息生成标题，标题会存到 `$DSH_HOME`；改由我方插件按"<入口> · <时间>"设标题 |
+| 标题生成 | `session-title-llm` | 用首条消息生成标题，标题会存到 `$DSH_HOME`；改由我方插件按"<胶囊名> · <时间>"设标题 |
 | 文档预览 | `ui-sidebar-documentpreview`、`office-to-pdf` | 会在 DSH 目录缓存 PDF |
 | 官方品牌 | `ui-brand-official` | 换成我方品牌（第 3.4 节） |
 
@@ -274,11 +299,12 @@ lawbench/                 我方仓库
 | P-2 | 强制更新策略查询 | `apps/desktop/src/mandatory-update-policy.ts`；打包 `apps/desktop/scripts/electron-builder-config.mjs`（`resolveDesktopPolicyEnvironment` 调用、`extraMetadata.dshMandatoryUpdatePolicy`） | 删掉这两处；安装包里没有这个字段，运行时就不查询 |
 | P-3 | 欢迎窗口 | `apps/desktop/src/welcome-window.ts`、`src/client/WelcomePage.tsx`、`welcome-backend.ts`、`main.ts` 中 `needsWelcome` 判断 | 换成我方"首次配置"页：填 6000D 和 395 地址、个人 Key、测试连接（PRD 7.9）；判断条件改为"没有配置过律所服务器" |
 | P-4 | 品牌 | `apps/desktop/scripts/electron-builder-config.mjs`（`productName`、`appId` 来自 `DSH_DESKTOP_APP_ID`、`protocols`、图标）、`apps/desktop/resources/icon*`、`tray-windows.ico`、`src/locale.ts`（产品名文案）、`main.ts` 关于面板、`apps/desktop/installer/`（安装界面文案和图片） | 换成律所名称和 logo，"技术支持"放我方 |
-| P-5 | 聊天附件 | `packages/client/ui-conversation/src/client/input/editor/apply.ts` 中 `addFiles` | 置为 `undefined`，粘贴、选择、拖入文件一起关闭；材料一律走"导入" |
+| P-5 | 聊天附件改为导入 | `packages/client/ui-conversation/src/client/input/editor/apply.ts` 中 `addFiles`；输入区的"+"按钮 | `addFiles` 改为调用我方的导入处理：取出文件的本机路径（Electron `webUtils.getPathForFile`），调 `/api/materials/import`，不写附件；粘贴的截图（没有本机路径）先存为 `工作区/临时/` 下的图片再导入到 `02案件材料/粘贴图片/`。"+"按钮去掉，由我方"导入"按钮代替（D13） |
 | P-6 | 远程命名空间 | `packages/api/remotes/src/client/index.ts` | 加一行导入我方 `lawbench` 命名空间（第 1.2 节） |
 | P-7 | 网络白名单 | `packages/util/http-proxy/src/install.ts`（全局 undici dispatcher） | 加地址白名单（第 14.3 节） |
 | P-8 | 会话记录存到案件目录 | `packages/session/session-persistence-jsonl` | 复制为我方插件，改目录规则（第 3.3 节）；如果做成独立插件、通过补丁替换 `session-persistence-jsonl` 行，就不算改源码 |
 | P-9 | Electron 后台请求 | `apps/desktop/src/main.ts` | 主窗口关闭拼写检查（`session.setSpellCheckerEnabled(false)`）；`session.defaultSession.webRequest.onBeforeRequest` 拦截白名单以外的请求 |
+| P-11 | 委托材料窗口 | `apps/desktop/src/main.ts` | 增加一个 IPC 通道 `lawbench:open-retainer`：新建 `BrowserWindow` 加载 `<安装目录>/engines/retainer/启动.html`，`partition: 'persist:retainer'`（与主窗口的存储隔开），`nodeIntegration: false`、`contextIsolation: true`、禁止 `window.open` 和跳转到其他地址。**这个分区是独立的 session，P-9 不会自动作用到它**：对 `session.fromPartition('persist:retainer')` 同样设置 `webRequest` 白名单（只放行 `file://` 和 `127.0.0.1:17801`）并关闭拼写检查。预加载脚本在网页脚本运行前删除 `window.showDirectoryPicker`，让网页改用下载保存；`will-download` 把下载一律存到当前案件的 `工作区/临时/委托材料/<时间>/`（第 13.5 节）。关闭窗口时通知工作台服务停止证件识别驱动 |
 | P-10 | 组合包进入桌面端 | `packages/boot/app-boot/src/profile.ts`（`PROFILE_TEMPLATES.web`）；`@deepseek-ai/dsh` 的依赖列表 | 加上 `lawbench-dsh`（第 14.1 节） |
 
 完成后用抓包核对（第 14.3 节）。
@@ -294,7 +320,10 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | 工作区列表 | `$DSH_HOME/storages` | 否（只有文件夹路径） | 保持 |
 | 会话全文检索索引 | `session-query-sqlite` | — | 官方默认已是 `:memory:` 且不开启，保持不变 |
 | 大段工具输出的溢出文件 | `spill-local`，系统临时目录 | 是 | 默认超过 12500 token 的工具结果会写成溢出文件。**把 `spill-policy` 的阈值调到大于模型窗口**（第 3.1 节），任何工具结果都不会溢出。另外 `tool-fs-search` 也会写溢出文件，律师工作台 preset 不挂它。验收时检查溢出目录为空 |
-| 聊天中粘贴的图片 | `attachment-local`，`$DSH_HOME` | 是 | 界面上关闭附件（第 3.2 节 P-5） |
+| 聊天中粘贴的图片、拖入的文件 | `attachment-local`，`$DSH_HOME` | 是 | 改为导入到案件文件夹，不经过附件存储（第 3.2 节 P-5）；验收时确认附件目录为空 |
+| 委托材料窗口的浏览器存储 | Electron `userData/Partitions/retainer` | 含委托人姓名、证件信息，不含案卷 | 默认只在内存中处理，律师在该工具里主动开启"在这台电脑记住工作内容"才写入；工具自带"清除本机记忆"。操作说明中写明 |
+| 发票引擎运行环境 | `%LOCALAPPDATA%\invoice-ledger-db\runtimes` | 否（只有 Python 运行环境） | 保持；发票和台账本身在律师指定的日常办公文件夹（第 13.3 节） |
+| Word / WPS 的"最近使用的文档" | Office 注册表和最近文件列表 | 文件名 | 转换时以 `AddToRecentFiles=False` 打开、不显示窗口（第 12.3 节）；LibreOffice 的配置目录放在案件临时目录（第 5.2 节） |
 | 凭据（Key） | `$DSH_HOME/.credentials.yaml` | Key | 替换为我方凭据插件，存 Windows 凭据管理器；验收时确认该文件不存在或不含 Key（第 8.1 节） |
 | 桌面端日志 | Electron `userData/logs`、Host 日志 | 抽查 | 确认不含正文；含正文的日志项关闭 |
 | Electron 用户数据（缓存、localStorage） | `userData` | 抽查 | 关闭 HTTP 缓存；抽查确认 |
@@ -309,14 +338,19 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 |---|---|---|
 | U-1 | 中文界面 | 桌面端和界面都已支持中文；补丁里设 `locale.preference: zh`（第 3.1 节）；我方文字按官方方式注册中文词条（`ctx.locale.register`）；律师可见的文字不出现 token、context 等词 |
 | U-2 | 双品牌 | 桌面壳部分见第 3.2 节 P-4；界面侧栏的品牌位（`sidebar.brand.mark`、`sidebar.brand.name` 插槽）由我方插件占用，律所为主，我方为"技术支持" |
-| U-3 | 去掉无关入口 | 插件管理、反馈、preset 选择、附件已在第 3.1、3.2 节关掉；其余入口（如终端、工作区依赖安装）按界面实际情况在补丁中关闭对应行 |
-| U-4 | 首页 | 用"整页"插槽：`sidebar.panellist`（侧栏图标）+ `main`（页面），写法参照官方 `packages/client/ui-plugin-manager`。内容：最近案件、新建 / 打开案件、5 个入口 |
+| U-3 | 去掉无关入口 | 插件管理、反馈、preset 选择已在第 3.1 节关掉，附件改为导入（P-5）；其余入口（如终端、工作区依赖安装）按界面实际情况在补丁中关闭对应行 |
+| U-4 | 首页 | 用"整页"插槽：`sidebar.panellist`（侧栏图标）+ `main`（页面），写法参照官方 `packages/client/ui-plugin-manager`。内容自上而下：分流提示语（`capsules.json` 的 `hint`）；一级胶囊（分组）一行，点选后下面一行显示该组的二级胶囊；最近案件、新建 / 打开案件。点 Skill 胶囊：没有打开的案件时先让律师选案件（新建时可选"民商事 / 刑事"标准目录），然后进入案件工作区并写任务单；点工具胶囊：打开对应工具（U-13、U-14） |
 | U-5 | 案件工作区 | 左栏（材料、识别进度、wiki）和右栏（草稿、成果、自检结果）做成右侧栏标签页（`ctx.sidebarRightTabs.register` + `sidebar.right.pane.tab` 插槽，参照 `packages/client/ui-sidebar-documentpreview`）；中间的对话区沿用官方会话界面；Skill 选择、参数放在会话输入区上方 |
 | U-6 | 原文查看 | 右侧栏标签页，按出处定位（第 9.3 节） |
 | U-7 | 通知 | 识别完成、流水线完成时发系统通知，只写"识别任务已完成"或"整理任务已完成"，**不带案件名和材料名** |
-| U-8 | 设置 | `settings.section` 插槽：服务器和 Key、个人参数预设、Word 模板、关于（双 logo） |
+| U-8 | 设置 | `settings.section` 插槽：服务器和 Key、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、发票购买方名称、Word 转 PDF 用哪个程序、胶囊管理（U-11）、关于（双 logo） |
 | U-9 | 取消 | 沿用官方的停止按钮（断开流式请求）；同时通知工作台服务停止正在运行的流水线（第 8.4 节） |
 | U-10 | 关闭窗口 | 官方行为是隐藏到托盘、Host 继续运行，正好满足后台识别；首次关闭时的提示改为说明"识别会在后台继续" |
+| U-11 | 胶囊管理 | 首页右上角"管理胶囊"进入编辑状态：拖动胶囊排序（同组内、跨组都可以），点名字改名，点眼睛图标隐藏或显示，"新增胶囊"选择一组 Skill 或一个内置工具并起名，"恢复默认"用默认配置覆盖（先确认）。没有删除按钮，没有密码。保存时调 `PUT /api/capsules`，服务端校验 Skill 和工具存在 |
+| U-12 | 拖入导入 | 对话框（P-5）、材料面板、首页的案件卡片都接受拖入文件和文件夹；材料面板的"导入"按钮可以选文件或文件夹。弹出确认框：复制到哪个子文件夹（默认 `02案件材料`，可改）、共几个文件；确认后调 `/api/materials/import`，结果列出复制了哪些、跳过了哪些及原因 |
+| U-13 | 发票整理面板 | `main` 插槽的一个页面（第 13.3 节）：报销年月、导入发票文件夹、分析、入账、生成贴票包、确认已报销等按钮，引擎输出原样显示在页面下方；首次使用时要求先在设置中指定日常办公文件夹和购买方名称 |
+| U-14 | 委托材料窗口 | 点"文件生成"胶囊，经 P-11 打开独立窗口并启动证件识别驱动；窗口标题显示当前案件名；生成的文书下载到案件临时目录，窗口关闭后案件工作区提示"导入新生成的文件到 01委托手续"（第 13.5 节） |
+| U-15 | 归档面板 | 案卷归档任务保存归档方案后，右侧栏出现"归档"标签：显示方案表格（可改材料顺序、名称、办案结果等字段），办案结果必须由律师点选，未选时"生成归档文件"按钮不可用；生成后列出文件和"立卷申请书需打印手签后扫描"等提示 |
 
 界面布局是否能完全按 PRD 7.9 的三栏实现，要在第一阶段做出来后跟律师确认；官方界面的插槽决定了"对话区在中间、面板在右侧栏"这种布局最省事。
 
@@ -334,17 +368,19 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 │  │  ├─ 文本/              每份材料一个 md，带位置标记（第 5.3 节）
 │  │  └─ 识别页/            395 返回的逐页结果
 │  ├─ wiki/                 case.json（案件卡片）、案件/*.md、材料/*.md、index.md、log.md、待确认.json
-│  ├─ 任务/<任务ID>/        task.json（任务单）、reads.json（读取记录）、草稿/、result.json（结果清单）
+│  ├─ 任务/<任务ID>/        task.json（任务单）、reads.json（读取记录）、草稿/、result.json（结果清单）、归档方案.json（归档任务）
 │  ├─ 会话/                 DSH 会话记录（第 3.3 节）
 │  ├─ 临时/                 转换、渲染的中间文件，用完即删
 │  └─ case.db               SQLite：案件编号、识别任务、检索索引（contracts/case_db.sql）
-└─ 成果/                    律师确认后的成果，索引.json
+└─ 成果/                    律师确认后的成果，索引.json；归档/（归档总文件夹，第 12.4 节）
 ```
+
+- **标准案件目录**（可选）：新建案件时律师可选"民商事"或"刑事"，程序按 `contracts/formats.md` 第 1.1 节补建子文件夹（`01委托手续`、`02案件材料`、`03一审/我方证据` 等），与委托材料工具和归档目录一致；只补缺，不改已有文件夹。不选则不建。
 
 - **材料编号**（`material_id`）：`M` + 4 位序号，首次导入时按顺序分配，写入 `材料/index.json`，同一案件内不复用；原件改名或移动视为删除后新增。识别页、检索索引、出处记录都用它关联材料。
 - **材料名**：给 AI 和律师看的名字，在案件内唯一，规则见第 20.2 节。
 
-- **原件区** = 案件根目录下除 `工作区/`、`成果/` 和以 `.` 开头的项以外的所有文件。不复制原件。"导入"= 扫描原件区、解析新增或变化的文件。
+- **原件区** = 案件根目录下除 `工作区/`、`成果/` 和以 `.` 开头的项以外的所有文件。已在案件文件夹里的原件不复制、不改动；律师从案件外拖入或选择的文件，由导入操作复制进案件文件夹（第 5.1 节），之后同样只读。
 - **原件哈希**：记在 `材料/index.json`，按大小和修改时间做缓存，变了才重算。验收时比对哈希（SEC-08）。
 - **案件编号**：首次打开时生成 UUID，写进 `case.db`。整个文件夹复制到别处后，在新位置"打开案件"一次即可继续使用（F-CASE-04）；会话记录在案件目录内，跟着一起走。
 - **案件注册表**：工作台服务在应用数据目录维护 `cases.json`（`case_id → 案件目录`，只有路径，没有内容），"最近案件"也从这里读。
@@ -362,7 +398,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
    - 不能是绝对路径或带盘符，不能含 `..`，不能以 `.`、`工作区`、`成果` 开头。
 3. **不跟随链接**：对拼接后的路径及其每一级父目录执行 `lstat`；只要有一级是符号链接或 reparse point（Windows 下判断 `st_file_attributes & FILE_ATTRIBUTE_REPARSE_POINT`，junction 在此范围内），就拒绝。
 4. **最终校验**：`realpath` 必须以 `ROOT + 分隔符` 开头；Windows 下比较前统一大小写。
-5. **写权限**：只允许写 `工作区/` 和 `成果/`；原件区没有任何写接口。写文件时先写临时文件再原子替换（`os.replace`）。
+5. **写权限**：只允许写 `工作区/` 和 `成果/`。原件区只有两种写入，都由律师在界面上操作触发、AI 的工具里没有：`/api/materials/import` 复制新文件（目标已存在同名文件时改名为"原名(2)"，从不覆盖）；`/api/case/open` 按标准目录新建空文件夹。已有原件在任何情况下都不改动、不删除。写文件时先写临时文件再原子替换（`os.replace`）。
 6. **拒绝时**：返回中文错误"超出当前案件范围"，本机日志记一条（只记工具名和原因，不记参数内容）。
 
 ### 4.3 给界面的接口（`/api/*`，仅限界面调用）
@@ -375,17 +411,18 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 - 每次执行（识别、流水线、抽取、Agent 任务）创建时分配 `task_id`（识别为 `job_id`），同时固定所属案件、输入材料的版本和律师确认过的发送范围；之后的进度查询、取消都按 `task_id`，与界面当前显示哪个案件无关。
 - 插件调用 `/core/*` 时，由会话头的 `cwd` 查出 `case_id`；`cwd` 不在注册表中的会话，工具一律拒绝。
 
-共 19 个接口，请求和返回的字段见第 20.5 节和 `contracts/api/`，下表只说作用。
+共 25 个接口，请求和返回的字段见第 20.5 节和 `contracts/api/`，下表只说作用。
 
 | 接口 | 作用 | 发往服务器 |
 |---|---|---|
-| `POST /api/case/open` | 打开案件（新建时初始化 `工作区/`），登记到注册表；拒绝链接根目录和云同步目录 | 否 |
+| `POST /api/case/open` | 打开案件（新建时初始化 `工作区/`，可按标准目录补建子文件夹），登记到注册表；拒绝链接根目录和云同步目录 | 否 |
 | `GET /api/case/recent` | 最近案件 | 否 |
 | `POST /api/materials/scan` | 扫描原件区，在本机解析新增或变化的材料 | 否 |
+| `POST /api/materials/import` | 拖入或选择的文件、文件夹复制进案件文件夹，然后同 scan（第 5.1 节） | 否 |
 | `GET /api/materials` | 材料列表、状态、失败原因、需识别的页 | 否 |
 | `POST /api/ocr/jobs` | 提交识别 | 395 |
 | `GET /api/ocr/jobs`；`POST /api/ocr/jobs/{job_id}/cancel` | 识别进度；取消 | — |
-| `POST /api/task` | 写任务单：律师选的入口、Skill、选用的前序成果和参数；Agent 插件在该会话下一次请求时使用 | 否 |
+| `POST /api/task` | 写任务单：律师点的胶囊、Skill、选用的前序成果和参数；Agent 插件在该会话下一次请求时使用 | 否 |
 | `POST /api/pipeline/run`；`GET /api/pipeline/{task_id}`；`POST /api/pipeline/{task_id}/cancel` | 运行、查看、取消流水线（本次只有案件 wiki）；律师勾选"使用 395 抽取"时，字段抽取和分类走 395 | 6000D（勾选时另有 395） |
 | `GET /api/tasks` | 本案任务、草稿列表（成果区） | 否 |
 | `POST /api/redline` | 生成修订版 Word（第 12.2 节） | 否，本机生成 |
@@ -394,12 +431,16 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | `GET /api/source` | 原文查看：按出处返回定位单元的文本；PDF 另返回该页的页面图片（定位到页，不做文字高亮） | 否 |
 | `GET /api/search` | 律师检索 | 否 |
 | `GET/PUT /api/settings`；`POST /api/connection/test` | 设置；测试两台服务器连接 | 测试时只发探测请求 |
+| `GET/PUT /api/capsules`；`POST /api/capsules/reset` | 读写本机胶囊配置；恢复默认（第 10.3 节） | 否 |
+| `POST /api/archive/build` | 按律师确认的归档方案生成归档总文件夹（第 12.4 节） | 否，本机生成 |
+| `POST /api/invoice/run` | 发票整理的一个白名单动作（第 13.3 节） | 否 |
+| `POST /api/retainer/driver` | 启停委托材料的证件识别驱动（第 13.5 节） | 否 |
 
 第一版中的独立接口 `POST /api/extract` 取消：9B 抽取只作为 wiki 流水线的一个选项使用（PRD 路由表）。
 
 ### 4.4 给 AI 的工具（`case_*`，由 Agent 插件注册）
 
-共 8 个工具。所有工具只作用于当前会话所在的案件；单次返回不超过 8000 字（DSH 的工具结果裁剪阈值是 8192 字符），超出的截断并提示分段读取。每个工具的定义按官方 `ToolDefinition`：`name`、`description`、`parameters`（JSON Schema，`additionalProperties: false`）、`output`（`schema` + `render`）、`execute`。
+共 11 个工具。所有工具只作用于当前会话所在的案件；单次返回不超过 8000 字（DSH 的工具结果裁剪阈值是 8192 字符），超出的截断并提示分段读取。每个工具的定义按官方 `ToolDefinition`：`name`、`description`、`parameters`（JSON Schema，`additionalProperties: false`）、`output`（`schema` + `render`）、`execute`。
 
 参数和返回的字段以第 20.4 节和 `contracts/tools/` 为准，下表是摘要。工具的 `parameters` 直接取契约文件中的 `$defs/args`。
 
@@ -413,12 +454,15 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | `case_save_draft` | `title, content` | 保存路径和版本、`citation_check`（含 `problems`）、`coverage`、`not_fully_read` | 写入 `工作区/任务/<任务ID>/草稿/<标题>-v<N>.md`；同标题再存生成新版本，旧版本保留 |
 | `case_suggest_wiki` | `field, value, source, reason?` | 建议编号 | 写入 `wiki/待确认.json`，律师在界面上确认后才改 wiki |
 | `case_save_edit_list` | `name, edits[]` | 保存路径、接受条数、范围外条目 | 保存合同修改清单（第 12.2 节），律师点"生成修订版"时使用 |
+| `case_calc_sentence` | `penalty, years?, months?, execution_start?, custody[]` | 刑期起止日、折抵天数、节点、计算依据、需律师判断的情形 | 纯程序计算，不读写文件（第 13.4 节） |
+| `case_archive_match` | `catalog` | 归档目录逐项匹配结果、未匹配和忽略的材料 | 只读（第 12.4 节） |
+| `case_save_archive_plan` | 归档方案（卷类、当事人、日期、办案结果、结案报告内容、各项材料） | 保存路径、缺失的必交项、提示 | 写 `工作区/任务/<任务ID>/归档方案.json`；归档文件由律师在面板点击后生成 |
 
 测试链路中的 `case_wiki_plan`、`case_wiki_put_facts` 不再提供：案件 wiki 改为流水线（D6）。
 
 另外可用：DSH 的 `skill`（加载 Skill 正文）、`ask_user_question`（必问问题，第 10.2 节）。
 
-**不提供**：写原件、删除文件、任意路径、执行命令、联网、提交识别或抽取、导出到成果目录。
+**不提供**：写原件、删除文件、任意路径、执行命令、联网、提交识别或抽取、导出到成果目录、生成归档文件、调用发票引擎。
 
 ### 4.5 本机日志
 
@@ -430,7 +474,18 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 
 ### 5.1 导入流程
 
-律师把文件放进案件文件夹（拖入或在界面上选择"添加材料"，后者把文件复制到案件根目录），再点"导入"：
+材料进入案件有两种方式，结果相同：
+- 律师自己把文件放进案件文件夹（资源管理器里复制），再点"导入"；
+- 把文件或文件夹**拖到**对话框、材料面板或首页的案件卡片上，或点"导入"按钮选择文件、文件夹（D13、U-12）。
+
+拖入或选择的路径在案件文件夹**外**时，`/api/materials/import` 先复制（不移动，原文件不动）：
+- 目标子文件夹：律师在确认框中选择；默认有 `02案件材料` 就放进去，没有就放案件根目录。文件夹整体复制，保留内部结构。
+- 跳过：位于云同步目录的源文件（与 SEC-14 同一套检测）、快捷方式和链接、无法读取的文件、单个超过 300MB 的文件；目标已有同名且内容相同（sha256 一致）的文件。
+- 同名但内容不同：改名为"原名(2)"，不覆盖。
+- 路径已在案件文件夹内的，不复制，直接解析；**例外**：位于案件 `工作区/` 下的临时文件（粘贴的截图、委托材料窗口的下载）照样复制到目标子文件夹，复制后删除临时文件。
+- `unzip` 为 true 时（委托材料窗口的 ZIP 下载），先把 ZIP 解压到 `工作区/临时/`（拒绝路径越界、链接和超过 500 个文件的 ZIP）再复制；ZIP 顶层含标准目录文件夹（如 `01委托手续`）时按其结构放到案件根目录，否则放到 `target`。
+
+复制完成后（或律师直接点"导入"时）：
 
 1. 扫描原件区，对比 `材料/index.json`，找出新增、变化、删除的文件。
 2. 新增或变化的文件，按扩展名和文件头判断格式，交给第 5.2 节对应的解析器。
@@ -503,7 +558,7 @@ LibreOffice 调用方式：`soffice --headless --norestore -env:UserInstallation
 - **推理后端**：首选 llama.cpp 的 `llama-server`（Vulkan 后端，Windows 上对这块 AMD 核显支持最稳），OCR 用它能加载的视觉模型，9B 用 GGUF 量化模型；关闭请求日志（不开 `--verbose`，不开 `--log-file`，关闭 `--slots` 等调试接口）。〔待 G-5、G-6：在这台 Windows 上实测速度和准确率；Vulkan 不行时再试 AMD 的 ROCm for Windows（HIP SDK）〕
 - **以 Windows 服务运行**：三个进程都用 WinSW（MIT）包装成 Windows 服务，开机自启、崩溃自动重启；运行账号是专用的本地低权限账号 `prep395svc`，不是管理员。
 - **目录**：程序在 `C:\prep395\`（该账号只读）；日志在 `C:\prep395\logs\`（该账号可写）；不设其他可写目录。
-- **防火墙**：Windows Defender 防火墙入站规则只放行 9000 端口，来源限定律所局域网网段和 WireGuard 网段；9101、9102 不放行。关闭远程桌面以外的共享（文件和打印机共享关闭）。
+- **防火墙**：Windows Defender 防火墙入站规则只放行 9000 端口，来源限定律所局域网网段和 EasyTier 虚拟网段（第 15 节）；9101、9102 不放行。关闭远程桌面以外的共享（文件和打印机共享关闭）。
 - **系统盘开 BitLocker**：Windows 的页面文件、休眠文件无法可靠关闭，内存中的内容可能被写到磁盘；开 BitLocker 后，即使写入也是加密的。同时关闭休眠（`powercfg /h off`）。页面文件的残余风险写进部署说明，告知甲方。
 - **不装与服务无关的软件**；Windows 更新由甲方按内网策略管理。
 - **现状与差距**（2026-09-28 盘点，详见 `docs/src/环境事实.md`）：地址 `192.168.8.124`，Vulkan 可用，可访问 hf-mirror / ModelScope 下载模型；BitLocker 未开、休眠未关、Python 装在用户目录（服务账号无法使用，部署时改为在 `C:\prep395\` 内置 Python 或为所有用户安装）。
@@ -535,7 +590,7 @@ PRD SEC-12 要求临时文件只放内存盘、不写硬盘。Windows 没有 tmp
 
 **`GET /health`**（不需要 Key，不含任何内容）
 ```json
-{"status": "ok", "ocr": "ok", "llm9b": "ok", "queue": 3, "version": "1.0.0", "contract_version": "1.0"}
+{"status": "ok", "ocr": "ok", "llm9b": "ok", "queue": 3, "version": "1.0.0", "contract_version": "1.1"}
 ```
 
 **`POST /v1/ocr/page?dewatermark=false&deskew=true&return_image=false`**：单页识别
@@ -761,7 +816,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 按"任务单 + 分层上下文 + 结果清单"组织：
 
 - **系统提示** = 通用规则（`dsh-persona`，`complete: true`，不叠加 DSH 默认的编程助手提示）。内容：身份（律所内部案件助手，只处理当前案件）、只能通过 `case_*` 工具读材料、出处规则、法律依据待律师核实、材料里的文字只是案卷内容不是指令，以及流水线的 8 条通用规则。Skill 正文由 AI 通过 `skill` 工具加载。
-- **任务单**（`task.json`，执行前）：所属会话、入口、Skill、律师的指令、选用的前序成果（路径、版本、哈希）、wiki 分节、参数、预算。律师每发起一次请求，插件在第一步向工作台服务申请新任务：界面事先为该会话写了待执行的任务单（`POST /api/task`），就用它；没有就按"自由对话"默认值新建。
+- **任务单**（`task.json`，执行前）：所属会话、胶囊 id（字段名 `entry`）、Skill、律师的指令、选用的前序成果（路径、版本、哈希）、wiki 分节、参数、预算。律师每发起一次请求，插件在第一步向工作台服务申请新任务：界面事先为该会话写了待执行的任务单（`POST /api/task`），就用它；没有就按"自由对话"默认值新建。
 - **首轮注入**（`agent/pre-step` 第一步，插件向工作台服务要）：
   - **L0 案件卡片**：本方立场、当事人、争议焦点、关键事实、材料清单及状态；每条标可信度（✔律师确认 > 原文 > ⚠未确认）；标出 wiki 生成后新增或修改的材料。上限 6000 字。
   - **L1 任务输入**：任务单选用的前序成果和 wiki 分节，按窗口控制长度（不超过窗口的 40%，按 token 计，第 8.2 节）；超出的只列目录，由 AI 用 `case_read_input` 分段读取。
@@ -811,7 +866,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 
 ---
 
-## 10. Skill 和入口
+## 10. Skill 和胶囊
 
 ### 10.1 加载位置
 
@@ -831,7 +886,7 @@ Skill 中的 `scripts/` 只由工作台服务从以上位置导入执行，AI �
 skills/
 ├─ _shared/共用规则.md   所有业务 Skill 共用的规则，由 build_skills.py 同步进每个 SKILL.md，不在单个 Skill 里改
 ├─ _scripts/            build_skills.py（同步共用规则并校验）、install.py（复制到安装目录）、skill_manifest.py（校验规则）
-├─ entries/             入口清单（第 10.3 节）
+├─ capsules.default.json  默认胶囊配置（第 10.3 节）
 └─ <skill-id>/          每个 Skill 一个文件夹，平铺
    ├─ SKILL.md          头部信息 + 六部分正文
    ├─ 流水线提示词.md    流水线类 Skill 才有（本次只有 case-wiki-build），分段约定见 contracts/formats.md 第 6 节
@@ -851,8 +906,6 @@ title: 刑事阅卷笔录             # 界面显示
 description: 刑事阅卷笔录。律师要求对刑事案件卷宗阅卷、制作阅卷笔录……时使用。
 mode: agent               # pipeline 或 agent
 kind: excerpt             # 成果类型：excerpt 摘录 / analysis 分析 / draft 文书（决定 G 类核对规则，第 9.4 节）
-entry: 刑事阅卷            # 入口名；可以是列表（如 [合同审查, 合同起草]）；"共用"表示每个入口都有
-order: 2                  # 在入口中的推荐顺序
 params: {thinking: 低, window: 64K, max_tokens: 16384}
 owner: 待定               # 责任律师；发版校验（build_skills.py --strict）时不能是"待定"
 inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior 前序成果
@@ -864,33 +917,45 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 - **必问问题**：每条写成 `- key：问题（可从材料中获取：是/否）`。Agent 在开始时调用 DSH 的 `ask_user_question`，把能从材料里找到的值预先填好，请律师确认（F-SKILL-02）。
 - **自检清单**：每条是一句可以检查的规则。AI 在输出前逐项自查并写出结果；另外，`case_save_draft` 的核对结果一并显示。
 
-**本次的 Skill**：按《五个业务能力编排》写好的 13 个 Skill，唯一存放位置是仓库的 `skills/`（`D:\lawbench\skills`；原来的 `D:\新建文件夹\skill临时文件夹` 只作存档，不再修改），全部按本节格式，`build_skills.py` 和契约自检（`contracts/check_examples.py --skills`）都已通过。律师提供的 11 个参考 Skill 不放进仓库、不被加载（第 2 节"不用的组件"），仍在存档目录中供参考。
+哪个 Skill 出现在哪个胶囊，由胶囊配置决定（第 10.3 节），Skill 头部不再写入口和顺序（契约 1.1 删除了 `entry`、`order` 字段）。
 
-**Skill 的工作流程**：改了 Skill 或入口清单后，运行 `python skills/_scripts/build_skills.py`（同步共用规则并校验，发版时加 `--strict`），再由打包脚本运行 `install.py --out <安装目录>/skills`。
+**本次的 Skill**：18 个，唯一存放位置是仓库的 `skills/`（`D:\lawbench\skills`），全部按本节格式，`build_skills.py` 和契约自检（`contracts/check_examples.py --skills`）都已通过：
+- 第一版的 13 个：case-wiki-build、case-reading-notes、criminal-reading-notes、criminal-evidence-review、defense-opinion、cross-exam-opinion、criminal-applications（增加"不予批准逮捕的法律意见书"）、contract-review、contract-draft、general-drafting、pre-issue-check、doc-revise、legal-workflow（改为按胶囊导航）；
+- 本版新增 5 个：litigation-docs（诉讼文书起草）、sentence-calc（刑期计算）、tender-review（招标文件审查）、bid-drafting（投标文件起草）、case-archiving（案卷归档，由律所归档 Skill 改写，附 `catalogs/` 四类归档目录）。
 
-### 10.3 入口清单
+律所提供的发票整理、委托材料两个工具不是 Skill，放在 `engines/`（第 13.3、13.5 节）；原归档 Skill 只作参考，放在 `docs/reference/client-skills/`。律师此前提供的 11 个参考 Skill 仍不放进仓库、不被加载（第 2 节"不用的组件"）。
 
-`skills/entries/<序号>-<id>.yaml`（契约 `contracts/skill/entry.schema.json`），文件名排序即首页顺序：
+**Skill 的工作流程**：改了 Skill 或胶囊配置后，运行 `python skills/_scripts/build_skills.py`（同步共用规则并校验，发版时加 `--strict`），再由打包脚本运行 `install.py --out <安装目录>/skills`。
 
-| 文件 | 入口 | Skill（按推荐顺序） |
-|---|---|---|
-| `1-criminal-reading.yaml` | 刑事阅卷 | case-wiki-build → criminal-reading-notes → criminal-evidence-review → pre-issue-check → doc-revise → legal-workflow |
-| `2-criminal-docs.yaml` | 刑事文书 | case-wiki-build → defense-opinion / cross-exam-opinion / criminal-applications → pre-issue-check → doc-revise → legal-workflow |
-| `3-contract-review.yaml` | 合同审查 | case-wiki-build → contract-review → pre-issue-check → doc-revise → legal-workflow |
-| `4-contract-draft.yaml` | 合同起草 | case-wiki-build → contract-draft → contract-review → pre-issue-check → doc-revise → legal-workflow |
-| `5-general.yaml` | 通用文书 | case-wiki-build → case-reading-notes → general-drafting → pre-issue-check → doc-revise → legal-workflow |
+### 10.3 胶囊配置
 
-```yaml
-id: criminal-reading
-name: 刑事阅卷
-skills: [case-wiki-build, criminal-reading-notes, criminal-evidence-review, pre-issue-check, doc-revise, legal-workflow]
-outputs: [刑事阅卷笔录, 证据审查意见]
-```
+`skills/capsules.default.json`（契约 `contracts/skill/capsules.schema.json`）是首页的默认配置，随安装包复制到 `<安装目录>/skills/`。律师本机的配置在 `<应用数据>/capsules.json`，首次启动时从默认配置复制；胶囊管理（U-11）改的是本机配置，"恢复默认"再从默认配置复制一次。升级安装包不覆盖本机配置；默认配置新增的胶囊，在本机配置里以隐藏状态补进去，并在首页提示"有新功能，可在管理胶囊中显示"。
 
-- `case-wiki-build` 是流水线 Skill：在入口中显示为"生成 / 更新案件 wiki"按钮，调用 `POST /api/pipeline/run`，不进入对话。其余 Skill 都在对话中运行（写任务单后由 Agent 执行）。
-- 首页显示 5 个入口，顺序和名称都来自清单文件，增减入口不改程序。
-- 入口内按顺序列出 Skill，律师可以跳过或单独运行任何一个，也可以自由对话。
-- **选用前序成果**（F-ENT-02、F-ENT-03）：运行时，律师可以勾选本案的任意草稿或成果（包括其他入口产生的）作为输入。任务单的 `inputs` 记录每个输入的路径、版本号和 sha256；执行时核对哈希，选用后被改过的，提示律师复核。上游修改后生成新版本，不覆盖下游。
+| 分组 | 胶囊 | 类型 | Skill（按推荐顺序）或工具 |
+|---|---|---|---|
+| 民事与商事 | 合同审查 | skill | contract-review → pre-issue-check → doc-revise |
+| 民事与商事 | 合同起草 | skill | contract-draft → contract-review → pre-issue-check → doc-revise |
+| 民事与商事 | 诉讼文书起草 | skill | litigation-docs → pre-issue-check → doc-revise |
+| 刑事案件 | 案卷分析 | skill | criminal-reading-notes → criminal-evidence-review → pre-issue-check → doc-revise |
+| 刑事案件 | 刑期计算 | skill | sentence-calc |
+| 刑事案件 | 取保候审/不予逮捕申请 | skill | criminal-applications → pre-issue-check → doc-revise |
+| 刑事案件 | 辩护词起草 | skill | defense-opinion → pre-issue-check → doc-revise |
+| 刑事案件 | 质证意见起草 | skill | cross-exam-opinion → pre-issue-check → doc-revise |
+| 日常办公 | 发票整理 | tool | invoice（第 13.3 节） |
+| 日常办公 | 律师函起草 | skill | general-drafting → pre-issue-check → doc-revise |
+| 日常办公 | 招投标材料处理 | skill | tender-review → bid-drafting → pre-issue-check → doc-revise |
+| 日常办公 | 文件生成 | tool | retainer（委托材料，第 13.5 节） |
+| 日常办公 | 案卷归档 | skill | case-archiving |
+| 日常办公 | 通用文书 | skill | general-drafting → case-reading-notes → pre-issue-check → doc-revise |
+
+`shared`（每个 Skill 胶囊里都可用）：case-wiki-build、legal-workflow。
+
+- `case-wiki-build` 是流水线 Skill：在每个 Skill 胶囊的工作区显示为"生成 / 更新案件 wiki"按钮，调用 `POST /api/pipeline/run`，不进入对话。其余 Skill 都在对话中运行（写任务单后由 Agent 执行）。
+- 胶囊内按顺序列出 Skill，第一个默认选中；律师可以跳过或单独运行任何一个，也可以自由对话。
+- 胶囊名最长 12 个字，分组名最长 8 个字。律师新增的胶囊 `custom: true`，只能从已安装的 Skill 和两个内置工具中选。
+- 服务端校验（`PUT /api/capsules`）：分组和胶囊的 id 全局唯一；Skill 都存在；工具只能是 `invoice`、`retainer`；**默认配置里的每个分组和胶囊 id 都必须还在**（只能隐藏，不能删除）；`shared` 和 `hint` 必须与默认配置相同（律师不能改）。不合格返回 `INVALID_ARGUMENT`，不保存。
+- 任务单的 `entry` 存胶囊 id（不是名称），律师改名不影响已有任务。
+- **选用前序成果**（F-ENT-02、F-ENT-03）：运行时，律师可以勾选本案的任意草稿或成果（包括其他胶囊产生的）作为输入。任务单的 `inputs` 记录每个输入的路径、版本号和 sha256；执行时核对哈希，选用后被改过的，提示律师复核。上游修改后生成新版本，不覆盖下游。
 
 ---
 
@@ -945,9 +1010,51 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 
 **验收**：G-10 的样本在 Word 和 WPS 中都能显示修订，并能逐条接受或拒绝。
 
+### 12.3 Word 转 PDF（`office/convert.py`）
+
+归档需要把 docx、doc、wps 转成 PDF，而且结案报告要求一页排版准确。律所电脑装有 Word 或 WPS，优先调用它们；按设置 `converter` 选择，默认 `auto` 依次尝试：
+
+| 顺序 | 程序 | 调用方式 |
+|---|---|---|
+| 1 | Microsoft Word | pywin32：`Dispatch("Word.Application")`，`Visible=False`、`DisplayAlerts=0`；`Documents.Open(path, ReadOnly=True, AddToRecentFiles=False)`；`ExportAsFixedFormat(out, 17)`；关闭文档，不保存 |
+| 2 | WPS 文字 | pywin32：`Dispatch("KWPS.Application")`（没有再试 `WPS.Application`），接口与 Word 相同 |
+| 3 | 内置 LibreOffice | 第 5.2 节的命令行方式 |
+
+- 每次转换在单独的子进程里做，超时 120 秒即结束该进程，换下一个程序；COM 对象用完即 `Quit()`。
+- 转换源文件先复制到 `工作区/临时/`，转换程序只打开副本，原件不被 Word 锁定或写入。
+- 三种都失败：返回 `CONVERTER_UNAVAILABLE`，提示律师手动另存为 PDF 后放进案件文件夹。
+- 返回里写明实际用了哪个程序，界面提示"结案报告请在 Word / WPS 中核对是否为一页"。
+- **留痕**：Word / WPS 作为独立进程运行，可能在 `%TEMP%`、自动恢复目录里留下临时文件，不受我方控制。验收（第 16 节 SEC-01 / SEC-11）的全盘搜索要覆盖归档转换之后的状态；如果在案件目录外搜到正文，把 `converter` 的默认值改为 `libreoffice`，Word / WPS 只作为律师在设置里自选的选项。
+
+### 12.4 案卷归档（`archive/`）
+
+由律所周海沺律师的归档 Skill（`docs/reference/client-skills/lawyer-archiving-1.0.0`）改写。原 Skill 让 AI 执行 `find`、`soffice`、Python 脚本，并假定 Mac 环境和固定承办律师；本版分成 AI 部分（`case-archiving` Skill）和程序部分（本节），承办律师取设置中的本机律师姓名，可在方案中改。
+
+**归档目录**：`skills/case-archiving/catalogs/<卷类>.json`（契约 `skill/archive_catalog.schema.json`），四类：民事行政卷（附件3）、刑事卷（附件2）、常法卷（附件4）、其他非诉卷（附件5）。每项有编号、名称、是否必交、文件名关键词、对应的标准目录文件夹。"结案报告"一项标 `generated: true`：由程序生成，不参与匹配，不算缺失，AI 也不把它放进归档方案。
+
+**匹配**（`case_archive_match`，`archive/match.py`）：
+1. 跳过 `generated` 项。取材料清单，忽略：`~$` 开头的临时文件、`._` 开头的文件、名字形如"微信图片_数字""IMG_数字"的文件、加密或无法读取的材料。
+2. 文件名命中某项关键词就归入该项；命中多项时，优先该项 `folders` 包含材料所在文件夹的，再取命中关键词最长的。
+3. 没有命中关键词、但所在文件夹只对应一项的（如 `03一审/我方证据` 只对应"证据材料"），按文件夹归入。
+4. 其余列为未匹配。
+
+**生成**（`/api/archive/build`，`archive/build.py`），律师在归档面板确认办案结果后点击：
+1. 用界面提交的 `confirmed` 方案（`result` 不能为 null）。
+2. 每项材料按方案顺序取原件：PDF 直接用；docx / doc / wps 按第 12.3 节转 PDF；图片用 Pillow 转 PDF；xlsx、xls 用 LibreOffice 转 PDF。中间文件放 `工作区/临时/`，用完删除。
+3. 结案报告（`generated` 项，自动加入卷宗对应编号的位置）：`skills/case-archiving/templates/结案报告模板.docx` 存在时，用 python-docx 按顺序替换其中的 `【…】` 占位符（占位符可能被拆成多个 run，先合并同一段内的 run 再替换）；不存在时用内置的临时版式生成（仿宋 12 号，一页），并在提示中写"结案报告为临时模板，待律所模板到位后替换"。转 PDF 后放在卷宗的"结案报告"一项。
+4. 卷宗：用 pypdf 按编号顺序合并，缺项跳过、不插空白页，记下每项的起止页；用 reportlab 生成页码层（每页底部先画一条白色矩形遮住原有页码，再居中写"第x页 共x页"，字体 STSong-Light 10 号），逐页叠加。
+5. 立卷申请书：`templates/立卷申请书模板<_卷类>.docx` 存在时按原 Skill 的规则填写（案件编号段、删除缺项行、民事行政卷保留原编号、常法卷重新连续编号、每项名称后加页码范围如 `p12-15`、表格内容仿宋 12 号不加粗）；不存在时用临时版式生成同样内容的表格。只生成 docx，提示"打印 → 手签 → 扫描为 PDF 后上传，不得代签或电子签"。
+6. 发票.pdf：编号为"收费发票凭证"一项的材料单独合并一份。
+7. 有必交项缺失时（`generated` 项不算），按 `references/特殊情况说明模板.md` 的模板一生成《材料缺失情况说明及承诺》docx，缺失材料逐项列出，原因处留【待填写】；`fee_settled` 为 false 时生成模板二《律师费未结清情况说明及承诺》。
+8. 输出到 `成果/归档/<委托人>与<对方当事人>案件归档/`（无对方当事人时为 `<委托人>案件归档`），同名已存在时加 `-v2`；另写 `归档目录.md`（逐项材料、页码、缺失项）。登记到 `成果/索引.json`。
+
+**模板**：律所的结案报告、立卷申请书（附件2–5）Word 原件待律所提供（编排计划的负责人待办），放入 `skills/case-archiving/templates/` 后自动使用，不改程序。
+
 ---
 
-## 13. 小工具（`tools/`）
+## 13. 小工具和内置工具
+
+13.1、13.2 是独立的小工具（`tools/`），13.3–13.5 是在工作台里使用的内置工具。
 
 两个小工具都是独立程序：Python 加 tkinter 界面，用 PyInstaller 打包；不连网，不调用模型。LibreOffice 和 pandoc 与客户端共用同一份安装。
 
@@ -969,6 +1076,61 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 
 扫描件转 Word 不在本次范围内。
 
+### 13.3 发票整理（`engines/invoice-ledger/`、`invoice/runner.py`）
+
+律所周海沺律师的发票 Skill（invoice-ledger-db 3.9.4）功能完整：PDF / ZIP / 图片归档、Windows 本地识别、查重、台账、报销批次和贴票包。本版**原样作为引擎**，只做以下改动，记在引擎的 `CHANGELOG.md`（版本 `3.9.4.1`）：
+- 经作者同意去掉设备授权：删除 `license_gate.py`、`license_cli.py`、`license-public.json`，运行环境入口不再校验；署名保留。
+- 其余代码不改。
+
+**调用方式**：工作台服务用客户端自带的 Python 作为宿主，运行 `python engines/invoice-ledger/scripts/invoke.py <脚本> <参数>`；引擎首次运行时把自带的 `vendor/env-win_amd64.zip` 展开到 `%LOCALAPPDATA%\invoice-ledger-db\runtimes` 并复用。环境变量只传：`INVOICE_BUYER`（设置中的购买方名称）、`PYTHONUTF8=1`，以及引擎和 Python 运行必需的 `SYSTEMROOT`、`LOCALAPPDATA`、`USERPROFILE`、`TEMP`、`TMP`（第 1.3 节）；不传代理等其他变量。
+
+**白名单动作**（契约 `api/invoice_run.schema.json`），台账目录固定为 `<日常办公文件夹>/发票台账`，任务目录固定为 `发票台账/_任务/<报销年月>`：
+
+| 动作 | 引擎命令 | 界面按钮 |
+|---|---|---|
+| `env_check` | `env_check.py --deep --ocr` | 环境检查 |
+| `history` | `workflow.py history --ledger … --out _任务/<period>/历史未报清单-<时间>.json` | 查看历史未报（先选报销年月） |
+| `plan` | `workflow.py plan --job … --period … --channel local\|eml --history exclude\|selected [--history-numbers <文件>]` | 开始本期（先回答报销年月、历史票是否纳入） |
+| `run` | `workflow.py run --job … --batch … --ledger … --src <文件夹>`（channel 为 eml 时用 `--eml`） | 导入并生成贴票包 |
+| `analyze`、`import` | `workflow.py analyze\|import --job … --ledger …` | 分析对账、入账 |
+| `prepare` | `workflow.py prepare --job … --ledger … --batch … [--replace]` | 生成贴票包 |
+| `reprint` | `workflow.py reprint --ledger … --batch …` | 重印 |
+| `cancel`、`reimburse` | `workflow.py cancel\|reimburse --ledger … --batch … [--apply]` | 取消批次、确认已报销（`--apply` 前先预览） |
+| `review` | `workflow.py review --ledger … --sha256 … --reviewer … [--confirm]` | 人工核验识别结果 |
+| `report`、`check_schema` | `invoice_db.py report\|check-schema --ledger …` | 报表、台账体检 |
+
+- **不提供**：`--imap-host`、`--download-links`、`attach`、`channel=mcp/imap`（都需要联网）。邮箱里的发票由律师自己下载，或在邮件客户端导出为 EML 后导入。
+- 引擎退出码 0 为成功，2 为"有重复、冲突、待核或部分失败"（界面标黄，提示看明细），其他为失败（`ENGINE_FAILED`）。引擎输出原样显示在面板上，不写日志；日志只记动作名、退出码、耗时。
+- 同一时间只运行一个动作（引擎自己也有台账文件锁）；单个动作超时 30 分钟。
+- 日常办公文件夹未设置时返回 `OFFICE_DIR_NOT_SET`；设置时按 SEC-14 的规则拒绝云同步目录。
+- 发票不是案卷：台账和原票在日常办公文件夹，不进案件检索，不进 AI 上下文。
+
+### 13.4 刑期计算（`calc/sentence.py`，工具 `case_calc_sentence`）
+
+纯日期计算，不调用模型。规则表写在代码里，每条带一句依据文字（返回的 `basis`），文字由责任律师核对后定稿，未核对前每条后面加"（待律师核实）"。
+
+| 规则 | 实现 |
+|---|---|
+| 折抵比例 | 管制：羁押 1 日折抵 2 日；拘役、有期徒刑：1 日折抵 1 日；指定居所监视居住：管制 1 日折抵 1 日，拘役、有期徒刑 2 日折抵 1 日（不足 1 日的部分不计，写入 notes） |
+| 羁押天数 | 每段按起止日含两端计算；各段重叠的部分只算一次 |
+| 刑期起止 | 给了判决执行之日：起 = 执行之日，止 = 起 + 刑期 − 1 日 − 折抵天数。没给执行之日、且各段羁押首尾相接（后一段的 `from` 是前一段 `to` 的次日，如拘留转逮捕）视为连续：起 = 羁押首日，止 = 起 + 刑期 − 1 日（管制、指定居所监视居住按比例调整）；最后一段的 `to` 由律师填到计算当天。羁押有间断而没给执行之日：不算起止，notes 写"羁押期间不连续，请提供判决执行之日" |
+| 刑期加法 | 按日历月加：先加年、再加月，月末日期对齐到当月最后一天（如 1 月 31 日加 1 个月为 2 月 28 日或 29 日） |
+| 节点 | 管制、拘役、有期徒刑：执行满二分之一的日期（减刑后实际执行的下限、有期徒刑假释的执行期限）。折半方法：刑期为偶数个整月时按月折半（如 3 年 6 个月折半为 1 年 9 个月）；否则按天折半（起止之间的总天数除以 2，向上取整），并在 notes 注明"按天折半"；无期徒刑：不算起止，notes 写"无期徒刑的减刑、假释节点按实际执行年限计算，请律师判断" |
+| 不处理 | 数罪并罚、缓刑考验期、减刑后的新刑期：写入 notes，由律师判断 |
+
+单元测试覆盖：跨闰年、月末、多段重叠、管制和指定居所监视居住的比例、不连续羁押。
+
+### 13.5 委托材料（`engines/retainer/`，"文件生成"胶囊）
+
+律所周海沺律师的委托材料工具（retainer-offline 3.4.1）是一个离线网页：13 份 Word 模板（个人委托、公司委托、刑事三组，含委托合同、授权委托书、所函；风险告知已在合同内），合同第六条按固定、半风险、全风险收费自动生成；支持 Excel 逐案导入、证件识别预填、生成案件目录。**原样使用，不改网页代码。**
+
+- **打开**：点"文件生成"胶囊 → Host 插件经 P-11 在独立窗口打开 `engines/retainer/启动.html`，同时调 `/api/retainer/driver` 的 `start`。
+- **证件识别驱动**：`engines/retainer/tools/ocr-driver/driver.py --port 17801 --host 127.0.0.1`，由工作台服务用客户端的 Python 启动（依赖 RapidOCR 及其 onnxruntime、opencv，装进客户端 Python；驱动目录里自带的 `vendor/` 优先），只监听 `127.0.0.1`；窗口关闭时 `stop`。识别在本机 CPU 完成，不发往 395。原来的 `启动委托工作台.bat` 不使用。已知情况：驱动的跨域设置为允许任何来源（`Access-Control-Allow-Origin: *`），本机其他网页理论上也能调用它；因为只监听本机、只在委托材料窗口打开期间运行、只返回调用者自己上传的证件的识别结果，本版不改律所的代码，记为残余风险。
+- **网络**：网页自带的内容安全策略只允许连 `127.0.0.1:17801`；窗口的独立 session 由 P-11 另设白名单、关闭拼写检查。
+- **保存位置**：为了守住"原件区只能由导入新增、不覆盖"（第 4.2 节第 5 条、SEC-08），网页**不直接写案件文件夹**：P-11 的预加载脚本删除 `showDirectoryPicker`，网页按其自身逻辑改为下载单份 Word 或当前案件 ZIP（开发时实测确认这一回退；不回退时改为拦截该调用）；主进程把下载存到当前案件的 `工作区/临时/委托材料/<时间>/`。窗口关闭后，案件工作区提示"导入新生成的文件到 01委托手续"，律师确认后调 `/api/materials/import`（`target` 为 `01委托手续`，ZIP 时 `unzip: true`），同名文件改名、不覆盖。窗口标题显示当前案件名；没有打开的案件时，下载存到 `<应用数据>/临时/委托材料/`，关闭时提示先打开案件再导入。
+- **默认信息**：网页的律所、律师、电话、银行账户默认值来自 `data/config.json`（现为律所某团队的信息），各律师在网页的"高级配置"里改成自己的，保存在该窗口的浏览器存储中（第 3.3 节）。
+- **程序性文书模板**：`engines/retainer/procedural-templates/` 的 25 份民事程序性文书（财产保全、调查令、延期开庭等），律师可在网页的"模板管理"中作为附加文书导入使用；诉讼文书起草 Skill 不重写这些文书。
+
 ---
 
 ## 14. 打包、安装、升级
@@ -981,7 +1143,7 @@ outputs: [刑事阅卷笔录, 证据审查意见]
   1. 把 `lawbench-dsh` 加为 `@deepseek-ai/dsh` 的运行时依赖，使它被打进运行时（官方可选组合包就是这样打进去的）；
   2. 把它加到桌面端 profile 模板的组合包列表末尾（官方 `packages/boot/app-boot/src/profile.ts` 中 `PROFILE_TEMPLATES.web`，桌面端 `apps/desktop/src/project-manager.ts` 用它初始化 profile），记为 DSH 源码修改 P-10。
   注意：已经存在的 profile 不会被重写，所以测试机要删掉旧的 `$DSH_HOME/profiles/desktop` 再装。
-- 包内包含：DSH 定制版（含我方组合包）、Python 运行时及全部依赖（构建时离线安装好）、LibreOffice、pandoc、tokenizer.json、内置 Skill、Word 模板、第三方许可证清单。**运行时不下载任何东西**，也不执行任何包安装。
+- 包内包含：DSH 定制版（含我方组合包）、Python 运行时及全部依赖（构建时离线安装好，含 pywin32、pypdf、reportlab、RapidOCR 及其依赖）、LibreOffice、pandoc、tokenizer.json、内置 Skill 和 `capsules.default.json`、`engines/`（发票引擎含其运行环境压缩包约 45MB，委托材料网页和证件识别驱动）、Word 模板、第三方许可证清单。**运行时不下载任何东西**，也不执行任何包安装。
 - 桌面端安装器只面向当前用户安装；管理员下发 Skill 的公共目录由我方安装步骤单独创建并设权限。
 - 小工具单独打包，检测到已安装客户端时复用客户端的 LibreOffice 和 pandoc；没有安装客户端时自带一份。
 - 没有代码签名证书时（PRD 待确认 #5），在操作说明中写明 Windows SmartScreen 的放行步骤。
@@ -994,14 +1156,17 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 
 ### 14.3 只连两台服务器（SEC-03）
 
-所有发出网络请求的地方都要做地址白名单检查（只允许首次配置中的 6000D、395 地址和 `127.0.0.1`），并且**不自动跟随重定向**（收到 3xx 视为错误），防止跳转到白名单外的地址：
+所有发出网络请求的地方都要做地址白名单检查（只允许首次配置中的 6000D、395 地址和 `127.0.0.1`；律所用 EasyTier 远程接入时，这两个地址可以填虚拟网地址，第 15 节），并且**不自动跟随重定向**（收到 3xx 视为错误），防止跳转到白名单外的地址：
 
 | 请求来源 | 怎么限制 |
 |---|---|
 | 工作台服务（Python） | 统一的 httpx 客户端，发送前检查目标主机；`follow_redirects=False` |
 | DSH Desktop Host（Node 进程，含 pi-ai 模型适配器） | DSH 已有一个全局的 undici dispatcher（官方 `packages/util/http-proxy/src/install.ts`，Host 启动时安装，所有 `fetch` 都经过它），在其中加地址白名单：目标不在白名单就直接拒绝连接，重定向同样检查（第 3.2 节 P-7）。另外包装 `http` / `https` 的 `request`，覆盖不走 `fetch` 的代码。`webRequest` 管不到这个进程，不能依赖它 |
 | Electron 渲染进程（界面） | `session.webRequest` 拦截白名单以外的请求；界面只加载本地资源 |
-| 其他子进程（LibreOffice、pandoc） | 本身不联网；启动时不传任何网络参数 |
+| 其他子进程（LibreOffice、pandoc、Word / WPS 转换） | 本身不联网；启动时不传任何网络参数 |
+| 发票引擎子进程 | 引擎里有联网代码（IMAP、正文链接下载），工作台只开放第 13.3 节的白名单动作，参数由服务端拼装、不接受界面传入的任意参数；验收时抓包覆盖全部发票动作 |
+| 证件识别驱动 | 只监听 `127.0.0.1:17801`，模型随包，不联网 |
+| 委托材料窗口 | 网页自带内容安全策略只允许 `127.0.0.1:17801`（T0 在 Windows 上核对 `启动.html`）；窗口的独立 session 另设白名单并关闭拼写检查（P-11） |
 
 另外可选：安装时加一条 Windows 防火墙出站规则，只允许本程序连接两台服务器的地址（作为第二道保险，不替代上面的检查）。
 
@@ -1012,10 +1177,15 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 
 ## 15. 网络
 
-- 两台服务器都在律所局域网内。律师在所外时，经 WireGuard 访问：WireGuard 服务端设在律所网关或其中一台服务器上，律师电脑是对等端，`AllowedIPs` 只包含两台服务器的地址（分流模式，其他流量不走 VPN）。
-- 客户端配置的服务器地址，在所内和所外相同（WireGuard 路由到同一网段），律师不需要切换。
-- 局域网内使用 HTTP（与 6000D 网关现状一致），所外的流量由 WireGuard 加密。
-- 范围：给出配置模板和一份测试通过的对等端配置；不负责律所 VPN 的整体规划（PRD 4.7）。〔待甲方确认 WireGuard 是否已部署〕
+- 两台服务器都在律所局域网内，所内直接访问。
+- **所外访问**：按甲方《EasyTier 律所工作台远程接入方案 V2》（自建共享节点、`--secure-mode`、私有模式、按律师分发凭据、ACL 默认拒绝）。原方案中的 WireGuard 不再采用。**分工**（2026-09-28 定）：共享节点用的云服务器由律所提供；两台服务器侧的配置由我方完成（编排计划工单 T27）。
+- 我方要做的：
+  1. 首次配置和设置中的 6000D、395 地址可以填 EasyTier 虚拟网地址，地址白名单按设置中的实际地址生效（第 14.3 节）；"测试连接"对虚拟网地址同样适用。
+  2. 在 6000D（Linux）和 395（Windows）上按方案 V2 安装 EasyTier 并加入律所虚拟网；访问规则默认拒绝，只放行虚拟网段到 **6000D 的 8000 端口和 395 的 9000 端口**（方案原文只放行了模型端口，这里补上 9000）；不代理律所其他子网。
+  3. 两台服务器的防火墙：6000D 入站只放行虚拟网段和局域网到 8000；395 的 Windows 防火墙入站规则加上虚拟网段（第 6.1 节）。
+  4. 写一个检查脚本，在律所外的网络上用一台律师电脑实测：8000、9000 可达，其他端口不可达，客户端"测试连接"通过。
+  5. 各项参数填进甲方方案的部署参数台账（密钥和凭据只写存放位置，不写明文）。
+- 局域网和虚拟网内都使用 HTTP（与 6000D 网关现状一致）；所外流量由 EasyTier 的端到端加密保护。
 
 ---
 
@@ -1023,19 +1193,19 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 
 | 编号 | 实现位置 | 验证方法 |
 |---|---|---|
-| SEC-01 | 第 4.1 节目录；第 3.3 节 DSH 数据落点；第 4.5 节日志不含正文 | 用测试案卷完整走一遍，在案件目录以外全盘搜索案卷中的特征字符串 |
+| SEC-01 | 第 4.1 节目录；第 3.3 节 DSH 数据落点；第 4.5 节日志不含正文；拖入的文件复制进案件文件夹、不进附件目录（P-5） | 用测试案卷完整走一遍（含拖入导入、归档），在案件目录以外全盘搜索案卷中的特征字符串；发票台账在日常办公文件夹，不属于案卷 |
 | SEC-02 | D7：外发操作只在界面接口中提供，调用前弹确认框 | 检查 AI 工具列表；抓包比对发出的请求与确认框中显示的内容 |
 | SEC-03 | 第 14.3 节；第 3.2 节 | G-11 抓包 |
 | SEC-04 | 没有向量检索组件；服务器不建立任何索引 | 代码审查；检查服务器的磁盘 |
 | SEC-05 | D3、D4；第 4.2 节路径闸门 | 自动测试：`../`、绝对路径、符号链接、junction、大小写变体、超长名字 |
 | SEC-06 | 第 6.3 节；第 8.1 节 Key 存 Windows 凭据管理器 | 用无 Key、停用的 Key 分别调用两台服务器；换 Windows 账号读不到 Key |
 | SEC-07 | 第 3.1 节（律师工作台 preset 不挂 agent-instructions，官方 preset 全部关掉，Skill 不扫默认目录）；第 10.1 节 | 测试案件内放 AGENTS.md、`.dsh/skills/<恶意 Skill>`、含越权指令的材料，确认都不起作用 |
-| SEC-08 | 原件区没有写接口；`材料/index.json` 记录哈希 | 验收前后比对原件哈希 |
+| SEC-08 | 已有原件没有改写接口；原件区只有律师触发的导入（只新增、不覆盖）和标准目录建文件夹（第 4.2 节）；`材料/index.json` 记录哈希；归档、Word 转换只读原件副本 | 验收前后比对原件哈希（含导入同名文件、归档之后） |
 | SEC-09 | 甲方网关现状（不记正文）；第 8.6 节 | 检查网关的 `usage.db` 和日志 |
 | SEC-10 | 第 14.3 节地址白名单；代码中不存在其他模型地址 | 代码审查 + 抓包 |
 | SEC-11 | 第 4.5 节日志；LibreOffice 配置目录放在案件临时目录；临时文件都在 `工作区/临时/` | 同 SEC-01 的全盘搜索 |
 | SEC-12 | 第 6.2 节全程在内存中处理、启动清理；第 6.1 节 BitLocker、关闭休眠；第 6.6 节日志 | 第 6.2 节的全盘搜索；检查日志中是否有测试文本 |
-| SEC-13 | 第 6.1 节 Windows 防火墙；第 8.6 节 vLLM 只监听本机；第 15 节 | 从外网和律所局域网分别扫描端口 |
+| SEC-13 | 第 6.1 节 Windows 防火墙；第 8.6 节 vLLM 只监听本机；第 15 节（所外经 EasyTier，服务器侧由我方配置） | 从外网和律所局域网分别扫描端口 |
 | SEC-14 | 第 4.2 节云同步目录检测 | 在 OneDrive 同步目录、名字含"坚果云"的目录下各建一个案件，打开时都被拒绝 |
 
 ---
@@ -1065,10 +1235,19 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 1. 本次只交付 Windows 客户端，macOS 预留（PRD 1.1、9.4）。
 2. Key 存 Windows 凭据管理器（PRD F-ACC-01a，本文 D9、第 8.1 节）。
 3. 案件文件夹不得位于云同步目录（PRD SEC-14，本文第 4.2 节）。
-4. 五个入口和 Skill 按《五个业务能力编排》（PRD 6.3，本文第 10 节）。
+4. 五个入口和 Skill 按《五个业务能力编排》（当时 PRD 第三版 6.3；第三版起改为胶囊，见第 8 条）。
 5. 案件 wiki 走流水线，其余 Skill 走 Agent（本文 D6）。
 6. 出处统一为 `〔材料名 位置〕`（本文第 9.3、20.2 节；Skill 的共用规则已同步）。
 7. 395 的 9B 只用于 wiki 生成中的字段抽取和分类，取消"按卷提取目录"（PRD F-ENT-04，本文第 6.4、9.1 节）。
+
+第三版按 2026-09-28 甲方需求变更同步修改（对应 PRD 第四版）：
+
+8. 首页两级胶囊替代五个入口（PRD 6.3，本文 D11、第 10.3 节、U-4、U-11）。
+9. 聊天附件改为拖入即导入，"+"按钮去掉（PRD F-MAT-02a、7.9，本文 D13、P-5、第 5.1 节、U-12）。
+10. 新增诉讼文书起草、刑期计算、招投标、案卷归档（PRD 6.3、F-ARC-*，本文第 10.2、12.4、13.4 节）。
+11. 接入发票整理、委托材料两个现成工具（PRD F-TOOL-03、F-TOOL-04，本文 D12、第 13.3、13.5 节）。
+12. Word 转 PDF 优先用本机 Word / WPS（本文第 12.3 节）。
+13. 所外访问改为 EasyTier：云服务器由律所提供，两台服务器侧由我方配置，不再做 WireGuard（PRD 4.7、8、SEC-13，本文第 15 节）。
 
 ---
 
@@ -1097,8 +1276,10 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 | 9 | 出处核对库、流水线框架、案件 wiki 流水线（第 9 节） | 大卷宗对照标准答案打分，A–E 类问题为 0 |
 | 10 | 395 完整功能：9B 抽取、去水印、取消、`/admin`（第 6 节） | G-5、G-6；取消测试 |
 | 11 | 界面：首次配置、首页、案件工作区面板、原文查看；去掉对外连接和无关入口（第 3.2、3.4 节） | G-11 抓包 |
-| 12 | 修订版（第 12.2 节）；5 个入口的 13 个 Skill 逐个在链路中跑通 | G-10；各 Skill 测试集（律所样本到位前用虚构样本） |
-| 13 | 小工具（第 13 节）；打包（第 14 节） | 断网安装；Windows 10、Windows 11 各装一遍 |
+| 12 | 修订版（第 12.2 节）；首页胶囊和胶囊管理（第 10.3 节、U-4、U-11）；拖入导入（第 5.1 节、P-5、U-12）；14 个胶囊的 18 个 Skill 逐个在链路中跑通 | G-10；各 Skill 测试集（律所样本到位前用虚构样本） |
+| 12a | Word / PDF 转换（第 12.3 节）、案卷归档（第 12.4 节）、刑期计算（第 13.4 节） | 归档：虚构案件生成三个文件，页码和立卷申请书页码范围一致；刑期计算单元测试 |
+| 12b | 发票整理面板和引擎调用（第 13.3 节）、委托材料窗口和证件识别驱动（第 13.5 节） | 虚构发票走完一期；委托材料生成到案件的 `01委托手续`；两项都抓包 |
+| 13 | 小工具（第 13.1、13.2 节）；打包（第 14 节） | 断网安装；Windows 10、Windows 11 各装一遍 |
 
 **贯穿两个阶段的测试样本**：律所材料暂时拿不到，由一张单独的工单造虚构测试案卷，放在仓库 `tests/fixtures/`：刑事卷宗（文字版 PDF + 扫描页 + 图片）、民事借贷案（docx 含修订痕迹、银行流水 xlsx、csv）、一份合同 docx（含表格、页眉页脚，用于修订版的范围外测试）、G-9 检索验证集、越权植入材料（AGENTS.md、`.dsh/skills/`、"忽略以上要求"文字）。各步骤的验收都用这套样本；wiki 测试的大卷宗（`D:\pycharm\test\wiki`）作为流水线的对照样本。
 
@@ -1111,7 +1292,7 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 ### 20.1 通用约定
 
 - **写法**：JSON Schema Draft 2020-12。每个文件的 `$id` 以 `lawbench://contracts/` 开头，引用一律写完整 `$id`。接口类契约在同一个文件的 `$defs` 下分 `request` / `response`（或 `args` / `result`）；落盘文件的契约就是整个文件本身。
-- **版本**：整套契约一个版本号，写在 `contracts/VERSION`（当前 `1.0`）。工作台服务的 `/health` 和 395 的 `/health` 都返回 `contract_version`；Host 插件启动工作台服务后先比对版本，不一致就提示"组件版本不一致，请重新安装"，不继续。落盘的 JSON 文件带 `"v": 1`，读到不认识的 `v` 时只读、不写。
+- **版本**：整套契约一个版本号，写在 `contracts/VERSION`（当前 `1.1`）。工作台服务的 `/health` 和 395 的 `/health` 都返回 `contract_version`；Host 插件启动工作台服务后先比对版本，不一致就提示"组件版本不一致，请重新安装"，不继续。落盘的 JSON 文件带 `"v": 1`，读到不认识的 `v` 时只读、不写。
 - **改契约的规矩**：先改 `contracts/`（`*.schema.json` 由 `contracts/_build/gen_schemas.py` 生成，改契约就改这个脚本再运行，不手改生成的文件；样例由 `_build/gen_examples.py` 生成），再升 `VERSION`，再在本节末尾"变更记录"加一行，最后才改代码。开发工单不得在代码里私自增减字段。
 - **本机接口的返回体**（`/core/*`、`/api/*`）：成功 `{"ok": true, "value": …}`；失败 `{"ok": false, "error": {"code": …, "message": …}}`。业务错误一律 HTTP 200；缺少或错误的启动令牌返回 HTTP 401（无返回体）；服务内部异常返回 HTTP 500，返回体仍按失败格式，`code` 为 `INTERNAL`。
 - **错误码**（`common.schema.json#/$defs/error_code`）和给律师看的提示：
@@ -1139,10 +1320,15 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 | `CANCELLED` | 已取消 | 已取消 |
 | `SERVICE_UNAVAILABLE` | 工作台服务未启动（由插件返回） | 工作台服务未启动，请稍后重试 |
 | `INTERNAL` | 其他 | 内部错误，请重试；多次出现请联系技术支持 |
+| `OFFICE_DIR_NOT_SET` | 没有设置日常办公文件夹就用发票整理 | 请先在设置中指定日常办公文件夹 |
+| `CONVERTER_UNAVAILABLE` | Word、WPS、LibreOffice 都转换失败 | 无法把文件转成 PDF，请在 Word 或 WPS 中另存为 PDF 后放入案件文件夹 |
+| `TEMPLATE_MISSING` | 需要的模板文件缺失且没有临时版式 | 缺少模板文件，请联系管理员 |
+| `ENGINE_FAILED` | 发票引擎退出码不是 0 或 2，或超时 | 发票整理未完成，请查看下方的输出信息 |
+| `PLAN_NOT_CONFIRMED` | 归档方案的办案结果为空 | 请先确认办案结果 |
 
 - **编号**（`common.schema.json`）：`case_id` 为 UUID v4；`material_id` 为 `M` + 4 位序号；`task_id` 为 `T-`（Agent）或 `P-`（流水线）+ `YYYYMMDDHHMMSS` + `-` + 4 位小写十六进制；`job_id` 为 `J-` + 同样格式；wiki 事实 `F` + 4 位、wiki 建议 `S` + 4 位。
 - **时间**：ISO 8601 带时区（如 `2026-09-28T09:30:00+08:00`）。
-- **路径**：契约中的路径一律是相对案件根目录的路径，分隔符用 `/`，不以 `/` 开头、不含 `..`；只有 `cases.json` 的 `root` 和 `/api/case/open` 的 `path` 是绝对路径。
+- **路径**：契约中的路径一律是相对案件根目录的路径，分隔符用 `/`，不以 `/` 开头、不含 `..`；绝对路径（`common.schema.json#/$defs/abs_path`）只出现在界面与工作台服务之间：`cases.json` 的 `root`、`/api/case/open` 的 `path`、`/api/materials/import` 的源路径、发票整理的源文件夹和输出文件，AI 工具里没有绝对路径。
 
 ### 20.2 出处和材料名
 
@@ -1163,11 +1349,11 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 | `POST /core/tool` | `tool.schema.json` | 每次 `case_*` 工具执行 | `args` 和 `value` 的结构见 20.4；服务端按工具契约校验 `args`，不合格返回 `INVALID_ARGUMENT` |
 | `POST /core/progress` | `progress.schema.json` | `session/event` 收到 `assistant/message` | 覆盖写 `进行中.md`，更新用量 |
 | `POST /core/task/end` | `task_end.schema.json` | `turn/end` | 写 `result.json` 最终状态；返回写入的状态 |
-| `GET /health` | — | Host 插件每 5 秒 | `{"status":"ok","contract_version":"1.0"}`，不需要令牌 |
+| `GET /health` | — | Host 插件每 5 秒 | `{"status":"ok","contract_version":"1.1"}`，不需要令牌 |
 
 ### 20.4 AI 工具（`contracts/tools/`）
 
-8 个工具，每个文件的 `$defs/args` 直接用作 DSH `ToolDefinition.parameters`，`$defs/result` 是 `/core/tool` 成功时 `value` 的结构。Skill 正文里引用的返回字段（`has_more`、`next_start`、`citation_check.problems`、`not_fully_read` 等）必须和这里一致，`build_skills.py` 校验工具名，契约自检校验 Skill 头部。
+11 个工具，每个文件的 `$defs/args` 直接用作 DSH `ToolDefinition.parameters`，`$defs/result` 是 `/core/tool` 成功时 `value` 的结构。Skill 正文里引用的返回字段（`has_more`、`next_start`、`citation_check.problems`、`not_fully_read` 等）必须和这里一致，`build_skills.py` 校验工具名，契约自检校验 Skill 头部。
 
 | 工具 | 契约文件 | 关键字段 |
 |---|---|---|
@@ -1179,10 +1365,13 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 | `case_save_draft` | `case_save_draft.schema.json` | `path`、`version`、`citation_check{passed, problems[], stats}`、`coverage`、`not_fully_read` |
 | `case_suggest_wiki` | `case_suggest_wiki.schema.json` | 字段枚举；`source` 必须是合格的出处文本 |
 | `case_save_edit_list` | `case_save_edit_list.schema.json` | 修改条目 `edit_item`；返回 `out_of_scope` |
+| `case_calc_sentence` | `case_calc_sentence.schema.json` | 刑种枚举、羁押期间数组；返回 `start`、`end`、`milestones`、`basis`、`notes` |
+| `case_archive_match` | `case_archive_match.schema.json` | 卷类枚举；返回逐项 `matched`、`unmatched`、`ignored` |
+| `case_save_archive_plan` | `case_save_archive_plan.schema.json` | 参数即归档方案（`$defs/plan`，`/api/archive/build` 复用）；`result` 未经律师确认时为 null |
 
 ### 20.5 界面 → 工作台服务（`contracts/api/`）
 
-界面插件 → `ctx.remote.lawbench.<方法>()` → Host 插件 → 工作台服务 `/api/*`。每个接口一个文件，`$defs/request` 对 GET 接口表示查询参数。19 个接口见第 4.3 节表格，文件名与接口一一对应：`case_open`、`case_recent`、`materials_scan`、`materials_list`、`ocr_submit`、`ocr_list`、`ocr_cancel`、`task_create`、`pipeline_run`、`pipeline_status`、`pipeline_cancel`、`tasks_list`、`redline`、`wiki_suggestions`、`outputs_confirm`、`source`、`search`、`settings`、`connection_test`。Host 插件的 `@Remote` 方法名与文件名相同（改成驼峰）。
+界面插件 → `ctx.remote.lawbench.<方法>()` → Host 插件 → 工作台服务 `/api/*`。每个接口一个文件，`$defs/request` 对 GET 接口表示查询参数。25 个接口见第 4.3 节表格，文件名与接口一一对应：`case_open`、`case_recent`、`materials_scan`、`materials_import`、`materials_list`、`ocr_submit`、`ocr_list`、`ocr_cancel`、`task_create`、`pipeline_run`、`pipeline_status`、`pipeline_cancel`、`tasks_list`、`redline`、`wiki_suggestions`、`outputs_confirm`、`source`、`search`、`settings`、`connection_test`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`。Host 插件的 `@Remote` 方法名与文件名相同（改成驼峰）。
 
 ### 20.6 工作台服务 → 395（`contracts/prep395/`）
 
@@ -1215,12 +1404,16 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 | `工作区/任务/<ID>/result.json` | `files/result.schema.json` | `/core/progress`、`/core/task/end`、`case_save_draft`、流水线 | 界面成果区 |
 | `工作区/任务/<ID>/草稿/*.md` | `formats.md` 第 5 节 | `case_save_draft`、`/core/progress`、流水线 | 界面、`/api/outputs/confirm` |
 | `工作区/任务/<ID>/修改清单/*.json` | `tools/case_save_edit_list.schema.json#/$defs/args` | `case_save_edit_list` | `/api/redline` |
+| `工作区/任务/<ID>/归档方案.json` | `tools/case_save_archive_plan.schema.json#/$defs/plan` | `case_save_archive_plan` | 归档面板、`/api/archive/build` |
+| `成果/归档/<…>案件归档/` | `formats.md` 第 1 节 | `/api/archive/build` | 律师上传金助理 |
 | `工作区/wiki/case.json` | `files/case_card.schema.json` | wiki 流水线、界面（本方立场、律师确认） | L0 注入、`case_read_wiki` |
 | `工作区/wiki/案件/*.md`、`材料/*.md` | `formats.md` 第 4 节 | wiki 流水线 | `case_read_wiki`、界面 |
 | `工作区/wiki/待确认.json` | `files/wiki_pending.schema.json` | `case_suggest_wiki` | `/api/wiki/suggestions` |
 | `成果/索引.json` | `files/outputs_index.schema.json` | `/api/outputs/confirm` | 界面、选用前序成果 |
 | `<应用数据>/cases.json` | `files/cases.schema.json` | `/api/case/open` | 注册表、最近案件 |
 | `<应用数据>/settings.json` | `files/settings.schema.json` | `/api/settings` | 工作台服务、界面 |
+| `<应用数据>/capsules.json` | `skill/capsules.schema.json` | `/api/capsules`、首次启动复制 | 首页、胶囊管理 |
+| `<日常办公文件夹>/发票台账/` | 发票引擎自有格式（`formats.md` 第 1.2 节） | 发票引擎 | 发票整理面板 |
 
 `<应用数据>` 为 `%APPDATA%\<产品名>\`。所有 JSON 文件写入时先写临时文件再原子替换（第 4.2 节）；写入前按契约校验，不合格不写并记日志（只记契约名和字段路径）。
 
@@ -1228,13 +1421,13 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 
 目录树、材料文本、出处、wiki 分节、草稿、流水线提示词的分段约定见 `contracts/formats.md`。
 
-### 20.10 Skill 和入口（`contracts/skill/`）
+### 20.10 Skill、胶囊和归档目录（`contracts/skill/`）
 
-`SKILL.md` 头部按 `skill/frontmatter.schema.json`，入口清单按 `skill/entry.schema.json`。正文六部分、必问问题的写法、允许的工具名由 `skills/_scripts/skill_manifest.py` 规定，与本契约一起维护。
+`SKILL.md` 头部按 `skill/frontmatter.schema.json`（1.1 起不再有 `entry`、`order`）；胶囊配置按 `skill/capsules.schema.json`（替代 1.0 的 `skill/entry.schema.json`）；归档目录按 `skill/archive_catalog.schema.json`。正文六部分、必问问题的写法、允许的工具名由 `skills/_scripts/skill_manifest.py` 规定，与本契约一起维护。
 
 ### 20.11 怎么校验
 
-- **自检**：`python contracts/check_examples.py --skills skills`。它把 `contracts/` 下所有 schema 注册进去，校验 `examples/` 中的正例和反例（`manifest.json` 写明每个样例应当通过还是失败），再校验全部 Skill 头部和入口清单。退出码 0 才算通过。当前：39 个样例全部符合预期，13 个 Skill 和 5 个入口清单全部通过。
+- **自检**：`python contracts/check_examples.py --skills skills`。它把 `contracts/` 下所有 schema 注册进去，校验 `examples/` 中的正例和反例（`manifest.json` 写明每个样例应当通过还是失败），再校验胶囊配置、胶囊用到的全部 Skill 头部和四个归档目录。退出码 0 才算通过。当前：51 个样例全部符合预期，胶囊配置、18 个 Skill 和 4 个归档目录全部通过。
 - **Python**：`jsonschema` 的 `Draft202012Validator` + `referencing.Registry`（写法照 `check_examples.py` 的 `validator()`）。工作台服务在 `/core/tool` 收到参数时、写落盘文件前校验；开发和测试环境下对所有返回也校验，生产环境关闭返回校验以省时间。
 - **TypeScript**：`ajv/dist/2020`，启动时 `addSchema` 整个 `contracts/` 目录。Agent 插件用 `tools/*` 的 `$defs/args` 注册工具；界面插件的类型由 schema 生成（如 `json-schema-to-typescript`），不手写。
 - **契约测试**：每张开发工单的验收里，凡涉及接口或落盘文件的，都包含"实际请求 / 返回 / 文件通过对应契约校验"。
@@ -1244,3 +1437,4 @@ outputs: [刑事阅卷笔录, 证据审查意见]
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | 1.0 | 2026-09-28 | 首版 |
+| 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹 |

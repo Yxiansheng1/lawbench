@@ -1,0 +1,10 @@
+﻿build 退出码 = 0
+Built 13 templates, original skill contents and local data scripts
+checksums: template-checksums.json 宸查噸绠楋細13 椤?
+_craft_meta.json 宸查噸绠楋細74 椤?
+
+=== resources/templates 结构 ===
+  个人委托 : 4 份
+  公司委托 : 5 份
+  刑事 : 4 份
+  合计文件 = 13

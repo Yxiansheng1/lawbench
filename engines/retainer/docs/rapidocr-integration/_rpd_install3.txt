@@ -1,0 +1,19 @@
+﻿Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting omegaconf
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/a4/0e/152509871bf30df6fc38569f52a2db9b55dd41aae957adae50a053ac7778/omegaconf-2.3.1-py3-none-any.whl (79 kB)
+Collecting antlr4-python3-runtime
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/89/03/a851e84fcbb85214dc637b6378121ef9a0dd61b4c65264675d8a5c9b1ae7/antlr4_python3_runtime-4.13.2-py3-none-any.whl (144 kB)
+Installing collected packages: antlr4-python3-runtime, omegaconf
+Successfully installed antlr4-python3-runtime-4.13.2 omegaconf-2.3.1
+python.exe : WARNING: Target directory D:\workbuddy娴嬭瘯\retainer-offline\tools\o
+cr-driver\vendor\bin already exists. Specify --upgrade to force replacement.
+所在位置 行:447 字符: 1
++ & $py -m pip install --target $vd --no-deps omegaconf antlr4-python3- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: Target...ce replacement. 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+[notice] A new release of pip is available: 25.0.1 -> 26.2.1
+[notice] To update, run: python.exe -m pip install --upgrade pip

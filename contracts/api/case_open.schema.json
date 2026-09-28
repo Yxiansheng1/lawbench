@@ -10,6 +10,20 @@
         "path": {
           "type": "string",
           "description": "律师选的文件夹绝对路径"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "enum": [
+                "civil",
+                "criminal"
+              ],
+              "description": "新建案件时按标准目录建子文件夹（formats.md 第 1.1 节）；只补缺，不改已有文件夹"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -38,13 +52,21 @@
                 "created": {
                   "type": "boolean",
                   "description": "本次新建了 工作区/"
+                },
+                "folders_created": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "本次按目录模板新建的子文件夹"
                 }
               },
               "additionalProperties": false,
               "required": [
                 "case_id",
                 "name",
-                "created"
+                "created",
+                "folders_created"
               ]
             }
           },
@@ -72,13 +94,21 @@
         "created": {
           "type": "boolean",
           "description": "本次新建了 工作区/"
+        },
+        "folders_created": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "本次按目录模板新建的子文件夹"
         }
       },
       "additionalProperties": false,
       "required": [
         "case_id",
         "name",
-        "created"
+        "created",
+        "folders_created"
       ]
     }
   }

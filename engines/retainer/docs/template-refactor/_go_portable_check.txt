@@ -1,0 +1,19 @@
+﻿=== Go SDK 目录 ===
+文件数=15639  大小MB=235.5
+
+=== 当前环境指向 ===
+GOROOT     = C:\Users\0\go-sdk\go
+GOPATH     = C:\Users\0\go
+GOCACHE    = C:\Users\0\AppData\Local\go-build
+GOMODCACHE = C:\Users\0\go\pkg\mod
+
+=== 用户目录下的缓存 ===
+C:\Users\0\go 不存在
+C:\Users\0\AppData\Local\go-build  文件数=751  大小MB=43
+
+=== 官方原始 zip 是否还在 ===
+C:\Users\0\go-sdk-download.zip 存在=True
+大小MB=75.3
+
+=== 打包工具 ===
+tar.exe = C:\WINDOWS\system32\tar.exe

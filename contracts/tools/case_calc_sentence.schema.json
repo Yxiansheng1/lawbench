@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_calc_sentence.schema.json",
+  "title": "case_calc_sentence",
+  "description": "按律师给定的刑种、刑期和先行羁押期间，用程序计算刑期起止日和减刑、假释节点；结果附计算依据，法律依据仍待律师核实",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "penalty": {
+          "enum": [
+            "管制",
+            "拘役",
+            "有期徒刑",
+            "无期徒刑"
+          ]
+        },
+        "years": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25,
+          "description": "刑期年数；无期徒刑不填"
+        },
+        "months": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 11,
+          "description": "刑期月数"
+        },
+        "execution_start": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "custody": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date",
+                "description": "日期 YYYY-MM-DD"
+              },
+              "to": {
+                "type": "string",
+                "format": "date",
+                "description": "日期 YYYY-MM-DD"
+              },
+              "kind": {
+                "enum": [
+                  "刑事拘留",
+                  "逮捕",
+                  "指定居所监视居住",
+                  "其他"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "kind"
+            ]
+          },
+          "description": "判决执行以前先行羁押的各段期间（含两端）；指定居所监视居住按规定折抵"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "penalty",
+        "custody"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offset_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "折抵天数"
+        },
+        "custody_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "先行羁押总天数"
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "如 执行满二分之一"
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "日期 YYYY-MM-DD"
+              },
+              "basis": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "date",
+              "basis"
+            ]
+          }
+        },
+        "basis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "计算依据的文字说明，来自内置规则表，待律师核实"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "无法计算或需律师判断的情形"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "offset_days",
+        "custody_days",
+        "milestones",
+        "basis",
+        "notes"
+      ]
+    }
+  }
+}

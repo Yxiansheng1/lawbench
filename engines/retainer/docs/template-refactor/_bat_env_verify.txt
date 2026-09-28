@@ -1,0 +1,11 @@
+﻿退出码 = 0
+=== env.bat applied ===
+GOROOT_FROM_BAT=C:\Users\0\_portable_test\go-sdk\go
+GOPATH_FROM_BAT=C:\Users\0\_portable_test\go-sdk\gopath
+GOCACHE_FROM_BAT=C:\Users\0\_portable_test\go-sdk\gocache
+go version go1.27.1 windows/amd64
+C:\Users\0\_portable_test\go-sdk\go
+C:\Users\0\_portable_test\go-sdk\gopath
+C:\Users\0\_portable_test\go-sdk\gocache
+=== done ===
+

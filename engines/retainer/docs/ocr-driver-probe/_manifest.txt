@@ -1,0 +1,13 @@
+﻿_manifest.txt
+_ocr_paddle_result.txt
+_ocr_probe2.txt
+_ocr_probe3.txt
+_ocr_probe4.txt
+_ocr_probe5.txt
+_ocr_probe6.txt
+_ocr_probe6b.txt
+_tmp_ocr_idcard.png
+_tmp_ocr_license.png
+_tmp_ocr_make.py
+_tmp_ocr_paddle.py
+_tmp_winrt_ocr.ps1

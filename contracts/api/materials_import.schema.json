@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/materials_import.schema.json",
+  "title": "POST /api/materials/import",
+  "description": "拖入或点'导入'选中的文件、文件夹：复制到案件文件夹（不移动、不覆盖、原文件不动），再按 materials_scan 解析。已在案件文件夹内的直接解析",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+          },
+          "minItems": 1
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unzip": {
+          "type": "boolean",
+          "description": "源为 ZIP 时先解压再复制其中的文件（委托材料窗口的下载用）；ZIP 顶层含标准目录文件夹（如 01委托手续）时按其结构放到案件根目录"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "paths",
+        "target",
+        "unzip"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "copied": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "from": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+                      },
+                      "to": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "from",
+                      "to"
+                    ]
+                  }
+                },
+                "skipped": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+                      },
+                      "reason": {
+                        "enum": [
+                          "云同步目录",
+                          "链接或快捷方式",
+                          "同名同内容已存在",
+                          "无法读取",
+                          "超过大小上限"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "path",
+                      "reason"
+                    ]
+                  }
+                },
+                "scan": {
+                  "$ref": "lawbench://contracts/api/materials_scan.schema.json#/$defs/value"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "copied",
+                "skipped",
+                "scan"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "copied": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+              },
+              "to": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ]
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+              },
+              "reason": {
+                "enum": [
+                  "云同步目录",
+                  "链接或快捷方式",
+                  "同名同内容已存在",
+                  "无法读取",
+                  "超过大小上限"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "reason"
+            ]
+          }
+        },
+        "scan": {
+          "$ref": "lawbench://contracts/api/materials_scan.schema.json#/$defs/value"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "copied",
+        "skipped",
+        "scan"
+      ]
+    }
+  }
+}

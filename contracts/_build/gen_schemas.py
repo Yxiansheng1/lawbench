@@ -1,4 +1,4 @@
-"""生成 contracts/ 下的全部 JSON Schema（契约 1.0）。
+"""生成 contracts/ 下的全部 JSON Schema（契约 1.1）。
 改契约只改这个脚本，再运行一次；不要手改生成的 .schema.json。
 """
 import json, pathlib, shutil
@@ -81,6 +81,7 @@ common = {
     "job_id": s("识别任务编号", pattern="^J-[0-9]{14}-[0-9a-f]{4}$"),
     "session_id": s("DSH 会话 ID，原样透传，不解析", minLength=1),
     "time": s("ISO 8601，带时区，如 2026-09-28T09:30:00+08:00", format="date-time"),
+    "abs_path": s("本机绝对路径（仅界面与工作台服务之间使用，不进 AI 工具）", minLength=3),
     "rel_path": s("相对案件根目录的路径，分隔符一律用 /，不以 / 开头，不含 .. 段",
                   pattern="^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$"),
     "material_type": enum("pdf", "docx", "doc", "wps", "xlsx", "xls", "csv", "md", "txt", "image"),
@@ -93,6 +94,7 @@ common = {
         "MATERIAL_NOT_FOUND", "MATERIAL_NOT_READY", "TASK_NOT_FOUND", "INPUT_CHANGED", "BUDGET_EXCEEDED",
         "SERVER_UNREACHABLE", "KEY_INVALID", "SERVER_BUSY", "CONTEXT_TOO_LONG", "OUTPUT_TRUNCATED",
         "TIMEOUT", "HOST_NOT_ALLOWED", "PREP_UNAVAILABLE", "CANCELLED", "SERVICE_UNAVAILABLE", "INTERNAL",
+        "OFFICE_DIR_NOT_SET", "CONVERTER_UNAVAILABLE", "TEMPLATE_MISSING", "ENGINE_FAILED", "PLAN_NOT_CONFIRMED",
         desc="错误码；含义与对应的中文提示见 Spec 20.1"),
     "error": obj({"code": ref("error_code"),
                   "message": s("给律师看的中文提示；不含材料名、检索词、正文")}),
@@ -238,6 +240,55 @@ tool("case_save_edit_list", "保存合同修改清单（Spec 12.2），律师点
           "out_of_scope": arr(obj({"id": i(minimum=1), "reason": s()}))}))
 FILES["tools/case_save_edit_list.schema.json"]["$defs"]["edit_item"] = edit_item
 
+# 1.1 新增：刑期计算（纯程序计算，不读案件文件；Spec 13.4）
+date = s("日期 YYYY-MM-DD", format="date")
+tool("case_calc_sentence", "按律师给定的刑种、刑期和先行羁押期间，用程序计算刑期起止日和减刑、假释节点；结果附计算依据，法律依据仍待律师核实",
+     obj({"penalty": enum("管制", "拘役", "有期徒刑", "无期徒刑"),
+          "years": i("刑期年数；无期徒刑不填", minimum=0, maximum=25),
+          "months": i("刑期月数", minimum=0, maximum=11),
+          "execution_start": nullable(date),
+          "custody": arr(obj({"from": date, "to": date, "kind": enum("刑事拘留", "逮捕", "指定居所监视居住", "其他")}),
+                         description="判决执行以前先行羁押的各段期间（含两端）；指定居所监视居住按规定折抵")},
+         required=["penalty", "custody"]),
+     obj({"start": nullable(date), "end": nullable(date),
+          "offset_days": i("折抵天数", minimum=0), "custody_days": i("先行羁押总天数", minimum=0),
+          "milestones": arr(obj({"name": s("如 执行满二分之一"), "date": date, "basis": s()})),
+          "basis": arr(s("计算依据的文字说明，来自内置规则表，待律师核实")),
+          "notes": arr(s("无法计算或需律师判断的情形"))}))
+
+# 1.1 新增：案卷归档（Spec 12.4）
+catalog_name = enum("民事行政卷", "刑事卷", "常法卷", "其他非诉卷")
+tool("case_archive_match", "按归档目录把本案材料逐项匹配（程序按文件夹和文件名关键词匹配），给 AI 核对用；只读",
+     obj({"catalog": catalog_name}),
+     obj({"catalog": catalog_name,
+          "items": arr(obj({"code": i(minimum=1), "name": s(), "required": b(),
+                            "matched": arr(obj({"name": s("材料名"), "folder": s("所在的第一层文件夹名，根目录为空串"),
+                                                "reason": enum("文件夹", "关键词", "文件夹和关键词")}))})),
+          "unmatched": arr(s("材料名")),
+          "ignored": arr(obj({"name": s(), "reason": enum("临时文件", "命名混乱", "加密或无法读取", "工作区或成果")}))}))
+archive_item = obj({"code": i(minimum=1), "name": s("立卷申请书里写的材料名称（按本案实际改写，去掉括号提示）"),
+                    "materials": arr(s("材料名，按卷宗合并顺序"), minItems=1)},
+                   desc="只放实际有材料的项；程序生成的项（结案报告）不放，由 archive_build 自动加入")
+archive_plan = obj({
+    "catalog": catalog_name,
+    "client": s("委托人全称", minLength=1), "opponent": nullable(s("对方当事人全称；常法卷等没有时为 null")),
+    "cause": s("案由全称或服务事项"), "lawyer": nullable(s("承办律师；null 时用设置里的律师姓名")),
+    "entrust_date": nullable(date), "close_date": nullable(date),
+    "jzl_no": nullable(s("金助理系统案件编号，律师提供")),
+    "result": nullable(enum("胜诉", "败诉", "部分胜诉", "调解", "撤诉", "其他",
+                            desc="办案结果（我方视角）。只能由律师确认，AI 未得到律师答复时填 null")),
+    "summary": s("案情简介（常法卷为服务概况）"), "opinion": s("承办律师分析与意见（常法卷为服务结果）"),
+    "fee_settled": b("律师费是否已按合同足额收取；律师未说明时按 true"),
+    "items": arr(archive_item, minItems=1)},
+    required=["catalog", "client", "opponent", "cause", "lawyer", "entrust_date", "close_date", "jzl_no", "result",
+              "summary", "opinion", "fee_settled", "items"])
+tool("case_save_archive_plan", "保存归档方案到 工作区/任务/<任务ID>/归档方案.json，律师核对后点'生成归档文件'时使用",
+     archive_plan,
+     obj({"path": ref("rel_path"),
+          "missing_required": arr(obj({"code": i(minimum=1), "name": s()}), description="必交但没有材料的项"),
+          "warnings": arr(s())}))
+FILES["tools/case_save_archive_plan.schema.json"]["$defs"]["plan"] = archive_plan
+
 # ---------------------------------------------------------------- C4 界面 → /api/*
 job_row = obj({"job_id": ref("job_id"), "material_id": ref("material_id"), "name": s(),
                "status": enum("queued", "running", "paused", "done", "cancelled", "partial_failed"),
@@ -246,8 +297,11 @@ job_row = obj({"job_id": ref("job_id"), "material_id": ref("material_id"), "name
                "created_at": ref("time")})
 api = [
     ("case_open", "POST /api/case/open", "打开或新建案件；登记到 cases.json。云同步目录报 CASE_IN_SYNC_FOLDER，链接或 junction 报 CASE_ROOT_IS_LINK",
-     obj({"path": s("律师选的文件夹绝对路径")}),
-     obj({"case_id": ref("case_id"), "name": s("文件夹名"), "created": b("本次新建了 工作区/")})),
+     obj({"path": s("律师选的文件夹绝对路径"),
+          "template": nullable(enum("civil", "criminal", desc="新建案件时按标准目录建子文件夹（formats.md 第 1.1 节）；只补缺，不改已有文件夹"))},
+         required=["path"]),
+     obj({"case_id": ref("case_id"), "name": s("文件夹名"), "created": b("本次新建了 工作区/"),
+          "folders_created": arr(s(), description="本次按目录模板新建的子文件夹")})),
     ("case_recent", "GET /api/case/recent", "最近案件（按最近打开时间倒序）", obj({}),
      obj({"cases": arr(obj({"case_id": ref("case_id"), "name": s(), "root": s(), "last_opened": ref("time"),
                             "exists": b("文件夹是否还在")}))})),
@@ -271,7 +325,7 @@ api = [
     ("ocr_cancel", "POST /api/ocr/jobs/{job_id}/cancel", "取消识别；已完成的页保留",
      obj({"job_id": ref("job_id")}), obj({"job_id": ref("job_id"), "status": s()})),
     ("task_create", "POST /api/task", "为某个会话写待执行的任务单；Agent 插件在该会话下一次请求时取用",
-     obj({"case_id": ref("case_id"), "session_id": ref("session_id"), "entry": nullable(s()),
+     obj({"case_id": ref("case_id"), "session_id": ref("session_id"), "entry": nullable(s("发起任务的胶囊 id（capsules.json 中的 id，改名不影响）；自由对话为 null")),
           "skill": nullable(s()), "inputs": arr(ref("rel_path"), description="选用的草稿或成果路径，服务端计算版本和 sha256"),
           "params": ref("params")}),
      obj({"task_id": ref("task_id")})),
@@ -311,6 +365,53 @@ api = [
     ("search", "GET /api/search?case_id=&q=", "律师检索；返回结构同 case_search",
      obj({"case_id": ref("case_id"), "q": s(minLength=1, maxLength=100)}),
      {"$ref": BASE + "tools/case_search.schema.json#/$defs/result"}),
+    ("materials_import", "POST /api/materials/import",
+     "拖入或点'导入'选中的文件、文件夹：复制到案件文件夹（不移动、不覆盖、原文件不动），再按 materials_scan 解析。已在案件文件夹内的直接解析",
+     obj({"case_id": ref("case_id"), "paths": arr(ref("abs_path"), minItems=1),
+          "target": nullable(ref("rel_path")),
+          "unzip": b("源为 ZIP 时先解压再复制其中的文件（委托材料窗口的下载用）；ZIP 顶层含标准目录文件夹（如 01委托手续）时按其结构放到案件根目录")},
+         required=["case_id", "paths", "target", "unzip"]),
+     obj({"copied": arr(obj({"from": ref("abs_path"), "to": ref("rel_path")})),
+          "skipped": arr(obj({"path": ref("abs_path"),
+                              "reason": enum("云同步目录", "链接或快捷方式", "同名同内容已存在", "无法读取", "超过大小上限")})),
+          "scan": {"$ref": BASE + "api/materials_scan.schema.json#/$defs/value"}})),
+    ("capsules", "GET / PUT /api/capsules", "读写本机胶囊配置 <应用数据>/capsules.json；PUT 传完整对象，服务端校验 Skill 和工具是否存在",
+     {"$ref": BASE + "skill/capsules.schema.json"}, {"$ref": BASE + "skill/capsules.schema.json"}),
+    ("capsules_reset", "POST /api/capsules/reset", "恢复默认胶囊（用安装目录里的 capsules.default.json 覆盖本机配置）",
+     obj({}), {"$ref": BASE + "skill/capsules.schema.json"}),
+    ("archive_build", "POST /api/archive/build",
+     "律师核对归档方案并确认办案结果后，在本机生成归档总文件夹：卷宗.pdf（按编号合并、加页码）、立卷申请书.docx、结案报告.docx、归档目录.md，发票凭证另存为 发票.pdf",
+     obj({"case_id": ref("case_id"), "task_id": ref("task_id"), "plan": ref("rel_path"),
+          "confirmed": {"$ref": BASE + "tools/case_save_archive_plan.schema.json#/$defs/plan",
+                        "description": "律师在界面上改过、确认过的方案（result 不得为 null）"}}),
+     obj({"folder": ref("rel_path"),
+          "files": arr(obj({"kind": enum("卷宗", "立卷申请书", "结案报告", "发票", "归档目录", "特殊情况说明"),
+                            "path": ref("rel_path")})),
+          "page_ranges": arr(obj({"code": i(minimum=1), "from": i(minimum=1), "to": i(minimum=1)})),
+          "converter": enum("word", "wps", "libreoffice"),
+          "manual": arr(s("给律师的提示，如 立卷申请书需打印手签后扫描、模板为临时模板"))})),
+    ("invoice_run", "POST /api/invoice/run",
+     "发票整理：按白名单调用发票引擎（engines/invoice-ledger）的一个动作；台账固定在 <日常办公文件夹>/发票台账。不支持邮箱联网收取和正文链接下载",
+     {"oneOf": [
+         obj({"action": enum("env_check", "report", "check_schema")}),
+         obj({"action": {"const": "history"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$")}),
+         obj({"action": {"const": "plan"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$"),
+              "channel": enum("local", "eml"), "history": enum("exclude", "selected"),
+              "history_numbers": arr(s(pattern="^[0-9]{8,20}$"))}),
+         obj({"action": {"const": "run"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$"),
+              "batch": s(minLength=1, maxLength=40), "src": ref("abs_path"), "channel": enum("local", "eml")}),
+         obj({"action": enum("analyze", "import"), "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$")}),
+         obj({"action": {"const": "prepare"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$"),
+              "batch": s(minLength=1, maxLength=40), "replace": b()}),
+         obj({"action": {"const": "reprint"}, "batch": s(minLength=1, maxLength=40)}),
+         obj({"action": enum("cancel", "reimburse"), "batch": s(minLength=1, maxLength=40),
+              "apply": b("false 时只预览")}),
+         obj({"action": {"const": "review"}, "sha256": ref("sha256"), "reviewer": s(minLength=1), "confirm": b()})]},
+     obj({"exit_code": i(), "attention": b("引擎退出码 2：有重复、冲突、待核或部分失败，须看明细"),
+          "output": s("引擎输出原文，只在界面显示，不写日志"), "files": arr(ref("abs_path"))})),
+    ("retainer_driver", "POST /api/retainer/driver", "委托材料窗口打开时启动、关闭时停止本机证件识别驱动（127.0.0.1:17801）",
+     obj({"action": enum("start", "stop", "status")}),
+     obj({"running": b(), "port": {"const": 17801}, "message": s()})),
     ("settings", "GET / PUT /api/settings", "读写 settings.json；PUT 传完整对象",
      {"$ref": BASE + "files/settings.schema.json"}, {"$ref": BASE + "files/settings.schema.json"}),
     ("connection_test", "POST /api/connection/test", "测试服务器连接（只发探测请求，不含内容）",
@@ -366,7 +467,7 @@ ffile("material_index", "工作区/材料/index.json", "原件索引；导入时
                "error": nullable(s()), "imported_at": ref("time"), "updated_at": ref("time")}))}))
 ffile("task", "工作区/任务/<任务ID>/task.json", "任务单（执行前写）",
       obj({"task_id": ref("task_id"), "case_id": ref("case_id"), "kind": enum("agent", "pipeline"),
-           "session_id": nullable(ref("session_id")), "entry": nullable(s()), "skill": nullable(s()),
+           "session_id": nullable(ref("session_id")), "entry": nullable(s("胶囊 id")), "skill": nullable(s()),
            "step": nullable(enum("wiki_build", "wiki_update")),
            "inputs": arr(ref("input_ref")), "params": ref("params"), "budget": ref("budget"),
            "state": enum("pending", "running", "finished", "abnormal",
@@ -410,18 +511,44 @@ ffile("settings", "<应用数据>/settings.json", "设置；Key 不在这里（�
            "defaults": ref("params"),
            "skill_presets": {"type": "object", "additionalProperties": ref("params")},
            "templates": obj({"文书": nullable(s()), "合同": nullable(s())}),
-           "ocr_fallback_llm": b("395 不可用时由 6000D 接管识别；管理员开启，默认 false")}))
+           "ocr_fallback_llm": b("395 不可用时由 6000D 接管识别；管理员开启，默认 false"),
+           "profile": obj({"lawyer_name": nullable(s("本机律师姓名：结案报告、立卷申请书默认的承办律师"))}),
+           "office": obj({"dir": nullable(s("日常办公文件夹（发票台账等），律师指定；不得位于云同步目录")),
+                          "invoice_buyer": nullable(s("发票购买方名称（律所全称），用于抬头核验"))}),
+           "converter": enum("auto", "word", "wps", "libreoffice",
+                             desc="Word 转 PDF 用哪个程序；auto = Word → WPS → 内置 LibreOffice 依次尝试")}))
 
 # ---------------------------------------------------------------- C9 Skill 与入口
 put("skill/frontmatter.schema.json", "SKILL.md 头部", "DSH 只读 name 和 description；其余字段由工作台服务读取",
     root=obj({"name": s(pattern="^[a-z0-9]+(-[a-z0-9]+)*$"), "title": s(), "description": s(maxLength=400),
               "mode": enum("agent", "pipeline"), "kind": enum("excerpt", "analysis", "draft"),
-              "entry": {"anyOf": [s(), arr(s(), minItems=1)], "description": "入口名、入口名列表或'共用'"},
-              "order": i(minimum=1), "params": ref("params"), "owner": s(), "inputs":
+              "params": ref("params"), "owner": s(), "inputs":
               arr(enum("materials", "wiki", "prior"), minItems=1, uniqueItems=True)}))
-put("skill/entry.schema.json", "entries/<序号>-<id>.yaml", "入口清单；文件名排序即首页顺序",
-    root=obj({"id": s(pattern="^[a-z0-9]+(-[a-z0-9]+)*$"), "name": s(), "skills": arr(s(), minItems=1),
-              "outputs": arr(s(), minItems=1)}))
+ID = s(pattern="^[a-z0-9]+(-[a-z0-9]+)*$")
+cap_skill = obj({"id": ID, "name": s(minLength=1, maxLength=12), "kind": {"const": "skill"},
+                 "skills": arr(ID, minItems=1, description="按推荐顺序；第一个是点胶囊后默认选中的 Skill"),
+                 "outputs": arr(s()), "hidden": b(), "custom": b("律师自己新增的胶囊")})
+cap_tool = obj({"id": ID, "name": s(minLength=1, maxLength=12), "kind": {"const": "tool"},
+                "tool": enum("invoice", "retainer", desc="invoice=发票整理面板；retainer=委托材料窗口"),
+                "hidden": b(), "custom": b()})
+put("skill/capsules.schema.json", "skills/capsules.default.json 与 <应用数据>/capsules.json",
+    "首页两级胶囊：一级为分组，二级为胶囊；胶囊打开一组 Skill（kind=skill）或一个内置工具（kind=tool）。律师只能排序、改名、隐藏和新增，不能删除；恢复默认用 capsules.default.json",
+    defs={"skill_item": cap_skill, "tool_item": cap_tool},
+    root=obj({"v": {"const": 1}, "hint": s("首页顶部的分流提示语"),
+              "shared": arr(ID, description="每个 Skill 胶囊里都能用的共用 Skill"),
+              "groups": arr(obj({"id": ID, "name": s(minLength=1, maxLength=8), "hidden": b(),
+                                 "items": arr({"oneOf": [{"$ref": "#/$defs/skill_item"}, {"$ref": "#/$defs/tool_item"}]})}),
+                            minItems=1)}))
+put("skill/archive_catalog.schema.json", "skills/case-archiving/catalogs/<卷类>.json",
+    "归档目录：编号、材料名称、是否必交、文件名关键词和对应的标准目录文件夹（程序匹配用）",
+    root=obj({"id": catalog_name, "attachment": s("立卷申请书对应的所内附件编号，如 附件3"),
+              "renumber": b("立卷申请书删掉缺项后是否重新连续编号（常法卷为 true）"),
+              "items": arr(obj({"code": i(minimum=1), "name": s(), "required": b(),
+                                "keywords": arr(s(), minItems=1),
+                                "folders": arr(s(), description="标准案件目录中通常存放这类材料的文件夹（含子路径），可为空"),
+                                "generated": b("由归档程序生成（结案报告）：不参与匹配、不算缺失，生成时自动放入卷宗")},
+                               required=["code", "name", "required", "keywords", "folders"]),
+                           minItems=1)}))
 
 
 def main():
@@ -432,7 +559,7 @@ def main():
         p = OUT / path
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(sch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (OUT / "VERSION").write_text("1.0\n", encoding="utf-8")
+    (OUT / "VERSION").write_text("1.1\n", encoding="utf-8")
     print(len(FILES), "schemas")
 
 

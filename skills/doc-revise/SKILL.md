@@ -4,8 +4,6 @@ title: 修改稿
 description: 按律师意见修改文稿。律师要求修改、调整、润色一份已有草稿，或按出稿前审查的问题清单改稿时使用。只改律师指出的地方和必要的连带部分，保留原有出处和结构，输出修改后全文和逐条修改说明。
 mode: agent
 kind: draft
-entry: 共用
-order: 7
 params: {thinking: 中, window: 128K, max_tokens: 49152}
 owner: 待定
 inputs: [materials, prior]

@@ -1,0 +1,11 @@
+png D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license.png
+jpg q90 D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-q90.jpg
+jpeg q70 D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-q70.jpeg
+pdf text D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-text.pdf insert_ok=True
+pdf scan D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-scan.pdf
+docx D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license.docx
+noext D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-noext
+fake doc D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-old.doc
+
+--- docx 内的 media ---
+word/media/image1.png  42090 B

@@ -4,8 +4,6 @@ title: 刑事阅卷笔录
 description: 刑事阅卷笔录。律师要求对刑事案件卷宗阅卷、制作阅卷笔录、梳理起诉意见书或起诉书指控事实与证据时使用。按卷宗顺序逐份阅读，按指控事实和证据种类组织摘录，每条带出处，最后给出指控事实与证据对应表和覆盖清单。
 mode: agent
 kind: excerpt
-entry: 刑事阅卷
-order: 2
 params: {thinking: 低, window: 64K, max_tokens: 16384}
 owner: 待定
 inputs: [materials, wiki]

@@ -4,8 +4,6 @@ title: 通用法律文书
 description: 通用法律文书起草。律师要求起草律师函、法律意见书、案件分析报告、咨询报告、工作函、情况说明等非诉讼程序类文书时使用。按文书类型套用固定结构，事实只取自案件材料、案件卡片和上游成果并带出处，法律分析部分留给律师核实。
 mode: agent
 kind: draft
-entry: 通用文书
-order: 4
 params: {thinking: 中, window: 128K, max_tokens: 32768}
 owner: 待定
 inputs: [materials, wiki, prior]

@@ -1,0 +1,10 @@
+﻿=== go-sdk 顶层 ===
+go\
+gocache\
+gopath\
+env.bat
+go-shell.bat
+使用说明.txt
+
+使用说明.txt 编码校验（GBK 读回首行）：
+Go 便携版 1.27.1（windows-amd64）

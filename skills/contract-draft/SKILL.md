@@ -4,8 +4,6 @@ title: 合同初稿
 description: 合同起草。律师要求起草新合同、框架协议、补充协议或某几条条款时使用。先整理交易要素并列出缺失事实，再确定合同类型和条款骨架，最后逐条起草；缺失的商业信息统一标待补充，不编造。
 mode: agent
 kind: draft
-entry: 合同起草
-order: 3
 params: {thinking: 中, window: 128K, max_tokens: 49152}
 owner: 待定
 inputs: [materials, wiki]

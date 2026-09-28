@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_save_archive_plan.schema.json",
+  "title": "case_save_archive_plan",
+  "description": "保存归档方案到 工作区/任务/<任务ID>/归档方案.json，律师核对后点'生成归档文件'时使用",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "catalog": {
+          "enum": [
+            "民事行政卷",
+            "刑事卷",
+            "常法卷",
+            "其他非诉卷"
+          ]
+        },
+        "client": {
+          "type": "string",
+          "minLength": 1,
+          "description": "委托人全称"
+        },
+        "opponent": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "对方当事人全称；常法卷等没有时为 null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cause": {
+          "type": "string",
+          "description": "案由全称或服务事项"
+        },
+        "lawyer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "承办律师；null 时用设置里的律师姓名"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "entrust_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "close_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jzl_no": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "金助理系统案件编号，律师提供"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "enum": [
+                "胜诉",
+                "败诉",
+                "部分胜诉",
+                "调解",
+                "撤诉",
+                "其他"
+              ],
+              "description": "办案结果（我方视角）。只能由律师确认，AI 未得到律师答复时填 null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "案情简介（常法卷为服务概况）"
+        },
+        "opinion": {
+          "type": "string",
+          "description": "承办律师分析与意见（常法卷为服务结果）"
+        },
+        "fee_settled": {
+          "type": "boolean",
+          "description": "律师费是否已按合同足额收取；律师未说明时按 true"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string",
+                "description": "立卷申请书里写的材料名称（按本案实际改写，去掉括号提示）"
+              },
+              "materials": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "材料名，按卷宗合并顺序"
+                },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "name",
+              "materials"
+            ],
+            "description": "只放实际有材料的项；程序生成的项（结案报告）不放，由 archive_build 自动加入"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "catalog",
+        "client",
+        "opponent",
+        "cause",
+        "lawyer",
+        "entrust_date",
+        "close_date",
+        "jzl_no",
+        "result",
+        "summary",
+        "opinion",
+        "fee_settled",
+        "items"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        },
+        "missing_required": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "name"
+            ]
+          },
+          "description": "必交但没有材料的项"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "missing_required",
+        "warnings"
+      ]
+    },
+    "plan": {
+      "type": "object",
+      "properties": {
+        "catalog": {
+          "enum": [
+            "民事行政卷",
+            "刑事卷",
+            "常法卷",
+            "其他非诉卷"
+          ]
+        },
+        "client": {
+          "type": "string",
+          "minLength": 1,
+          "description": "委托人全称"
+        },
+        "opponent": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "对方当事人全称；常法卷等没有时为 null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cause": {
+          "type": "string",
+          "description": "案由全称或服务事项"
+        },
+        "lawyer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "承办律师；null 时用设置里的律师姓名"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "entrust_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "close_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "description": "日期 YYYY-MM-DD"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jzl_no": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "金助理系统案件编号，律师提供"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "enum": [
+                "胜诉",
+                "败诉",
+                "部分胜诉",
+                "调解",
+                "撤诉",
+                "其他"
+              ],
+              "description": "办案结果（我方视角）。只能由律师确认，AI 未得到律师答复时填 null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "案情简介（常法卷为服务概况）"
+        },
+        "opinion": {
+          "type": "string",
+          "description": "承办律师分析与意见（常法卷为服务结果）"
+        },
+        "fee_settled": {
+          "type": "boolean",
+          "description": "律师费是否已按合同足额收取；律师未说明时按 true"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string",
+                "description": "立卷申请书里写的材料名称（按本案实际改写，去掉括号提示）"
+              },
+              "materials": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "材料名，按卷宗合并顺序"
+                },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "name",
+              "materials"
+            ],
+            "description": "只放实际有材料的项；程序生成的项（结案报告）不放，由 archive_build 自动加入"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "catalog",
+        "client",
+        "opponent",
+        "cause",
+        "lawyer",
+        "entrust_date",
+        "close_date",
+        "jzl_no",
+        "result",
+        "summary",
+        "opinion",
+        "fee_settled",
+        "items"
+      ]
+    }
+  }
+}

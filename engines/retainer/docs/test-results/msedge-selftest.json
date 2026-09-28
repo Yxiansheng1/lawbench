@@ -1,0 +1,92 @@
+{
+  "success": true,
+  "version": "3.4.1",
+  "createdAt": "2026-09-16T06:49:18.121Z",
+  "total": 21,
+  "checks": [
+    {
+      "name": "金额正例：小数万元、大额、角分",
+      "passed": true
+    },
+    {
+      "name": "中文与全角百分比",
+      "passed": true
+    },
+    {
+      "name": "金额反例：负值、分期、比例缺金额、错误分隔",
+      "passed": true
+    },
+    {
+      "name": "分类识别与民事纠纷例外",
+      "passed": true
+    },
+    {
+      "name": "三类主体模板完整生成及字段校验（13份）",
+      "passed": true
+    },
+    {
+      "name": "三种收费模式注入合同第六条",
+      "passed": true
+    },
+    {
+      "name": "完整民事与刑事目录及归档内容",
+      "passed": true
+    },
+    {
+      "name": "跨片段占位符与 XML 特殊字符",
+      "passed": true
+    },
+    {
+      "name": "正文、表格、页眉、文本框占位符",
+      "passed": true
+    },
+    {
+      "name": "清理保留颜色、字体与分页符",
+      "passed": true
+    },
+    {
+      "name": "注入引擎五种规则与未匹配保留",
+      "passed": true
+    },
+    {
+      "name": "源模板重建与未知字段拦截",
+      "passed": true
+    },
+    {
+      "name": "收费条款转换及旧条款清除",
+      "passed": true
+    },
+    {
+      "name": "标准 Excel 创建与读取",
+      "passed": true
+    },
+    {
+      "name": "自有 Excel 别名、乱序、前导零和重复映射",
+      "passed": true
+    },
+    {
+      "name": "Excel 公式和错误值标记",
+      "passed": true
+    },
+    {
+      "name": "资源包与工作包校验及损坏拦截",
+      "passed": true
+    },
+    {
+      "name": "版本漂移与目录穿越拦截",
+      "passed": true
+    },
+    {
+      "name": "导入文件外部资源、宏和实体阻断",
+      "passed": true
+    },
+    {
+      "name": "空白注入不跨越正文及收费条款分段下划线",
+      "passed": true
+    },
+    {
+      "name": "目录写入接口保留原目录且写入完整内容",
+      "passed": true
+    }
+  ]
+}

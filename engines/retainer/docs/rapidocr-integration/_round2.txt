@@ -1,0 +1,16 @@
+﻿python.exe :   File "<string>", line 1
+所在位置 行:447 字符: 1
++ & $py -c $code 2>&1 | Out-File 'D:\workbuddy测试\_round2.txt' -Encoding ...
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (  File "<string>", line 1:String) 
+    [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    import json,io; d=json.load(io.open(rD:\workbuddy娴嬭瘯\retainer-offline\tools
+\ocr-driver\tests\results\round-2.json,encoding=utf-8)); m=d[metrics]; print(la
+bel:,d[label]); print(cases:,d[caseCount]); print(accuracy:,m[fieldAccuracy],hi
+t,m[fieldHit],/,m[fieldTotal],wrong,m[fieldWrong],miss,m[fieldMiss]); print(cod
+ePass:,m[codePassRate],requiredComplete:,m[requiredCompleteRate]); bad=[x for x
+ in d[detail] if not x.get(ok)]; print(failed
+                                          ^
+SyntaxError: invalid syntax

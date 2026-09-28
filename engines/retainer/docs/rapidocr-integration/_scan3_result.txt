@@ -1,0 +1,16 @@
+﻿=== title ===
+
+=== scanState ===
+id="scanState" class="inset">宸插～鍏ュ綋鍓嶆浠讹細鍚嶇О/濮撳悕鈫掑鎵樻柟銆佹硶瀹氫唬琛ㄤ汉/璐熻矗浜衡啋娉曞畾浠ｈ〃浜恒€傘€€鍗曚綅璇佺収涓嶄綔涓鸿嚜鐒朵汉锛屼富浣撶被鍨嬪凡璁句负銆屽叕鍙搞€嶃€傝鏍稿鍚庣户缁€?/div>
+ <div id="scanNotes" class="muted">selftest-license.png锛氬浘鐗囧惈閫忔槑閫氶亾锛屽凡鍚堟垚涓虹櫧搴曞悗璇嗗埆</div>
+ <div id="scanPreview"><div class="row"><span class="grow muted">璇嗗埆缁撴灉浠呬綔
+
+=== driver log ===
+寮曟搸灏辩华锛歳apidocr 锛堝姞杞?0.8 绉掞級
+椹卞姩宸插惎鍔細http://127.0.0.1:17801   锛堜粎鏈満鍙闂紝Ctrl+C 鍋滄锛?
+[driver] "GET /health HTTP/1.1" 200 -
+[driver] "OPTIONS /ocr HTTP/1.1" 204 -
+[driver] "POST /ocr HTTP/1.1" 200 -
+[driver] "GET /health HTTP/1.1" 200 -
+[driver] "OPTIONS /ocr HTTP/1.1" 204 -
+[driver] "POST /ocr HTTP/1.1" 200 -

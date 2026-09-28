@@ -1,0 +1,155 @@
+﻿vendor total = 31.66 MB
+--- top level ---
+bin
+rapidocr
+rapidocr-3.9.2.dist-info
+--- rapidocr tree (depth<=3) ---
+[D] \rapidocr\cal_rec_boxes
+[D] \rapidocr\ch_ppocr_cls
+[D] \rapidocr\ch_ppocr_det
+[D] \rapidocr\ch_ppocr_rec
+[D] \rapidocr\inference_engine
+[D] \rapidocr\models
+[D] \rapidocr\utils
+[D] \rapidocr\__pycache__
+    1,493 B  \rapidocr\cli.py
+    4,225 B  \rapidocr\config.yaml
+   71,521 B  \rapidocr\default_models.yaml
+   17,127 B  \rapidocr\main.py
+        0 B  \rapidocr\py.typed
+      520 B  \rapidocr\_version.py
+    1,048 B  \rapidocr\__init__.py
+      553 B  \rapidocr\__init__.pyi
+[D] \rapidocr\cal_rec_boxes\__pycache__
+   12,190 B  \rapidocr\cal_rec_boxes\main.py
+      131 B  \rapidocr\cal_rec_boxes\__init__.py
+   17,442 B  \rapidocr\cal_rec_boxes\__pycache__\main.cpython-312.pyc
+      264 B  \rapidocr\cal_rec_boxes\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\ch_ppocr_cls\__pycache__
+    3,904 B  \rapidocr\ch_ppocr_cls\main.py
+    2,649 B  \rapidocr\ch_ppocr_cls\utils.py
+      187 B  \rapidocr\ch_ppocr_cls\__init__.py
+    5,081 B  \rapidocr\ch_ppocr_cls\__pycache__\main.cpython-312.pyc
+    3,955 B  \rapidocr\ch_ppocr_cls\__pycache__\utils.cpython-312.pyc
+      320 B  \rapidocr\ch_ppocr_cls\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\ch_ppocr_det\__pycache__
+    3,733 B  \rapidocr\ch_ppocr_det\main.py
+   10,823 B  \rapidocr\ch_ppocr_det\utils.py
+      183 B  \rapidocr\ch_ppocr_det\__init__.py
+    4,630 B  \rapidocr\ch_ppocr_det\__pycache__\main.cpython-312.pyc
+   18,774 B  \rapidocr\ch_ppocr_det\__pycache__\utils.cpython-312.pyc
+      318 B  \rapidocr\ch_ppocr_det\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\ch_ppocr_rec\__pycache__
+    6,657 B  \rapidocr\ch_ppocr_rec\main.py
+    2,099 B  \rapidocr\ch_ppocr_rec\typings.py
+    6,486 B  \rapidocr\ch_ppocr_rec\utils.py
+      219 B  \rapidocr\ch_ppocr_rec\__init__.py
+    7,872 B  \rapidocr\ch_ppocr_rec\__pycache__\main.cpython-312.pyc
+    4,235 B  \rapidocr\ch_ppocr_rec\__pycache__\typings.cpython-312.pyc
+    8,291 B  \rapidocr\ch_ppocr_rec\__pycache__\utils.cpython-312.pyc
+      347 B  \rapidocr\ch_ppocr_rec\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\inference_engine\mnn
+[D] \rapidocr\inference_engine\onnxruntime
+[D] \rapidocr\inference_engine\openvino
+[D] \rapidocr\inference_engine\paddle
+[D] \rapidocr\inference_engine\pytorch
+[D] \rapidocr\inference_engine\tensorrt
+[D] \rapidocr\inference_engine\__pycache__
+    5,607 B  \rapidocr\inference_engine\base.py
+       74 B  \rapidocr\inference_engine\__init__.py
+[D] \rapidocr\inference_engine\mnn\__pycache__
+    3,103 B  \rapidocr\inference_engine\mnn\main.py
+      161 B  \rapidocr\inference_engine\mnn\__init__.py
+    4,756 B  \rapidocr\inference_engine\mnn\__pycache__\main.cpython-312.pyc
+      305 B  \rapidocr\inference_engine\mnn\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\inference_engine\onnxruntime\__pycache__
+    4,527 B  \rapidocr\inference_engine\onnxruntime\main.py
+    8,035 B  \rapidocr\inference_engine\onnxruntime\provider_config.py
+      177 B  \rapidocr\inference_engine\onnxruntime\__init__.py
+    6,535 B  \rapidocr\inference_engine\onnxruntime\__pycache__\main.cpython-312.pyc
+   11,354 B  \rapidocr\inference_engine\onnxruntime\__pycache__\provider_config.cpython-312.pyc
+      321 B  \rapidocr\inference_engine\onnxruntime\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\inference_engine\openvino\__pycache__
+    1,852 B  \rapidocr\inference_engine\openvino\device_config.py
+    3,694 B  \rapidocr\inference_engine\openvino\main.py
+      181 B  \rapidocr\inference_engine\openvino\__init__.py
+    2,561 B  \rapidocr\inference_engine\openvino\__pycache__\device_config.cpython-312.pyc
+    5,240 B  \rapidocr\inference_engine\openvino\__pycache__\main.cpython-312.pyc
+      320 B  \rapidocr\inference_engine\openvino\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\inference_engine\paddle\__pycache__
+    3,829 B  \rapidocr\inference_engine\paddle\device_config.py
+    5,381 B  \rapidocr\inference_engine\paddle\main.py
+      183 B  \rapidocr\inference_engine\paddle\__init__.py
+    6,661 B  \rapidocr\inference_engine\paddle\__pycache__\device_config.cpython-312.pyc
+    7,489 B  \rapidocr\inference_engine\paddle\__pycache__\main.cpython-312.pyc
+      319 B  \rapidocr\inference_engine\paddle\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\inference_engine\pytorch\networks
+[D] \rapidocr\inference_engine\pytorch\__pycache__
+    3,030 B  \rapidocr\inference_engine\pytorch\device_config.py
+    1,149 B  \rapidocr\inference_engine\pytorch\main.py
+      179 B  \rapidocr\inference_engine\pytorch\__init__.py
+[D] \rapidocr\inference_engine\pytorch\networks\architectures
+[D] \rapidocr\inference_engine\pytorch\networks\backbones
+[D] \rapidocr\inference_engine\pytorch\networks\heads
+[D] \rapidocr\inference_engine\pytorch\networks\necks
+[D] \rapidocr\inference_engine\pytorch\networks\transforms
+[D] \rapidocr\inference_engine\pytorch\networks\__pycache__
+   10,904 B  \rapidocr\inference_engine\pytorch\networks\arch_config.yaml
+    2,295 B  \rapidocr\inference_engine\pytorch\networks\common.py
+    2,340 B  \rapidocr\inference_engine\pytorch\networks\main.py
+       74 B  \rapidocr\inference_engine\pytorch\networks\__init__.py
+    5,541 B  \rapidocr\inference_engine\pytorch\__pycache__\device_config.cpython-312.pyc
+    2,606 B  \rapidocr\inference_engine\pytorch\__pycache__\main.cpython-312.pyc
+      318 B  \rapidocr\inference_engine\pytorch\__pycache__\__init__.cpython-312.pyc
+[D] \rapidocr\inference_engine\tensorrt\__pycache__
+    4,991 B  \rapidocr\inference_engine\tensorrt\engine_builder.py
+   14,074 B  \rapidocr\inference_engine\tensorrt\main.py
+   10,011 B  \rapidocr\inference_engine\tensorrt\memory_utils.py
+      171 B  \rapidocr\inference_engine\tensorrt\__init__.py
+    7,019 B  \rapidocr\inference_engine\tensorrt\__pycache__\engine_builder.cpython-312.pyc
+   19,453 B  \rapidocr\inference_engine\tensorrt\__pycache__\main.cpython-312.pyc
+   11,563 B  \rapidocr\inference_engine\tensorrt\__pycache__\memory_utils.cpython-312.pyc
+      315 B  \rapidocr\inference_engine\tensorrt\__pycache__\__init__.cpython-312.pyc
+    7,613 B  \rapidocr\inference_engine\__pycache__\base.cpython-312.pyc
+      195 B  \rapidocr\inference_engine\__pycache__\__init__.cpython-312.pyc
+        0 B  \rapidocr\models\.gitkeep
+  585,532 B  \rapidocr\models\ch_ppocr_mobile_v2.0_cls_mobile.onnx
+9,929,594 B  \rapidocr\models\PP-OCRv6_det_small.onnx
+21,234,383 B  \rapidocr\models\PP-OCRv6_rec_small.onnx
+[D] \rapidocr\utils\__pycache__
+    3,436 B  \rapidocr\utils\download_file.py
+    3,979 B  \rapidocr\utils\download_models.py
+    5,334 B  \rapidocr\utils\load_image.py
+    1,179 B  \rapidocr\utils\log.py
+    3,702 B  \rapidocr\utils\model_resolver.py
+    2,387 B  \rapidocr\utils\output.py
+    3,028 B  \rapidocr\utils\parse_parameters.py
+    5,723 B  \rapidocr\utils\process_img.py
+      462 B  \rapidocr\utils\to_json.py
+    4,520 B  \rapidocr\utils\to_markdown.py
+    1,165 B  \rapidocr\utils\typings.py
+    3,077 B  \rapidocr\utils\utils.py
+   10,047 B  \rapidocr\utils\vis_res.py
+       74 B  \rapidocr\utils\__init__.py
+    5,948 B  \rapidocr\utils\__pycache__\download_file.cpython-312.pyc
+    5,428 B  \rapidocr\utils\__pycache__\download_models.cpython-312.pyc
+    8,232 B  \rapidocr\utils\__pycache__\load_image.cpython-312.pyc
+    1,948 B  \rapidocr\utils\__pycache__\log.cpython-312.pyc
+    4,342 B  \rapidocr\utils\__pycache__\model_resolver.cpython-312.pyc
+    4,747 B  \rapidocr\utils\__pycache__\output.cpython-312.pyc
+    4,461 B  \rapidocr\utils\__pycache__\parse_parameters.cpython-312.pyc
+    8,675 B  \rapidocr\utils\__pycache__\process_img.cpython-312.pyc
+    1,063 B  \rapidocr\utils\__pycache__\to_json.cpython-312.pyc
+    6,010 B  \rapidocr\utils\__pycache__\to_markdown.cpython-312.pyc
+    2,484 B  \rapidocr\utils\__pycache__\typings.cpython-312.pyc
+    6,119 B  \rapidocr\utils\__pycache__\utils.cpython-312.pyc
+   14,970 B  \rapidocr\utils\__pycache__\vis_res.cpython-312.pyc
+      184 B  \rapidocr\utils\__pycache__\__init__.cpython-312.pyc
+    2,433 B  \rapidocr\__pycache__\cli.cpython-312.pyc
+   22,635 B  \rapidocr\__pycache__\main.cpython-312.pyc
+      632 B  \rapidocr\__pycache__\_version.cpython-312.pyc
+    1,402 B  \rapidocr\__pycache__\__init__.cpython-312.pyc
+--- onnx files anywhere ---
+\rapidocr\models\ch_ppocr_mobile_v2.0_cls_mobile.onnx  0.56MB
+\rapidocr\models\PP-OCRv6_det_small.onnx  9.47MB
+\rapidocr\models\PP-OCRv6_rec_small.onnx  20.25MB

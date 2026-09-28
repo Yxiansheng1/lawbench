@@ -1,0 +1,8 @@
+﻿=== _chan_pass.txt ===
+chars=3089
+MACHINE_STATE=PASS;DETAIL=engine=rapidocr,ready=true,version=
+class=pass
+=== _chan_block.txt ===
+chars=3965
+MACHINE_STATE=FAIL;DETAIL=name=TypeError,msg=Failed to fetch
+class=fail

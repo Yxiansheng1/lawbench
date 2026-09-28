@@ -1,0 +1,15 @@
+﻿Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting rapidocr
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/55/ed/0ee9b9281986974be9d2406ae0134c8d7c91d2fc613f16ffda9701eeda6f/rapidocr-3.9.2-py3-none-any.whl (27.3 MB)
+     --------------------------------------- 27.3/27.3 MB 49.5 MB/s eta 0:00:00
+Installing collected packages: rapidocr
+Successfully installed rapidocr-3.9.2
+python.exe : 
+所在位置 行:447 字符: 1
++ & $py -m pip install --target $vd --no-deps rapidocr -i https://pypi. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[notice] A new release of pip is available: 25.0.1 -> 26.2.1
+[notice] To update, run: python.exe -m pip install --upgrade pip

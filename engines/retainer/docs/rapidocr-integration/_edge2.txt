@@ -1,0 +1,34 @@
+﻿=== 语法检查 ===
+
+exit=0
+=== 边界测试重跑 ===
+通过  Excel 冒充 docx
+  文件=book.docx  sniff=.xlsx  期望=error  实际=error
+  说明=UnsupportedFormat: 这是表格、演示或纯文本文件，不是证件材料。本工具支持图片、PDF 与 Word 文档。
+
+通过  伪装成 Word 的非 Word zip
+  文件=broken.docx  sniff=.docx  期望=error  实际=error
+  说明=UnsupportedFormat: 这不是有效的 Word 文档，文件可能已损坏或实为其他格式（"There is no item named 'word/document.xml' in the archive"）
+
+通过  损坏的 PDF
+  文件=broken.pdf  sniff=.pdf  期望=error  实际=error
+  说明=UnsupportedFormat: PDF 无法打开，文件可能已损坏或被截断（Failed to open stream）
+
+通过  老版 doc
+  文件=old.doc  sniff=.doc  期望=error  实际=error
+  说明=UnsupportedFormat: 老版 .doc 为二进制格式，本机没有可用的解析器（未安装 LibreOffice、Word，且缺少 pywin32/olefile）。请在 WPS 或 Word 中「另存为 .docx」后重试，或直接提供 PDF。
+
+通过  超过 50 MB
+  文件=big.png  sniff=None  期望=error  实际=error
+  说明=UnsupportedFormat: 文件超过 50 MB
+
+通过  1x1 极小图片
+  文件=tiny.png  sniff=.png  期望=ok  实际=ok
+  说明=format=.png text=0 images=1
+
+通过  扩展名与内容不符（图配 pdf 名）
+  文件=wrong.pdf  sniff=.png  期望=ok  实际=ok
+  说明=format=.png text=0 images=1
+
+============================================================
+合计 10 项：通过 10，未通过 0

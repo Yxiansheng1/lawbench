@@ -4,8 +4,6 @@ title: 辩护词
 description: 辩护词、辩护意见。律师要求起草辩护词、审查起诉阶段辩护意见、审判阶段书面辩护意见时使用。以阅卷笔录和证据审查意见为依据，按律师确定的辩护方向（无罪、罪轻、量刑）起草，事实部分逐条带卷宗出处，法律依据留给律师核实。
 mode: agent
 kind: draft
-entry: 刑事文书
-order: 4
 params: {thinking: 中, window: 128K, max_tokens: 49152}
 owner: 待定
 inputs: [materials, wiki, prior]

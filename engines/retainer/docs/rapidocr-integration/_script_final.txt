@@ -1,0 +1,9 @@
+﻿=== 交付脚本 ===
+  启动委托工作台.bat
+=== 工作区根目录残留（非本次） ===
+  _after_cleanup.txt
+  _del_err.txt
+  _mem_list.txt
+  _tmp_verify.py
+  _verify.txt
+  _verify_run.txt

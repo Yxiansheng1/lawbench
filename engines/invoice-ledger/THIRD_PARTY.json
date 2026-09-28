@@ -1,0 +1,190 @@
+{
+  "note": "Metadata copied from bundled distributions; provenance not independently authenticated. License texts remain in runtime archive.",
+  "python": {
+    "version": "3.12.10",
+    "source": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+    "license_file": "LICENSE.txt"
+  },
+  "components": [
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "home_page": null,
+      "project_urls": [
+        "Documentation, https://cffi.readthedocs.io/",
+        "Changelog, https://cffi.readthedocs.io/en/latest/whatsnew.html",
+        "Download, https://github.com/python-cffi/cffi/releases",
+        "Contact, https://groups.google.com/forum/#!forum/python-cffi",
+        "Source Code, https://github.com/python-cffi/cffi",
+        "Issue Tracker, https://github.com/python-cffi/cffi/issues"
+      ],
+      "license_expression": "MIT-0",
+      "license_metadata": null,
+      "license_files": [
+        "Lib/site-packages/cffi-2.1.1.dist-info/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.4.5",
+      "home_page": null,
+      "project_urls": [
+        "Changelog, https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md",
+        "Documentation, https://charset-normalizer.readthedocs.io/",
+        "Code, https://github.com/jawah/charset_normalizer",
+        "Issue tracker, https://github.com/jawah/charset_normalizer/issues"
+      ],
+      "license_expression": null,
+      "license_metadata": "MIT",
+      "license_files": [
+        "Lib/site-packages/charset_normalizer-3.4.5.dist-info/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "cryptography",
+      "version": "46.0.5",
+      "home_page": null,
+      "project_urls": [
+        "homepage, https://github.com/pyca/cryptography",
+        "documentation, https://cryptography.io/",
+        "source, https://github.com/pyca/cryptography/",
+        "issues, https://github.com/pyca/cryptography/issues",
+        "changelog, https://cryptography.io/en/latest/changelog/"
+      ],
+      "license_expression": "Apache-2.0 OR BSD-3-Clause",
+      "license_metadata": null,
+      "license_files": [
+        "Lib/site-packages/cryptography-46.0.5.dist-info/licenses/LICENSE",
+        "Lib/site-packages/cryptography-46.0.5.dist-info/licenses/LICENSE.APACHE",
+        "Lib/site-packages/cryptography-46.0.5.dist-info/licenses/LICENSE.BSD"
+      ]
+    },
+    {
+      "name": "et_xmlfile",
+      "version": "2.0.0",
+      "home_page": "https://foss.heptapod.net/openpyxl/et_xmlfile",
+      "project_urls": [
+        "Documentation, https://openpyxl.pages.heptapod.net/et_xmlfile/",
+        "Source, https://foss.heptapod.net/openpyxl/et_xmlfile",
+        "Tracker, https://foss.heptapod.net/openpyxl/et_xmfile/-/issues"
+      ],
+      "license_expression": null,
+      "license_metadata": "MIT",
+      "license_files": []
+    },
+    {
+      "name": "openpyxl",
+      "version": "3.1.5",
+      "home_page": "https://openpyxl.readthedocs.io",
+      "project_urls": [
+        "Documentation, https://openpyxl.readthedocs.io/en/stable/",
+        "Source, https://foss.heptapod.net/openpyxl/openpyxl",
+        "Tracker, https://foss.heptapod.net/openpyxl/openpyxl/-/issues"
+      ],
+      "license_expression": null,
+      "license_metadata": "MIT",
+      "license_files": []
+    },
+    {
+      "name": "pdfminer.six",
+      "version": "20251230",
+      "home_page": null,
+      "project_urls": [
+        "Homepage, https://github.com/pdfminer/pdfminer.six"
+      ],
+      "license_expression": "MIT",
+      "license_metadata": null,
+      "license_files": [
+        "Lib/site-packages/pdfminer_six-20251230.dist-info/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "pdfplumber",
+      "version": "0.11.9",
+      "home_page": "https://github.com/jsvine/pdfplumber",
+      "project_urls": [],
+      "license_expression": null,
+      "license_metadata": null,
+      "license_files": [
+        "Lib/site-packages/pdfplumber-0.11.9.dist-info/licenses/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "pillow",
+      "version": "12.1.1",
+      "home_page": null,
+      "project_urls": [
+        "Changelog, https://github.com/python-pillow/Pillow/releases",
+        "Documentation, https://pillow.readthedocs.io",
+        "Funding, https://tidelift.com/subscription/pkg/pypi-pillow?utm_source=pypi-pillow&utm_medium=pypi",
+        "Homepage, https://python-pillow.github.io",
+        "Mastodon, https://fosstodon.org/@pillow",
+        "Release notes, https://pillow.readthedocs.io/en/stable/releasenotes/index.html",
+        "Source, https://github.com/python-pillow/Pillow"
+      ],
+      "license_expression": "MIT-CMU",
+      "license_metadata": null,
+      "license_files": [
+        "Lib/site-packages/pillow-12.1.1.dist-info/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "home_page": null,
+      "project_urls": [
+        "Homepage, https://github.com/eliben/pycparser"
+      ],
+      "license_expression": "BSD-3-Clause",
+      "license_metadata": null,
+      "license_files": [
+        "Lib/site-packages/pycparser-3.0.dist-info/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "pypdfium2",
+      "version": "5.6.0",
+      "home_page": "https://github.com/pypdfium2-team/pypdfium2",
+      "project_urls": [
+        "Source, https://github.com/pypdfium2-team/pypdfium2",
+        "Tracker, https://github.com/pypdfium2-team/pypdfium2/issues",
+        "Documentation, https://pypdfium2.readthedocs.io",
+        "Changelog, https://pypdfium2.readthedocs.io/en/stable/changelog.html"
+      ],
+      "license_expression": null,
+      "license_metadata": "BSD-3-Clause, Apache-2.0, dependency licenses",
+      "license_files": [
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/abseil.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/agg23.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/fast_float.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/freetype.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/icu.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/lcms.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/libjpeg_turbo.ijg",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/libjpeg_turbo.md",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/libopenjpeg.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/libpng.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/libtiff.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/llvm-libc.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/pdfium-binaries.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/pdfium.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/simdutf.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/data/windows_x64/BUILD_LICENSES/zlib.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/LICENSES/Apache-2.0.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/LICENSES/BSD-3-Clause.txt",
+        "Lib/site-packages/pypdfium2-5.6.0.dist-info/licenses/LICENSES/CC-BY-4.0.txt"
+      ]
+    },
+    {
+      "name": "winsdk",
+      "version": "1.0.0b10",
+      "home_page": "https://github.com/pywinrt/python-winsdk",
+      "project_urls": [],
+      "license_expression": null,
+      "license_metadata": "MIT",
+      "license_files": [
+        "Lib/site-packages/winsdk-1.0.0b10.dist-info/LICENSE"
+      ]
+    }
+  ]
+}

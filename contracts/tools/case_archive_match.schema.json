@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/tools/case_archive_match.schema.json",
+  "title": "case_archive_match",
+  "description": "按归档目录把本案材料逐项匹配（程序按文件夹和文件名关键词匹配），给 AI 核对用；只读",
+  "$defs": {
+    "args": {
+      "type": "object",
+      "properties": {
+        "catalog": {
+          "enum": [
+            "民事行政卷",
+            "刑事卷",
+            "常法卷",
+            "其他非诉卷"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "catalog"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "catalog": {
+          "enum": [
+            "民事行政卷",
+            "刑事卷",
+            "常法卷",
+            "其他非诉卷"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "matched": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "材料名"
+                    },
+                    "folder": {
+                      "type": "string",
+                      "description": "所在的第一层文件夹名，根目录为空串"
+                    },
+                    "reason": {
+                      "enum": [
+                        "文件夹",
+                        "关键词",
+                        "文件夹和关键词"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "folder",
+                    "reason"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "name",
+              "required",
+              "matched"
+            ]
+          }
+        },
+        "unmatched": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "材料名"
+          }
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "enum": [
+                  "临时文件",
+                  "命名混乱",
+                  "加密或无法读取",
+                  "工作区或成果"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "reason"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "catalog",
+        "items",
+        "unmatched",
+        "ignored"
+      ]
+    }
+  }
+}

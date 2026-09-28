@@ -1,0 +1,19 @@
+﻿=== 多格式验证（末尾汇总）===
+
+====================================================================
+汇总
+文件                   格式       文本字     图像       走OCR      关键命中
+license.png          .png     0       1        是         3/3
+license-q90.jpg      .jpg     0       1        是         3/3
+license-q70.jpeg     .jpg     0       1        是         3/3
+license-text.pdf     .pdf     107     0        否         3/3
+license-scan.pdf     .pdf     0       1        是         3/3
+license.docx         .docx    97      1        是         3/3
+license-noext        .png     0       1        是         3/3
+license-old.doc      装载失败：老版 .doc 为二进制格式，本机没有可用的解析器（未安装 LibreOffice、Word，且缺少 pywin32/olefile）。请在 WPS 或 Word 中「另存为 .docx」后重试，或直接提供 PDF。
+
+=== 识别质量第 3 轮 ===
+label: BUG排查后回归
+fieldAccuracy: 1.0  (120/120)  wrong=0 miss=0
+codePassRate: 1.0  requiredComplete: 1.0  errors: 0
+failed cases: 0

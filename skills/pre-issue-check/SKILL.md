@@ -4,8 +4,6 @@ title: 出稿前审查
 description: 出稿前审查。律师要求在文书发出或提交前检查、校对、复核一份草稿时使用，适用于辩护词、质证意见、申请书、合同、审查意见、律师函、法律意见书等。逐项检查事实与原件是否一致、要素是否齐全、全文数据是否前后一致、法律依据是否已标注核实，只出问题清单，不改原稿。
 mode: agent
 kind: analysis
-entry: 共用
-order: 6
 params: {thinking: 中, window: 128K, max_tokens: 32768}
 owner: 待定
 inputs: [materials, prior]

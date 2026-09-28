@@ -1,0 +1,30 @@
+﻿=== 引擎运行时的启动器检测 ===
+
+  ============================================
+    Retainer Workbench
+    local OCR engine auto-start
+  ============================================
+
+  [check] page    = D:\workbuddy测试\retainer-offline\启动.html
+  [check] pythonw = C:\Users\0\AppData\Local\Programs\Python\Python312\pythonw.exe
+  [check] python  = C:\Users\0\AppData\Local\Programs\Python\Python312\python.exe
+  [check] driver  = D:\workbuddy测试\retainer-offline\tools\ocr-driver\driver.py
+  [check] port 17801 listening = 1
+  [ok] OCR engine is already running.
+
+=== 停止引擎 ===
+  Stopped: python (PID 5408)
+
+=== 停止后再检测 ===
+
+  ============================================
+    Retainer Workbench
+    local OCR engine auto-start
+  ============================================
+
+  [check] page    = D:\workbuddy测试\retainer-offline\启动.html
+  [check] pythonw = C:\Users\0\AppData\Local\Programs\Python\Python312\pythonw.exe
+  [check] python  = C:\Users\0\AppData\Local\Programs\Python\Python312\python.exe
+  [check] driver  = D:\workbuddy测试\retainer-offline\tools\ocr-driver\driver.py
+  [check] port 17801 listening = 0
+  [check] engine not running; would start it now.

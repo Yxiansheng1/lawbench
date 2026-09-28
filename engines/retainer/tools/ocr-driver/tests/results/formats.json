@@ -1,0 +1,112 @@
+{
+ "cases": [
+  {
+   "file": "license.png",
+   "desc": "PNG 图片",
+   "loaded": true,
+   "format": ".png",
+   "textChars": 0,
+   "imageCount": 1,
+   "usedOcr": true,
+   "keyHit": 3,
+   "loadSeconds": 0.34,
+   "ocrSeconds": 1.81,
+   "notes": []
+  },
+  {
+   "file": "license-q90.jpg",
+   "desc": "JPG 图片（质量 90）",
+   "loaded": true,
+   "format": ".jpg",
+   "textChars": 0,
+   "imageCount": 1,
+   "usedOcr": true,
+   "keyHit": 3,
+   "loadSeconds": 0.01,
+   "ocrSeconds": 1.32,
+   "notes": []
+  },
+  {
+   "file": "license-q70.jpeg",
+   "desc": "JPEG 图片（质量 70）",
+   "loaded": true,
+   "format": ".jpg",
+   "textChars": 0,
+   "imageCount": 1,
+   "usedOcr": true,
+   "keyHit": 3,
+   "loadSeconds": 0.01,
+   "ocrSeconds": 1.63,
+   "notes": [
+    "文件头显示实际为 .jpg，扩展名为 .jpeg，已按内容处理"
+   ]
+  },
+  {
+   "file": "license-text.pdf",
+   "desc": "PDF（有文本层）",
+   "loaded": true,
+   "format": ".pdf",
+   "textChars": 107,
+   "imageCount": 0,
+   "usedOcr": false,
+   "keyHit": 3,
+   "loadSeconds": 0.1,
+   "ocrSeconds": 0.0,
+   "notes": [
+    "该 PDF 有文本层，已直接提取，未使用 OCR（1 页）"
+   ]
+  },
+  {
+   "file": "license-scan.pdf",
+   "desc": "PDF（扫描件，无文本层）",
+   "loaded": true,
+   "format": ".pdf",
+   "textChars": 0,
+   "imageCount": 1,
+   "usedOcr": true,
+   "keyHit": 3,
+   "loadSeconds": 0.04,
+   "ocrSeconds": 1.65,
+   "notes": [
+    "该 PDF 无文本层（扫描件），全部 1 页需识别"
+   ]
+  },
+  {
+   "file": "license.docx",
+   "desc": "DOCX（文字＋表格＋内嵌图片）",
+   "loaded": true,
+   "format": ".docx",
+   "textChars": 97,
+   "imageCount": 1,
+   "usedOcr": true,
+   "keyHit": 3,
+   "loadSeconds": 0.17,
+   "ocrSeconds": 1.9,
+   "notes": [
+    "已直接提取 Word 文本 97 字，文字部分未使用 OCR",
+    "另有 1 张内嵌图片需要识别"
+   ]
+  },
+  {
+   "file": "license-noext",
+   "desc": "无扩展名（内容为 PNG）",
+   "loaded": true,
+   "format": ".png",
+   "textChars": 0,
+   "imageCount": 1,
+   "usedOcr": true,
+   "keyHit": 3,
+   "loadSeconds": 0.01,
+   "ocrSeconds": 1.92,
+   "notes": [
+    "扩展名缺失，已按文件头识别为 .png"
+   ]
+  },
+  {
+   "file": "license-old.doc",
+   "desc": "老版 .doc",
+   "loaded": false,
+   "error": "老版 .doc 为二进制格式，本机没有可用的解析器（未安装 LibreOffice、Word，且缺少 pywin32/olefile）。请在 WPS 或 Word 中「另存为 .docx」后重试，或直接提供 PDF。"
+  }
+ ]
+}

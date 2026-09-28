@@ -1,7 +1,7 @@
 """契约自检：用 contracts/ 下的 schema 校验 examples/ 下的样例。
 
 用法：python contracts/check_examples.py [--skills <Skill 根目录>]
-  --skills  另外校验真实 Skill 的 SKILL.md 头部和 entries/*.yaml
+  --skills  另外校验 capsules.default.json、真实 Skill 的 SKILL.md 头部和归档目录
 退出码：全部符合预期为 0，否则为 1。开发工单的契约测试可直接调用本脚本里的 validator()。
 """
 from __future__ import annotations
@@ -52,23 +52,34 @@ def check_manifest() -> int:
 
 
 def check_skills(root: pathlib.Path) -> int:
+    """校验 capsules.default.json、胶囊用到的每个 SKILL.md 头部，以及归档目录 catalogs/*.json。"""
     import yaml
     bad = 0
     fm = validator("skill/frontmatter.schema.json")
-    en = validator("skill/entry.schema.json")
-    for f in sorted((root / "entries").glob("*.yaml")):
-        errs = list(en.iter_errors(yaml.safe_load(f.read_text(encoding="utf-8"))))
-        bad += bool(errs)
-        print(("[错] " if errs else "[对] ") + f.name, *(e.message[:120] for e in errs[:3]))
-    names = set()
-    for f in sorted((root / "entries").glob("*.yaml")):
-        names.update(yaml.safe_load(f.read_text(encoding="utf-8"))["skills"])
+    cap = validator("skill/capsules.schema.json")
+    cat = validator("skill/archive_catalog.schema.json")
+    caps = json.loads((root / "capsules.default.json").read_text(encoding="utf-8"))
+    errs = list(cap.iter_errors(caps))
+    bad += bool(errs)
+    print(("[错] " if errs else "[对] ") + "capsules.default.json", *(e.message[:120] for e in errs[:3]))
+    names = set(caps.get("shared", []))
+    for g in caps.get("groups", []):
+        for it in g.get("items", []):
+            names.update(it.get("skills", []))
     for n in sorted(names):
-        text = (root / n / "SKILL.md").read_text(encoding="utf-8")
-        head = yaml.safe_load(text.split("---")[1])
+        f = root / n / "SKILL.md"
+        if not f.is_file():
+            bad += 1
+            print("[错] " + n, "找不到 SKILL.md")
+            continue
+        head = yaml.safe_load(f.read_text(encoding="utf-8").split("---")[1])
         errs = list(fm.iter_errors(head))
         bad += bool(errs)
         print(("[错] " if errs else "[对] ") + n, *(e.message[:120] for e in errs[:3]))
+    for f in sorted((root / "case-archiving" / "catalogs").glob("*.json")):
+        errs = list(cat.iter_errors(json.loads(f.read_text(encoding="utf-8"))))
+        bad += bool(errs)
+        print(("[错] " if errs else "[对] ") + "case-archiving/catalogs/" + f.name, *(e.message[:120] for e in errs[:3]))
     return bad
 
 

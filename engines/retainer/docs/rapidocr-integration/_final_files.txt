@@ -1,0 +1,20 @@
+﻿=== 根目录 bat ===
+启动委托工作台.bat
+=== driver 目录 ===
+停止识别引擎.bat
+启动识别引擎.bat
+=== app ===
+core.js
+excel.js
+idscan.js
+packages.js
+selftest.js
+style.css
+ui.js
+=== 工作区根目录残留 ===
+_after_cleanup.txt
+_del_err.txt
+_mem_list.txt
+_tmp_verify.py
+_verify.txt
+_verify_run.txt

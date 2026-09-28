@@ -4,8 +4,6 @@ title: 阅卷笔录
 description: 阅卷笔录。律师要求阅卷、整理案卷、出阅卷笔录、梳理材料要点时使用。逐份完整阅读本案全部可读材料，按材料输出摘录和要点，每条事实标注出处〔材料名 位置〕，最后给出要素汇总、与案件卡片的差异和覆盖清单，并保存为草稿。
 mode: agent
 kind: excerpt
-entry: 通用文书
-order: 2
 params: {thinking: 低, window: 128K, max_tokens: 32768}
 owner: 待定
 inputs: [materials, wiki, prior]

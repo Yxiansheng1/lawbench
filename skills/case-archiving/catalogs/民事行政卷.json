@@ -1,0 +1,199 @@
+{
+ "id": "民事行政卷",
+ "attachment": "附件3",
+ "renumber": false,
+ "items": [
+  {
+   "code": 1,
+   "name": "民事委托代理合同（合同编号、经办律师签字、落款时间必填）",
+   "required": true,
+   "keywords": [
+    "委托代理合同",
+    "委托合同",
+    "代理合同",
+    "聘用律师合同"
+   ],
+   "folders": [
+    "01委托手续"
+   ]
+  },
+  {
+   "code": 2,
+   "name": "收费发票凭证（如为计时收费，请一并上传计时收费确认单；如约定风险收费，需写明风险收费金额计算公式）",
+   "required": true,
+   "keywords": [
+    "发票",
+    "收费",
+    "律师费"
+   ],
+   "folders": [
+    "01委托手续"
+   ]
+  },
+  {
+   "code": 3,
+   "name": "授权委托书",
+   "required": true,
+   "keywords": [
+    "授权委托书",
+    "授权书",
+    "所函"
+   ],
+   "folders": [
+    "01委托手续"
+   ]
+  },
+  {
+   "code": 4,
+   "name": "起诉书、上诉书或答辩书",
+   "required": true,
+   "keywords": [
+    "起诉状",
+    "起诉书",
+    "上诉状",
+    "上诉书",
+    "答辩状",
+    "答辩书",
+    "反诉状"
+   ],
+   "folders": [
+    "03一审/我方文件",
+    "03一审/对方文件",
+    "04二审/我方文件",
+    "04二审/对方文件"
+   ]
+  },
+  {
+   "code": 5,
+   "name": "阅卷笔录",
+   "required": false,
+   "keywords": [
+    "阅卷笔录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 6,
+   "name": "会见当事人谈话笔录",
+   "required": false,
+   "keywords": [
+    "谈话笔录",
+    "会见笔录",
+    "当事人笔录",
+    "询问笔录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 7,
+   "name": "证据材料",
+   "required": true,
+   "keywords": [
+    "证据材料",
+    "证据目录",
+    "证据清单",
+    "证据册"
+   ],
+   "folders": [
+    "03一审/我方证据",
+    "04二审/我方证据"
+   ]
+  },
+  {
+   "code": 8,
+   "name": "诉讼保全申请书、证据保全申请书、先行给付申请书和法院裁定书",
+   "required": false,
+   "keywords": [
+    "诉讼保全",
+    "证据保全",
+    "先行给付",
+    "先予执行",
+    "保全裁定",
+    "保全申请书"
+   ],
+   "folders": []
+  },
+  {
+   "code": 9,
+   "name": "承办律师代理意见",
+   "required": false,
+   "keywords": [
+    "代理意见"
+   ],
+   "folders": []
+  },
+  {
+   "code": 10,
+   "name": "集体讨论记录",
+   "required": false,
+   "keywords": [
+    "集体讨论",
+    "讨论记录",
+    "合议记录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 11,
+   "name": "代理词",
+   "required": false,
+   "keywords": [
+    "代理词"
+   ],
+   "folders": [
+    "03一审/庭审准备",
+    "04二审/庭审准备"
+   ]
+  },
+  {
+   "code": 12,
+   "name": "出庭通知书",
+   "required": false,
+   "keywords": [
+    "出庭通知书",
+    "开庭通知",
+    "传票"
+   ],
+   "folders": []
+  },
+  {
+   "code": 13,
+   "name": "庭审笔录",
+   "required": false,
+   "keywords": [
+    "庭审笔录",
+    "开庭笔录",
+    "法庭笔录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 14,
+   "name": "判决书、裁定书、调解书、上诉书",
+   "required": true,
+   "keywords": [
+    "判决书",
+    "裁定书",
+    "调解书",
+    "判决",
+    "裁定",
+    "调解"
+   ],
+   "folders": [
+    "03一审/法院文书",
+    "04二审/法院文书"
+   ]
+  },
+  {
+   "code": 15,
+   "name": "结案报告",
+   "required": true,
+   "keywords": [
+    "结案报告",
+    "办案小结"
+   ],
+   "folders": [],
+   "generated": true
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+﻿=== .paddlex tree (dirs with size) ===
+   405.7 MB    56 files  .\official_models
+     6.6 MB     7 files  .\official_models\PP-LCNet_x1_0_doc_ori
+     6.5 MB     7 files  .\official_models\PP-LCNet_x1_0_textline_ori
+   168.5 MB    14 files  .\official_models\PP-OCRv5_server_det
+   162.6 MB    14 files  .\official_models\PP-OCRv5_server_rec
+    61.5 MB    14 files  .\official_models\UVDoc
+    84.3 MB     7 files  .\official_models\PP-OCRv5_server_det\temp_dir
+    81.3 MB     7 files  .\official_models\PP-OCRv5_server_rec\temp_dir
+    30.8 MB     7 files  .\official_models\UVDoc\temp_dir

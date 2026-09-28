@@ -1,0 +1,4 @@
+﻿=== 关键状态 ===
+resources/templates 组数 = 3
+resources/templates 文件 = 13
+根目录 _* 残留 = _after_cleanup.txt, _cc_check1.txt, _cc_gates.txt, _cc_gates2.txt, _cc_gates3.txt, _cc_gates4.txt, _cc_ls.txt, _cc_ls2.txt, _cc_mem.txt, _cc_pron.txt, _cc_qfix.txt, _cc_scripts.txt, _cc_sizes.txt, _cc_ta.txt, _cc_ta2.txt, _del_err.txt, _mem_list.txt, _tmp_verify.py, _verify.txt, _verify_run.txt

@@ -2,11 +2,13 @@
 
 | 位置 | 内容 |
 |---|---|
-| `docs/PRD.html`、`docs/Spec.html` | 需求（第三版）和技术方案（第二版）；由 `docs/src/*.md` 生成，改文档改 md 再运行 `python scripts/build_docs.py` |
-| `docs/src/业务编排.md` | 五个业务能力的编排 |
+| `docs/PRD.html`、`docs/Spec.html` | 需求（第四版）和技术方案（第三版）；由 `docs/src/*.md` 生成，改文档改 md 再运行 `python scripts/build_docs.py` |
+| `docs/src/业务编排.md` | 各胶囊的业务能力编排 |
 | `docs/src/环境事实.md` | 开发机、DSH、6000D、395 的实测事实（编排计划事实索引的来源） |
 | `contracts/` | 契约（接口和数据格式，Spec 第 20 节）；自检 `python contracts/check_examples.py --skills skills` |
-| `skills/` | 13 个业务 Skill、共用规则、入口清单、校验脚本；改完运行 `python skills/_scripts/build_skills.py --root skills` |
+| `skills/` | 18 个业务 Skill、共用规则、首页胶囊配置 `capsules.default.json`、校验脚本；改完运行 `python skills/_scripts/build_skills.py --root skills` |
+| `engines/` | 律所周海沺律师提供的现成工具：`invoice-ledger/`（发票整理引擎，已去掉设备授权）、`retainer/`（委托材料网页和证件识别驱动）；按 Spec 13.3、13.5 调用，改动须登记在各自的 CHANGELOG |
+| `docs/reference/client-skills/` | 律所提供的原始 Skill（只作参考，不打包），如案卷归档的原版 |
 | `scripts/check_6000d.py` | 检查 6000D 网关、Key 校验和测试 Key（开发机上运行） |
 | `scripts/probe_395.ps1` | 395 的只读盘点：系统、显卡驱动、BitLocker、防火墙、端口、外网（在 395 上运行） |
 | `scripts/check_395_reach.py` | 开发机能否访问 395 的各端口和 `/health`（开发机上运行） |

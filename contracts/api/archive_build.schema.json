@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/archive_build.schema.json",
+  "title": "POST /api/archive/build",
+  "description": "律师核对归档方案并确认办案结果后，在本机生成归档总文件夹：卷宗.pdf（按编号合并、加页码）、立卷申请书.docx、结案报告.docx、归档目录.md，发票凭证另存为 发票.pdf",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        },
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+        },
+        "plan": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        },
+        "confirmed": {
+          "$ref": "lawbench://contracts/tools/case_save_archive_plan.schema.json#/$defs/plan",
+          "description": "律师在界面上改过、确认过的方案（result 不得为 null）"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "task_id",
+        "plan",
+        "confirmed"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "folder": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "卷宗",
+                          "立卷申请书",
+                          "结案报告",
+                          "发票",
+                          "归档目录",
+                          "特殊情况说明"
+                        ]
+                      },
+                      "path": {
+                        "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "path"
+                    ]
+                  }
+                },
+                "page_ranges": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "from": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "to": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "code",
+                      "from",
+                      "to"
+                    ]
+                  }
+                },
+                "converter": {
+                  "enum": [
+                    "word",
+                    "wps",
+                    "libreoffice"
+                  ]
+                },
+                "manual": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "description": "给律师的提示，如 立卷申请书需打印手签后扫描、模板为临时模板"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "folder",
+                "files",
+                "page_ranges",
+                "converter",
+                "manual"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "folder": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "卷宗",
+                  "立卷申请书",
+                  "结案报告",
+                  "发票",
+                  "归档目录",
+                  "特殊情况说明"
+                ]
+              },
+              "path": {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ]
+          }
+        },
+        "page_ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "from": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "to": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "from",
+              "to"
+            ]
+          }
+        },
+        "converter": {
+          "enum": [
+            "word",
+            "wps",
+            "libreoffice"
+          ]
+        },
+        "manual": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "给律师的提示，如 立卷申请书需打印手签后扫描、模板为临时模板"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "folder",
+        "files",
+        "page_ranges",
+        "converter",
+        "manual"
+      ]
+    }
+  }
+}

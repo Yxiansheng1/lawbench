@@ -4,8 +4,6 @@ title: 合同审查意见
 description: 合同审查。律师要求审查、审核合同，找合同风险，出具审查意见或修改建议时使用。先确认我方立场和审查目的，按交易结构、文本形式、具体条款三层逐条审查，风险按 P0/P1/P2 分级，每条引用合同原文位置并给出修改建议和推荐措辞，最后给出能否签署的结论。
 mode: agent
 kind: analysis
-entry: [合同审查, 合同起草]
-order: 4
 params: {thinking: 高, window: 128K, max_tokens: 32768}
 owner: 待定
 inputs: [materials, wiki, prior]

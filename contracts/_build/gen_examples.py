@@ -98,7 +98,7 @@ ex("prep_extract.res.json", "prep395/extract.schema.json",
    {"task": "fields", "result": [{"field": "金额", "value": "60,000.00", "loc": "第6页"}], "elapsed_ms": 3200},
    "#/$defs/response")
 ex("prep_health.json", "prep395/health.schema.json",
-   {"status": "ok", "ocr": "ok", "llm9b": "ok", "queue": 3, "version": "1.0.0", "contract_version": "1.0"})
+   {"status": "ok", "ocr": "ok", "llm9b": "ok", "queue": 3, "version": "1.0.0", "contract_version": "1.1"})
 
 # 落盘文件
 ex("file_material_index.json", "files/material_index.schema.json",
@@ -108,7 +108,7 @@ ex("file_material_index.json", "files/material_index.schema.json",
        "text_path": "工作区/材料/文本/证据/借条.pdf.md", "pages_need_ocr": [2, 3], "pages_mixed": [],
        "note": None, "error": None, "imported_at": NOW, "updated_at": NOW}]})
 ex("file_task.json", "files/task.json".replace("task.json", "task.schema.json"),
-   {"v": 1, "task_id": T, "case_id": CASE, "kind": "agent", "session_id": "s_01HZX", "entry": "刑事阅卷",
+   {"v": 1, "task_id": T, "case_id": CASE, "kind": "agent", "session_id": "s_01HZX", "entry": "case-analysis",
     "skill": "criminal-reading-notes", "step": None,
     "inputs": [{"index": 1, "title": "刑事阅卷笔录", "path": "成果/刑事阅卷笔录-v1.md", "version": 1, "sha256": SHA}],
     "params": PARAMS, "budget": {"model_calls": 8, "tool_calls": 24, "minutes": 45}, "state": "pending",
@@ -137,7 +137,55 @@ ex("file_settings.json", "files/settings.schema.json",
    {"v": 1, "servers": {"llm_base_url": "http://192.168.8.77:8000/v1", "prep_base_url": "http://192.168.8.78:9000"},
     "defaults": {"thinking": "中", "window": "64K", "max_tokens": 16384, "temperature": 0.3},
     "skill_presets": {"contract-review": {"thinking": "高", "window": "128K", "max_tokens": 32768}},
-    "templates": {"文书": None, "合同": None}, "ocr_fallback_llm": False})
+    "templates": {"文书": None, "合同": None}, "ocr_fallback_llm": False,
+    "profile": {"lawyer_name": "李律师"}, "office": {"dir": "D:\\日常办公", "invoice_buyer": "某某律师事务所"},
+    "converter": "auto"})
+
+# 1.1：导入、刑期计算、归档、发票、胶囊
+ex("api_materials_import.req.json", "api/materials_import.schema.json",
+   {"case_id": CASE, "paths": ["C:\\Users\\li\\Downloads\\补充证据", "C:\\Users\\li\\Desktop\\借条.pdf"],
+    "target": "02案件材料", "unzip": False}, "#/$defs/request")
+ex("api_materials_import.res.json", "api/materials_import.schema.json",
+   {"ok": True, "value": {"copied": [{"from": "C:\\Users\\li\\Desktop\\借条.pdf", "to": "02案件材料/借条.pdf"}],
+                          "skipped": [{"path": "C:\\Users\\li\\OneDrive\\a.pdf", "reason": "云同步目录"}],
+                          "scan": {"added": 1, "changed": 0, "removed": 0, "failed": 0, "review_needed": True}}},
+   "#/$defs/response")
+ex("tool_calc_sentence.args.json", "tools/case_calc_sentence.schema.json",
+   {"penalty": "有期徒刑", "years": 3, "months": 6, "execution_start": None,
+    "custody": [{"from": "2026-03-01", "to": "2026-03-30", "kind": "刑事拘留"},
+                {"from": "2026-03-31", "to": "2026-09-28", "kind": "逮捕"}]}, "#/$defs/args")
+ex("tool_calc_sentence.args_bad.json", "tools/case_calc_sentence.schema.json",
+   {"penalty": "死刑", "custody": []}, "#/$defs/args", "invalid")
+ex("tool_calc_sentence.result.json", "tools/case_calc_sentence.schema.json",
+   {"start": "2026-03-01", "end": "2029-08-31", "offset_days": 212, "custody_days": 212,
+    "milestones": [{"name": "执行满二分之一", "date": "2027-11-30", "basis": "有期徒刑执行原判刑期二分之一以上可提请假释（待律师核实）"}],
+    "basis": ["有期徒刑判决执行以前先行羁押的，羁押一日折抵刑期一日（待律师核实）"], "notes": []}, "#/$defs/result")
+PLAN = {"catalog": "民事行政卷", "client": "深圳市某某物流有限公司", "opponent": "广州某某供应链管理有限公司",
+        "cause": "买卖合同纠纷", "lawyer": None, "entrust_date": "2026-01-05", "close_date": "2026-08-20",
+        "jzl_no": None, "result": None, "summary": "【待补充：案情简介】", "opinion": "【待补充】",
+        "fee_settled": True,
+        "items": [{"code": 1, "name": "民事委托代理合同", "materials": ["委托代理合同"]},
+                  {"code": 14, "name": "民事调解书", "materials": ["民事调解书"]}]}
+ex("tool_archive_plan.args.json", "tools/case_save_archive_plan.schema.json", PLAN, "#/$defs/args")
+ex("tool_archive_plan.args_bad.json", "tools/case_save_archive_plan.schema.json",
+   {k: v for k, v in PLAN.items() if k != "result"}, "#/$defs/args", "invalid")
+ex("api_archive_build.fail.json", "api/archive_build.schema.json",
+   {"ok": False, "error": {"code": "CONVERTER_UNAVAILABLE", "message": "本机没有可用的 Word、WPS，内置转换程序也无法启动"}},
+   "#/$defs/response")
+ex("api_invoice_run.req.json", "api/invoice_run.schema.json",
+   {"action": "plan", "period": "2026-09", "channel": "local", "history": "exclude", "history_numbers": []},
+   "#/$defs/request")
+ex("api_invoice_run.req_imap.json", "api/invoice_run.schema.json",
+   {"action": "plan", "period": "2026-09", "channel": "imap", "history": "exclude", "history_numbers": []},
+   "#/$defs/request", "invalid")
+CAPS = {"v": 1, "hint": "提示", "shared": ["pre-issue-check"],
+        "groups": [{"id": "office", "name": "日常办公", "hidden": False, "items": [
+            {"id": "invoice", "name": "发票整理", "kind": "tool", "tool": "invoice", "hidden": False, "custom": False},
+            {"id": "lawyer-letter", "name": "律师函起草", "kind": "skill", "skills": ["general-drafting"],
+             "outputs": ["律师函"], "hidden": False, "custom": False}]}]}
+ex("skill_capsules.json", "skill/capsules.schema.json", CAPS)
+bad = json.loads(json.dumps(CAPS)); bad["groups"][0]["items"][0]["tool"] = "email"
+ex("skill_capsules.bad_tool.json", "skill/capsules.schema.json", bad, expect="invalid")
 
 (EX / "manifest.json").write_text(json.dumps(M, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 print(len(M), "examples")

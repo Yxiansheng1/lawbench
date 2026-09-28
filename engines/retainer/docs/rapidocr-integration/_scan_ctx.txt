@@ -1,0 +1,19 @@
+﻿index=3491
+context: scanState" class="inset">宸插～鍏ュ綋鍓嶆浠讹細name銆乴egal_rep銆傝鏍稿鍚庣户缁€?/div>
+ <div id="scanNotes" class="muted" hidden=""></div>
+ <div id="scanPreview"><div class="row"><span class="grow muted">璇嗗埆缁撴灉浠呬綔棰勫～锛岃閫愰」鏍稿鍚庡啀浣跨敤</span><button id="scanApply" class="primary">濉叆褰撳墠妗堜欢</button><button id="scanDiscard">鏀惧純</button></div><div id="scanFields" class="mapping"><label>鍚嶇О/濮撳悕锛堝～鍏ャ€屽鎵樻柟銆嶏級<input data-
+
+title ctx: <title>SCANTEST plaintiff=[娣卞湷甯傜ず渚嬬鎶€鏈夐檺鍏徃] legalrep=[寮犱笁] note=宸插～鍏ュ綋鍓嶆浠讹細name銆乴egal_rep銆傝鏍稿鍚庣户缁€?/title><link rel="stylesheet" href="app/style.css">
+<script defer="" src="vendor/jszip.min.js"
+
+=== script tags ===
+vendor/jszip.min.js
+data/config.js
+data/rules.js
+data/builtin.js
+app/core.js
+app/excel.js
+app/packages.js
+app/selftest.js
+app/ui.js
+app/idscan.js

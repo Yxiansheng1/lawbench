@@ -1,0 +1,6 @@
+﻿domChars=17312
+=== docChoices 上下文 ===
+id="docChoices" class="doc-choices"><label><input type="checkbox" value="涓汉-鍥哄畾/1銆佹皯浜嬪鎵樹唬鐞嗗悎鍚?docx"><span>1銆佹皯浜嬪鎵樹唬鐞嗗悎鍚?docx</span></label><label><input type="checkbox" value="涓汉-鍥哄畾/2銆佹巿鏉冨鎵樹功.docx"><span>2銆佹巿鏉冨鎵樹功.docx</span></label><label><input type="checkbox" value="涓汉-鍥哄畾/猸愶笍褰撲簨浜洪渶鎻愪緵鐨勬潗鏂欐竻鍗?docx"><span>猸愶笍褰撲簨浜洪渶鎻愪緵鐨勬潗鏂欐竻鍗?docx</span></label><label><input type="checkbox" value="涓汉-鍥哄畾/涓€瀹℃墍鍑?docx"><span>涓€瀹℃墍鍑?docx</span></label></div><label class="check"><input id="includeFolders" type="checkbox">鍖呭惈瀹屾暣妗堜欢鐩綍缁撴瀯</label><button id="generate" class="primary wide">鐢熸垚褰撳墠妗堜欢鏂囦功</butt
+
+=== generationGroup ===
+id="generationGroup"><option value="auto">鎸夋浠惰嚜鍔ㄩ€夋嫨</option><option value="涓汉-鍥哄畾">涓汉-鍥哄畾</option><option value="涓汉-鍗婇闄?>涓汉-鍗婇闄?/option><option value="鍏徃-鍥哄畾">鍏徃-鍥哄畾</option><option value="鍏徃-鍗婇闄?>鍏徃-鍗婇闄?/option><option value="鍒戜簨">鍒戜簨</option></select></label><div id="docChoices" class="doc-choices"><label><input type="checkbox" value="涓汉-鍥哄畾/1銆佹皯浜嬪鎵樹唬鐞嗗悎鍚?docx"><span>1銆佹皯浜嬪鎵樹唬鐞嗗

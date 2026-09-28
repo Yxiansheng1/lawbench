@@ -1,0 +1,3 @@
+﻿result=OK
+sizeMB=75.27
+seconds=573.7

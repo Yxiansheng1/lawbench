@@ -1,0 +1,8 @@
+{
+  "name": "invoice-ledger-db",
+  "version": "3.9.4.1",
+  "description": "发票下载、归档、PDF分类统计、图片OCR、查重、台账入账与报销标记。",
+  "author": "周海沺律师",
+  "source": "周海沺律师",
+  "license": "律所内部使用（经作者同意移除设备授权），署名保留"
+}

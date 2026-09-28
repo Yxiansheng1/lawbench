@@ -1,0 +1,30 @@
+{
+  "craft": {
+    "builder": "skill-crafting",
+    "builderVersion": "1.0.0",
+    "checksums": {
+      ".DS_Store": "sha256:e2fcda51a3e1839430d9d9ae2380e6b8a0343c54657475142489cd86a2ab619b",
+      "AGENTS.md": "sha256:0fdc1bbf93fad1d6f7c325e6dcb6c0604cf3828e2fc30298821f65f1e7c6376c",
+      "CHANGELOG.md": "sha256:2985426ca02e24586e4c7a8f944721c530abbb7ad58b43b9f8b97ca1832a35c7",
+      "SKILL.md": "sha256:6bd6dc8efa576945f7cf8c2c39be2f214a63a261ff86f268e652de6034a63081",
+      "_meta.json": "sha256:beb67db66aadd4a42111ee23ce689bb6f633fc66eb26cf9bb5d6dd18c93651c9",
+      "clean_templates.py": "sha256:11be529d7daf16ef33047289c30836e24473567f981c06e0825b37769a979a58",
+      "generate.py": "sha256:ef909c4cf532c28e73b69a5dfc5e44d28143a619e056eac7035807e33a14e7e9",
+      "runtime_utils.py": "sha256:3f8fee16d6f96d8a54135c8cb59aa6a4b42d29a05164c3befdb419db835ff765",
+      "template-checksums.json": "sha256:1fd539bf318f794954cad62c3c61220cdb17d55f82e7931c68f5b9b5639f4f7b",
+      "templates/.ready": "sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "test-prompts.json": "sha256:b7ea8634540735702538ff0e53414991ef398fb4a6ee7366f626872208418fc7",
+      "tests/test_runtime.py": "sha256:f941c1979240e9878f79aa1668adda3a51b5e9c2efa2240a7467e04eeffe14fe"
+    },
+    "languageConstraint": "rust+go-only",
+    "pipeline": [
+      "init(go)",
+      "verify(rust)",
+      "stamp(go)",
+      "package(go)"
+    ],
+    "stampVersion": "1.0",
+    "stampedAt": "2026-09-07T22:56:49+08:00",
+    "toolchain": "rust+go"
+  }
+}

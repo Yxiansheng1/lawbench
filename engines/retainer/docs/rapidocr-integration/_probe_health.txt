@@ -1,0 +1,33 @@
+﻿=== driver log ===
+姝ｅ湪鍔犺浇 OCR 寮曟搸鈥?
+python.exe : C:\Users\0\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\__init__.py:113: RequestsDep
+endencyWarning: urllib3 (2.6.3) or chardet (7.2.0)/charset_normalizer (3.4.6) doesn't match a supported version!
+所在位置 行:446 字符: 1
++ & $py 'D:\workbuddy测试\retainer-offline\tools\ocr-driver\driver.py' -- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\0\AppD...ported version!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  warnings.warn(
+[32m[INFO] 2026-09-13 15:52:55,919 [RapidOCR] base.py:23: Using engine_name: onnxruntime[0m
+[32m[INFO] 2026-09-13 15:52:55,995 [RapidOCR] download_file.py:60: File exists and is valid: D:\workbuddy娴嬭瘯\retainer-
+offline\tools\ocr-driver\vendor\rapidocr\models\PP-OCRv6_det_small.onnx[0m
+[32m[INFO] 2026-09-13 15:52:55,995 [RapidOCR] main.py:63: Using D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vend
+or\rapidocr\models\PP-OCRv6_det_small.onnx[0m
+[32m[INFO] 2026-09-13 15:52:56,064 [RapidOCR] base.py:23: Using engine_name: onnxruntime[0m
+[32m[INFO] 2026-09-13 15:52:56,067 [RapidOCR] download_file.py:60: File exists and is valid: D:\workbuddy娴嬭瘯\retainer-
+offline\tools\ocr-driver\vendor\rapidocr\models\ch_ppocr_mobile_v2.0_cls_mobile.onnx[0m
+[32m[INFO] 2026-09-13 15:52:56,067 [RapidOCR] main.py:63: Using D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vend
+or\rapidocr\models\ch_ppocr_mobile_v2.0_cls_mobile.onnx[0m
+[32m[INFO] 2026-09-13 15:52:56,138 [RapidOCR] base.py:23: Using engine_name: onnxruntime[0m
+[32m[INFO] 2026-09-13 15:52:56,153 [RapidOCR] download_file.py:60: File exists and is valid: D:\workbuddy娴嬭瘯\retainer-
+offline\tools\ocr-driver\vendor\rapidocr\models\PP-OCRv6_rec_small.onnx[0m
+[32m[INFO] 2026-09-13 15:52:56,153 [RapidOCR] main.py:63: Using D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vend
+or\rapidocr\models\PP-OCRv6_rec_small.onnx[0m
+寮曟搸灏辩华锛歳apidocr 锛堝姞杞?0.8 绉掞級
+椹卞姩宸插惎鍔細http://127.0.0.1:17801   锛堜粎鏈満鍙闂紝Ctrl+C 鍋滄锛?
+=== GET /health ===
+status=200
+ACAO=*
+ACAPN=true
+body={"ok": true, "ready": true, "engine": "rapidocr", "version": "", "maxBytes": 20971520, "offline": true, "problems": [], "startupError": null}

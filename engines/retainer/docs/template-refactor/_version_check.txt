@@ -1,0 +1,6 @@
+﻿=== 版本一致性核查 ===
+core.js VERSION = 3.4.0
+config.json = 3.4.0
+rules.json  = 3.4.0
+_meta.json  = 3.4.0
+启动.html    = 3.4.0

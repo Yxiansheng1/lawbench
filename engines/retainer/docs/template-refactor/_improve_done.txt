@@ -1,0 +1,17 @@
+﻿=== 关键状态 ===
+resources/templates = 13 份 / 3 组
+根目录 _* 残留 = _after_cleanup.txt, _del_err.txt, _mem_list.txt, _tmp_verify.py, _verify.txt, _verify_run.txt
+
+=== 本轮新增/修改的 tools ===
+  build.go
+  compare-contracts.py
+  fix-clause6.py
+  refresh-checksums.py
+
+=== tests ===
+  browser.cjs
+  load-playwright.cjs
+  parity.cjs
+  parity_check.py
+  workflows.cjs
+  xlsx-qa.mjs

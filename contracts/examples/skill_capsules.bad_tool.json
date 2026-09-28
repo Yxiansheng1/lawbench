@@ -1,0 +1,37 @@
+{
+  "v": 1,
+  "hint": "提示",
+  "shared": [
+    "pre-issue-check"
+  ],
+  "groups": [
+    {
+      "id": "office",
+      "name": "日常办公",
+      "hidden": false,
+      "items": [
+        {
+          "id": "invoice",
+          "name": "发票整理",
+          "kind": "tool",
+          "tool": "email",
+          "hidden": false,
+          "custom": false
+        },
+        {
+          "id": "lawyer-letter",
+          "name": "律师函起草",
+          "kind": "skill",
+          "skills": [
+            "general-drafting"
+          ],
+          "outputs": [
+            "律师函"
+          ],
+          "hidden": false,
+          "custom": false
+        }
+      ]
+    }
+  ]
+}

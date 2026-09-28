@@ -1,0 +1,2 @@
+﻿=== load-playwright.cjs 验证 ===
+OK chromium=object

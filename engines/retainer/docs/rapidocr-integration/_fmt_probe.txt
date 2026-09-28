@@ -1,0 +1,29 @@
+MOD fitz           OK
+MOD pypdf          OK
+MOD pdfplumber     OK
+MOD docx           OK
+MOD PIL            OK
+MOD cv2            OK
+MOD numpy          OK
+MOD olefile        MISS
+MOD win32com       MISS
+MOD pythoncom      MISS
+MOD zipfile        OK
+BIN C:\Program Files\LibreOffice\program\soffice.exe                       --
+BIN C:\Program Files (x86)\LibreOffice\program\soffice.exe                 --
+BIN C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE            --
+BIN C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE      --
+PATH soffice        --
+PATH soffice.com    --
+PATH libreoffice    --
+PATH winword        --
+PATH wps            --
+PATH et             --
+PATH wpp            --
+WPSROOT C:\Users\0\AppData\Local\Kingsoft\WPS Office ABSENT
+WPSROOT C:\Program Files\Kingsoft -> ['C:\\Program Files\\Kingsoft\\office6\\wpscloudsvr.exe']
+WPSROOT C:\Program Files (x86)\Kingsoft -> ['C:\\Program Files (x86)\\Kingsoft\\pdf\\wpscloudsvr.exe']
+COM Word.Application       REGISTERED
+COM KWps.Application       REGISTERED
+COM WPS.Application        --
+COM soffice.ServiceManager --

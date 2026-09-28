@@ -1,0 +1,23 @@
+﻿templates = 13
+version = 3.3.0
+文件大小MB = 0.76
+
+=== 按组统计 ===
+  个人委托 : 4 份
+  公司委托 : 5 份
+  刑事 : 4 份
+
+=== 清单 ===
+  [个人委托] 1 民事委托代理合同.docx  tag=contract
+  [个人委托] 2 授权委托书.docx  tag=auth
+  [个人委托] 3 所函.docx  tag=letter
+  [个人委托] ⭐️当事人需提供的材料清单.docx  tag=checklist
+  [公司委托] 1 民事委托代理合同.docx  tag=contract
+  [公司委托] 2 民事授权委托书.docx  tag=auth
+  [公司委托] 3 法定代表人身份证明.docx  tag=legalrep
+  [公司委托] 4 所函.docx  tag=letter
+  [公司委托] ⭐️贵公司需提供的材料清单.docx  tag=checklist
+  [刑事] 1、刑事辩护委托合同.docx  tag=contract
+  [刑事] 2、刑事授权委托书.docx  tag=auth
+  [刑事] ⭐️贵方需提供的材料清单.docx  tag=checklist
+  [刑事] 会见信.docx  tag=meeting_letter

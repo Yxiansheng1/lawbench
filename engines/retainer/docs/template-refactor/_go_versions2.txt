@@ -1,0 +1,10 @@
+﻿total=281
+top8:
+  go1.26.3.windows-amd64.zip
+  go1.26.4.windows-amd64.zip
+  go1.26.5.windows-amd64.zip
+  go1.26.6.windows-amd64.zip
+  go1.26.7.windows-amd64.zip
+  go1.26.8.windows-amd64.zip
+  go1.27.0.windows-amd64.zip
+  go1.27.1.windows-amd64.zip

@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/skill/capsules.schema.json",
+  "title": "skills/capsules.default.json 与 <应用数据>/capsules.json",
+  "description": "首页两级胶囊：一级为分组，二级为胶囊；胶囊打开一组 Skill（kind=skill）或一个内置工具（kind=tool）。律师只能排序、改名、隐藏和新增，不能删除；恢复默认用 capsules.default.json",
+  "$defs": {
+    "skill_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12
+        },
+        "kind": {
+          "const": "skill"
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "minItems": 1,
+          "description": "按推荐顺序；第一个是点胶囊后默认选中的 Skill"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "custom": {
+          "type": "boolean",
+          "description": "律师自己新增的胶囊"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "skills",
+        "outputs",
+        "hidden",
+        "custom"
+      ]
+    },
+    "tool_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12
+        },
+        "kind": {
+          "const": "tool"
+        },
+        "tool": {
+          "enum": [
+            "invoice",
+            "retainer"
+          ],
+          "description": "invoice=发票整理面板；retainer=委托材料窗口"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "custom": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "tool",
+        "hidden",
+        "custom"
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "hint": {
+      "type": "string",
+      "description": "首页顶部的分流提示语"
+    },
+    "shared": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "description": "每个 Skill 胶囊里都能用的共用 Skill"
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/skill_item"
+                },
+                {
+                  "$ref": "#/$defs/tool_item"
+                }
+              ]
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "hidden",
+          "items"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "hint",
+    "shared",
+    "groups"
+  ]
+}

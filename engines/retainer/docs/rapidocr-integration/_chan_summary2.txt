@@ -1,0 +1,4 @@
+﻿=== _chan_auto2.txt ===
+MACHINE_STATE=UPLOAD_PASS;DETAIL=format=.png,usedOcr=true,lines=4,durationMs=1089,roundtripMs=10
+=== _chan_block2.txt ===
+MACHINE_STATE=FAIL;DETAIL=name=TypeError,msg=Failed to fetch

@@ -1,0 +1,21 @@
+﻿=== gen log ===
+png D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license.png
+jpg q90 D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-q90.jpg
+jpeg q70 D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-q70.jpeg
+pdf text D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-text.pdf insert_ok=True
+pdf scan D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-scan.pdf
+docx D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license.docx
+noext D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-noext
+fake doc D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\format-corpus\license-old.doc
+
+--- docx 内的 media ---
+word/media/image1.png  42090 B
+=== files ===
+license-noext             42,090 B
+license-old.doc              520 B
+license-q70.jpeg          32,574 B
+license-q90.jpg           47,138 B
+license-scan.pdf       1,203,569 B
+license-text.pdf       9,761,645 B
+license.docx              74,897 B
+license.png               42,090 B

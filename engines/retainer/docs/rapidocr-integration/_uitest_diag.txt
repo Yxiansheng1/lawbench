@@ -1,0 +1,17 @@
+﻿domChars=16793
+has UITEST: True
+uitest.js referenced: True
+=== scripts ===
+  vendor/jszip.min.js
+  data/config.js
+  data/rules.js
+  data/builtin.js
+  app/core.js
+  app/excel.js
+  app/packages.js
+  app/selftest.js
+  app/ui.js
+  app/idscan.js
+  app/uitest.js
+=== title raw ===
+<title>UITEST templates=22 | filled=ok | choices=4 | checked=4 | group=auto | check=绫诲瀷锛氭皯鍟嗕簨 涓讳綋锛氫釜浜?鏀惰垂锛氬浐瀹?妯℃澘缁勶細涓汉-鍥哄畾 閲戦锛氳窗涓囦紞浠熷厓鏁达紙楼25000锛?| outputFiles=4 | outputsHidden=false | notice=宸茬敓鎴?4

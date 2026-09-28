@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/invoice_run.schema.json",
+  "title": "POST /api/invoice/run",
+  "description": "发票整理：按白名单调用发票引擎（engines/invoice-ledger）的一个动作；台账固定在 <日常办公文件夹>/发票台账。不支持邮箱联网收取和正文链接下载",
+  "$defs": {
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "enum": [
+                "env_check",
+                "report",
+                "check_schema"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "history"
+            },
+            "period": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "period"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "plan"
+            },
+            "period": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "channel": {
+              "enum": [
+                "local",
+                "eml"
+              ]
+            },
+            "history": {
+              "enum": [
+                "exclude",
+                "selected"
+              ]
+            },
+            "history_numbers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]{8,20}$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "period",
+            "channel",
+            "history",
+            "history_numbers"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "run"
+            },
+            "period": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "batch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "src": {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+            },
+            "channel": {
+              "enum": [
+                "local",
+                "eml"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "period",
+            "batch",
+            "src",
+            "channel"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "enum": [
+                "analyze",
+                "import"
+              ]
+            },
+            "period": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "period"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "prepare"
+            },
+            "period": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "batch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "replace": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "period",
+            "batch",
+            "replace"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "reprint"
+            },
+            "batch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "batch"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "enum": [
+                "cancel",
+                "reimburse"
+              ]
+            },
+            "batch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "apply": {
+              "type": "boolean",
+              "description": "false 时只预览"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "batch",
+            "apply"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "review"
+            },
+            "sha256": {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/sha256"
+            },
+            "reviewer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confirm": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "sha256",
+            "reviewer",
+            "confirm"
+          ]
+        }
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "exit_code": {
+                  "type": "integer"
+                },
+                "attention": {
+                  "type": "boolean",
+                  "description": "引擎退出码 2：有重复、冲突、待核或部分失败，须看明细"
+                },
+                "output": {
+                  "type": "string",
+                  "description": "引擎输出原文，只在界面显示，不写日志"
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "exit_code",
+                "attention",
+                "output",
+                "files"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "exit_code": {
+          "type": "integer"
+        },
+        "attention": {
+          "type": "boolean",
+          "description": "引擎退出码 2：有重复、冲突、待核或部分失败，须看明细"
+        },
+        "output": {
+          "type": "string",
+          "description": "引擎输出原文，只在界面显示，不写日志"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/abs_path"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "exit_code",
+        "attention",
+        "output",
+        "files"
+      ]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+﻿=== py_compile ===
+
+exit=0
+=== import test ===
+OK consts: 2 31
+=== results dir ===
+formats.json
+round-1.json
+round-2.json

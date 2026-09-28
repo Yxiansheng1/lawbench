@@ -1,0 +1,162 @@
+{
+ "id": "刑事卷",
+ "attachment": "附件2",
+ "renumber": false,
+ "items": [
+  {
+   "code": 1,
+   "name": "刑事委托代理合同（合同编号、经办律师签字、落款时间必填）",
+   "required": true,
+   "keywords": [
+    "委托代理合同",
+    "委托合同",
+    "刑事委托",
+    "聘用律师合同"
+   ],
+   "folders": [
+    "01委托手续"
+   ]
+  },
+  {
+   "code": 2,
+   "name": "收费发票凭证（如为计时收费，请一并上传计时收费确认清单）",
+   "required": true,
+   "keywords": [
+    "发票",
+    "收费",
+    "律师费"
+   ],
+   "folders": [
+    "01委托手续"
+   ]
+  },
+  {
+   "code": 3,
+   "name": "授权委托书",
+   "required": true,
+   "keywords": [
+    "授权委托书",
+    "授权书",
+    "所函"
+   ],
+   "folders": [
+    "01委托手续"
+   ]
+  },
+  {
+   "code": 4,
+   "name": "阅卷笔录",
+   "required": false,
+   "keywords": [
+    "阅卷笔录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 5,
+   "name": "会见被告人、委托人、证人笔录",
+   "required": false,
+   "keywords": [
+    "会见笔录",
+    "谈话笔录",
+    "被告人笔录",
+    "证人笔录"
+   ],
+   "folders": [
+    "02案件材料/会见笔录"
+   ]
+  },
+  {
+   "code": 6,
+   "name": "调查材料",
+   "required": false,
+   "keywords": [
+    "调查材料",
+    "调查笔录",
+    "取证"
+   ],
+   "folders": []
+  },
+  {
+   "code": 7,
+   "name": "承办人提出的辩护或代理意见",
+   "required": false,
+   "keywords": [
+    "辩护意见",
+    "代理意见",
+    "法律意见书"
+   ],
+   "folders": []
+  },
+  {
+   "code": 8,
+   "name": "集体讨论记录",
+   "required": false,
+   "keywords": [
+    "集体讨论",
+    "讨论记录",
+    "合议记录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 9,
+   "name": "起诉书/上诉书/抗诉书",
+   "required": true,
+   "keywords": [
+    "起诉书",
+    "上诉书",
+    "上诉状",
+    "抗诉书",
+    "公诉书"
+   ],
+   "folders": []
+  },
+  {
+   "code": 10,
+   "name": "辩护词",
+   "required": true,
+   "keywords": [
+    "辩护词"
+   ],
+   "folders": []
+  },
+  {
+   "code": 11,
+   "name": "出庭通知书",
+   "required": false,
+   "keywords": [
+    "出庭通知书",
+    "开庭通知",
+    "传票"
+   ],
+   "folders": []
+  },
+  {
+   "code": 12,
+   "name": "裁定书、判决书",
+   "required": true,
+   "keywords": [
+    "判决书",
+    "裁定书",
+    "刑事判决",
+    "刑事裁定"
+   ],
+   "folders": [
+    "05一审/法院文书",
+    "06二审/法院文书"
+   ]
+  },
+  {
+   "code": 13,
+   "name": "结案报告",
+   "required": true,
+   "keywords": [
+    "结案报告",
+    "办案小结"
+   ],
+   "folders": [],
+   "generated": true
+  }
+ ]
+}

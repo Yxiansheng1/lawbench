@@ -1,0 +1,7 @@
+﻿health={"ok": true, "ready": true, "engine": "rapidocr", "version": "", "maxBytes": 52428800, "offline": true, "formats": [".bmp", ".doc", ".docx", ".gif", ".jpeg", ".jpg", ".pdf", ".png", ".tif", ".tiff", ".webp"], "imageFormats": [".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"], "problems": [], "startupError": null}
+
+=== title ===
+
+=== has scanDrop: True
+=== has scanSeal: False
+=== over class count: 0

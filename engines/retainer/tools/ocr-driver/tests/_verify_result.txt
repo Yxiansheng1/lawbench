@@ -1,0 +1,8 @@
+URL: file:///D:/workbuddy测试/retainer-offline/启动.html#scantest
+domChars: 16219
+
+TITLE:
+IDTEST address=[江西省樟树市义成镇淖港村碰塘组15附1号] name=[李四] id=[360982198503120015] birth=[1985年3月12日] warn=图片含透明通道，已合成为白底后识别
+
+SCAN STATE:
+完成 1 份，其中可解析 1 份：selftest-idcard.png（居民身份证（人像面））

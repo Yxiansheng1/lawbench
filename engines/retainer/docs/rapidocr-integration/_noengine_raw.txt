@@ -1,0 +1,4 @@
+﻿driver state: down
+scanDrop class: [disabled]
+scanFile disabled attr: <input id="scanFile" type="file" accept="image/*,.pdf,.docx" multiple="" hidden="" disabled=""
+scanState raw(utf8 re-read): 

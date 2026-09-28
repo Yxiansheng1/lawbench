@@ -1,0 +1,16 @@
+﻿Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting antlr4-python3-runtime==4.9.3
+  Using cached antlr4_python3_runtime-4.9.3-py3-none-any.whl
+Installing collected packages: antlr4-python3-runtime
+Successfully installed antlr4-python3-runtime-4.9.3
+python.exe : WARNING: Target directory D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vendor\bin already exists. Spe
+cify --upgrade to force replacement.
+所在位置 行:454 字符: 1
++ & $py -m pip install --target $vd --no-deps "antlr4-python3-runtime== ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: Target...ce replacement.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+[notice] A new release of pip is available: 25.0.1 -> 26.2.1
+[notice] To update, run: python.exe -m pip install --upgrade pip

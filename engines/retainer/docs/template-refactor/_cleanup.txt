@@ -1,0 +1,25 @@
+﻿=== 归档文件 ===
+_go_build.txt
+_go_check.txt
+_go_dl.txt
+_go_env.txt
+_go_extract.txt
+_go_final.txt
+_go_state.txt
+_go_ver.txt
+_go_versions.txt
+_go_versions2.txt
+_proxy_check.txt
+_tpl_clean.txt
+
+=== 根目录残留 ===
+_after_cleanup.txt
+_del_err.txt
+_mem_list.txt
+_tmp_verify.py
+_verify.txt
+_verify_run.txt
+
+=== Go 状态 ===
+go version go1.27.1 windows/amd64
+下载包（可删）：True

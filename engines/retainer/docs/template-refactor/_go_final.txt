@@ -1,0 +1,4 @@
+﻿解压文件数=10321
+解压大小MB=201.4
+go version: go version go1.27.1 windows/amd64
+下载包仍在: True  （大小 75.3 MB，安装完成后可删）

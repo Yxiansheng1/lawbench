@@ -1,0 +1,21 @@
+﻿=== 集成后文件清单 ===
+core.js
+excel.js
+idscan.js
+packages.js
+selftest.js
+style.css
+ui.js
+
+=== 启动.html CSP ===
+connect-src http://127.0.0.1:17801
+script count: 10
+has idscan: True
+
+=== root leftovers ===
+_after_cleanup.txt
+_del_err.txt
+_mem_list.txt
+_tmp_verify.py
+_verify.txt
+_verify_run.txt

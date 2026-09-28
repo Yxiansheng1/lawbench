@@ -1,0 +1,5 @@
+driver state: down
+scanDrop class: [disabled]
+scanFile: <input id="scanFile" type="file" accept="image/*,.pdf,.docx" multiple="" hidden="" disabled=""
+scanState: 鏈娴嬪埌鏈満璇嗗埆寮曟搸銆傝鍙屽嚮銆屽惎鍔ㄥ鎵樺伐浣滃彴.bat銆嶏紙鎴?tools/ocr-driver/鍚姩璇嗗埆寮曟搸.bat锛夛紱鍚姩鍚庢湰椤典細鑷姩鎺ヤ笂锛屾棤闇€鍒锋柊銆備笉浣跨敤璇嗗埆鍔熻兘鏃讹紝鍏朵綑鎿嶄綔涓嶅彈褰卞搷銆?/div>
+ 

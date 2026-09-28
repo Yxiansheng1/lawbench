@@ -1,0 +1,9 @@
+﻿label: 地址多行拼接与补正验证
+cases: 20
+fieldAccuracy: 1.0
+hit/wrong/miss/total: 120 / 0 / 0 / 120
+codePassRate: 1.0
+requiredCompleteRate: 1.0
+avgScore: 0.9865
+errors: 0
+failed cases: 0

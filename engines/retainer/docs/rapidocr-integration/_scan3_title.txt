@@ -1,0 +1,8 @@
+﻿=== contains SCANTEST: True
+tion 'none'; frame-src 'none'">
+<title>SCANTEST plaintiff=[娣卞湷甯傜ず渚嬬鎶€鏈夐檺鍏徃] legalrep=[寮犱笁] party=[鍏徃] cert=business_license state=宸插～鍏ュ綋鍓嶆浠讹細鍚嶇О/濮撳悕鈫掑鎵樻柟銆佹硶瀹氫唬琛ㄤ汉/璐熻矗浜衡啋娉曞畾浠ｈ〃浜恒€傘€€鍗曚綅璇佺収涓?/title><link rel="stylesheet" href="app/style.css">
+<script defe
+
+=== disable 状态 / dropzone ===
+scanDrop class: 
+scanFile disabled: id="scanFile" type="file" accept="image/*,.pdf,.docx" multiple="" hidden=""

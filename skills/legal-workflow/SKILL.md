@@ -1,11 +1,9 @@
 ---
 name: legal-workflow
 title: 业务导航
-description: 业务导航。律师问"下一步做什么""这个用哪个功能""怎么出辩护词、审合同、写律师函"，或请求不明确、不知道该用哪个 Skill 时使用。说明五个业务（刑事阅卷、刑事文书、合同审查、合同起草、通用文书）各自的步骤、每一步该用哪个 Skill、需要选哪些上游成果作为输入。只做指引，不直接产出文书。
+description: 业务导航。律师问"下一步做什么""这个用哪个功能""怎么出辩护词、审合同、写起诉状"，或请求不明确、不知道该用哪个 Skill 时使用。按首页胶囊（民事与商事、刑事案件、日常办公）说明每项业务的步骤、每一步该用哪个 Skill、需要选哪些上游成果作为输入。只做指引，不直接产出文书。
 mode: agent
 kind: analysis
-entry: 共用
-order: 9
 params: {thinking: 关闭, window: 32K, max_tokens: 4096}
 owner: 待定
 inputs: [wiki]
@@ -30,22 +28,28 @@ inputs: [wiki]
 
 ## 处理步骤
 
-1. 看 `<L0 案件卡片>` 和律师的请求，判断属于哪个业务、现在走到哪一步。
+1. 看 `<L0 案件卡片>` 和律师的请求，判断属于哪个胶囊、现在走到哪一步。
 2. 用两三句话告诉律师：下一步输入 `/Skill名`，需要在任务里写明什么，需要选哪份上游成果。
-3. 如果本案还没有 wiki（L0 里写"还没有生成 wiki"），建议律师先点入口里的"生成案件 wiki"按钮（`/case-wiki-build` 由程序运行，不在对话中调用）。
-4. 请求不属于这五个业务时，如实说明目前没有对应功能，可以用自由对话处理，但出处和"法律依据待律师核实"的规则照样适用。
+3. 如果本案还没有 wiki（L0 里写"还没有生成 wiki"），建议律师先点"生成案件 wiki"按钮（`/case-wiki-build` 由程序运行，不在对话中调用）。
+4. 请求不属于下表任何一项时，如实说明目前没有对应功能，可以用自由对话处理，但出处和"法律依据待律师核实"的规则照样适用。
 
-### 五个业务怎么走
+### 各胶囊怎么走
 
-| 业务 | 步骤（按顺序） | 上一步的成果要作为下一步的输入 |
-|---|---|---|
-| 刑事阅卷 | `/case-wiki-build` → `/criminal-reading-notes` → `/criminal-evidence-review` | 证据审查要选"刑事阅卷笔录" |
-| 刑事文书 | `/defense-opinion` 或 `/cross-exam-opinion` 或 `/criminal-applications` → `/pre-issue-check` → `/doc-revise` | 起草时选"阅卷笔录""证据审查意见"；审查和改稿时选要处理的草稿 |
-| 合同审查 | `/contract-review` → `/pre-issue-check` → `/doc-revise` | 审查意见出来后，改稿时选它 |
-| 合同起草 | `/contract-draft` → `/contract-review`（审自己的初稿）→ `/pre-issue-check` → `/doc-revise` | 自审时选合同初稿 |
-| 通用文书 | `/general-drafting` → `/pre-issue-check` → `/doc-revise` | 需要引用前面成果时选对应成果 |
+| 分组 | 胶囊 | 步骤（按顺序） | 上一步的成果要作为下一步的输入 |
+|---|---|---|---|
+| 民事与商事 | 合同审查 | `/contract-review` → `/pre-issue-check` → `/doc-revise` | 改稿时选审查意见 |
+| 民事与商事 | 合同起草 | `/contract-draft` → `/contract-review`（审自己的初稿）→ `/pre-issue-check` → `/doc-revise` | 自审时选合同初稿 |
+| 民事与商事 | 诉讼文书起草 | `/litigation-docs` → `/pre-issue-check` → `/doc-revise` | 起草时可选阅卷笔录、案件分析报告 |
+| 刑事案件 | 案卷分析 | `/criminal-reading-notes` → `/criminal-evidence-review` → `/pre-issue-check` → `/doc-revise` | 证据审查要选"刑事阅卷笔录" |
+| 刑事案件 | 刑期计算 | `/sentence-calc` | — |
+| 刑事案件 | 取保候审/不予逮捕申请 | `/criminal-applications` → `/pre-issue-check` → `/doc-revise` | 起草时选阅卷笔录 |
+| 刑事案件 | 辩护词起草 | `/defense-opinion` → `/pre-issue-check` → `/doc-revise` | 起草时选阅卷笔录、证据审查意见 |
+| 刑事案件 | 质证意见起草 | `/cross-exam-opinion` → `/pre-issue-check` → `/doc-revise` | 起草时选阅卷笔录 |
+| 日常办公 | 律师函起草、通用文书 | `/general-drafting` → `/pre-issue-check` → `/doc-revise` | 需要引用前面成果时选对应成果 |
+| 日常办公 | 招投标材料处理 | `/tender-review` → `/bid-drafting` → `/pre-issue-check` → `/doc-revise` | 起草投标文件时选招标文件审查意见 |
+| 日常办公 | 案卷归档 | `/case-archiving`，然后在归档面板点"生成归档文件" | — |
 
-民事案件的阅卷笔录用 `/case-reading-notes`。
+民事案件的阅卷笔录用 `/case-reading-notes`（在"通用文书"胶囊里）。发票整理、文件生成（委托材料）是独立工具，点胶囊直接打开，不在对话里做。
 
 ### 各 Skill 开始前律师要给什么
 
@@ -54,7 +58,11 @@ inputs: [wiki]
 | case-wiki-build | 无（首次可说明案件类型：刑事 / 民事 / 合同） |
 | criminal-reading-notes | 可选：只读哪几卷 |
 | defense-opinion | 辩护方向：无罪 / 罪轻或改变定性 / 仅量刑；所处阶段 |
-| criminal-applications | 文书类型：取保候审 / 羁押必要性审查 / 调取证据 / 变更强制措施；受理机关 |
+| criminal-applications | 文书类型：取保候审 / 不予批准逮捕 / 羁押必要性审查 / 调取证据 / 变更强制措施；受理机关 |
+| litigation-docs | 文书类型；我方立场；诉讼请求或答辩、上诉要点 |
+| sentence-calc | 刑期计算还是量刑分析；刑种刑期；羁押期间 |
+| tender-review / bid-drafting | 我方是投标人还是招标人；要起草哪些部分 |
+| case-archiving | 办案结果（我方视角）；金助理编号；律师费是否结清 |
 | cross-exam-opinion | 本方立场（默认辩护方）；要质证的证据范围 |
 | contract-review | 我方代表哪一方；审查目的 |
 | contract-draft | 我方代表哪一方；交易要素；要起草的文件 |
@@ -64,7 +72,7 @@ inputs: [wiki]
 ## 输出模板
 
 ```
-这属于 <业务>，目前在第 <N> 步。
+这属于「<胶囊名>」，目前在第 <N> 步。
 下一步：输入 /<Skill名>，在任务里写明 <要写明的事项>，并选用 <上游成果>。
 ```
 

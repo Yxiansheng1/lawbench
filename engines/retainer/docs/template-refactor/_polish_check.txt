@@ -1,0 +1,8 @@
+﻿=== 模板处理工具按钮（收口后）===
+  feeFixed     生成固定收费条款副本
+  feeRisk      生成半风险收费条款副本
+  feePure      生成全风险收费条款副本
+
+=== 当前状态 ===
+resources/templates = 13 份
+根目录 _* 残留 = _after_cleanup.txt, _del_err.txt, _mem_list.txt, _tmp_verify.py, _verify.txt, _verify_run.txt

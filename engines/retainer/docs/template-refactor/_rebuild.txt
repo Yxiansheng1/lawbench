@@ -1,0 +1,7 @@
+﻿构建退出码 = 0
+Built 13 templates, original skill contents and local data scripts
+
+=== data/*.js 的 version ===
+  config.js version = 3.4.0
+  rules.js version = 3.4.0
+  builtin.js version = 3.4.0

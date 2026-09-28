@@ -1,0 +1,24 @@
+﻿python.exe : C:\Users\0\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\__init__.py:113: RequestsDep
+endencyWarning: urllib3 (2.6.3) or chardet (7.2.0)/charset_normalizer (3.4.6) doesn't match a supported version!
+所在位置 行:446 字符: 1
++ & $py 'D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\run_for ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\0\AppD...ported version!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  warnings.warn(
+[32m[INFO] 2026-09-13 16:10:35,443 [RapidOCR] base.py:23: Using engine_name: onnxruntime[0m
+[32m[INFO] 2026-09-13 16:10:35,531 [RapidOCR] download_file.py:60: File exists and is valid: D:\workbuddy娴嬭瘯\retainer-
+offline\tools\ocr-driver\vendor\rapidocr\models\PP-OCRv6_det_small.onnx[0m
+[32m[INFO] 2026-09-13 16:10:35,531 [RapidOCR] main.py:63: Using D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vend
+or\rapidocr\models\PP-OCRv6_det_small.onnx[0m
+[32m[INFO] 2026-09-13 16:10:35,594 [RapidOCR] base.py:23: Using engine_name: onnxruntime[0m
+[32m[INFO] 2026-09-13 16:10:35,596 [RapidOCR] download_file.py:60: File exists and is valid: D:\workbuddy娴嬭瘯\retainer-
+offline\tools\ocr-driver\vendor\rapidocr\models\ch_ppocr_mobile_v2.0_cls_mobile.onnx[0m
+[32m[INFO] 2026-09-13 16:10:35,596 [RapidOCR] main.py:63: Using D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vend
+or\rapidocr\models\ch_ppocr_mobile_v2.0_cls_mobile.onnx[0m
+[32m[INFO] 2026-09-13 16:10:35,669 [RapidOCR] base.py:23: Using engine_name: onnxruntime[0m
+[32m[INFO] 2026-09-13 16:10:35,683 [RapidOCR] download_file.py:60: File exists and is valid: D:\workbuddy娴嬭瘯\retainer-
+offline\tools\ocr-driver\vendor\rapidocr\models\PP-OCRv6_rec_small.onnx[0m
+[32m[INFO] 2026-09-13 16:10:35,683 [RapidOCR] main.py:63: Using D:\workbuddy娴嬭瘯\retainer-offline\tools\ocr-driver\vend
+or\rapidocr\models\PP-OCRv6_rec_small.onnx[0m

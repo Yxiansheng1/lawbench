@@ -4,8 +4,6 @@ title: 案件 wiki
 description: 生成或更新案件 wiki（案件卡片、当事人、时间线、争议焦点、概览）。律师点"生成 / 更新案件 wiki"时由程序按步骤运行，不在对话中调用。结果进入所有任务的 L0 注入。
 mode: pipeline
 kind: excerpt
-entry: 共用
-order: 1
 params: {thinking: 低, window: 64K, max_tokens: 16384}
 owner: 待定
 inputs: [materials]
@@ -17,7 +15,7 @@ inputs: [materials]
 
 ## 适用场景
 
-律师点"生成案件 wiki"（首次）或"更新案件 wiki"（材料有新增或变化后）时运行。每个入口都可以用；生成的案件卡片和各节进入所有任务的 L0 注入，AI 也可以用 `case_read_wiki` 读取。
+律师点"生成案件 wiki"（首次）或"更新案件 wiki"（材料有新增或变化后）时运行。每个胶囊都可以用；生成的案件卡片和各节进入所有任务的 L0 注入，AI 也可以用 `case_read_wiki` 读取。
 
 ## 输入
 

@@ -1,0 +1,50 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; connect-src http://127.0.0.1:17801; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<title>CH-UPLOAD_PASS</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px;font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif;color:#2C2C2A;background:#F7F7F5}
+h1{margin:0 0 4px;font-size:18px;font-weight:500}
+.sub{color:#5F5E5A;margin:0 0 16px;font-size:13px}
+.card{background:#fff;border:1px solid #E3E2DE;border-radius:10px;padding:16px;margin-bottom:14px}
+.acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+button,label.btn{font:inherit;padding:7px 14px;border-radius:8px;border:1px solid #C9C8C2;background:#fff;cursor:pointer}
+button.primary{background:#185FA5;border-color:#185FA5;color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}
+.verdict{margin-top:10px;padding:10px 12px;border-radius:8px;font-weight:500}
+.verdict.pass{background:#E1F5EE;color:#085041;border:1px solid #0F6E56}
+.verdict.fail{background:#FCEBEB;color:#791F1F;border:1px solid #A32D2D}
+#log{height:260px;overflow:auto;background:#FCFCFB;border:1px solid #E3E2DE;border-radius:8px;padding:10px;font:13px/1.7 "Cascadia Mono",Consolas,monospace}
+.line{display:flex;gap:10px}
+.line .t{color:#888780;flex:0 0 78px}
+.line.ok .m{color:#0F6E56}
+.line.err .m{color:#A32D2D}
+.line.hint .m{color:#5F5E5A}
+#result .row{display:flex;justify-content:space-between;gap:12px;padding:6px 8px;border-bottom:1px solid #EFEFEC}
+#result .row .meta{color:#888780;font-size:12px;white-space:nowrap}
+#lines{margin-top:8px}
+</style>
+</head><body>
+<h1>閫氶亾楠岃瘉 路 姝ｄ緥</h1>
+<p class="sub">CSP 宸叉斁琛?<code>http://127.0.0.1:17801</code>锛岄鏈燂細鎺㈡祴鎴愬姛銆佸彲涓婁紶璇嗗埆銆?/p>
+
+<div class="card">
+  <div class="acts">
+    <button id="probe" class="primary">鎺㈡祴鏈満椹卞姩</button>
+    <button id="showCsp">鏌ョ湅鏈〉 CSP</button>
+    <label class="btn">閫夋嫨璇佷欢鍥剧墖<input id="upload" type="file" accept="image/*" hidden=""></label>
+  <button>鐢熸垚娴嬭瘯鍥惧苟璇嗗埆</button></div>
+  <div id="verdict" class="verdict pass">閫氶亾鍙敤锛氬凡杩為€氭湰鏈洪┍鍔紝寮曟搸涓?rapidocr</div>
+</div>
+
+<div class="card"><div id="log"><div class="line "><span class="t">15:54:09</span><span class="m">椤甸潰宸插姞杞斤紙鍗忚锛歠ile:锛屾簮锛歠ile://锛?/span></div><div class="line "><span class="t">15:54:09</span><span class="m">寮€濮嬫帰娴?http://127.0.0.1:17801/health</span></div><div class="line ok"><span class="t">15:54:09</span><span class="m">HTTP 200锛岃€楁椂 10 ms</span></div><div class="line ok"><span class="t">15:54:09</span><span class="m">寮曟搸=rapidocr銆€鐗堟湰=銆€灏辩华=true</span></div><div class="line "><span class="t">15:54:09</span><span class="m">妫€娴嬪埌 #auto锛岃嚜鍔ㄦ墽琛屽畬鏁撮摼璺祴璇?/span></div><div class="line "><span class="t">15:54:09</span><span class="m">鐢熸垚椤靛唴娴嬭瘯鍥撅紙铏氭瀯鍐呭锛夆€?/span></div><div class="line "><span class="t">15:54:10</span><span class="m">娴嬭瘯鍥?36 KB锛屽紑濮嬩笂浼?/span></div><div class="line "><span class="t">15:54:10</span><span class="m">涓婁紶 selftest.png锛?6 KB锛?/span></div><div class="line ok"><span class="t">15:54:10</span><span class="m">HTTP 200锛屽線杩?10 ms锛岄┍鍔ㄥ唴鑰楁椂 1325 ms</span></div><div class="line ok"><span class="t">15:54:10</span><span class="m">璇嗗埆鍒?4 琛岋細</span></div></div></div>
+
+<div class="card" id="result">
+  <strong>璇嗗埆缁撴灉锛堝甫鍧愭爣鐨勬枃鏈锛屾湭鍋氬瓧娈佃В鏋愶級</strong>
+  <div id="lines"><div class="row"><span class="txt">钀ヤ笟鎵х収</span><span class="meta">score 0.994銆€璧风偣 39,34</span></div><div class="row"><span class="txt">鍚嶇О娣卞湷甯傜ず渚嬬鎶€鏈夐檺鍏徃</span><span class="meta">score 1.000銆€璧风偣 38,90</span></div><div class="row"><span class="txt">缁熶竴绀句細淇＄敤浠ｇ爜 91440300MA5EXAMPLA</span><span class="meta">score 0.980銆€璧风偣 35,146</span></div><div class="row"><span class="txt">娉曞畾浠ｈ〃浜哄紶涓?/span><span class="meta">score 1.000銆€璧风偣 37,201</span></div></div>
+</div>
+
+<script src="channel.js"></script>
+
+<div id="machine" style="display: none;">MACHINE_STATE=UPLOAD_PASS;DETAIL=lines=4,durationMs=1325,roundtripMs=10</div></body></html>

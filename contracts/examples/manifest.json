@@ -232,5 +232,77 @@
   "schema": "files/settings.schema.json",
   "pointer": "",
   "expect": "valid"
+ },
+ {
+  "file": "api_materials_import.req.json",
+  "schema": "api/materials_import.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_materials_import.res.json",
+  "schema": "api/materials_import.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_calc_sentence.args.json",
+  "schema": "tools/case_calc_sentence.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_calc_sentence.args_bad.json",
+  "schema": "tools/case_calc_sentence.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "invalid"
+ },
+ {
+  "file": "tool_calc_sentence.result.json",
+  "schema": "tools/case_calc_sentence.schema.json",
+  "pointer": "#/$defs/result",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_archive_plan.args.json",
+  "schema": "tools/case_save_archive_plan.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_archive_plan.args_bad.json",
+  "schema": "tools/case_save_archive_plan.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "invalid"
+ },
+ {
+  "file": "api_archive_build.fail.json",
+  "schema": "api/archive_build.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_invoice_run.req.json",
+  "schema": "api/invoice_run.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_invoice_run.req_imap.json",
+  "schema": "api/invoice_run.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "invalid"
+ },
+ {
+  "file": "skill_capsules.json",
+  "schema": "skill/capsules.schema.json",
+  "pointer": "",
+  "expect": "valid"
+ },
+ {
+  "file": "skill_capsules.bad_tool.json",
+  "schema": "skill/capsules.schema.json",
+  "pointer": "",
+  "expect": "invalid"
  }
 ]

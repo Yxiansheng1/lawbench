@@ -1,0 +1,4 @@
+﻿corpus:
+font=C:\Windows\Fonts\msyh.ttc
+cases=20
+license-clean  business_license  白底印刷体，正面平拍

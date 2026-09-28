@@ -1,0 +1,22 @@
+﻿bytes=2695
+first3=64,101,99
+BOM check (should be 64,101,99 = 'dec'): @ec
+--- 用 GBK 解码前 6 行 ---
+@echo off
+setlocal enabledelayedexpansion
+title 委托材料工作台 - 启动器
+
+set "ROOT=%~dp0"
+set "DRIVER=%ROOT%tools\ocr-driver\driver.py"
+--- 用 GBK 读回校验 ---
+@echo off
+setlocal enabledelayedexpansion
+title 委托材料工作台 - 启动器
+
+set "ROOT=%~dp0"
+set "DRIVER=%ROOT%tools\ocr-driver\driver.py"
+set "PORT=17801"
+set "CHECK=0"
+if /i "%~1"=="--check" set "CHECK=1"
+
+echo.

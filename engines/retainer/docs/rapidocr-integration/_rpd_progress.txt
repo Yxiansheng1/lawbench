@@ -1,0 +1,8 @@
+﻿=== install log tail ===
+Collecting rapidocr
+  Downloading rapidocr-3.9.2-py3-none-any.whl.metadata (1.1 kB)
+Downloading rapidocr-3.9.2-py3-none-any.whl (27.3 MB)
+=== vendor dir ===
+entries=0  totalMB=0
+=== pip connectivity ===
+True

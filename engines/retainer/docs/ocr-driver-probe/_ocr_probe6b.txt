@@ -1,0 +1,5 @@
+﻿=== checksum algorithms ===
+USCC official sample 91350100M000100Y43 -> computed tail = 3 (expect 3)
+ID   official sample 11010519491231002X -> computed tail = X (expect X)
+constructed fictional USCC = 91440300MA5EXAMPLA
+verify constructed USCC -> A

@@ -1,0 +1,3 @@
+﻿解压耗时=667.6 秒
+go.exe 存在=True
+版本：go version go1.27.1 windows/amd64

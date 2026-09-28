@@ -1,0 +1,13 @@
+﻿=== driver dir ===
+docloader.py                8527 B  ascii-only=True
+driver.py                  12218 B  ascii-only=True
+fieldfix.py                12753 B  ascii-only=True
+README.md                   8130 B  ascii-only=True
+start-engine.bat             704 B  ascii-only=True
+stop-engine.bat              207 B  ascii-only=True
+stop-engine.ps1              688 B  ascii-only=True
+
+=== 内容编码检查 ===
+start-engine.bat       nonAsciiBytes=0
+stop-engine.bat        nonAsciiBytes=0
+stop-engine.ps1        nonAsciiBytes=0

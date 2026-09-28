@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "CONVERTER_UNAVAILABLE",
+    "message": "本机没有可用的 Word、WPS，内置转换程序也无法启动"
+  }
+}

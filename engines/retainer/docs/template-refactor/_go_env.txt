@@ -1,0 +1,8 @@
+﻿PATH: 已加入 PATH
+PATH(User) 现含 go-sdk = True
+GOPROXY(User) = https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct
+GOSUMDB(User) = sum.golang.google.cn
+
+=== 解压进度 ===
+文件数=9744  大小MB=196.6
+（Go SDK 完整解压约 1.4 万个文件 / 300MB 左右）

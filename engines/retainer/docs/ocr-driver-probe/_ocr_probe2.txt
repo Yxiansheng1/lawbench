@@ -1,0 +1,7 @@
+﻿=== WinRT OCR (recheck) ===
+count=2
+tags=en-US,zh-Hans-CN
+fromUserProfile=True
+=== system locale ===
+uiculture=zh-CN
+os=Microsoft Windows 10 专业版

@@ -68,6 +68,67 @@
     "ocr_fallback_llm": {
       "type": "boolean",
       "description": "395 不可用时由 6000D 接管识别；管理员开启，默认 false"
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "lawyer_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "本机律师姓名：结案报告、立卷申请书默认的承办律师"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "lawyer_name"
+      ]
+    },
+    "office": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "日常办公文件夹（发票台账等），律师指定；不得位于云同步目录"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invoice_buyer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "发票购买方名称（律所全称），用于抬头核验"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "dir",
+        "invoice_buyer"
+      ]
+    },
+    "converter": {
+      "enum": [
+        "auto",
+        "word",
+        "wps",
+        "libreoffice"
+      ],
+      "description": "Word 转 PDF 用哪个程序；auto = Word → WPS → 内置 LibreOffice 依次尝试"
     }
   },
   "additionalProperties": false,
@@ -77,6 +138,9 @@
     "defaults",
     "skill_presets",
     "templates",
-    "ocr_fallback_llm"
+    "ocr_fallback_llm",
+    "profile",
+    "office",
+    "converter"
   ]
 }

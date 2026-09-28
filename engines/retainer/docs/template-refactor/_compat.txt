@@ -1,0 +1,12 @@
+URL: file:///D:/workbuddy测试/retainer-offline/启动.html#uitest
+domChars: 15685
+模板选项数(渲染出的复选框): 4
+
+TITLE:
+UITEST templates=13 | groups=个人委托/公司委托/刑事 | validateConfig=ok | legacyImport=from3.3.0,records=1,templates=13 | 固定[check=类型：民商事 主体：个人 收费：固定 模板组：个人委托 金额：贰万伍仟元整（¥25000）][files=4][notice=已生成 4 份文书，字段与文档结构校验通过。] | 半风险[check=类型：民商事 主体：个人 收费：半风险 模板组：个人委托 金额：贰万元整（¥20000） 风险费率：百分之十二点五（12][files=4][notice=已生成 4 份文书，字段与文档结构校验通过。] | 全风险[check=类型：民商事 主体：个人 收费：全风险 模板组：个人委托 金额：零元整（0） 风险费率：百分之十五（15%）][files=4][notice=已生成 4 份文书，字段与文档结构校验通过。]
+
+模板组摘要:
+当前模板组「个人委托」共 4 份，已选 4 份。（案件字段未填全时按默认组显示，填全后自动匹配）
+
+SCAN STATE:
+未检测到本机识别引擎。请双击工作台目录下的「启动委托工作台.bat」（或 tools/ocr-driver/start-engine.bat）；启动后本页会自动接上，无需刷新。不使用识别功能时，其余操作不受影响。

@@ -1,0 +1,23 @@
+﻿[移出] 个人委托\1、民事委托代理合同.docx  →  _deprecated-templates\
+[跳过] 无锁文件：D:\workbuddy测试\retainer-offline\original-skill\templates\个人委托\~$民事委托代理合同.docx
+[跳过] 无锁文件：D:\workbuddy测试\retainer-offline\original-skill\templates\公司委托\~$民事委托代理合同.docx
+
+=== 清理后的模板目录 ===
+【个人委托】4 份
+    1 民事委托代理合同.docx
+    2 授权委托书.docx
+    3 所函.docx
+    ⭐️当事人需提供的材料清单.docx
+【公司委托】5 份
+    1 民事委托代理合同.docx
+    2 民事授权委托书.docx
+    3 法定代表人身份证明.docx
+    4 所函.docx
+    ⭐️贵公司需提供的材料清单.docx
+【刑事】4 份
+    1、刑事辩护委托合同.docx
+    2、刑事授权委托书.docx
+    ⭐️贵方需提供的材料清单.docx
+    会见信.docx
+
+有效 .docx 合计 = 13

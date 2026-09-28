@@ -1,4 +1,4 @@
-"""同步共用规则，并按 Spec 第 10 节校验 Skill 和入口清单。
+"""同步共用规则，并按 Spec 第 10 节校验 Skill 和胶囊配置。
 
 用法：
     python build_skills.py                  # 默认根目录 = 本脚本所在目录的上一级
@@ -7,17 +7,16 @@
     python build_skills.py --strict         # 发版用：缺测试集、owner 未定也算错误
 
 做两件事：
-1. 把 _shared/共用规则.md 写进 entries 里用到的每个 Skill 的
+1. 把 _shared/共用规则.md 写进胶囊配置里用到的每个 Skill 的
    <!-- 共用规则:开始 --> ... <!-- 共用规则:结束 --> 之间；
    没有标记的，插到"## 自检清单"之前。
 2. 校验（错误必须改；警告建议看，--strict 时部分警告升级为错误）：
-   入口清单 entries/*.yaml
-     - id、name、skills、outputs 齐全；id、name 不重复；skills 都存在
-     - 每个入口内 Skill 的 order 不递减
+   胶囊配置 capsules.default.json
+     - 分组、胶囊的 id 全局不重复；同组胶囊名不重复
+     - kind=skill 的 skills 都存在；kind=tool 的 tool 是已知内置工具；shared 里的 Skill 都存在
    SKILL.md 头部（Spec 10.2）
-     - name/title/description/mode/kind/entry/order/params/owner/inputs 齐全
+     - name/title/description/mode/kind/params/owner/inputs 齐全
      - name 与目录名一致；mode、kind、inputs、params 取值合法
-     - entry 与入口清单一致；entry 为"共用"的必须出现在每个入口
      - mode=pipeline 必须有 流水线提示词.md
    SKILL.md 正文（Spec 10.2）
      - 六个二级标题齐全且顺序正确
@@ -31,6 +30,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass, field
@@ -53,12 +53,13 @@ H2_RE = re.compile(r"^## (.+?)\s*$", re.M)
 
 
 @dataclass
-class Entry:
-    file: str
+class Capsule:
+    group: str
     id: str
     name: str
+    kind: str
     skills: list[str]
-    outputs: list[str]
+    tool: str | None
 
 
 @dataclass
@@ -66,7 +67,8 @@ class Report:
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     changed: list[str] = field(default_factory=list)
-    entries: list[Entry] = field(default_factory=list)
+    capsules: list[Capsule] = field(default_factory=list)
+    shared: list[str] = field(default_factory=list)
     metas: dict[str, dict] = field(default_factory=dict)
 
     def soft(self, msg: str, strict: bool) -> None:
@@ -137,53 +139,70 @@ def strip_block(body: str) -> str:
     return body
 
 
-# ---------- 入口清单 ----------
+# ---------- 胶囊配置 ----------
 
-def load_entries(root: Path, rep: Report) -> list[Entry]:
-    d = root / M.ENTRIES_DIR
-    files = sorted(d.glob("*.yaml")) if d.is_dir() else []
-    if not files:
-        rep.errors.append(f"找不到入口清单：{d}\\*.yaml（Spec 10.3）")
+def load_capsules(root: Path, rep: Report) -> list[Capsule]:
+    f = root / M.CAPSULES_FILE
+    tag = f"[{M.CAPSULES_FILE}]"
+    if not f.is_file():
+        rep.errors.append(f"找不到胶囊配置：{f}（Spec 10.3）")
         return []
-    entries: list[Entry] = []
-    for f in files:
-        tag = f"[entries/{f.name}]"
-        try:
-            data = yaml.safe_load(read_text(f)[0]) or {}
-        except yaml.YAMLError as exc:
-            rep.errors.append(f"{tag} YAML 格式错误：{exc}")
+    try:
+        data = json.loads(read_text(f)[0])
+    except json.JSONDecodeError as exc:
+        rep.errors.append(f"{tag} JSON 格式错误：{exc}")
+        return []
+    rep.shared = [str(x) for x in as_list(data.get("shared"))]
+    caps: list[Capsule] = []
+    ids: list[str] = []
+    for g in as_list(data.get("groups")):
+        gid, gname = str(g.get("id", "")), str(g.get("name", ""))
+        if not gid or not gname:
+            rep.errors.append(f"{tag} 有分组缺少 id 或 name")
             continue
-        missing = [k for k in ("id", "name", "skills", "outputs") if not data.get(k)]
-        if missing:
-            rep.errors.append(f"{tag} 缺少字段：{', '.join(missing)}")
-            continue
-        if not NAME_RE.match(str(data["id"])):
-            rep.errors.append(f"{tag} id 只能用小写字母、数字和连字符")
-        skills = [str(s) for s in as_list(data["skills"])]
-        if len(set(skills)) != len(skills):
-            rep.errors.append(f"{tag} skills 里有重复")
-        entries.append(Entry(f.name, str(data["id"]), str(data["name"]), skills,
-                             [str(o) for o in as_list(data["outputs"])]))
-    for attr in ("id", "name"):
-        values = [getattr(e, attr) for e in entries]
-        dup = sorted({v for v in values if values.count(v) > 1})
+        ids.append(gid)
+        names: list[str] = []
+        for it in as_list(g.get("items")):
+            cid, cname, kind = str(it.get("id", "")), str(it.get("name", "")), it.get("kind")
+            if not NAME_RE.match(cid) or not cname:
+                rep.errors.append(f"{tag} 分组「{gname}」里有胶囊的 id 或 name 不合法：{cid!r}")
+                continue
+            ids.append(cid)
+            names.append(cname)
+            if kind == "skill":
+                skills = [str(x) for x in as_list(it.get("skills"))]
+                if not skills:
+                    rep.errors.append(f"{tag} 胶囊「{cname}」没有 skills")
+                if len(set(skills)) != len(skills):
+                    rep.errors.append(f"{tag} 胶囊「{cname}」的 skills 有重复")
+                caps.append(Capsule(gname, cid, cname, "skill", skills, None))
+            elif kind == "tool":
+                tool = str(it.get("tool", ""))
+                if tool not in M.TOOL_IDS:
+                    rep.errors.append(f"{tag} 胶囊「{cname}」的 tool 只能是 {' / '.join(sorted(M.TOOL_IDS))}")
+                caps.append(Capsule(gname, cid, cname, "tool", [], tool))
+            else:
+                rep.errors.append(f"{tag} 胶囊「{cname}」的 kind 只能是 skill / tool")
+        dup = sorted({n for n in names if names.count(n) > 1})
         if dup:
-            rep.errors.append(f"入口 {attr} 重复：{', '.join(dup)}")
-    return entries
+            rep.errors.append(f"{tag} 分组「{gname}」里胶囊名重复：{', '.join(dup)}")
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    if dup:
+        rep.errors.append(f"{tag} id 重复：{', '.join(dup)}")
+    return caps
 
 
-def managed_skills(entries: list[Entry]) -> list[str]:
+def managed_skills(caps: list[Capsule], shared: list[str] | None = None) -> list[str]:
     out: list[str] = []
-    for e in entries:
-        for s in e.skills:
-            if s not in out:
-                out.append(s)
+    for s in [x for c in caps for x in c.skills] + list(shared or []):
+        if s not in out:
+            out.append(s)
     return out
 
 
 # ---------- 单个 Skill ----------
 
-def check_meta(name: str, skill_dir: Path, meta: dict, entries: list[Entry], rep: Report, strict: bool) -> None:
+def check_meta(name: str, skill_dir: Path, meta: dict, rep: Report, strict: bool) -> None:
     tag = f"[{name}]"
     missing = [k for k in M.REQUIRED_FIELDS if meta.get(k) in (None, "", [], {})]
     if missing:
@@ -207,10 +226,6 @@ def check_meta(name: str, skill_dir: Path, meta: dict, entries: list[Entry], rep
     kind = meta.get("kind")
     if kind is not None and kind not in M.KINDS:
         rep.errors.append(f"{tag} kind 只能是 {' / '.join(sorted(M.KINDS))}")
-
-    order = meta.get("order")
-    if order is not None and (not isinstance(order, int) or isinstance(order, bool) or order < 1):
-        rep.errors.append(f"{tag} order 必须是正整数")
 
     params = meta.get("params")
     if params is not None:
@@ -237,24 +252,9 @@ def check_meta(name: str, skill_dir: Path, meta: dict, entries: list[Entry], rep
     if bad:
         rep.errors.append(f"{tag} inputs 只能取 {' / '.join(sorted(M.INPUTS))}，出现了 {', '.join(map(str, bad))}")
 
-    # entry 与入口清单互相核对
-    declared = [str(x) for x in as_list(meta.get("entry"))]
-    listed_in = [e.name for e in entries if name in e.skills]
-    all_names = {e.name for e in entries}
-    if M.SHARED_ENTRY in declared:
-        if len(declared) > 1:
-            rep.errors.append(f"{tag} entry 写了\"{M.SHARED_ENTRY}\"就不要再列具体入口")
-        absent = sorted(all_names - set(listed_in))
-        if absent:
-            rep.errors.append(f"{tag} entry 为\"{M.SHARED_ENTRY}\"，但以下入口清单里没有它：{', '.join(absent)}")
-    else:
-        unknown = [d for d in declared if d not in all_names]
-        if unknown:
-            rep.errors.append(f"{tag} entry 里的 {', '.join(unknown)} 不是已有入口")
-        for n in sorted(set(listed_in) - set(declared)):
-            rep.errors.append(f"{tag} 入口\"{n}\"的清单里有它，但头部 entry 没写这个入口")
-        for n in sorted(set(declared) & all_names - set(listed_in)):
-            rep.errors.append(f"{tag} 头部 entry 写了\"{n}\"，但该入口清单里没有它")
+    for k in ("entry", "order"):
+        if k in meta:
+            rep.warnings.append(f"{tag} 头部的 {k} 已废止（契约 1.1 起由胶囊配置决定），可以删掉")
 
 
 def check_body(name: str, body: str, all_skills: set[str], meta: dict, rep: Report) -> None:
@@ -311,7 +311,7 @@ def check_body(name: str, body: str, all_skills: set[str], meta: dict, rep: Repo
             rep.errors.append(f"{tag} 出现通用工具 `{tool}`，律师工作台不提供")
     for ref in sorted(set(SLASH_RE.findall(own))):
         if ref not in all_skills:
-            rep.errors.append(f"{tag} 引用了 /{ref}，但入口清单里没有这个 Skill")
+            rep.errors.append(f"{tag} 引用了 /{ref}，但胶囊配置里没有这个 Skill")
     if name not in M.NO_SAVE_REQUIRED and not any(t in own for t in M.SAVE_TOOLS):
         rep.errors.append(f"{tag} 正文没有写怎么保存成果（{' / '.join(sorted(M.SAVE_TOOLS))}）")
 
@@ -352,15 +352,15 @@ def run(root: Path, check_only: bool, strict: bool = False) -> Report:
         return rep
     block = build_block(read_text(rules_path)[0])
 
-    rep.entries = load_entries(root, rep)
-    names = managed_skills(rep.entries)
+    rep.capsules = load_capsules(root, rep)
+    names = managed_skills(rep.capsules, rep.shared)
     all_skills = set(names)
 
     for name in names:
         skill_dir = root / name
         path = skill_dir / "SKILL.md"
         if not path.is_file():
-            rep.errors.append(f"[{name}] 入口清单里有，但找不到 {path}")
+            rep.errors.append(f"[{name}] 胶囊配置里有，但找不到 {path}")
             continue
         try:
             text, newline = read_text(path)
@@ -387,23 +387,16 @@ def run(root: Path, check_only: bool, strict: bool = False) -> Report:
             rep.errors.append(f"[{name}] 头部必须是 key: value 形式")
             continue
         rep.metas[name] = meta
-        check_meta(name, skill_dir, meta, rep.entries, rep, strict)
+        check_meta(name, skill_dir, meta, rep, strict)
         check_body(name, body, all_skills, meta, rep)
         check_tests(name, skill_dir, rep, strict)
-
-    # 入口内按 order 排列
-    for e in rep.entries:
-        orders = [rep.metas.get(s, {}).get("order") for s in e.skills]
-        if all(isinstance(o, int) for o in orders) and orders != sorted(orders):
-            seq = ", ".join(f"{s}({o})" for s, o in zip(e.skills, orders))
-            rep.errors.append(f"[entries/{e.file}] Skill 顺序与各自的 order 不一致：{seq}")
 
     others = sorted(
         p.name for p in root.iterdir()
         if p.is_dir() and (p / "SKILL.md").is_file() and p.name not in all_skills
     )
     if others:
-        rep.warnings.append(f"以下 Skill 不在任何入口清单里，不会被加载（仅参考）：{', '.join(others)}")
+        rep.warnings.append(f"以下 Skill 不在胶囊配置里，不会被加载（仅参考）：{', '.join(others)}")
     return rep
 
 
@@ -438,7 +431,7 @@ def main() -> int:
     root = args.root.resolve()
     print(f"Skill 根目录：{root}")
     rep = run(root, args.check, args.strict)
-    print(f"入口 {len(rep.entries)} 个，Skill {len(managed_skills(rep.entries))} 个")
+    print(f"胶囊 {len(rep.capsules)} 个，Skill {len(managed_skills(rep.capsules, rep.shared))} 个")
     return 0 if print_report(rep, args.check) else 1
 
 

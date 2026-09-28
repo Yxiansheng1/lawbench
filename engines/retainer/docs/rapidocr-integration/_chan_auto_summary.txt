@@ -1,0 +1,2 @@
+﻿chars=4189
+MACHINE_STATE=UPLOAD_PASS;DETAIL=lines=4,durationMs=1325,roundtripMs=10

@@ -1,0 +1,48 @@
+﻿=== 模板处理工具按钮清单（用于完善点核对）===
+  standardExcel            下载标准 Excel
+  newCase                  新建案件
+  remap                    重新匹配表头
+  applyMapping             应用映射并读取案件
+  scanDiscard              放弃
+  checkCase                检查字段
+  downloadZip              下载当前案件 ZIP
+  downloadReport           校验报告
+  saveFolder               保存到本地目录
+  verifyTemplates          检查完整性
+  restoreAll               恢复全部内置模板
+  cleanTemplate            合并同格式文字片段
+  injectTemplate           按原规则注入占位符
+  feeFixed                 生成固定收费条款副本
+  feeRisk                  生成半风险收费条款副本
+  downloadMaintenance      下载处理副本
+  downloadMaintenanceReport 下载处理报告
+  downloadRebuilt          下载重建模板包
+  adoptRebuilt             采纳全部已通过模板
+  exportResources          导出资源包
+  loadConfigEditor         读取当前配置
+  applyConfigEditor        校验并应用
+  resetConfig              恢复内置规则配置
+  downloadSelftest         下载自检报告
+
+=== 数量断言类硬编码扫描 ===
+ui.js 中的 22/13 字样：
+  ]`).value;
+   try{const out=await R.inject(new Uint8Array(await f.arrayBuffer()),group,tag),t=await makeTemplate(out.bytes,f.name,group,tag);await R.validateTemplate(t);R.assert(!ids.has(t.id),'多个源文件对应同一目标文书');ids.add(t.id);candidates.push(t);report.push({file:f.name,target:t.id,success:true,details:out.report});}catch(e){report.push({file:f.name,success:false,error:e.message});}}
+   R.assert(report.length,'请选择源文件');rebuilt=candidates;$('rebuildResult').hidden=false;$('rebuildReport').textContent=JSON.stringify({files:report,missing:RETAINER_BUILTIN.templates.filter(t=>!ids.has(t.id)).map(t=>t.id)},null,2);notice(`已处理 ${report.length} 份，通过 ${candidates.length} 份；请查看缺失与失败清单。`);
+ });
+ on('downloadRebuilt',async()=>{R.assert(rebuilt.length,'尚无已通过模板');const z=new JSZip();for(const t of rebuilt)z.file(t.id,R.bytes(t.base64));z.file('重建报告.json',$('rebuildReport').textContent);R.download(await z.generateAsync({type:'uint8array',compression:'DEFLATE'}),'重建模板.zip');});on('adoptRebuilt',()=>{R.assert(rebuilt.length,'尚无已通过模板');adopt(rebuilt);notice('已采纳 '+rebuilt.length+' 份模板，其余工作模板保留。');});
+ on('exportWork',async()=>R.download(await R.pack('work',snapshot()),'委托材料工作包.zip'));on('exportResources',async()=>R.download(await R.pack('resources'),'委托材料资源包.zip'));
+ function refresh(){populateGroups();renderRecords();renderChoices();renderTemplates();loadSheets();$('remember').checked=state.remember;$('includeFolders').checked=state.folders;}
+ async function importPack(id,kind){const f=$(id).files[0];if(!f)return;const p=await R.unpack(await f.arrayBuffer(),kind);if(kind==='work'){clearTimeout(saveTimer);await saveChain.catch(()=>{});await R.storage.clear().catch(()=>{});}R.applyPackage(p);if(kind==='work'){state=p.state;state.index=Math.max(0,Math.min(state.index||0,state.records.length-1));if(!state.records.length){state.records=[{row:fresh(),issues:[]}];state.index=0;}state.remember=false;$('storageStatus').textContent='工作包已恢复；自动保存关闭。';}refresh();scheduleSave();notice(p.importedFrom?('已从 '+p.importedFrom+' 版工作包导入案件数据；模板与收费条款已改用本版内置资源，请核对后使用。'):('已恢复本地'+(kind==='work'?'工作包；自动保存保持关闭。':'资源包。')));$(id).value='';}
+ on('importWork',()=>importPack('importWork','work'),'change');on('importResources',()=>importPack('importResources','resources'),'change');
+ on('remember',async()=>{state.remember=$('remember').checked;if(state.remember){try{await R.storage.put(await R.pack('work',snapshot()));$('storageStatus').textContent='已开启，工作内容将自动保存到此浏览器。';}catch(e){state.remember=false;$('remember').checked=false;$('storageStatus').textContent='保存失败，请下载工作包：'+e.message;throw e;}}else{clearTimeout(saveTimer);await saveChain.catch(()=>{});await R.storage.clear();$('storageStatus').textContent='已关闭自动保存并移除浏览器副本，当前页面数据仍在内存。';}},'change');
+ on('clearStorage',async()=>{clearTimeout(saveTimer);state.remember=false;$('remember').checked=false;await saveChain.catch(()=>{});await R.storage.clear();$('storageStatus').textContent='浏览器保存内容已清除；当前页面数据仍在内存。';});
+ on('loadConfigEditor',()=>{$('configEditor').value=JSON.stringify({config:R.config,rules:R.rules},null,2);});on('applyConfigEditor',()=>{const p=JSON.parse($('configEditor').value);R.validateConfig(p.config,p.rules);R.config=R.clone(p.config);R.rules=R.clone(p.rules);refresh();scheduleSave();notice('规则配置已校验并应用；模板中的固定文字未被改写。');});on('resetConfig',()=>{R.config=R.clone(RETAINER_CONFIG);R.rules=R.clone(RETAINER_RULES);refresh();scheduleSave();notice('已恢复内置规则配置。');});
+ const guide=`使用流程\n\n1. 下载标准 Excel，在“案件录入”每行填写一个案件；也可直接新建案件填写。\n2. 导入 Excel，选择工作表和表头行，核对字段映射后读取案件。\n3. 选择一案，核对金额、阶段及模板组，生成 Word。\n4. 下载单份文书或当前案件 ZIP。“包含完整案件目录”会保留原技能全部目录。\n\n模板管理\n内置三类共13份模板（个人委托 / 公司委托 / 刑事）。导入带占位符的自定义 Word 可替换同组文书；附加文书按文件名添加。源模板先在“模板处理工具”注入，查看报告后采纳。清理仅合并相邻同格式纯文字，不删除图片或字段。收费条款转换仅用于民事合同，生成副本供核对。\n\n本地保存\n默认不留存。可主动开启自动记住；也可下载工作包备份和迁移。工作包为普通本地文件，不含加密。浏览器存储不可用时请使用工作包。资源包不包含案件数据。\n\n输入支持与限制\n现有案件字段、固定 / 半风险 / 全风险收费。金额示例：50000元、2.5万元（固定）；前期2万+12.5%（半风险）；回款额的15%（全风险）。多金额、分期、结果收费需要另行处理合同，本程序会报错。Excel 不计算公式；先粘贴为值。\n\n安全与离线\n本工具不连接网络。导入文件中的宏、活动内容、外部资源引用不被执行，含这些内容的文件会被拒绝。原桌面源模板未随技能提供，重建需手动选择源文件；恢复内置模板无需源文件。\n\n版式与签署\n保留模板的格式结构，文字变长仍可能影响分页。在 Word 中复核排版、代理权限及签署信息，填写日期和合同编号。默认律师、账户等来自原模板，不属于 Excel 录入字段。\n\n维护数据\ndata/config.json 与 data/rules.json 为可读配置；运行加载对应本地 .js 数据文件。普通维护请使用资源包及高级配置编辑，维护者修改 JSON 后使用 tools/build.go 重新生成加载文件。\n\n完整性\n“检查完整性”核对模板缺失、哈希与字段；“离线自检”使用虚构样例验证运行能力。原技能源码与说明在本页下拉框及 original-skill 目录完整保留。`;
+ const docs={'使用说明':guide,'能力迁移对照':`案件输入 → 案件表单 / Excel 字段映射\n类型识别与金额 → 检查字段\n文书生成 → 生成当前案件文书\n案件目录 / 归档 → 包含完整案件目录 / 保存到本地目录\n模板完整性 / 恢复 → 模板管理\n占位符注入 / 下划线处理 → 模板处理工具\n模板清理 → 合并同格式文字片段\n收费条款转换 → 固定 / 半风险副本\n源模板重建 → 从源模板重建\n规则与默认信息 → 保存与资源 / 高级数据维护\n结果 JSON / 校验 → 校验报告\n版本 / 测试 → 说明与自检\n全部原技能文件 → original-skill 与本页完整资料`,...RETAINER_BUILTIN.originalDocs,...RETAINER_BUILTIN.appDocs};
+ for(const k of Object.keys(docs))$('helpSelect').append(option(k,k));$('helpContent').textContent=guide;$('helpSelect').onchange=()=>{$('helpContent').textContent=docs[$('helpSelect').value];};
+ const pt=el('table');for(const [k,v]of Object.entries(R.config.placeholders)){const tr=el('tr');tr.append(el('td','{{'+k+'}}'),el('td',v));pt.append(tr);}$('placeholderTable').append(pt);
+ on('selftest',async()=>{$('selftestReport').textContent='正在使用虚构案件运行自检…';lastSelftest=await R.selftest();$('selftestReport').textContent=JSON.stringify(lastSelftest,null,2);notice(lastSelftest.success?'自检通过。':'自检发现失败项，请查看报告。',!lastSelftest.success);});on('downloadSelftest',()=>{R.assert(lastSelftest,'请先运行自检');R.download(JSON.stringify(lastSelftest,null,2),'离线自检报告.json');});
+ refresh();window.RETAINER_UI={getState:snapshot,setState:s=>{state=s;refresh();},getResult:()=>result,integrity};
+ (async()=>{try{const saved=await R.storage.get();if(saved){const p=await R.unpack(saved,'work');if(p.state.remember){R.applyPackage(p);state=p.state;refresh();$('storageStatus').textContent=p.importedFrom?('已从 '+p.importedFrom+' 版保存内容恢复案件数据；模板已升级为本版。'):'已恢复此浏览器保存的工作内容。';notice(p.importedFrom?'已从旧版保存内容恢复案件数据，模板与收费条款已升级为本版。':'已恢复上次保存的工作内容。');}}}catch(e){$('storageStatus').textContent='浏览器保存不可用或恢复失败，请导入工作包：'+e.message;}})();
+})();

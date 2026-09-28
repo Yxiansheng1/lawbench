@@ -33,7 +33,8 @@
     "entry": {
       "anyOf": [
         {
-          "type": "string"
+          "type": "string",
+          "description": "胶囊 id"
         },
         {
           "type": "null"

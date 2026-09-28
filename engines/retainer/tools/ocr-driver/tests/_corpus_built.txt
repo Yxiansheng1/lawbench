@@ -1,0 +1,22 @@
+font=C:\Windows\Fonts\msyh.ttc
+cases=20
+license-clean  business_license  白底印刷体，正面平拍
+license-rotate3  business_license  旋转 3.0 度
+license-rotate-5  business_license  旋转 -5.0 度
+license-blur  business_license  高斯模糊 1.2
+license-noise  business_license  高斯噪点 σ=18
+license-jpeg60  business_license  JPEG 质量 60（保存时施加）
+license-lowres  business_license  降采样至 45% 再放大
+license-shadow  business_license  左侧亮右侧暗的渐变阴影
+license-scanbw  business_license  二值化，模拟复印件
+license-lowcontrast  business_license  低对比度
+idcard-clean  id_card_front  白底印刷体，正面平拍
+idcard-rotate3  id_card_front  旋转 3.0 度
+idcard-rotate-5  id_card_front  旋转 -5.0 度
+idcard-blur  id_card_front  高斯模糊 1.2
+idcard-noise  id_card_front  高斯噪点 σ=18
+idcard-jpeg60  id_card_front  JPEG 质量 60（保存时施加）
+idcard-lowres  id_card_front  降采样至 45% 再放大
+idcard-shadow  id_card_front  左侧亮右侧暗的渐变阴影
+idcard-scanbw  id_card_front  二值化，模拟复印件
+idcard-lowcontrast  id_card_front  低对比度

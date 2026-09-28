@@ -1,0 +1,79 @@
+{
+ "id": "其他非诉卷",
+ "attachment": "附件5",
+ "renumber": false,
+ "items": [
+  {
+   "code": 1,
+   "name": "专项服务合同（合同编号、经办律师签字、落款时间必填）",
+   "required": true,
+   "keywords": [
+    "专项服务合同",
+    "委托合同",
+    "服务合同",
+    "聘用律师合同"
+   ],
+   "folders": []
+  },
+  {
+   "code": 2,
+   "name": "收费发票凭证（如为计时收费，请一并上传计时收费确认单；如约定风险收费，需写明风险收费金额计算公式）",
+   "required": true,
+   "keywords": [
+    "发票",
+    "收费",
+    "律师费",
+    "服务费"
+   ],
+   "folders": []
+  },
+  {
+   "code": 3,
+   "name": "委托人提供的证据材料",
+   "required": false,
+   "keywords": [
+    "证据材料",
+    "委托人提供",
+    "证据目录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 4,
+   "name": "调查材料",
+   "required": false,
+   "keywords": [
+    "调查材料",
+    "调查报告",
+    "调查笔录",
+    "取证"
+   ],
+   "folders": []
+  },
+  {
+   "code": 5,
+   "name": "律师出具的法律意见，或草拟的法律文书、办理具体法律事务互动的记录等",
+   "required": true,
+   "keywords": [
+    "法律意见书",
+    "法律意见",
+    "尽职调查报告",
+    "法律文书",
+    "工作记录"
+   ],
+   "folders": []
+  },
+  {
+   "code": 6,
+   "name": "结案报告",
+   "required": true,
+   "keywords": [
+    "结案报告",
+    "办案小结",
+    "工作小结"
+   ],
+   "folders": [],
+   "generated": true
+  }
+ ]
+}

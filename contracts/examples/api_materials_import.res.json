@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "value": {
+    "copied": [
+      {
+        "from": "C:\\Users\\li\\Desktop\\借条.pdf",
+        "to": "02案件材料/借条.pdf"
+      }
+    ],
+    "skipped": [
+      {
+        "path": "C:\\Users\\li\\OneDrive\\a.pdf",
+        "reason": "云同步目录"
+      }
+    ],
+    "scan": {
+      "added": 1,
+      "changed": 0,
+      "removed": 0,
+      "failed": 0,
+      "review_needed": true
+    }
+  }
+}

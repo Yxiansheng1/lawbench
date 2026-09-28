@@ -1,4 +1,4 @@
-"""把入口清单用到的 Skill 和入口清单本身，按 Spec 10.1–10.3 的目录结构复制到 DSH 加载目录。
+"""把胶囊配置用到的 Skill 和 capsules.default.json，按 Spec 10.1–10.3 的目录结构复制到 DSH 加载目录。
 
 用法：
     python install.py --out "<安装目录>\\skills"
@@ -8,9 +8,9 @@
 
 结果（Spec 10.1 的 <安装目录>/skills/ 或管理员下发目录）：
     <out>/
-    ├─ <skill-id>/                入口清单用到的每个 Skill（默认不带 tests/）
-    ├─ entries/*.yaml             入口清单原样复制，首页按文件名顺序显示
-    ├─ manifest.json              入口 -> Skill、每个 Skill 的头部信息和 SKILL.md 的 sha256
+    ├─ <skill-id>/                胶囊配置用到的每个 Skill（默认不带 tests/）
+    ├─ capsules.default.json      默认胶囊（律师点"恢复默认"时用它覆盖本机配置）
+    ├─ manifest.json              胶囊 -> Skill、每个 Skill 的头部信息和 SKILL.md 的 sha256
     └─ .generated-by-install      标记文件：有它才允许下次整目录重建
 
 dsh-skill-filesystem 的 customSkillDirs 指向 <out>（Spec 3.1、10.1）。
@@ -56,7 +56,7 @@ def safe_reset(out: Path, src: Path, dry: bool) -> None:
 
 def main() -> int:
     build_skills.setup_console()
-    ap = argparse.ArgumentParser(description="按入口清单安装 Skill")
+    ap = argparse.ArgumentParser(description="按胶囊配置安装 Skill")
     ap.add_argument("--skills-dir", type=Path, default=Path(__file__).resolve().parent.parent,
                     help="Skill 源目录（默认：本脚本上一级目录）")
     ap.add_argument("--out", type=Path, required=True, help="输出目录（DSH 加载 Skill 的位置）")
@@ -80,20 +80,21 @@ def main() -> int:
     safe_reset(out, src, args.dry_run)
     ignore_list = list(M.COPY_IGNORE) + ([] if args.include_tests else ["tests"])
     ignore = shutil.ignore_patterns(*ignore_list)
-    skills = build_skills.managed_skills(rep.entries)
+    skills = build_skills.managed_skills(rep.capsules, rep.shared)
 
     manifest = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "source": str(src),
-        "entries": [{"id": e.id, "name": e.name, "file": e.file, "skills": e.skills, "outputs": e.outputs}
-                    for e in rep.entries],
+        "capsules": [{"group": c.group, "id": c.id, "name": c.name, "kind": c.kind, "skills": c.skills,
+                      "tool": c.tool} for c in rep.capsules],
+        "shared": rep.shared,
         "skills": {},
     }
     for name in skills:
         meta = rep.metas[name]
         manifest["skills"][name] = {
             "title": meta.get("title"), "mode": meta.get("mode"), "kind": meta.get("kind"),
-            "entry": meta.get("entry"), "order": meta.get("order"), "params": meta.get("params"),
+            "params": meta.get("params"),
             "owner": meta.get("owner"), "inputs": meta.get("inputs"),
             "sha256": sha256(src / name / "SKILL.md"),
         }
@@ -103,18 +104,16 @@ def main() -> int:
             shutil.copytree(src / name, out / name, ignore=ignore)
 
     if args.dry_run:
-        print(f"[dry-run] {src / M.ENTRIES_DIR} -> {out / M.ENTRIES_DIR}")
+        print(f"[dry-run] {src / M.CAPSULES_FILE} -> {out / M.CAPSULES_FILE}")
     else:
-        (out / M.ENTRIES_DIR).mkdir(parents=True)
-        for e in rep.entries:
-            shutil.copy2(src / M.ENTRIES_DIR / e.file, out / M.ENTRIES_DIR / e.file)
+        shutil.copy2(src / M.CAPSULES_FILE, out / M.CAPSULES_FILE)
         (out / MARKER).write_text("由 install.py 生成，重新运行会整目录重建，不要手工修改。\n", encoding="utf-8")
         (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                                            encoding="utf-8")
 
-    print(f"\n{'[dry-run] ' if args.dry_run else ''}已安装 {len(skills)} 个 Skill、{len(rep.entries)} 个入口到 {out}\n")
-    for e in rep.entries:
-        print(f"  {e.name:<6} {e.id:<17} {' → '.join(e.skills)}")
+    print(f"\n{'[dry-run] ' if args.dry_run else ''}已安装 {len(skills)} 个 Skill、{len(rep.capsules)} 个胶囊到 {out}\n")
+    for c in rep.capsules:
+        print(f"  {c.group:<6} {c.name:<12} {' → '.join(c.skills) if c.skills else '内置工具 ' + str(c.tool)}")
     print(f"\ncordis.patch.yml 中 skill-filesystem 的 customSkillDirs 加上：{json.dumps(str(out), ensure_ascii=False)}")
     return 0
 

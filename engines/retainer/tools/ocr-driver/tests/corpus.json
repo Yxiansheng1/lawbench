@@ -1,0 +1,287 @@
+{
+ "version": "1.0",
+ "createdAt": "2026-09-13",
+ "note": "全部为脚本生成的虚构内容，不含任何真实证件信息",
+ "cases": [
+  {
+   "id": "license-clean",
+   "file": "corpus/license-clean.png",
+   "docType": "business_license",
+   "scene": "白底印刷体，正面平拍",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-rotate3",
+   "file": "corpus/license-rotate3.png",
+   "docType": "business_license",
+   "scene": "旋转 3.0 度",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-rotate-5",
+   "file": "corpus/license-rotate-5.png",
+   "docType": "business_license",
+   "scene": "旋转 -5.0 度",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-blur",
+   "file": "corpus/license-blur.png",
+   "docType": "business_license",
+   "scene": "高斯模糊 1.2",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-noise",
+   "file": "corpus/license-noise.png",
+   "docType": "business_license",
+   "scene": "高斯噪点 σ=18",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-jpeg60",
+   "file": "corpus/license-jpeg60.png",
+   "docType": "business_license",
+   "scene": "JPEG 质量 60（保存时施加）",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-lowres",
+   "file": "corpus/license-lowres.png",
+   "docType": "business_license",
+   "scene": "降采样至 45% 再放大",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-shadow",
+   "file": "corpus/license-shadow.png",
+   "docType": "business_license",
+   "scene": "左侧亮右侧暗的渐变阴影",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-scanbw",
+   "file": "corpus/license-scanbw.png",
+   "docType": "business_license",
+   "scene": "二值化，模拟复印件",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "license-lowcontrast",
+   "file": "corpus/license-lowcontrast.png",
+   "docType": "business_license",
+   "scene": "低对比度",
+   "expect": {
+    "name": "深圳市示例科技有限公司",
+    "credit_code": "91440300MA5EXAMPLA",
+    "org_type": "有限责任公司",
+    "legal_rep": "张三",
+    "address": "广东省深圳市福田区示例路1号",
+    "established": "2020年09月01日"
+   }
+  },
+  {
+   "id": "idcard-clean",
+   "file": "corpus/idcard-clean.png",
+   "docType": "id_card_front",
+   "scene": "白底印刷体，正面平拍",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-rotate3",
+   "file": "corpus/idcard-rotate3.png",
+   "docType": "id_card_front",
+   "scene": "旋转 3.0 度",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-rotate-5",
+   "file": "corpus/idcard-rotate-5.png",
+   "docType": "id_card_front",
+   "scene": "旋转 -5.0 度",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-blur",
+   "file": "corpus/idcard-blur.png",
+   "docType": "id_card_front",
+   "scene": "高斯模糊 1.2",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-noise",
+   "file": "corpus/idcard-noise.png",
+   "docType": "id_card_front",
+   "scene": "高斯噪点 σ=18",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-jpeg60",
+   "file": "corpus/idcard-jpeg60.png",
+   "docType": "id_card_front",
+   "scene": "JPEG 质量 60（保存时施加）",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-lowres",
+   "file": "corpus/idcard-lowres.png",
+   "docType": "id_card_front",
+   "scene": "降采样至 45% 再放大",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-shadow",
+   "file": "corpus/idcard-shadow.png",
+   "docType": "id_card_front",
+   "scene": "左侧亮右侧暗的渐变阴影",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-scanbw",
+   "file": "corpus/idcard-scanbw.png",
+   "docType": "id_card_front",
+   "scene": "二值化，模拟复印件",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  },
+  {
+   "id": "idcard-lowcontrast",
+   "file": "corpus/idcard-lowcontrast.png",
+   "docType": "id_card_front",
+   "scene": "低对比度",
+   "expect": {
+    "name": "李四",
+    "gender": "男",
+    "ethnicity": "汉",
+    "birth": "1985年3月12日",
+    "address": "广东省深圳市南山区示例路2号",
+    "id_number": "11010519491231002X"
+   }
+  }
+ ]
+}

@@ -1,0 +1,28 @@
+﻿=== tests 目录 ===
+  corpus.json                  8270 B
+  make_corpus.py               5622 B
+  make_format_corpus.py        4716 B
+  README.md                    4965 B
+  run_edge.py                  3368 B
+  run_formats.py               5870 B
+  run_round.py                 9353 B
+  verify_page.py               3070 B
+  _corpus_built.txt            1182 B
+  _edge_result.txt             2277 B
+  _format_corpus.txt            849 B
+  _last_format_run.txt         8209 B
+  _last_run.txt                 367 B
+  _verify_result.txt            402 B
+  _verify_ui.txt                555 B
+=== results ===
+  formats.json
+  round-1.json
+  round-2.json
+  round-3.json
+=== 根目录残留 ===
+  _after_cleanup.txt
+  _del_err.txt
+  _mem_list.txt
+  _tmp_verify.py
+  _verify.txt
+  _verify_run.txt

@@ -1,0 +1,10 @@
+﻿解压后顶层 = go-sdk
+go.exe 存在 = True
+env.bat 存在 = True
+使用说明.txt 存在 = True
+
+=== 从全新位置运行 ===
+go version : go version go1.27.1 windows/amd64
+GOROOT     : C:\Users\0\_portable_test\go-sdk\go
+GOPATH     : C:\Users\0\_portable_test\go-sdk\gopath
+GOCACHE    : C:\Users\0\_portable_test\go-sdk\gocache

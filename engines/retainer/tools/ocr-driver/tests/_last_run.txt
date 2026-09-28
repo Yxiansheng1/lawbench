@@ -1,0 +1,7 @@
+第 3 轮　BUG排查后回归
+引擎 rapidocr　初始化 0.33s　总耗时 34.0s　用例 20
+字段准确率 1.0（120/120）　误识 0　漏取 0
+代码校验通过率 1.0　关键字段齐全率 1.0　平均置信度 0.9865　识别行数 120
+未全对用例 0/20：
+
+报告：D:\workbuddy测试\retainer-offline\tools\ocr-driver\tests\results\round-3.json

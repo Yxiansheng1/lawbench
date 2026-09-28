@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/skill/archive_catalog.schema.json",
+  "title": "skills/case-archiving/catalogs/<卷类>.json",
+  "description": "归档目录：编号、材料名称、是否必交、文件名关键词和对应的标准目录文件夹（程序匹配用）",
+  "type": "object",
+  "properties": {
+    "id": {
+      "enum": [
+        "民事行政卷",
+        "刑事卷",
+        "常法卷",
+        "其他非诉卷"
+      ]
+    },
+    "attachment": {
+      "type": "string",
+      "description": "立卷申请书对应的所内附件编号，如 附件3"
+    },
+    "renumber": {
+      "type": "boolean",
+      "description": "立卷申请书删掉缺项后是否重新连续编号（常法卷为 true）"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "标准案件目录中通常存放这类材料的文件夹（含子路径），可为空"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "由归档程序生成（结案报告）：不参与匹配、不算缺失，生成时自动放入卷宗"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "name",
+          "required",
+          "keywords",
+          "folders"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "attachment",
+    "renumber",
+    "items"
+  ]
+}
