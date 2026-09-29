@@ -1,0 +1,10 @@
+T0 步骤 4a：engines\retainer\启动.html 的 Content-Security-Policy（2026-09-29 抄录）
+
+文件存在：是（engines\retainer\启动.html，第 3 行 <meta http-equiv="Content-Security-Policy">）
+
+content 原文：
+default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src data: blob:; connect-src http://127.0.0.1:17801; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'
+
+结论：
+- connect-src 只有 http://127.0.0.1:17801，与 Spec 13.5、14.3 的前提一致。
+- default-src 'none'；没有放行任何外部主机。

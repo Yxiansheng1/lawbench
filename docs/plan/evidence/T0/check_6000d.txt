@@ -1,0 +1,16 @@
+网关：http://192.168.8.77:8000；Key A 已配置，Key B 已配置
+
+health           状态 200            0.09s   
+models 无 Key     状态 200            0.01s   
+models 错误 Key    状态 200            0.02s   
+models Key A     状态 200            0.01s   
+chat 无 Key       状态 200            0.10s   排队 0ms 回答：收到
+chat 错误 Key      状态 200            0.10s   排队 0ms 回答：收到
+chat Key A       状态 200            0.10s   排队 0ms 回答：收到
+chat Key B       状态 200            0.11s   排队 0ms 回答：收到
+
+结论：
+- Key 校验：未开启（无 Key 也能调用），需要甲方在网关打开 require_key
+- /v1/models 是否校验 Key：否（Spec 6.3 的 395 校验方式要改用 max_tokens=1 的请求）
+- chat Key A：可用
+- chat Key B：可用
