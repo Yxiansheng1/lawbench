@@ -1,2 +1,4 @@
 *.egg-info/
 .pytest_cache/
+# 6000D 上取来的分词器：进仓库之前主编排要核许可证和大小（注记 2332）
+lawbench/llm/tokenizer.json

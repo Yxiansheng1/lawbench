@@ -39,12 +39,40 @@ def _cjk(ch: str) -> bool:
 
 
 def count(text: str) -> int:
+    """有 tokenizer 用真计数；没有时近似计数，刻意偏大（它用来控制"不超过窗口的 40%"，少算会超窗口）：
+    - 中日韩文字、全角符号：每字 1 token（Qwen 系分词器对常见汉字通常一个字不到 1 token）；
+    - 数字：每位 1 token（Qwen 系把数字逐位切开）；
+    - 英文字母：连续的一串按每 3 个字母 1 token 向上取整（常见实测约 4 个字母 1 token）；
+    - 其他 ASCII 符号：每个 1 token；连续空白算 1 token；
+    - 其余非 ASCII 字符（其他文字、表情等）：每字 2 token。
+    与真实长度的偏差：没有 tokenizer，未核实。"""
     tok = _tokenizer()
     if tok is not None:
         return len(tok.encode(text).ids)
-    cjk = sum(1 for c in text if _cjk(c))
-    rest = sum(len(c.encode("utf-8")) for c in text if not _cjk(c))
-    return cjk + math.ceil(rest / 4)
+    n = 0
+    letters = 0
+    prev_space = False
+    for c in text:
+        if c.isascii() and c.isalpha():
+            letters += 1
+            prev_space = False
+            continue
+        if letters:
+            n += math.ceil(letters / 3)
+            letters = 0
+        if c.isspace():
+            if not prev_space:
+                n += 1
+            prev_space = True
+            continue
+        prev_space = False
+        if _cjk(c) or c.isascii():
+            n += 1
+        else:
+            n += 2
+    if letters:
+        n += math.ceil(letters / 3)
+    return n
 
 
 def l1_budget(window: str) -> int:
