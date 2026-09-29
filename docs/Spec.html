@@ -959,11 +959,13 @@ li{margin:3px 0}
 <p>所有读写案件文件的代码都必须经过闸门，没有其他写文件的途径。</p>
 <ol>
 <li><strong>案件根目录</strong>：只从案件注册表取（Agent 路径先用会话头的 <code>cwd</code> 查注册表），取 <code>realpath</code> 保存为 <code>ROOT</code>。根目录本身是链接或 junction 的，拒绝登记，提示&quot;请直接选择实际文件夹&quot;。
-<strong>云同步目录</strong>（SEC-14）：打开案件时，<code>ROOT</code> 位于以下位置之一即拒绝（错误码 <code>CASE_IN_SYNC_FOLDER</code>）：环境变量 <code>OneDrive</code>、<code>OneDriveCommercial</code>、<code>OneDriveConsumer</code> 指向的目录及其子目录；注册表 <code>HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder</code>；路径中任一级目录名包含 <code>OneDrive</code>、<code>坚果云</code>、<code>Nutstore</code>、<code>BaiduNetdisk</code>、<code>百度网盘</code>、<code>Dropbox</code>、<code>Google Drive</code>、<code>iCloudDrive</code>、<code>WPS云盘</code>。列表写在配置里，可以补充。</li>
+<strong>云同步目录</strong>（SEC-14）：打开案件时，<code>ROOT</code> 位于以下位置之一即拒绝（错误码 <code>CASE_IN_SYNC_FOLDER</code>）：环境变量 <code>OneDrive</code>、<code>OneDriveCommercial</code>、<code>OneDriveConsumer</code> 指向的目录及其子目录；注册表 <code>HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder</code>；路径中任一级目录名包含 <code>OneDrive</code>、<code>坚果云</code>、<code>Nutstore</code>、<code>BaiduNetdisk</code>、<code>百度网盘</code>、<code>Dropbox</code>、<code>Google Drive</code>、<code>iCloudDrive</code>、<code>WPS云盘</code>。列表写在配置里，可以补充。按子串匹配，宁可误拒不可漏放：案件文件夹名里带这些字样（如&quot;Dropbox公司诉某某案&quot;）也会被拒，律师改个文件夹名即可（2026-09-29 用户定）。
+<strong>不能当案件根目录的位置</strong>（2026-09-29 用户定）：盘符根目录（如 <code>D:\</code>）；包含本软件应用数据目录的文件夹（如整个用户目录）。选到时返回 <code>INVALID_ARGUMENT</code>。<code>\\?\</code> 前缀先去掉、统一 <code>realpath</code> 后再登记。</li>
 <li><strong>AI 传入的参数</strong>：
 <ul>
 <li>材料用 <code>case_list_materials</code> 返回的名称或相对路径；</li>
-<li>不能是绝对路径或带盘符，不能含 <code>..</code>，不能以 <code>.</code>、<code>工作区</code>、<code>成果</code> 开头。</li>
+<li>不能是绝对路径或带盘符，不能含 <code>..</code>，不能以 <code>.</code>、<code>工作区</code>、<code>成果</code> 开头（按第一级目录名整级判断：<code>成果/x</code> 拒绝，原件 <code>成果汇总.pdf</code> 放行）；</li>
+<li>任何一级不能是 Windows 设备名（<code>CON</code>、<code>PRN</code>、<code>AUX</code>、<code>NUL</code>、<code>COM0</code>–<code>COM9</code>、<code>LPT0</code>–<code>LPT9</code>、<code>CONIN$</code>、<code>CONOUT$</code>，不分大小写，带扩展名的如 <code>NUL.txt</code> 同样拒绝）。</li>
 </ul>
 </li>
 <li><strong>不跟随链接</strong>：对拼接后的路径及其每一级父目录执行 <code>lstat</code>；只要有一级是符号链接或 reparse point（Windows 下判断 <code>st_file_attributes &amp; FILE_ATTRIBUTE_REPARSE_POINT</code>，junction 在此范围内），就拒绝。</li>
@@ -2261,7 +2263,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <ul>
 <li>工作台服务的统一 HTTP 客户端（<code>net.py</code>）在启动时、网络变化时（Windows 网络状态变化通知）、以及请求出现连接错误时探测：先试所内地址（6000D 请求 <code>/v1/models</code>，395 请求 <code>/health</code>，各 1.5 秒超时），不通再试所外地址；选中的结果缓存 60 秒。两者都不通时报 <code>SERVER_UNREACHABLE</code>。</li>
 <li>识别（395）和流水线（6000D）请求直接用选中的地址。</li>
-<li><strong>Agent 的模型请求</strong>由 DSH 的适配器发出，而 DSH 的地址写在组合包配置里、运行时改不了，所以改为指向工作台服务的<strong>本机转发</strong>：工作台服务另开一个只监听 <code>127.0.0.1</code> 的固定端口（默认 18765，设置里可改），把 <code>/v1/*</code> 原样转发到当前选中的 6000D 地址（流式透传，请求头里的律师 Key 原样带过去，转发本身不记录请求和回答内容，只记元数据）。这个端口不需要启动令牌（DSH 的适配器加不了动态请求头），但只接受 <code>/v1/chat/completions</code> 和 <code>/v1/models</code> 两个路径，其余返回 404；没有律师 Key 的请求 6000D 会拒绝。</li>
+<li><strong>Agent 的模型请求</strong>由 DSH 的适配器发出，而 DSH 的地址写在组合包配置里、运行时改不了，所以改为指向工作台服务的<strong>本机转发</strong>：工作台服务另开一个只监听 <code>127.0.0.1</code> 的固定端口（默认 18765；第一版由 Host 插件启动服务时用 <code>--forward-port</code> 或 <code>LB_FORWARD_PORT</code> 指定，设置页不提供修改，2026-09-29 用户定；端口绑定失败时服务进程以非零码退出，由 Host 按第 1.3 节处理），把 <code>/v1/*</code> 原样转发到当前选中的 6000D 地址（流式透传，请求头里的律师 Key 原样带过去，转发本身不记录请求和回答内容，只记元数据）。这个端口不需要启动令牌（DSH 的适配器加不了动态请求头），但只接受 <code>/v1/chat/completions</code> 和 <code>/v1/models</code> 两个路径，其余返回 404；没有律师 Key 的请求 6000D 会拒绝。转发端口只接受 <code>Host</code> 为 <code>127.0.0.1:&lt;端口&gt;</code> 或 <code>localhost:&lt;端口&gt;</code> 的请求，带 <code>Origin</code> 请求头的请求（来自网页）一律 404、不发往上游。</li>
 <li>&quot;测试连接&quot;返回实际连通的是所内还是所外地址（契约 <code>api/connection_test</code> 的 <code>route</code>），界面显示&quot;已连接（所内）/（所外）&quot;。</li>
 <li>地址白名单（第 14.3 节）同时包含两组地址。</li>
 </ul>

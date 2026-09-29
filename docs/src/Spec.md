@@ -392,10 +392,12 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 所有读写案件文件的代码都必须经过闸门，没有其他写文件的途径。
 
 1. **案件根目录**：只从案件注册表取（Agent 路径先用会话头的 `cwd` 查注册表），取 `realpath` 保存为 `ROOT`。根目录本身是链接或 junction 的，拒绝登记，提示"请直接选择实际文件夹"。
-   **云同步目录**（SEC-14）：打开案件时，`ROOT` 位于以下位置之一即拒绝（错误码 `CASE_IN_SYNC_FOLDER`）：环境变量 `OneDrive`、`OneDriveCommercial`、`OneDriveConsumer` 指向的目录及其子目录；注册表 `HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder`；路径中任一级目录名包含 `OneDrive`、`坚果云`、`Nutstore`、`BaiduNetdisk`、`百度网盘`、`Dropbox`、`Google Drive`、`iCloudDrive`、`WPS云盘`。列表写在配置里，可以补充。
+   **云同步目录**（SEC-14）：打开案件时，`ROOT` 位于以下位置之一即拒绝（错误码 `CASE_IN_SYNC_FOLDER`）：环境变量 `OneDrive`、`OneDriveCommercial`、`OneDriveConsumer` 指向的目录及其子目录；注册表 `HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder`；路径中任一级目录名包含 `OneDrive`、`坚果云`、`Nutstore`、`BaiduNetdisk`、`百度网盘`、`Dropbox`、`Google Drive`、`iCloudDrive`、`WPS云盘`。列表写在配置里，可以补充。按子串匹配，宁可误拒不可漏放：案件文件夹名里带这些字样（如"Dropbox公司诉某某案"）也会被拒，律师改个文件夹名即可（2026-09-29 用户定）。
+   **不能当案件根目录的位置**（2026-09-29 用户定）：盘符根目录（如 `D:\`）；包含本软件应用数据目录的文件夹（如整个用户目录）。选到时返回 `INVALID_ARGUMENT`。`\\?\` 前缀先去掉、统一 `realpath` 后再登记。
 2. **AI 传入的参数**：
    - 材料用 `case_list_materials` 返回的名称或相对路径；
-   - 不能是绝对路径或带盘符，不能含 `..`，不能以 `.`、`工作区`、`成果` 开头。
+   - 不能是绝对路径或带盘符，不能含 `..`，不能以 `.`、`工作区`、`成果` 开头（按第一级目录名整级判断：`成果/x` 拒绝，原件 `成果汇总.pdf` 放行）；
+   - 任何一级不能是 Windows 设备名（`CON`、`PRN`、`AUX`、`NUL`、`COM0`–`COM9`、`LPT0`–`LPT9`、`CONIN$`、`CONOUT$`，不分大小写，带扩展名的如 `NUL.txt` 同样拒绝）。
 3. **不跟随链接**：对拼接后的路径及其每一级父目录执行 `lstat`；只要有一级是符号链接或 reparse point（Windows 下判断 `st_file_attributes & FILE_ATTRIBUTE_REPARSE_POINT`，junction 在此范围内），就拒绝。
 4. **最终校验**：`realpath` 必须以 `ROOT + 分隔符` 开头；Windows 下比较前统一大小写。
 5. **写权限**：只允许写 `工作区/` 和 `成果/`。原件区只有两种写入，都由律师在界面上操作触发、AI 的工具里没有：`/api/materials/import` 复制新文件（目标已存在同名文件时改名为"原名(2)"，从不覆盖）；`/api/case/open` 按标准目录新建空文件夹。已有原件在任何情况下都不改动、不删除。写文件时先写临时文件再原子替换（`os.replace`）。
@@ -1192,7 +1194,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 **地址选择（所内 / 所外自动切换）**：设置中每台服务器有两个地址：所内地址（`llm_base_url`、`prep_base_url`，局域网）和所外地址（`llm_alt_base_url`、`prep_alt_base_url`，虚拟 IP），首次配置页两个都填，默认值分别为 `http://192.168.8.77:8000/v1`、`http://192.168.8.124:9000`、`http://10.126.126.1:8000/v1`、`http://10.126.126.3:9000`。
 - 工作台服务的统一 HTTP 客户端（`net.py`）在启动时、网络变化时（Windows 网络状态变化通知）、以及请求出现连接错误时探测：先试所内地址（6000D 请求 `/v1/models`，395 请求 `/health`，各 1.5 秒超时），不通再试所外地址；选中的结果缓存 60 秒。两者都不通时报 `SERVER_UNREACHABLE`。
 - 识别（395）和流水线（6000D）请求直接用选中的地址。
-- **Agent 的模型请求**由 DSH 的适配器发出，而 DSH 的地址写在组合包配置里、运行时改不了，所以改为指向工作台服务的**本机转发**：工作台服务另开一个只监听 `127.0.0.1` 的固定端口（默认 18765，设置里可改），把 `/v1/*` 原样转发到当前选中的 6000D 地址（流式透传，请求头里的律师 Key 原样带过去，转发本身不记录请求和回答内容，只记元数据）。这个端口不需要启动令牌（DSH 的适配器加不了动态请求头），但只接受 `/v1/chat/completions` 和 `/v1/models` 两个路径，其余返回 404；没有律师 Key 的请求 6000D 会拒绝。
+- **Agent 的模型请求**由 DSH 的适配器发出，而 DSH 的地址写在组合包配置里、运行时改不了，所以改为指向工作台服务的**本机转发**：工作台服务另开一个只监听 `127.0.0.1` 的固定端口（默认 18765；第一版由 Host 插件启动服务时用 `--forward-port` 或 `LB_FORWARD_PORT` 指定，设置页不提供修改，2026-09-29 用户定；端口绑定失败时服务进程以非零码退出，由 Host 按第 1.3 节处理），把 `/v1/*` 原样转发到当前选中的 6000D 地址（流式透传，请求头里的律师 Key 原样带过去，转发本身不记录请求和回答内容，只记元数据）。这个端口不需要启动令牌（DSH 的适配器加不了动态请求头），但只接受 `/v1/chat/completions` 和 `/v1/models` 两个路径，其余返回 404；没有律师 Key 的请求 6000D 会拒绝。转发端口只接受 `Host` 为 `127.0.0.1:<端口>` 或 `localhost:<端口>` 的请求，带 `Origin` 请求头的请求（来自网页）一律 404、不发往上游。
 - "测试连接"返回实际连通的是所内还是所外地址（契约 `api/connection_test` 的 `route`），界面显示"已连接（所内）/（所外）"。
 - 地址白名单（第 14.3 节）同时包含两组地址。
 
