@@ -1,0 +1,24 @@
+# P-10 验证摘录（桌面 profile 由 T4 首轮在空的开发用 DSH_HOME 下按 P-10 模板创建；日志取自 2026-09-29 返修第二轮启动）
+
+## <DSH_HOME>\profiles\desktop\package.json（全文，无正文、无 Key）
+{
+  "name": "dsh-profile-desktop",
+  "private": true,
+  "dependencies": {},
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "lawbench-dsh"
+      ]
+    }
+  }
+}
+
+## 启动日志摘录（令牌、用户名已打码）
+desktop development: DSH_HOME=C:\Users\<用户>\AppData\Local\lawbench-dev\dsh-home
+dsh web: http://127.0.0.1:19387/?token=<已打码>
+
+## 启动日志中 "skipping profile bundle" 出现次数：0
+

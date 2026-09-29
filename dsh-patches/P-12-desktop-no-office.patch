@@ -1,0 +1,19 @@
+diff --git a/apps/desktop-host/src/index.ts b/apps/desktop-host/src/index.ts
+index 4a47a92ce8..e021ef69b8 100644
+--- a/apps/desktop-host/src/index.ts
++++ b/apps/desktop-host/src/index.ts
+@@ -92,11 +92,9 @@ async function main(): Promise<void> {
+   const { ctx } = await application
+   control.updateTasks = installDesktopUpdateTaskControl(ctx)
+   control.quitInspection = installDesktopQuitInspection(ctx)
+-  await ctx.plugin(desktopOffice, {
+-    runtimeDir,
+-    source: process.argv[4] ?? join(runtimeDir, '..', 'runtime', 'primary-runtime'),
+-    root: join(resolveDshHome(), 'dsh-runtimes', 'dsh-primary-runtime'),
+-  })
++  // lawbench P-12：不挂 Office Skill 和 load_workspace_dependencies 工具（Spec 3.1 只许 skill、ask_user_question、case_*；Spec 10.1 Skill 只从两处加载）
++  void desktopOffice
++  void resolveDshHome
+   installPlatformSessionPublisher(ctx, (session) => {
+     if (process.connected) process.send?.({ type: 'platform-session', session })
+   })

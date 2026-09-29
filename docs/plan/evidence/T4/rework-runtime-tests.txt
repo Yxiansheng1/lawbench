@@ -1,0 +1,40 @@
+# T4 返修运行时实测记录（2026-09-29，开发机，桌面端 dev 模式，已应用 P-10、P-03a、P-12）
+# 只记元数据和测试用的虚构内容；令牌、Key、用户名不出现。
+
+## P2-4 Skill 目录先后（20:35）
+准备：两个目录各放一个同名 Skill lb-t4-probe，正文只差一行"来源标记"。
+  %ProgramData%\lawbench\skills\lb-t4-probe\SKILL.md    来源标记：ADMIN-管理员目录
+  <临时目录>\skills-probe\lb-t4-probe\SKILL.md          来源标记：BUILTIN-内置目录（LAWBENCH_SKILLS_DIR 指向它）
+会话中请模型用 skill 工具加载 lb-t4-probe 并原样报出来源标记。
+模型回答：来源标记：ADMIN-管理员目录
+结论：同名时加载管理员目录那份。测试后已删除 %ProgramData%\lawbench。
+
+## P1-1 模型输出网址并点击（20:36–20:38）
+模型输出的链接：<a href="http://127.0.0.1:18799/lb-t4-link-test" target="_blank">（测试地址指向本机空端口，不涉外网）
+在桌面窗口（渲染进程，经开发模式调试端口 9222）点击该链接：
+  点击前调试目标：page devtools://…、page dsh-app://app/、worker ×2
+  点击后调试目标：同上，无新增页面或 webview
+  点击后页面地址：dsh-app://app/（未跳转）；页面内 <webview> 数量：0
+  点击前后新顶层窗口：无
+另在 127.0.0.1:18799 临时起监听后再点一次，收到：
+  HIT /lb-t4-link-test  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) … Chrome/153.0.0.0 Safari/537.36
+  （UA 不含 Electron / dsh-desktop，是系统默认浏览器发出的请求）
+结论：不在应用内打开；链接交给系统浏览器打开（见交付说明返修节"待主编排定夺"）。
+界面上侧栏浏览器入口：插件清单中 ui-sidebar-browser enabled=false（plugin-inventory-desktop.json）。
+
+## P2-3 工具模式（20:35–20:40）
+见 request-tools.json"返修"一节：DSH_TOOLS_MODE=both 时工具集合 {ask_user_question, case_ping, skill}；
+对照组去掉 tools 锁和 ptc-runtime 关闭行后为 {ask_user_question, case_ping, run_code, skill}。
+
+## P2-2 / P-03a 是否仍需要
+第一轮（不应用 P-03a）：主窗口进不了工作区，日志见 p03a-without-log.txt。
+第二轮起（应用 P-03a）：启动日志无 desktop welcome 错误，进入工作区，会话正常。
+结论：关掉 account 相关行后，P-03a 仍然需要（欢迎状态读取改为请求本机 /api/account/… 得到非 200）。
+
+## P3-3 账号 WebSocket 重连（20:45–20:47）
+读源码：apps/desktop/src/account-backend.ts:116-117 连接关闭或失败后 setTimeout(connect, 1000) 重试，不写日志；
+main.ts 在 Host 启动后无条件 watch 账号状态。
+实测：浏览器面板关闭、只剩桌面端时，统计客户端到 Host 端口 19387 的 TIME_WAIT 连接：
+  启动约 25 秒后 27 个，再过 30 秒 37 个（30 秒新增 10 个，约每 3 秒一个短连接）；
+  同期主进程持续的 ESTABLISHED 连接 1 个。启动日志中无 WebSocket / reconnect 字样。
+结论：存在持续的本机短连接空转，量级与"失败后 1 秒重试"一致；来源未逐个确认，属读源码推断。只连 127.0.0.1，不外连。

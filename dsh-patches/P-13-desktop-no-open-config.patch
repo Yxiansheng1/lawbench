@@ -1,0 +1,14 @@
+diff --git a/packages/client/ui-settings-general/src/client/index.ts b/packages/client/ui-settings-general/src/client/index.ts
+index 59209b8169..514b4217ac 100644
+--- a/packages/client/ui-settings-general/src/client/index.ts
++++ b/packages/client/ui-settings-general/src/client/index.ts
+@@ -99,7 +99,8 @@ export function apply(ctx: ClientContext): void {
+   // locale/change re-registration wiring.
+   const t = ctx.locale.bind(NS)
+   // The shared ConfigForm mirror updates after document commits and reconnects.
+-  const documentController = ctx.remote.$host.isLoopback
++  // lawbench P-13：桌面端不提供"打开配置文件"（profile 补丁叠在组合包之后，能改回被关掉的行）
++  const documentController = ctx.remote.$host.isLoopback && carrier === undefined
+     ? new SettingsDocumentStore(ctx, ctx.configForms.describe())
+     : undefined
+   const documentInjected = documentController === undefined

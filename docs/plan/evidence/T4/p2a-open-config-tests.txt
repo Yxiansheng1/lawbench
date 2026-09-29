@@ -1,0 +1,32 @@
+# T4 第二轮返修 P2-A 实测记录（2026-09-29 21:15–21:40，开发机，桌面端 dev 模式）
+# 只记元数据；用户名以 <用户> 代替，令牌不出现。
+
+## 1. 打补丁前（已应用 P-10、P-03a、P-12）
+桌面窗口经调试端口打开设置页，页面按钮文本含："通用设置"、"内置插件"、"Agent 预设"、"打开配置文件"、"关闭" …
+截图：settings-before-P13.png（右上角"打开配置文件"）
+
+点击"打开配置文件"后新出现的进程：
+  Cursor.exe  "D:\cursor_code\cursor\Cursor.exe" "C:\Users\<用户>\AppData\Local\lawbench-dev\dsh-home\profiles\desktop\cordis.patch.yml"
+  （本机默认 .yml 编辑器是 Cursor；打开的是桌面 profile 自己的补丁文件）
+
+在该文件里写入（模拟用户改一行）：
+  - id: ui-sidebar-browser
+    disabled: false
+约 8 秒后读运行时插件清单（dump_inventory.ps1）：
+  include:ui-sidebar-browser  enabled=True  fiberPhase=active   ← 未重启即生效，本卡关掉的行被重新打开
+恢复原文件（[]）后再读：
+  include:ui-sidebar-browser  enabled=False
+结论：复核员推断属实——按钮存在、打开的是 profile 补丁、改动即时生效且能覆盖我方补丁。
+
+（注：第一次追加时写成 "[]" 后面接列表项，YAML 不合法，被忽略，清单仍为 false；改成合法写法后才生效。
+  这说明写错格式时 DSH 静默忽略该文件，不影响结论。）
+
+## 2. 打补丁后（再应用 P-13，dev:desktop 重新构建）
+设置页按钮文本：只剩"通用设置"、"关闭"等，无"打开配置文件"。
+globalThis.dshDesktop 存在（typeof = object），即 P-13 判断的桌面端标记生效。
+截图：settings-after-P13.png
+运行时插件清单与核对：plugin-inventory-desktop.json、plugin-tree-check.txt（结论"通过"）。
+
+## 3. 未做 / 推断
+- Web 界面（非桌面端）按原样保留按钮，P-13 只在有桌面端标记时生效（产品只发桌面端）。
+- 设置接口的远程写入（settings-controller 的 update / mutate）同样能写 profile 补丁，未在本卡处理：归 T17，由 P-7 地址白名单兜底（读源码推断，未实测）。
