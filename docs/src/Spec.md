@@ -226,8 +226,14 @@ lawbench/                 我方仓库
 | 标题生成 | `session-title-llm` | 用首条消息生成标题，标题会存到 `$DSH_HOME`；改由我方插件按"<胶囊名> · <时间>"设标题 |
 | 文档预览 | `ui-sidebar-documentpreview`、`office-to-pdf` | 会在 DSH 目录缓存 PDF |
 | 官方品牌 | `ui-brand-official` | 换成我方品牌（第 3.4 节） |
+| 侧栏浏览器 | `ui-sidebar-browser` | 桌面端默认开启（web profile 下关），可访问任意网址，用独立分区的 webview，P-9 拦不到（2026-09-29 T4 复核发现） |
+| 模型设置页 | `ui-settings-models` | 可自建指向任意地址的模型路由并覆盖我方的 `llm-pi-ai` 行；服务器地址只在我方设置页改 |
+| 账号设置页和账号服务 | `ui-settings-account`、`account-controller` | 带 DeepSeek 登录、充值、用量链接和外部反馈表单地址 |
+| 代码执行运行时 | `ptc-runtime`；休眠的 `session-log-deepseek` 一并关掉 | 配合下面 `tools` 行锁定模式，杜绝模型拿到 `run_code` |
 
-关掉某行导致其他插件加载失败的，按报错处理，结果记入 `dsh/PATCHES.md`。最后在开发机上导出实际的插件树（`dsh --profile desktop --dump-config`），存档核对。行 id 以固定提交为准，换提交要重新核对。
+**反向检查**（2026-09-29 T4 复核后加）：上表是"要关的"，不保证列全。验收以"允许启用的行"白名单为准：导出的插件树里，凡不在白名单里的启用行一律报出；带 `!!js` 表达式的行按 desktop 语境（`profileContext.name == 'desktop'`）求值后再判。白名单和每行的理由放 `docs/plan/evidence/T4/`，换 DSH 提交要重做。
+
+关掉某行导致其他插件加载失败的，按报错处理，结果记入 `dsh-patches/PATCHES.md`。最后在开发机上导出实际的插件树（`dsh --profile desktop --dump-config`；桌面 profile 由 Electron 独占、命令行导不出时，导出 web profile 并按上面的方法对带 `!!js` 的行逐条判定），存档核对。行 id 以固定提交为准，换提交要重新核对。
 
 **2. 改配置的行**（注意：替换的是整行 `config`，没写的字段会丢，要把需要保留的字段一起写上）：
 
@@ -237,10 +243,13 @@ lawbench/                 我方仓库
 | `llm-pi-ai` | 律所模型路由（第 8.1 节） |
 | `spill-policy` | `maxInlineTokens: 1000000`（大于模型窗口），工具结果永远不溢出到文件（第 3.3 节） |
 | `spill-local` | `cleanupPeriodDays: 1`；按上一行配置不会产生文件，验收时检查其目录为空 |
-| `llm-retry` | 最多重试 1 次，不对 401 / 403 重试（第 8.3 节） |
+| 重试 | `llm-retry` 行没有配置项（2026-09-29 T4 核实）；重试策略写在 `llm-pi-ai` 路由的 `retryPolicy`：`mode: normal, maxRetries: 1`。默认可重试的错误不含鉴权失败，401 / 403 不重试（第 8.3 节） |
+| `tools` | `mode: native`。原配置取环境变量 `DSH_TOOLS_MODE`，设成 `ptc` 或 `both` 模型就会拿到 `run_code`，必须锁死 |
+| `agent-default-model` | 新会话默认用律所路由（官方默认模型所在的路由已关掉） |
+| `ui-settings` | `enabled: false`，保持开发者模式关闭；开着时新会话页会显示 preset 选择入口 |
 | `locale` | `preference: zh`，界面固定中文（官方 `packages/client/locale`） |
 | 工作区 | `documentsDirectory` 指向应用数据目录下的空目录，避免在"文档"里自动建 `deepseek-harness/default-workspace`；首页不提供"默认工作区"入口，必须先打开案件 |
-| `credentials-local` | 整行替换为我方凭据插件 `lawbench-dsh/credentials`（第 8.1 节） |
+| `credentials`（插件名 `@deepseek-ai/dsh-credentials-local`；本文其他地方说的 `credentials-local` 指这一行） | 整行替换为我方凭据插件 `lawbench-dsh/credentials`（第 8.1 节） |
 | `session-persistence-jsonl` | 整行替换为我方会话记录插件，按案件存储（第 3.3 节，P-8） |
 
 **G-2 补充核对**：除 AGENTS.md 和 `.dsh/skills` 外，逐一列出 DSH 在打开工作区时会从 `cwd` 读取的所有内容（项目级配置、插件、忽略文件等），写进 `dsh/PATCHES.md`，确认律师工作台 preset 下都不生效。
@@ -306,6 +315,8 @@ lawbench/                 我方仓库
 | P-9 | Electron 后台请求 | `apps/desktop/src/main.ts` | 主窗口关闭拼写检查（`session.setSpellCheckerEnabled(false)`）；`session.defaultSession.webRequest.onBeforeRequest` 拦截白名单以外的请求 |
 | P-11 | 委托材料窗口 | `apps/desktop/src/main.ts` | 增加一个 IPC 通道 `lawbench:open-retainer`：新建 `BrowserWindow` 加载 `<安装目录>/engines/retainer/启动.html`，`partition: 'persist:retainer'`（与主窗口的存储隔开），`nodeIntegration: false`、`contextIsolation: true`、禁止 `window.open` 和跳转到其他地址。**这个分区是独立的 session，P-9 不会自动作用到它**：对 `session.fromPartition('persist:retainer')` 同样设置 `webRequest` 白名单（只放行 `file://` 和 `127.0.0.1:17801`）并关闭拼写检查。预加载脚本在网页脚本运行前删除 `window.showDirectoryPicker`，让网页改用下载保存；`will-download` 把下载一律存到当前案件的 `工作区/临时/委托材料/<时间>/`（第 13.5 节）。关闭窗口时通知工作台服务停止证件识别驱动 |
 | P-10 | 组合包进入桌面端 | `packages/boot/app-boot/src/profile.ts`（`PROFILE_TEMPLATES.web`）；`@deepseek-ai/dsh` 的依赖列表 | 加上 `lawbench-dsh`（第 14.1 节） |
+| P-12 | 桌面端自带的 Office 组合 | `apps/desktop-host/src/index.ts` | 去掉 `desktop-office` 的挂载（Office Skill 和 `load_workspace_dependencies` 工具）。桌面端 Host 在补丁行之外直接挂载它，配置补丁关不掉；不去掉模型会多出白名单外的工具（2026-09-29 T4 抓包发现） |
+| P-03a | 欢迎窗口读账号状态（临时） | `apps/desktop/src/welcome-backend.ts` | 账号服务调用失败按"未登录"处理，否则关掉账号相关行后进不了工作区。P-3 落地时整体替换、删掉本条 |
 
 完成后用抓包核对（第 14.3 节）。
 
@@ -761,7 +772,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 
 排队时长取响应头 `X-Queue-Wait-Ms`，显示在运行状态中（F-RUN-01）。
 
-上表是流水线（工作台服务）的处理。Agent 路径的错误由 DSH 的 LLM 适配器报出：插件在 `session/event` 中把结束原因写进结果清单；DSH 界面上的错误文字按上表改为中文〔核对 DSH 现有文案，缺的补〕。DSH 的 `llm-retry` 默认会重试，改为最多 1 次，不对 401 / 403 重试。
+上表是流水线（工作台服务）的处理。Agent 路径的错误由 DSH 的 LLM 适配器报出：插件在 `session/event` 中把结束原因写进结果清单；DSH 界面上的错误文字按上表改为中文〔核对 DSH 现有文案，缺的补〕。DSH 默认会重试，改为最多 1 次（写在 `llm-pi-ai` 路由的 `retryPolicy`，见第 3.1 节），不对 401 / 403 重试。
 
 ### 8.4 取消
 

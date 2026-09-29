@@ -558,9 +558,30 @@ li{margin:3px 0}
 <td><code>ui-brand-official</code></td>
 <td>换成我方品牌（第 3.4 节）</td>
 </tr>
+<tr>
+<td>侧栏浏览器</td>
+<td><code>ui-sidebar-browser</code></td>
+<td>桌面端默认开启（web profile 下关），可访问任意网址，用独立分区的 webview，P-9 拦不到（2026-09-29 T4 复核发现）</td>
+</tr>
+<tr>
+<td>模型设置页</td>
+<td><code>ui-settings-models</code></td>
+<td>可自建指向任意地址的模型路由并覆盖我方的 <code>llm-pi-ai</code> 行；服务器地址只在我方设置页改</td>
+</tr>
+<tr>
+<td>账号设置页和账号服务</td>
+<td><code>ui-settings-account</code>、<code>account-controller</code></td>
+<td>带 DeepSeek 登录、充值、用量链接和外部反馈表单地址</td>
+</tr>
+<tr>
+<td>代码执行运行时</td>
+<td><code>ptc-runtime</code>；休眠的 <code>session-log-deepseek</code> 一并关掉</td>
+<td>配合下面 <code>tools</code> 行锁定模式，杜绝模型拿到 <code>run_code</code></td>
+</tr>
 </tbody>
 </table>
-<p>关掉某行导致其他插件加载失败的，按报错处理，结果记入 <code>dsh/PATCHES.md</code>。最后在开发机上导出实际的插件树（<code>dsh --profile desktop --dump-config</code>），存档核对。行 id 以固定提交为准，换提交要重新核对。</p>
+<p><strong>反向检查</strong>（2026-09-29 T4 复核后加）：上表是&quot;要关的&quot;，不保证列全。验收以&quot;允许启用的行&quot;白名单为准：导出的插件树里，凡不在白名单里的启用行一律报出；带 <code>!!js</code> 表达式的行按 desktop 语境（<code>profileContext.name == 'desktop'</code>）求值后再判。白名单和每行的理由放 <code>docs/plan/evidence/T4/</code>，换 DSH 提交要重做。</p>
+<p>关掉某行导致其他插件加载失败的，按报错处理，结果记入 <code>dsh-patches/PATCHES.md</code>。最后在开发机上导出实际的插件树（<code>dsh --profile desktop --dump-config</code>；桌面 profile 由 Electron 独占、命令行导不出时，导出 web profile 并按上面的方法对带 <code>!!js</code> 的行逐条判定），存档核对。行 id 以固定提交为准，换提交要重新核对。</p>
 <p><strong>2. 改配置的行</strong>（注意：替换的是整行 <code>config</code>，没写的字段会丢，要把需要保留的字段一起写上）：</p>
 <table>
 <thead>
@@ -587,8 +608,20 @@ li{margin:3px 0}
 <td><code>cleanupPeriodDays: 1</code>；按上一行配置不会产生文件，验收时检查其目录为空</td>
 </tr>
 <tr>
-<td><code>llm-retry</code></td>
-<td>最多重试 1 次，不对 401 / 403 重试（第 8.3 节）</td>
+<td>重试</td>
+<td><code>llm-retry</code> 行没有配置项（2026-09-29 T4 核实）；重试策略写在 <code>llm-pi-ai</code> 路由的 <code>retryPolicy</code>：<code>mode: normal, maxRetries: 1</code>。默认可重试的错误不含鉴权失败，401 / 403 不重试（第 8.3 节）</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td><code>mode: native</code>。原配置取环境变量 <code>DSH_TOOLS_MODE</code>，设成 <code>ptc</code> 或 <code>both</code> 模型就会拿到 <code>run_code</code>，必须锁死</td>
+</tr>
+<tr>
+<td><code>agent-default-model</code></td>
+<td>新会话默认用律所路由（官方默认模型所在的路由已关掉）</td>
+</tr>
+<tr>
+<td><code>ui-settings</code></td>
+<td><code>enabled: false</code>，保持开发者模式关闭；开着时新会话页会显示 preset 选择入口</td>
 </tr>
 <tr>
 <td><code>locale</code></td>
@@ -599,7 +632,7 @@ li{margin:3px 0}
 <td><code>documentsDirectory</code> 指向应用数据目录下的空目录，避免在&quot;文档&quot;里自动建 <code>deepseek-harness/default-workspace</code>；首页不提供&quot;默认工作区&quot;入口，必须先打开案件</td>
 </tr>
 <tr>
-<td><code>credentials-local</code></td>
+<td><code>credentials</code>（插件名 <code>@deepseek-ai/dsh-credentials-local</code>；本文其他地方说的 <code>credentials-local</code> 指这一行）</td>
 <td>整行替换为我方凭据插件 <code>lawbench-dsh/credentials</code>（第 8.1 节）</td>
 </tr>
 <tr>
@@ -730,6 +763,18 @@ li{margin:3px 0}
 <td>组合包进入桌面端</td>
 <td><code>packages/boot/app-boot/src/profile.ts</code>（<code>PROFILE_TEMPLATES.web</code>）；<code>@deepseek-ai/dsh</code> 的依赖列表</td>
 <td>加上 <code>lawbench-dsh</code>（第 14.1 节）</td>
+</tr>
+<tr>
+<td>P-12</td>
+<td>桌面端自带的 Office 组合</td>
+<td><code>apps/desktop-host/src/index.ts</code></td>
+<td>去掉 <code>desktop-office</code> 的挂载（Office Skill 和 <code>load_workspace_dependencies</code> 工具）。桌面端 Host 在补丁行之外直接挂载它，配置补丁关不掉；不去掉模型会多出白名单外的工具（2026-09-29 T4 抓包发现）</td>
+</tr>
+<tr>
+<td>P-03a</td>
+<td>欢迎窗口读账号状态（临时）</td>
+<td><code>apps/desktop/src/welcome-backend.ts</code></td>
+<td>账号服务调用失败按&quot;未登录&quot;处理，否则关掉账号相关行后进不了工作区。P-3 落地时整体替换、删掉本条</td>
 </tr>
 </tbody>
 </table>
@@ -1613,7 +1658,7 @@ li{margin:3px 0}
 </tbody>
 </table>
 <p>排队时长取响应头 <code>X-Queue-Wait-Ms</code>，显示在运行状态中（F-RUN-01）。</p>
-<p>上表是流水线（工作台服务）的处理。Agent 路径的错误由 DSH 的 LLM 适配器报出：插件在 <code>session/event</code> 中把结束原因写进结果清单；DSH 界面上的错误文字按上表改为中文〔核对 DSH 现有文案，缺的补〕。DSH 的 <code>llm-retry</code> 默认会重试，改为最多 1 次，不对 401 / 403 重试。</p>
+<p>上表是流水线（工作台服务）的处理。Agent 路径的错误由 DSH 的 LLM 适配器报出：插件在 <code>session/event</code> 中把结束原因写进结果清单；DSH 界面上的错误文字按上表改为中文〔核对 DSH 现有文案，缺的补〕。DSH 默认会重试，改为最多 1 次（写在 <code>llm-pi-ai</code> 路由的 <code>retryPolicy</code>，见第 3.1 节），不对 401 / 403 重试。</p>
 <h3 id="8-4-取消">8.4 取消</h3>
 <ul>
 <li>客户端断开连接后，网关记录状态 499，vLLM 随之中止生成（服务器报告 4.1 节）。</li>
