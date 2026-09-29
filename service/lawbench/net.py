@@ -9,18 +9,13 @@
 """
 from __future__ import annotations
 
-import contextlib
+import json
 import threading
 import time
 from urllib.parse import urlsplit
 
 import anyio
 import httpx
-from starlette.applications import Starlette
-from starlette.background import BackgroundTask
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
-from starlette.routing import Route
 
 from . import logs
 from .errors import MESSAGES, ApiError
@@ -88,8 +83,10 @@ async def _acheck_redirect(response: httpx.Response) -> None:
 
 
 class Net:
-    def __init__(self, servers: dict, clock=time.monotonic, transport: httpx.BaseTransport | None = None):
+    def __init__(self, servers: dict, clock=time.monotonic, transport: httpx.BaseTransport | None = None,
+                 forward_port: int | None = None):
         self.allow = Allowlist()
+        self.forward_port = forward_port
         self._clock = clock
         self._lock = threading.Lock()
         self._routes: dict[str, tuple[str, str, float]] = {}
@@ -100,21 +97,25 @@ class Net:
             timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),
             event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
 
-    def close(self) -> None:
-        self.client.close()
+    def check_servers(self, servers: dict) -> None:
+        """6000D 地址不能是本机转发端口自己（否则会自己探测自己）：INVALID_ARGUMENT。"""
+        if not self.forward_port:
+            return
+        for key in ("llm_base_url", "llm_alt_base_url"):
+            hp = _host_port(servers[key]) if servers.get(key) else None
+            if hp and hp[0] in (LOOPBACK, "localhost") and hp[1] == self.forward_port:
+                raise ApiError("INVALID_ARGUMENT", "llm_is_forward_port")
 
     def update(self, servers: dict) -> None:
+        self.check_servers(servers)
         with self._lock:
             self._servers = dict(servers)
             self.allow.update(servers)
             self._routes.clear()
 
-    def invalidate(self, kind: str | None = None) -> None:
+    def invalidate(self, kind: str) -> None:
         with self._lock:
-            if kind:
-                self._routes.pop(kind, None)
-            else:
-                self._routes.clear()
+            self._routes.pop(kind, None)
 
     # ---------- 地址选择 ----------
 
@@ -179,61 +180,138 @@ class Net:
 _FORWARD_ROUTES = {("POST", "/v1/chat/completions"): "chat", ("GET", "/v1/models"): "models"}
 
 
-def _upstream_error(code: str, status: int) -> JSONResponse:
-    return JSONResponse({"error": {"code": code, "message": MESSAGES[code]}}, status_code=status)
+def _error_body(code: str) -> bytes:
+    return json.dumps({"error": {"code": code, "message": MESSAGES[code]}}, ensure_ascii=False).encode("utf-8")
 
 
-def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None) -> Starlette:
+async def _send_simple(send, status: int, body: bytes = b"", content_type: bytes = b"application/json") -> None:
+    headers = [(b"content-length", str(len(body)).encode())]
+    if body:
+        headers.append((b"content-type", content_type))
+    await send({"type": "http.response.start", "status": status, "headers": headers})
+    await send({"type": "http.response.body", "body": body, "more_body": False})
+
+
+def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None):
+    """本机转发（纯 ASGI）。
+
+    - 只接受 POST /v1/chat/completions、GET /v1/models；Host 必须是 127.0.0.1:<本端口> 或 localhost:<本端口>；
+      带 Origin 请求头（来自网页）一律 404，不发往上游（Spec 第 15 节）。
+    - 全程监听客户端断开：断开时取消上游请求（包括还没回响应头的排队阶段）并关闭上游流，记 fail / CANCELLED。
+    - 失败都记 module=forward、status=fail：回响应头之前的失败返回 502 失败体；流式中途上游断开时直接断开客户端连接。
+    """
     state: dict = {}
 
-    @contextlib.asynccontextmanager
-    async def lifespan(app):
-        state["client"] = net.async_client(transport)
-        try:
-            yield
-        finally:
-            await state["client"].aclose()
+    async def lifespan(receive, send) -> None:
+        while True:
+            msg = await receive()
+            if msg["type"] == "lifespan.startup":
+                state["client"] = net.async_client(transport)
+                await send({"type": "lifespan.startup.complete"})
+            elif msg["type"] == "lifespan.shutdown":
+                client = state.pop("client", None)
+                if client is not None:
+                    await client.aclose()
+                await send({"type": "lifespan.shutdown.complete"})
+                return
 
-    async def handle(request: Request) -> Response:
-        op = _FORWARD_ROUTES.get((request.method, request.url.path))
-        if op is None:
-            return Response(status_code=404)
+    async def app(scope, receive, send) -> None:
+        if scope["type"] == "lifespan":
+            await lifespan(receive, send)
+            return
+        if scope["type"] != "http":
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        op = _FORWARD_ROUTES.get((scope["method"], scope["path"]))
+        port = (scope.get("server") or ("", 0))[1]
+        host = headers.get("host", "").lower()
+        if op is None or host not in (f"{LOOPBACK}:{port}", f"localhost:{port}") or "origin" in headers:
+            await _send_simple(send, 404)
+            return
+        await _forward(op, scope, headers, receive, send)
+
+    async def _forward(op: str, scope, headers: dict, receive, send) -> None:
         t0 = time.monotonic()
-        client: httpx.AsyncClient = state["client"]
-        headers = {k: v for k, v in request.headers.items() if k.lower() in FORWARD_REQ_HEADERS}
-        headers["accept-encoding"] = "identity"
-        body = await request.body()
-        resp = None
-        for attempt in (0, 1):
-            try:
-                base, _ = await anyio.to_thread.run_sync(net.select, "llm", attempt == 1)
-                up = client.build_request(request.method, base + request.url.path[len("/v1"):],
-                                          params=request.query_params, headers=headers, content=body)
-                resp = await client.send(up, stream=True)
+        outcome = {"status": "fail", "error": "CANCELLED"}
+
+        def log() -> None:
+            logs.event("forward", op, status=outcome["status"], error=outcome["error"],
+                       duration_ms=(time.monotonic() - t0) * 1000)
+
+        def finish(status: str, error: str | None) -> None:
+            """在发出最后一段之前定下结果；之后收到的 disconnect 不再改成 CANCELLED。"""
+            outcome.update(status=status, error=error, final=True)
+
+        body = bytearray()
+        while True:
+            msg = await receive()
+            if msg["type"] == "http.disconnect":
+                log()
+                return
+            body += msg.get("body", b"")
+            if not msg.get("more_body"):
                 break
-            except (httpx.ConnectError, httpx.ConnectTimeout):
-                net.invalidate("llm")
+
+        up_headers = {k: v for k, v in headers.items() if k in FORWARD_REQ_HEADERS}
+        up_headers["accept-encoding"] = "identity"
+        query = scope.get("query_string", b"").decode("latin-1")
+        client: httpx.AsyncClient = state["client"]
+
+        async def work(cancel_scope: anyio.CancelScope) -> None:
+            resp = None
+            try:
+                for attempt in (0, 1):
+                    try:
+                        base, _ = await anyio.to_thread.run_sync(net.select, "llm", attempt == 1)
+                        url = base + scope["path"][len("/v1"):] + (f"?{query}" if query else "")
+                        up = client.build_request(scope["method"], url, headers=up_headers, content=bytes(body))
+                        resp = await client.send(up, stream=True)
+                        break
+                    except (httpx.ConnectError, httpx.ConnectTimeout):
+                        net.invalidate("llm")
+                if resp is None:
+                    finish("fail", "SERVER_UNREACHABLE")
+                    await _send_simple(send, 502, _error_body("SERVER_UNREACHABLE"))
+                    return
+                out = [(k.encode("latin-1"), v.encode("latin-1")) for k, v in resp.headers.items()
+                       if k.lower() in FORWARD_RESP_HEADERS]
+                await send({"type": "http.response.start", "status": resp.status_code, "headers": out})
+                try:
+                    async for chunk in resp.aiter_raw():
+                        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+                except httpx.HTTPError as e:
+                    finish("fail", type(e).__name__)  # 上游流式中途断开：不补结尾，让客户端看到连接中断
+                    return
+                ok = resp.status_code < 400
+                finish("ok" if ok else "fail", None if ok else f"HTTP{resp.status_code}")
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
             except ApiError as e:
-                logs.event("forward", op, status="fail", error=e.code, duration_ms=(time.monotonic() - t0) * 1000)
-                return _upstream_error(e.code, 502)
-        if resp is None:
-            logs.event("forward", op, status="fail", error="SERVER_UNREACHABLE",
-                       duration_ms=(time.monotonic() - t0) * 1000)
-            return _upstream_error("SERVER_UNREACHABLE", 502)
-        out_headers = {k: v for k, v in resp.headers.items() if k.lower() in FORWARD_RESP_HEADERS}
+                finish("fail", e.code)
+                await _send_simple(send, 502, _error_body(e.code))
+            except httpx.HTTPError as e:
+                finish("fail", type(e).__name__)
+                await _send_simple(send, 502, _error_body("SERVER_UNREACHABLE"))
+            finally:
+                if resp is not None:
+                    with anyio.CancelScope(shield=True):
+                        await resp.aclose()
+                cancel_scope.cancel()
 
-        async def done() -> None:
-            await resp.aclose()
-            logs.event("forward", op, status="ok" if resp.status_code < 400 else "fail",
-                       error=None if resp.status_code < 400 else f"HTTP{resp.status_code}",
-                       duration_ms=(time.monotonic() - t0) * 1000)
+        async def watch(cancel_scope: anyio.CancelScope) -> None:
+            while True:
+                msg = await receive()
+                if msg["type"] == "http.disconnect":
+                    # 响应已经发完后 uvicorn 也会报 disconnect：那不是客户端取消
+                    if not outcome.get("final"):
+                        outcome.update(status="fail", error="CANCELLED")
+                        cancel_scope.cancel()
+                    return
 
-        return StreamingResponse(resp.aiter_raw(), status_code=resp.status_code, headers=out_headers,
-                                 background=BackgroundTask(done))
+        try:
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(work, tg.cancel_scope)
+                tg.start_soon(watch, tg.cancel_scope)
+        finally:
+            log()
 
-    app = Starlette(routes=[Route("/v1/chat/completions", handle, methods=["POST"]),
-                            Route("/v1/models", handle, methods=["GET"])],
-                    lifespan=lifespan)
-    app.add_exception_handler(404, lambda r, e: Response(status_code=404))
-    app.add_exception_handler(405, lambda r, e: Response(status_code=404))
     return app

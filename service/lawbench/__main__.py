@@ -33,19 +33,28 @@ def _server(app, port: int) -> uvicorn.Server:
                                          log_config=None, lifespan="on"))
 
 
-async def _serve(config: Config) -> None:
+EXIT_LISTEN_FAILED = 2
+
+
+async def _serve(config: Config) -> int:
+    """两个监听任一绑定失败：另一个也停下，进程以非零码退出，交给 Host 按 Spec 1.3 处理。"""
     _silence_uvicorn()
     app = create_app(config)
-    main = _server(app, config.port)
-    fwd = _server(forward_app(app.state.lb.net), config.forward_port)
+    servers = {"main": _server(app, config.port),
+               "forward": _server(forward_app(app.state.lb.net), config.forward_port)}
+    failed: list[str] = []
 
-    async def run_forward() -> None:
+    async def run(name: str) -> None:
         try:
-            await fwd.serve()
-        except (OSError, SystemExit) as e:  # 转发端口被占用不影响工作台接口
-            logs.event("forward", "listen", status="fail", error=type(e).__name__)
+            await servers[name].serve()
+        except (OSError, SystemExit) as e:  # uvicorn 绑定失败时 sys.exit(1)
+            failed.append(name)
+            logs.event(name, "listen", status="fail", error=type(e).__name__)
+        for s in servers.values():
+            s.should_exit = True
 
-    await asyncio.gather(main.serve(), run_forward())
+    await asyncio.gather(run("main"), run("forward"))
+    return EXIT_LISTEN_FAILED if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -56,8 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--forward-port", type=int)
     a = ap.parse_args(argv)
     config = Config.from_env(port=a.port, token=a.token, appdata=a.appdata, forward_port=a.forward_port)
-    asyncio.run(_serve(config))
-    return 0
+    return asyncio.run(_serve(config))
 
 
 if __name__ == "__main__":

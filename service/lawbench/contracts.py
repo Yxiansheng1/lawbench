@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import tempfile
+import time
 from functools import lru_cache
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -82,13 +83,29 @@ def atomic_write_bytes(path: pathlib.Path, data: bytes) -> None:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, path)
+        _replace_with_retry(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)
         except FileNotFoundError:
             pass
         raise
+
+
+REPLACE_RETRIES = 10
+REPLACE_WAIT = 0.03
+
+
+def _replace_with_retry(tmp: str, path: pathlib.Path) -> None:
+    """Windows 上目标文件正被别的句柄打开（读取、杀毒扫描）时 os.replace 抛 PermissionError：有上限地重试。"""
+    for attempt in range(REPLACE_RETRIES):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == REPLACE_RETRIES - 1:
+                raise
+            time.sleep(REPLACE_WAIT)
 
 
 def read_json(path: pathlib.Path):

@@ -13,7 +13,6 @@ from . import contracts, logs
 from .errors import ApiError
 
 SCHEMA = "skill/capsules.schema.json"
-TOOLS = {"invoice", "retainer"}
 
 
 class CapsuleStore:
@@ -42,9 +41,7 @@ class CapsuleStore:
                 contracts.write_json(self.path, default, SCHEMA)
                 return default
             local = contracts.read_json(self.path)
-            if local.get("v") != 1:
-                raise ApiError("INTERNAL", "capsules_unknown_v")
-            contracts.validate(SCHEMA, "", local)
+            contracts.validate(SCHEMA, "", local)  # 损坏或 v 不认识：抛异常，接口层返回 HTTP 500；恢复用 reset
             merged, added = _merge_new(local, default)
             if added:
                 contracts.write_json(self.path, merged, SCHEMA)
@@ -78,11 +75,9 @@ class CapsuleStore:
             ids.append(g["id"])
             for it in g["items"]:
                 ids.append(it["id"])
-                if it["kind"] == "skill":
-                    if not all(self.skill_exists(s) for s in it["skills"]):
-                        return "unknown_skill"
-                elif it["tool"] not in TOOLS:
-                    return "unknown_tool"
+                # 工具只能是 invoice、retainer：由契约 tool_item 的枚举保证
+                if it["kind"] == "skill" and not all(self.skill_exists(s) for s in it["skills"]):
+                    return "unknown_skill"
         if len(ids) != len(set(ids)):
             return "duplicate_id"
         present = set(ids)

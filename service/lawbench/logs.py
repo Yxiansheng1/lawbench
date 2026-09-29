@@ -41,7 +41,7 @@ def event(module: str, op: str, *, status: str = "ok", case_id: str | None = Non
           duration_ms: int | None = None, error: str | None = None) -> None:
     """error 只能是错误码或异常类名。"""
     if status not in _STATUS:
-        status = "fail"
+        raise ValueError(f"未知日志状态 {status}")
     rec = {"t": datetime.now().astimezone().isoformat(timespec="seconds"), "module": module, "op": op,
            "status": status}
     if case_id:

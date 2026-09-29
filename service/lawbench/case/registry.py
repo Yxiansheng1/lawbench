@@ -105,7 +105,7 @@ class CaseRegistry:
     # ---------- 打开案件 ----------
 
     def open(self, path: str, template: str | None) -> dict:
-        root = gate.check_root(path)
+        root = gate.check_root(path, appdata=self.path.parent)
         with self._lock:
             created = not os.path.isdir(os.path.join(root, gate.WORK))
             for rel in WORK_DIRS:
@@ -135,8 +135,9 @@ class CaseRegistry:
                 row = con.execute("SELECT value FROM meta WHERE key='case_id'").fetchone()
                 ver = con.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
                 if row:
-                    if ver and ver[0] != SCHEMA_VERSION:
-                        self._upgrade(con, root, ver[0])
+                    if not ver or ver[0] != SCHEMA_VERSION:
+                        # 第一版只有版本 1，不做升级：版本对不上就拒绝打开，不改动这份 case.db
+                        raise ApiError("INVALID_ARGUMENT", "case_db_version")
                     return row[0]
             con.executescript(self.sql_path.read_text(encoding="utf-8"))
             case_id = str(uuid.uuid4())
@@ -147,17 +148,3 @@ class CaseRegistry:
             return case_id
         finally:
             con.close()
-
-    def _upgrade(self, con: sqlite3.Connection, root: str, old: str) -> None:
-        """升级前备份为 case.db.bak-<旧版本>（Spec 4.1）。目前只有版本 1，没有迁移步骤。"""
-        if not old.isdigit() or int(old) > int(SCHEMA_VERSION):
-            raise ApiError("INTERNAL", "case_db_newer")
-        bak = gate.resolve_write(root, f"工作区/case.db.bak-{old}", op="case_db")
-        dst = sqlite3.connect(bak)
-        try:
-            con.backup(dst)
-        finally:
-            dst.close()
-        con.executescript(self.sql_path.read_text(encoding="utf-8"))
-        with con:
-            con.execute("INSERT OR REPLACE INTO meta VALUES ('schema_version', ?)", (SCHEMA_VERSION,))

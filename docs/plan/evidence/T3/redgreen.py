@@ -7,6 +7,7 @@ r"""T3 红绿验证：逐类"改坏防护 → 跑对应测试应当变红 → �
 from __future__ import annotations
 
 import pathlib
+import shlex
 import subprocess
 import sys
 
@@ -45,7 +46,7 @@ MUTATIONS = [
     ], "tests/test_gate.py::test_is_within_prefix_and_case"),
     ("闸门·写权限只限 工作区/ 成果/", "case/gate.py", [
         ("if parts[0] not in WRITABLE_TOP:", "if False:"),
-        ("if _real_top(root, path) not in (WORK.casefold(), OUTPUT.casefold()):", "if False:"),
+        ("if _real_top(root, path, op) not in (WORK.casefold(), OUTPUT.casefold()):", "if False:"),
     ], "tests/test_gate.py"),
     ("闸门·案件根目录是链接或 junction", "case/gate.py", [
         ('if is_link(p):\n        raise _deny(op, "root_is_link", "CASE_ROOT_IS_LINK")', "pass"),
@@ -73,9 +74,8 @@ MUTATIONS = [
         ("if cached and not force and cached[2] > now:", "if False:"),
     ], "tests/test_net.py"),
     ("本机转发·其余路径 404", "net.py", [
-        ('Route("/v1/models", handle, methods=["GET"])', 'Route("/{p:path}", handle, methods=["GET", "POST"])'),
-        ("op = _FORWARD_ROUTES.get((request.method, request.url.path))",
-         'op = _FORWARD_ROUTES.get((request.method, request.url.path), "other")'),
+        ('op = _FORWARD_ROUTES.get((scope["method"], scope["path"]))',
+         'op = _FORWARD_ROUTES.get((scope["method"], scope["path"]), "chat")'),
     ], "tests/test_net.py"),
     ("令牌·缺令牌返回 401", "app.py", [
         ('if request.url.path != "/health":', "if False:"),
@@ -87,12 +87,70 @@ MUTATIONS = [
         ('logs.event("api", _op(request), status="fail", error=type(exc).__name__)  # 只记异常类名',
          'logs.event("api", _op(request), status="fail", error=repr(exc))'),
     ], "tests/test_api_case.py"),
+    # ---------- 返修（执行令 T3返修-20260929-1950） ----------
+    ("R1·settings.json 损坏不阻止启动", "app.py", [
+        ("except Exception as e:  # noqa: BLE001 settings.json 损坏",
+         "except ZeroDivisionError as e:  # noqa: BLE001 settings.json 损坏"),
+    ], "tests/test_t3_rework.py -k r1_"),
+    ("R1·capsules.json 损坏不阻止启动、reset 可恢复", "app.py", [
+        ("except Exception as e:  # noqa: BLE001 capsules.json 损坏",
+         "except ZeroDivisionError as e:  # noqa: BLE001 capsules.json 损坏"),
+    ], "tests/test_t3_rework.py -k r1_"),
+    ("R2·Windows 设备名", "case/gate.py", [
+        ("        if is_device_name(p):\n", "        if False:\n"),
+    ], "tests/test_t3_rework.py -k r2_"),
+    ("R2·relpath 的 ValueError 转成拒绝", "case/gate.py", [
+        ("    except ValueError:  # 不同盘符", "    except ZeroDivisionError:  # 不同盘符"),
+    ], "tests/test_t3_rework.py -k r2_"),
+    ("R3·原子写遇文件被占用时重试", "contracts.py", [
+        ("REPLACE_RETRIES = 10", "REPLACE_RETRIES = 1"),
+    ], "tests/test_t3_rework.py -k r3_"),
+    ("R4·转发端口绑定失败时进程非零退出", "__main__.py", [
+        ("            failed.append(name)\n", "            pass\n"),
+    ], "tests/test_t3_rework.py -k r4_"),
+    ("R5·case.db 版本不对拒绝打开", "case/registry.py", [
+        ('                        raise ApiError("INVALID_ARGUMENT", "case_db_version")',
+         "                        return row[0]"),
+    ], "tests/test_t3_rework.py -k r5_"),
+    ("R5·错误日志带原因代号", "app.py", [
+        ('error = f"{exc.code}:{exc.reason}" if exc.reason else exc.code', "error = exc.code"),
+    ], "tests/test_t3_rework.py -k r5_"),
+    ("R6·工作台 500 用中间件返回、不断开连接", "app.py", [
+        ("except Exception as exc:  # noqa: BLE001 内部异常", "except ZeroDivisionError as exc:  # noqa: BLE001 内部异常"),
+    ], "tests/test_t3_rework.py tests/test_api_case.py -k 'r6_ or internal'"),
+    ("R6·转发在回响应头之前的其他 httpx 异常记 fail 并返回 502", "net.py", [
+        ('            except httpx.HTTPError as e:\n                finish("fail", type(e).__name__)\n'
+         '                await _send_simple(send, 502, _error_body("SERVER_UNREACHABLE"))\n', ""),
+    ], "tests/test_t3_rework.py -k r6_"),
+    ("R6·转发流式中途上游断开记 fail", "net.py", [
+        ('finish("fail", type(e).__name__)  # 上游流式中途断开', 'finish("ok", None)  # 上游流式中途断开'),
+    ], "tests/test_t3_rework.py -k r6_"),
+    ("R8·回响应头之前客户端断开即取消上游", "net.py", [
+        ("                        cancel_scope.cancel()\n                    return\n",
+         "                    return\n"),
+    ], "tests/test_t3_rework.py -k r8_"),
+    ("R9·转发端口检查 Host、拒绝 Origin", "net.py", [
+        ('if op is None or host not in (f"{LOOPBACK}:{port}", f"localhost:{port}") or "origin" in headers:',
+         "if op is None:"),
+    ], "tests/test_t3_rework.py -k r9_"),
+    ("R10·6000D 地址不能是转发端口自己", "net.py", [
+        ("        if not self.forward_port:\n            return\n", "        return\n"),
+    ], "tests/test_t3_rework.py -k r10_"),
+    ("R11·拒绝盘符根目录", "case/gate.py", [
+        ('    if os.path.splitdrive(real)[1] in ("", os.sep):\n', "    if False:\n"),
+    ], "tests/test_t3_rework.py -k r11_"),
+    ("R11·拒绝包含应用数据目录的根目录", "case/gate.py", [
+        ("        if _norm(ad) == _norm(real) or is_within(real, ad):", "        if False:"),
+    ], "tests/test_t3_rework.py -k r11_"),
+    ("R12·标准目录某一级已是 junction 时跳过", "case/gate.py", [
+        ("        if is_link(cur):\n            return False\n", ""),
+    ], "tests/test_t3_rework.py -k r12_"),
 ]
 
 
 def run(sel: str) -> tuple[int, str]:
     p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:warnings", "-p", "no:cacheprovider",
-                        *sel.split()], cwd=SERVICE, capture_output=True, text=True, encoding="utf-8",
+                        *shlex.split(sel)], cwd=SERVICE, capture_output=True, text=True, encoding="utf-8",
                        errors="replace")
     tail = [ln for ln in p.stdout.splitlines() if ln.strip()]
     failed = [ln.split(" - ")[0].replace("FAILED ", "") for ln in tail if ln.startswith("FAILED ")]

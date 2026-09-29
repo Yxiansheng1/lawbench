@@ -33,6 +33,10 @@ SYNC_NAME_MARKERS: list[str] = [
 ]
 SYNC_ENV_VARS = ("OneDrive", "OneDriveCommercial", "OneDriveConsumer")
 
+DEVICE_NAMES = frozenset(
+    ["con", "prn", "aux", "nul", "conin$", "conout$"]
+    + [f"{d}{n}" for d in ("com", "lpt") for n in [*"0123456789", "¹", "²", "³"]])
+
 MAX_COMPONENT = 255
 MAX_REL = 1024
 
@@ -124,16 +128,38 @@ def in_sync_folder(path: str) -> bool:
 
 # ---------- 规则 1：案件根目录 ----------
 
-def check_root(path: str, op: str = "case_open") -> str:
-    """校验律师选的案件文件夹，返回 realpath（即 ROOT）。"""
-    if not isinstance(path, str) or not path or "\x00" in path or not os.path.isabs(path):
+def strip_long_prefix(path: str) -> str:
+    """去掉 \\\\?\\ 前缀：\\\\?\\C:\\x → C:\\x，\\\\?\\UNC\\s\\x → \\\\s\\x。"""
+    if path.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + path[8:]
+    if path.startswith("\\\\?\\"):
+        return path[4:]
+    return path
+
+
+def check_root(path: str, op: str = "case_open", appdata: str | os.PathLike | None = None) -> str:
+    """校验律师选的案件文件夹，返回 realpath（即 ROOT）。
+
+    拒绝：链接或 junction（CASE_ROOT_IS_LINK）；云同步目录（CASE_IN_SYNC_FOLDER）；
+    盘符根目录、包含本软件应用数据目录的文件夹（INVALID_ARGUMENT，Spec 4.2 第 1 条）。
+    """
+    if not isinstance(path, str) or not path or "\x00" in path:
+        raise _deny(op, "root_not_abs", "INVALID_ARGUMENT")
+    path = strip_long_prefix(path)
+    if not os.path.isabs(path):
         raise _deny(op, "root_not_abs", "INVALID_ARGUMENT")
     p = os.path.normpath(path)
     if is_link(p):
         raise _deny(op, "root_is_link", "CASE_ROOT_IS_LINK")
     if not os.path.isdir(p):
         raise _deny(op, "root_not_dir", "INVALID_ARGUMENT")
-    real = os.path.realpath(p)
+    real = os.path.normpath(strip_long_prefix(os.path.realpath(p)))
+    if os.path.splitdrive(real)[1] in ("", os.sep):
+        raise _deny(op, "root_is_drive", "INVALID_ARGUMENT")
+    if appdata is not None:
+        ad = os.path.realpath(appdata)
+        if _norm(ad) == _norm(real) or is_within(real, ad):
+            raise _deny(op, "root_has_appdata", "INVALID_ARGUMENT")
     if in_sync_folder(p) or in_sync_folder(real):
         raise _deny(op, "sync_folder", "CASE_IN_SYNC_FOLDER")
     return real
@@ -168,7 +194,15 @@ def _split_rel(rel: str, op: str) -> list[str]:
             raise _deny(op, "dotdot")
         if len(p) > MAX_COMPONENT:
             raise _deny(op, "too_long")
+        if is_device_name(p):
+            raise _deny(op, "device_name")
     return parts
+
+
+def is_device_name(name: str) -> bool:
+    """Windows 设备名：去尾部点和空格、取第一个 . 之前的部分，不分大小写比对（NUL.txt、con 同样算）。"""
+    base = name.rstrip(" .").split(".")[0].rstrip(" ").casefold()
+    return base in DEVICE_NAMES
 
 
 def _top(parts: list[str]) -> str:
@@ -210,8 +244,15 @@ def _resolve(root: str, parts: list[str], op: str) -> pathlib.Path:
     return pathlib.Path(target)
 
 
-def _real_top(root: str, path: pathlib.Path) -> str:
-    rel = os.path.relpath(os.path.realpath(path), root)
+def _relpath(path: str | os.PathLike, root: str, op: str) -> str:
+    try:
+        return os.path.relpath(path, root)
+    except ValueError:  # 不同盘符、设备路径等：一律按越界拒绝
+        raise _deny(op, "relpath_error")
+
+
+def _real_top(root: str, path: pathlib.Path, op: str = "internal") -> str:
+    rel = _relpath(os.path.realpath(path), root, op)
     return pathlib.Path(rel).parts[0].casefold()
 
 
@@ -219,7 +260,7 @@ def resolve_read(root: str, rel: str, op: str = "ai_read") -> pathlib.Path:
     """AI 读原件区的材料：规则 2 + 3 + 4。"""
     parts = check_ai_rel(rel, op)
     path = _resolve(root, parts, op)
-    top = _real_top(root, path)  # 8.3 短名等别名，解析后仍落在保留目录也拒绝
+    top = _real_top(root, path, op)  # 8.3 短名等别名，解析后仍落在保留目录也拒绝
     if top.startswith(".") or top in (WORK.casefold(), OUTPUT.casefold()):
         raise _deny(op, "reserved_top")
     return path
@@ -237,7 +278,7 @@ def resolve_write(root: str, rel: str, op: str = "write") -> pathlib.Path:
     if parts[0] not in WRITABLE_TOP:
         raise _deny(op, "write_outside_work")
     path = _resolve(root, parts, op)
-    if _real_top(root, path) not in (WORK.casefold(), OUTPUT.casefold()):
+    if _real_top(root, path, op) not in (WORK.casefold(), OUTPUT.casefold()):
         raise _deny(op, "write_outside_work")
     return path
 
@@ -258,8 +299,16 @@ def mkdir_work(root: str, rel: str, op: str = "write") -> pathlib.Path:
 
 
 def mkdir_original(root: str, rel: str, op: str = "case_template") -> bool:
-    """原件区补建空文件夹（仅 /api/case/open 的 template）。已存在则不动，返回是否新建。"""
+    """原件区补建空文件夹（仅 /api/case/open 的 template）。返回是否新建。
+
+    已存在的一级（含链接、junction）一律跳过、不报错、不往里写：某一级已是链接时，它下面的各级也不建。
+    """
     parts = check_ai_rel(rel, op)
+    cur = root
+    for p in parts:
+        cur = os.path.join(cur, p)
+        if is_link(cur):
+            return False
     path = _resolve(root, parts, op)
     if os.path.lexists(path):
         return False
@@ -292,7 +341,7 @@ def delete_work_file(root: str, rel: str, op: str = "import") -> None:
     if parts[0] != WORK:
         raise _deny(op, "delete_outside_work")
     path = _resolve(root, parts, op)
-    if _real_top(root, path) != WORK.casefold():
+    if _real_top(root, path, op) != WORK.casefold():
         raise _deny(op, "delete_outside_work")
     if os.path.isfile(path):
         os.unlink(path)
@@ -300,7 +349,7 @@ def delete_work_file(root: str, rel: str, op: str = "import") -> None:
 
 def _mkdirs(root: str, path: pathlib.Path, op: str) -> None:
     """逐级新建目录；每新建一级都复查不是链接、仍在 ROOT 内（防止并发替换成 junction）。"""
-    rel_parts = [p for p in pathlib.Path(os.path.relpath(path, root)).parts if p != "."]
+    rel_parts = [p for p in pathlib.Path(_relpath(path, root, op)).parts if p != "."]
     cur = root
     for p in rel_parts:
         cur = os.path.join(cur, p)

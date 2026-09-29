@@ -66,6 +66,7 @@ def routes(st) -> list[Route]:
         return st.settings.get()
 
     def settings_put(d: dict) -> dict:
+        st.net.check_servers(d["servers"])  # 6000D 地址不能指向本机转发端口自己
         return st.settings.put(d)
 
     def capsules_get(d: dict) -> dict:
@@ -119,10 +120,14 @@ def probe_connection(st, server: str) -> dict:
     key_valid = None
     note = ""
     if server == "llm":
-        key = st.key_getter()
-        if not key:
-            note = "，尚未设置 Key"
+        try:
+            key = st.key_getter()
+        except Exception:  # noqa: BLE001 凭据管理器读取出错（已按类名记日志）：不能说成"尚未设置"
+            key, note = None, "，Key 暂时无法验证"
         else:
+            if not key:
+                note = "，尚未设置 Key"
+        if key:
             try:
                 r = net.client.post(base + "/chat/completions", timeout=KEY_TIMEOUT,
                                     headers={"Authorization": f"Bearer {key}"},

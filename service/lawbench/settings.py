@@ -40,23 +40,21 @@ class SettingsStore:
         self._listeners.append(fn)
 
     def get(self) -> dict:
+        """文件损坏或 v 不认识时抛异常（接口层按内部异常返回 HTTP 500，Spec 20.1）。"""
         with self._lock:
             if not self.path.exists():
                 return copy.deepcopy(DEFAULTS)
             data = contracts.read_json(self.path)
-        if data.get("v") != 1:
-            raise ApiError("INTERNAL", "settings_unknown_v")
         contracts.validate(SCHEMA, "", data)
         return data
 
     def put(self, data: dict) -> dict:
-        if self.path.exists():
-            if contracts.read_json(self.path).get("v") != 1:
-                raise ApiError("INVALID_ARGUMENT", "settings_unknown_v")  # 不认识的 v：只读、不写
         office_dir = data["office"]["dir"]
         if office_dir is not None:
             gate.check_office_dir(office_dir)
         with self._lock:
+            if self.path.exists() and contracts.read_json(self.path).get("v") != 1:
+                raise ApiError("INVALID_ARGUMENT", "settings_unknown_v")  # 不认识的 v：只读、不写
             contracts.write_json(self.path, data, SCHEMA)
         for fn in self._listeners:
             fn(data)
