@@ -1,0 +1,29 @@
+T4 合流记录（主编排，2026-09-29 21:56 +08:00，无人值守窗内）
+
+复核：三轮。第一轮 AMEND（review-REVIEW.md），第二轮 AMEND（review-REVIEW-第二轮.md），第三轮 PASS（review-REVIEW-第三轮.md）。
+合并方式：git merge --no-ff 5c29e83（line-A 上只有 T4 的三个提交：593f9cc、cd4c521、5c29e83）
+合并前 main：bd1657e01d0924c3655378ad7f94d9f3f8dec358
+合并后 main：0fd446539469c23d8b321f380faacd2c2a48c097
+子模块指针：160000 commit 477b4f420553e8a52c2fbccc464d7561b239c443	dsh
+合并后与 line-A 逐文件比对 dsh-ext、dsh-patches 和主要证据：无差异
+
+== 1. pytest 全量 ==
+service、prep395 尚未合并进 main（T3 + T5、T6 在返修或复核），不适用。
+DSH 自带测试和桌面端实测由线 A 在其工作目录做（证据在 evidence\T4\）；主编排的 main 工作目录不初始化子模块。
+
+== 2. 契约自检 ==
+[对] case-archiving/catalogs/民事行政卷.json
+退出码=0
+
+== 3. build_skills --check ==
+结果：✔ 通过
+退出码=0
+
+== 4. 插件树检查脚本在 main 上重跑 ==
+python docs\plan\evidence\T4\check_plugin_tree.py plugin-inventory-desktop.json plugin-tree.txt
+
+## 结论
+通过
+退出码=0
+
+结论：契约自检、build_skills、插件树检查退出码均为 0；pytest 不适用；对基线零新增失败。
