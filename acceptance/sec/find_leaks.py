@@ -10,7 +10,9 @@ python acceptance\\sec\\find_leaks.py --feature LBFX-CRIM01-7Q3Z --case-dir D:\\
 
 按顶层目录分批：每扫完一批打印一行（文件数、命中数、耗时），结果单独写进证据目录下
 find_leaks-<参数摘要>\批NNNN.txt，进度记在同目录的 进度.json。中断后用同样的参数再运行，
-自动从没扫完的那一批继续。不排除任何目录（桌面端的缓存正是正文副本可能落脚的地方）。
+自动从没扫完的那一批继续；沿用的批次在证据里列出扫描时刻，超过 24 小时的不沿用、重扫。
+一次运行全部扫完后标记为已完成，下一次运行自动从头开始（续跑只对没跑完的那一次有效）。
+不排除任何目录（桌面端的缓存正是正文副本可能落脚的地方）。
 
 按字节搜索 UTF-8 和 UTF-16LE 两种编码（特征字符串是 ASCII，GBK 同 UTF-8）；压缩文件（docx、zip）
 里的内容搜不到，所以验收看的是"解压后的正文副本有没有落到案件外"。不跟随链接和联接。
@@ -28,6 +30,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import FAIL, FEATURES, PASS, UNMET, Report  # noqa: E402
+
+
+MAX_REUSE_S = 24 * 3600       # 中断前扫完的批次最多沿用 24 小时
 
 
 def default_roots() -> list[Path]:
@@ -141,10 +146,23 @@ def main() -> None:
     batch_dir = r.out_dir / f"find_leaks-{key}"
     state_file = batch_dir / "进度.json"
     batch_dir.mkdir(parents=True, exist_ok=True)
-    state = {"done": {}}
+    now = time.time()
+    started = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
+    r.log(f"本次运行开始：{started}")
+    state = {"completed": False, "done": {}}
     if state_file.exists() and not a.fresh:
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-        r.log(f"续跑：上次已完成 {len(state['done'])} 批（进度文件 {state_file}）")
+        old = json.loads(state_file.read_text(encoding="utf-8"))
+        if old.get("completed", False):
+            r.log("上次运行已全部扫完：本次从头开始（续跑只对没跑完的那一次有效）")
+        else:
+            fresh = {k: v for k, v in old.get("done", {}).items() if now - v.get("at", 0) <= MAX_REUSE_S}
+            stale = len(old.get("done", {})) - len(fresh)
+            state["done"] = fresh
+            r.log(f"续跑：沿用上次中断前已扫完的 {len(fresh)} 批"
+                  + (f"；另有 {stale} 批超过 24 小时，不沿用、重扫" if stale else ""))
+    elif a.fresh:
+        r.log("--fresh：从头开始")
+    reused = set(state["done"])
     plan = batches(roots, excluded)
     r.log(f"共 {len(plan)} 批；每批结果单独写进 {batch_dir}")
     t_all = time.time()
@@ -152,8 +170,10 @@ def main() -> None:
         if name in state["done"]:
             continue
         acc = scan_batch(path, recursive, excluded, patterns, a.max_mb * 1024 * 1024)
+        acc["at"] = time.time()
         state["done"][name] = acc
-        lines = [f"批 {i}：{name}", f"文件 {acc['files']} 个，命中 {len(acc['hits'])} 处，"
+        lines = [f"批 {i}：{name}（{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(acc['at']))} 扫描）",
+                 f"文件 {acc['files']} 个，命中 {len(acc['hits'])} 处，"
                  f"无权限或读取失败 {acc['denied']} 个，超大跳过 {len(acc['big'])} 个，用时 {acc['secs']} 秒"]
         lines += [f"  命中：{p}　←　{label}" for p, label in acc["hits"]]
         lines += [f"  跳过（{s // 1024 // 1024}MB）：{p}" for p, s in acc["big"]]
@@ -161,13 +181,22 @@ def main() -> None:
         state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
         print(f"[{i}/{len(plan)}] {name}：文件 {acc['files']} 个，命中 {len(acc['hits'])}，用时 {acc['secs']} 秒",
               flush=True)
+    state["completed"] = True                        # 全部扫完：下次运行从头开始
+    state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    names = {n for n, _, _ in plan}
+    for n in sorted(reused & names):
+        at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(state["done"][n].get("at", 0)))
+        r.log(f"  沿用：{n}（{at} 扫描，中断前的结果）")
+    state["done"] = {k: v for k, v in state["done"].items() if k in names}
+    scanned_files = sum(v["files"] for k, v in state["done"].items() if k not in reused)
+    reused_files = sum(v["files"] for k, v in state["done"].items() if k in reused)
     done = state["done"]
     files = sum(v["files"] for v in done.values())
     denied = sum(v["denied"] for v in done.values())
     big = [b for v in done.values() for b in v["big"]]
     hits = [h for v in done.values() for h in v["hits"]]
-    r.log(f"已搜索 {files} 个文件（本次用时 {time.time() - t_all:.0f} 秒）；无权限或读取失败 {denied} 个；"
-          f"超过 {a.max_mb}MB 跳过 {len(big)} 个")
+    r.log(f"已搜索 {files} 个文件：本次实际扫描 {scanned_files} 个（用时 {time.time() - t_all:.0f} 秒），"
+          f"沿用中断前的结果 {reused_files} 个；无权限或读取失败 {denied} 个；超过 {a.max_mb}MB 跳过 {len(big)} 个")
     for p, s in big:
         r.log(f"  跳过（{s // 1024 // 1024}MB）：{p}")
     if hits:
