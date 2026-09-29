@@ -108,7 +108,7 @@ def test_log_has_only_metadata(settings):
 
 
 def test_startup_cleanup_only_own_top_level_files(settings, isolated_tmp, tmp_path):
-    """只删系统临时目录和 <HOME>\tmp\ 顶层的 prep395- 普通文件；目录、链接、服务目录里的其他文件都不动。"""
+    """只删系统临时目录和 <HOME>/tmp/ 顶层的 prep395- 普通文件；目录、链接、服务目录里的其他文件都不动。"""
     import subprocess
     (isolated_tmp / f"{TEMP_PREFIX}leftover.png").write_bytes(b"x")
     (isolated_tmp / "other-program.tmp").write_bytes(b"x")
