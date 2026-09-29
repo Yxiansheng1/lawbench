@@ -2,7 +2,7 @@
 // - 用 ctx.subprocess.spawn 启动并看护工作台服务（supervisor.ts）；
 // - 提供 Cordis 服务 lawbenchCore：Agent 插件经它拿端口和令牌；
 // - 提供远程命名空间 lawbench（最小集：设置读写、测试连接、首次配置状态），首次配置页经 Host 的 /api 调用。
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
@@ -95,6 +95,9 @@ const fail = (code: string, message: string): ApiResult => ({ ok: false, error: 
 const BAD_ARGS = '请求参数有误'
 const BAD_RESPONSE = '工作台服务返回的内容不符合约定，请重试；多次出现请联系技术支持'
 const PASTE_MAX_BYTES = 20 * 1024 * 1024
+/** base64 长度上限：解码前先按长度拦（返修 P3-4），4/3 倍再留一点换行余量。 */
+const PASTE_MAX_BASE64 = Math.ceil(PASTE_MAX_BYTES / 3) * 4 + 1024
+const PASTE_TOO_BIG = '只能粘贴 PNG 或 JPEG 图片，且不超过 20 MB'
 /** 粘贴截图的导入位置（T13 执行令 Q3②）。 */
 export const PASTE_TARGET = '02案件材料/粘贴图片'
 
@@ -167,13 +170,15 @@ export class LawbenchRemote {
   async importPastedImage(request: unknown): Promise<ApiResult> {
     const r = (request ?? {}) as { case_id?: unknown; image_base64?: unknown }
     if (typeof r.case_id !== 'string' || typeof r.image_base64 !== 'string') return fail('INVALID_ARGUMENT', BAD_ARGS)
+    if (r.image_base64.length > PASTE_MAX_BASE64) return fail('INVALID_ARGUMENT', PASTE_TOO_BIG)
     const bytes = Buffer.from(r.image_base64, 'base64')
     const ext = bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
       : bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff ? 'jpg' : undefined
-    if (!ext || bytes.length > PASTE_MAX_BYTES) return fail('INVALID_ARGUMENT', '只能粘贴 PNG 或 JPEG 图片，且不超过 20 MB')
+    if (!ext || bytes.length > PASTE_MAX_BYTES) return fail('INVALID_ARGUMENT', PASTE_TOO_BIG)
     const dir = pasteDir(this.appData)
+    // 文件名用随机标识（返修 P3-4：原先秒级时间 + 2 字节随机，同一秒两次粘贴可能撞名）
     const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
-    const file = join(dir, `粘贴-${stamp}-${randomBytes(2).toString('hex')}.${ext}`)
+    const file = join(dir, `粘贴-${stamp}-${randomUUID()}.${ext}`)
     try {
       await mkdir(dir, { recursive: true })
       await writeFile(file, bytes)
@@ -207,17 +212,30 @@ export class LawbenchRemote {
     return { configured: hasSettings && hasKey, hasSettings, hasKey, service: this.supervisor.state }
   }
 
-  async getSettings(): Promise<unknown> { return this.api('GET', '/api/settings') }
+  /**
+   * T7 沿用的三个方法也按契约校验返回（T13 返修 P3-3）：把服务给的 value 装回 {ok: true, value} 按 $defs/response 校验；
+   * 不合契约就抛中文错误（这三个方法沿用 T7 的"抛中文错误"约定），日志只记方法名和错误条数。
+   */
+  private checked(method: string, contract: string, value: unknown): unknown {
+    const errs = validate(`lawbench://contracts/api/${contract}.schema.json`, 'response', { ok: true, value })
+    if (errs.length) {
+      this.log('warn', 'api.call', { method, ok: false, code: 'INTERNAL', invalid: errs.length })
+      throw new Error(BAD_RESPONSE)
+    }
+    return value
+  }
+
+  async getSettings(): Promise<unknown> { return this.checked('getSettings', 'settings', await this.api('GET', '/api/settings')) }
 
   async putSettings(settings: unknown): Promise<unknown> {
     const errs = validate('lawbench://contracts/api/settings.schema.json', 'request', settings)
     if (errs.length) throw new Error('请求参数有误')
-    return this.api('PUT', '/api/settings', settings)
+    return this.checked('putSettings', 'settings', await this.api('PUT', '/api/settings', settings))
   }
 
   async testConnection(server: unknown): Promise<unknown> {
     if (server !== 'llm' && server !== 'prep') throw new Error('请求参数有误')
-    return this.api('POST', '/api/connection/test', { server })
+    return this.checked('testConnection', 'connection_test', await this.api('POST', '/api/connection/test', { server }))
   }
 
   /** 串行执行"测试连接"（T7 第二次返修 F2）：两次并发时，后一次必须等前一次（含恢复）做完再取"旧值"。 */

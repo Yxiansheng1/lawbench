@@ -235,3 +235,65 @@ describe('Skill 列表（Q4）', () => {
     expect(readFileSync).toBeDefined()
   })
 })
+
+describe('T7 沿用的三个方法也校验返回（返修 P3-3）', () => {
+  const settings = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'examples', 'file_settings.json'), 'utf8'))
+  const good = { reachable: true, key_valid: true, latency_ms: 12, route: 'primary', message: '连接正常' }
+
+  it('合契约的原样返回', async () => {
+    reply = (s) => ({ ok: true, value: s.url === '/api/connection/test' ? good : settings })
+    const r = new LawbenchRemote(up(), tmpdir(), () => undefined)
+    expect(await r.getSettings()).toEqual(settings)
+    expect(await r.putSettings(settings)).toEqual(settings)
+    expect(await r.testConnection('llm')).toEqual(good)
+  })
+
+  it('不合契约的抛中文错误，日志只记方法名和条数', async () => {
+    const logs: unknown[] = []
+    const r = new LawbenchRemote(up(), tmpdir(), () => undefined, [], (...a) => { logs.push(a) })
+    reply = () => ({ ok: true, value: { ...settings, 多余: 'D:\案件\不该进日志' } })
+    await expect(r.getSettings()).rejects.toThrow('不符合约定')
+    await expect(r.putSettings(settings)).rejects.toThrow('不符合约定')
+    reply = () => ({ ok: true, value: { reachable: 'yes' } })
+    await expect(r.testConnection('prep')).rejects.toThrow('不符合约定')
+    expect(JSON.stringify(logs)).not.toContain('案件')
+    expect(logs.filter((l) => JSON.stringify(l).includes('"code":"INTERNAL"'))).toHaveLength(3)
+  })
+})
+
+describe('粘贴截图的上限与文件名（返修 P3-4）', () => {
+  let appData: string
+  beforeEach(() => { appData = mkdtempSync(join(tmpdir(), 'lb-paste2-')) })
+  afterEach(() => rmSync(appData, { recursive: true, force: true }))
+
+  it('base64 超过 20 MB 对应的长度：不解码、不写临时文件、不发请求', async () => {
+    const r = new LawbenchRemote(up(), appData, () => undefined)
+    const huge = PNG.toString('base64') + 'A'.repeat(28 * 1024 * 1024)
+    const out = await r.importPastedImage({ case_id: CASE, image_base64: huge })
+    expect(!out.ok && out.error).toMatchObject({ code: 'INVALID_ARGUMENT', message: expect.stringContaining('20 MB') })
+    expect(existsSync(pasteDir(appData))).toBe(false)
+    expect(seen).toHaveLength(0)
+  })
+
+  it('解码后恰好超过 20 MB（长度在余量内）：同样拒收', async () => {
+    const r = new LawbenchRemote(up(), appData, () => undefined)
+    const bytes = Buffer.concat([PNG, Buffer.alloc(20 * 1024 * 1024 + 1 - PNG.length)])
+    const out = await r.importPastedImage({ case_id: CASE, image_base64: bytes.toString('base64') })
+    expect(!out.ok && out.error.code).toBe('INVALID_ARGUMENT')
+    expect(seen).toHaveLength(0)
+  })
+
+  it('20 MB 以内的照常导入；临时文件名带随机标识，同一秒两次粘贴不撞名', async () => {
+    reply = () => ({ ok: true, value: { copied: [], skipped: [], scan: { added: 0, changed: 0, removed: 0, failed: 0, review_needed: false } } })
+    const r = new LawbenchRemote(up(), appData, () => undefined)
+    await Promise.all([
+      r.importPastedImage({ case_id: CASE, image_base64: PNG.toString('base64') }),
+      r.importPastedImage({ case_id: CASE, image_base64: PNG.toString('base64') }),
+    ])
+    const names = seen.map((s) => (s.body as { paths: string[] }).paths[0]!)
+    expect(names).toHaveLength(2)
+    expect(new Set(names).size).toBe(2)
+    for (const n of names) expect(n).toMatch(/粘贴-\d{14}-[0-9a-f-]{36}\.png$/)
+    expect(seen.every((s) => s.files?.length === 1)).toBe(true)
+  })
+})

@@ -21,7 +21,7 @@ export const LAWBENCH_REMOTE = {
     parameters: params.map((name) => ({
       name,
       wire: name,
-      source: 'json' as const,
+      source: 'json' as const, // ui-words: 标识符（网关参数来源的取值）
       acceptsUndefined: true,
       codec: passThrough(`${PACKAGE}#${LAWBENCH_NAMESPACE}/${method}:${name}`),
     })),

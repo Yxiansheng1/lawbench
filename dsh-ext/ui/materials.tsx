@@ -231,7 +231,13 @@ function WikiSection({ caseRef, materials, onOpen }: { caseRef: CaseRef; materia
   }, [id, reloadTasks])
   useEffect(() => {
     if (!running) {
-      if (watched.current) { osNotify('整理任务已完成'); watched.current = null; void reloadSugs() }
+      // 只在成功完成时通知；被停止、失败的不发"已完成"（返修一并做）
+      if (watched.current) {
+        const done = tasks.state === 'ok' ? tasks.value.tasks.find((t) => t.task_id === watched.current) : undefined
+        if (done?.status === 'completed') osNotify('整理任务已完成')
+        watched.current = null
+        void reloadSugs()
+      }
       setStatus(null)
       return
     }

@@ -102,9 +102,16 @@ export const ERROR_HINT: Record<string, string> = {
   SERVICE_UNAVAILABLE: '工作台服务正在启动或已停止，稍后再试。',
 }
 
+/** 给律师看的提示：没有中文的（如 DSH 网关的英文技术信息）一律换成通用中文提示（返修 P3-2，Spec U-1）。 */
+export const GENERIC_ERROR = '工作台服务暂时连不上，请稍后重试；多次出现请联系技术支持'
+export function lawyerMessage(message: string | undefined | null): string {
+  return message && /[一-鿿]/.test(message) ? message : GENERIC_ERROR
+}
+
 export function errorText(e: { code: string; message: string }): string {
   const hint = ERROR_HINT[e.code]
-  return hint ? `${e.message} ${hint}` : e.message
+  const msg = lawyerMessage(e.message)
+  return hint ? `${msg} ${hint}` : msg
 }
 
 /**

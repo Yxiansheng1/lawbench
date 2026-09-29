@@ -32,4 +32,19 @@ zh.json:1  「tokens」  …本次用了 1200 个 tokens…
 另：cordis effect 的调试标签（只在开发日志里出现）改成中文，不再含 session、workspace 等词。
 
 ## 当前 dsh-ext\ui\
-界面插件施工中；正式的 ui-words.txt 在界面代码写完后生成。
+正式结果见 ui-words.txt（零命中）。
+
+## 返修 P3-1（复核员列的六种漏报，2026-09-30）
+改法：JSX 文本改为取 > 与 < 之间、去掉 {…} 表达式后剩下的文字（剩下的像代码的——含 { } ; => && || === !== ——跳过）；
+纯 ASCII 短字符串恰好等于禁用词（含复数）时照查；英文词表自动含复数；代码里恰好等于禁用词的标识符字符串，
+在该行写注释"ui-words: 标识符（……）"豁免并写明是什么（界面代码里 6 行：Skill 头部 mode 取值 2 行、DSH 服务名 3 行、网关参数来源取值 1 行）。
+样例三（每行一种写法）：
+  1  <div>Token 用量：{n}</div>              JSX 文本紧挨表达式      → 报「Token」
+  2  <div>{n} tokens</div>                   表达式在前、复数         → 报「tokens」
+  3  <Button>{'Prompt'}</Button>             纯英文短字符串=禁用词    → 报「Prompt」
+  4  title: () => 'Session'                  箭头函数返回的字符串     → 报「Session」
+  5  <button aria-label="agent">             读屏可见的属性           → 报「agent」
+  6  '共 3 个 sessions，2 个 agents'          复数形式                → 报「sessions」「agents」
+  7  ctx.inject(['sessions'], f) // ui-words: 标识符（DSH 服务名）    → 不报（豁免）
+  8  a > b && b < a                          比较运算，不是 JSX 文本  → 不报
+输出：命中 7 处，退出码 1。样例一仍命中 11 处，样例二仍零命中。当前 dsh-ext\ui\ 零命中。

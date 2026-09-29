@@ -2,7 +2,8 @@
 
 扫 dsh-ext\\ui\\ 下源码里律师能看到的文字——字符串字面量、JSX 文本、词条表——找出不该出现的词。
 注释、import 路径、对象键名、标识符不算（只看字符串和 JSX 文本）。
-英文词按整词、不分大小写匹配（sessionId 这类标识符在字符串外，不受影响）；中文词按子串匹配。
+英文词连同复数按整词、不分大小写匹配（sessionId 这类标识符在字符串外，不受影响）；中文词按子串匹配。
+代码里恰好等于禁用词的标识符字符串（如 cordis 的服务名 'sessions'）在该行写注释 `ui-words: 标识符` 豁免，并写明是什么。
 
 用法：python scripts\\check_ui_words.py [目录，默认 dsh-ext\\ui] [--out 报告文件]
 退出码：0 = 零命中；1 = 有命中；2 = 参数错误。
@@ -15,17 +16,22 @@ import re
 import sys
 
 # 词表只放这一处（T13 执行令 0357 Q12 裁决：初稿再加 上下文、embedding、schema、payload、endpoint、runtime、workspace；
-# "Skill"和"Key"不禁用）。"上下文"已包含初稿的"模型上下文""上下文窗口"。
-BANNED_EN = ["token", "tokens", "context", "prompt", "LLM", "API", "agent", "preset", "session", "JSON",
+# "Skill"和"Key"不禁用）。"上下文"已包含初稿的"模型上下文""上下文窗口"。英文词的复数（加 s）自动一并禁用。
+BANNED_EN = ["token", "context", "prompt", "LLM", "API", "agent", "preset", "session", "JSON",
              "embedding", "schema", "payload", "endpoint", "runtime", "workspace"]
 BANNED_ZH = ["上下文", "提示词"]
 
 EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
 SKIP_DIRS = {"node_modules", "lib", "fixtures", "tests", "__tests__"}
+IGNORE_MARK = "ui-words: 标识符"
 
-_EN = re.compile(r"(?<![A-Za-z0-9_])(" + "|".join(re.escape(w) for w in BANNED_EN) + r")(?![A-Za-z0-9_])", re.IGNORECASE)
+_WORDS = "(?:" + "|".join(re.escape(w) for w in BANNED_EN) + ")s?"
+_EN = re.compile(r"(?<![A-Za-z0-9_])(" + _WORDS + r")(?![A-Za-z0-9_])", re.IGNORECASE)
+_EN_EXACT = re.compile(_WORDS, re.IGNORECASE)
 _STRING = re.compile(r"""(?P<q>['"`])(?P<body>(?:\\.|(?!(?P=q)).)*)(?P=q)""", re.DOTALL)
-_JSX_TEXT = re.compile(r">([^<>{}]+)<")
+# JSX 文本：> 与 < 之间，去掉其中的 {…} 表达式后剩下的文字（返修 P3-1："Token 用量：{n}" 这类紧挨表达式的文字）
+_JSX_RUN = re.compile(r">([^<>]*)<")
+_CODEISH = re.compile(r"[{};]|=>|&&|\|\||===|!==")
 _LINE_COMMENT = re.compile(r"(^|[^:\\])//[^\n]*")
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _IMPORT = re.compile(r"^\s*(import|export)\b[^\n]*\bfrom\s*['\"][^'\"]+['\"]|^\s*import\s*['\"][^'\"]+['\"]", re.MULTILINE)
@@ -50,13 +56,20 @@ def visible_texts(src: str, suffix: str):
         body = m.group("body")
         if m.group("q") == "`":
             body = re.sub(r"\$\{[^}]*\}", " ", body)  # 模板字符串里 ${…} 是代码，不是界面文字
-        # 像模块路径、CSS 类名、事件名这类只有 ASCII 且不含空格的短标识不算律师可见文字
-        if re.fullmatch(r"[\w./:@#\-]*", body) and not re.search(r"[一-鿿]", body):
+        # 像模块路径、CSS 类名、事件名这类只有 ASCII 且不含空格的短标识不算律师可见文字；
+        # 但恰好等于禁用词（或其复数）的照查——{'Prompt'}、aria-label="agent"、() => 'Session' 律师都看得见（返修 P3-1）
+        if re.fullmatch(r"[\w./:@#\-]*", body) and not re.search(r"[一-鿿]", body) and not _EN_EXACT.fullmatch(body):
             continue
         yield clean.count("\n", 0, m.start()) + 1, body
     if suffix in {".tsx", ".jsx"}:
-        for m in _JSX_TEXT.finditer(clean):
-            text = m.group(1).strip()
+        for m in _JSX_RUN.finditer(clean):
+            run = m.group(1)
+            prev = None
+            while prev != run:  # 由内向外去掉 {…}
+                prev, run = run, re.sub(r"\{[^{}]*\}", " ", run)
+            if _CODEISH.search(run):  # 剩下的像代码（比较运算、箭头函数体），不是 JSX 文本
+                continue
+            text = run.strip()
             if text:
                 yield clean.count("\n", 0, m.start()) + 1, text
 
@@ -69,7 +82,10 @@ def scan(root: pathlib.Path):
         if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
             continue
         src = path.read_text(encoding="utf-8", errors="replace")
+        ignored = {i + 1 for i, line in enumerate(src.split("\n")) if IGNORE_MARK in line}
         for line, text in visible_texts(src, path.suffix):
+            if line in ignored:
+                continue
             words = [m.group(1) for m in _EN.finditer(text)] + [w for w in BANNED_ZH if w in text]
             for w in words:
                 hits.append((path.relative_to(root).as_posix(), line, w, text.strip()[:60]))
@@ -86,7 +102,7 @@ def main(argv: list[str]) -> int:
         print(f"目录不存在：{root}", file=sys.stderr)
         return 2
     hits = scan(root)
-    lines = [f"界面用语检查：{root}", f"词表（英文按整词、不分大小写）：{', '.join(BANNED_EN)}；中文：{', '.join(BANNED_ZH)}", ""]
+    lines = [f"界面用语检查：{root}", f"词表（英文按整词、不分大小写，含复数）：{', '.join(BANNED_EN)}；中文：{', '.join(BANNED_ZH)}", ""]
     lines += [f"{f}:{ln}  「{w}」  …{ctx}…" for f, ln, w, ctx in hits]
     lines += ["", f"命中 {len(hits)} 处" if hits else "零命中"]
     report = "\n".join(lines) + "\n"

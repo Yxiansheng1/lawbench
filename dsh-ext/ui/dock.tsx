@@ -1,17 +1,20 @@
 // 会话输入区上方（DSH 插槽 conversation.input.dock）：当前胶囊和 Skill 选择、必问问题、参数、选用的前序成果（PRD 7.9）。
 // 选定后写任务单 /api/task（Spec 9.2：界面事先为该会话写待执行的任务单，Agent 插件在该会话下一次请求时使用）。
-// entry 填胶囊 id（T13 执行令 Q5）；自由对话不写任务单（插件按"自由对话"默认值新建）。运行状态和停止沿用 DSH 对话区自带的。
+// entry 填胶囊 id（T13 执行令 Q5）。一张任务单管一条消息，写入与复位规则见 tasksheet.ts（返修 P2-1、P2-3）。
+// 运行状态和停止沿用 DSH 对话区自带的。
 import { useEffect, useMemo, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
 import { errorText } from './format.ts'
 import { Badge, Button, C, S } from './kit.tsx'
-import { app, call, lb, setSelection, type CaseRef, type Params, type Selection, type SkillInfo } from './state.ts'
+import { app, call, lb, MODE_AGENT, setSelection, type CaseRef, type Params, type Selection, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
+import { sheetFor } from './tasksheet.ts'
 
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
 const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 const WRITE_DELAY_MS = 500
+const POLL_MS = 3000
 
 let capsCache: Promise<Capsules | undefined> | undefined
 let skillsCache: Promise<SkillInfo[]> | undefined
@@ -38,22 +41,45 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
 
   const capsules = useMemo(() => (caps ? visible(caps).flatMap((g) => g.items.filter((x): x is SkillCapsule => x.kind === 'skill').map((x) => ({ ...x, group: g.name }))) : []), [caps])
   const capsule = capsules.find((c) => c.id === sel.capsuleId)
-  const agentSkills = skills.filter((s) => s.mode === 'agent')
+  const agentSkills = skills.filter((s) => s.mode === MODE_AGENT)
   const choices = capsule ? [...new Set([...capsule.skills, ...(caps?.shared ?? [])])].filter((n) => agentSkills.some((s) => s.name === n)) : []
   const skill = agentSkills.find((s) => s.name === sel.skill)
   const params: Params = sel.params ?? (skill ? presets[skill.name] ?? skill.params : defaults) ?? { thinking: '中', window: '128K', max_tokens: 16384 }
 
-  // 选择一变就写任务单（防抖）；自由对话且没选前序成果时不写
+  // 任务单：一张管一条消息（返修 P2-1、P2-3，见 tasksheet.ts）
+  const sheet = useMemo(() => sheetFor(sessionId, {
+    write: (req) => call<{ task_id: string }>('taskCreate', { case_id: caseRef.case_id, session_id: sessionId, ...req }),
+    started: async () => {
+      const r = await call<{ tasks: Array<{ task_id: string }> }>('tasksList', { case_id: caseRef.case_id })
+      return r.ok ? r.value.tasks.map((t) => t.task_id) : undefined
+    },
+  }), [sessionId, caseRef.case_id])
+  const label = capsule ? capsule.name : sel.inputs.length ? '自由对话（带选用的成果）' : '自由对话'
+
+  // 选择一变就按新选择写（防抖）；"已按某胶囊运行"的提示不被随后的复位冲掉
   const key = JSON.stringify([sel.capsuleId, sel.skill, params, sel.inputs])
   useEffect(() => {
-    if (sel.capsuleId === null && sel.inputs.length === 0) { setStatus(null); return }
     const t = setTimeout(() => {
-      void call<{ task_id: string }>('taskCreate', {
-        case_id: caseRef.case_id, session_id: sessionId, entry: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params,
-      }).then((r) => setStatus(r.ok ? { ok: true, text: '已就绪：发出下一条消息时按这里的选择运行' } : { ok: false, text: errorText(r.error) }))
+      void sheet.apply({ capsuleId: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params, label }).then((s) => {
+        if (s.kind === 'ready') setStatus({ ok: true, text: `已就绪：下一条消息按「${s.label}」运行（只管这一条）` })
+        else if (s.kind === 'error') setStatus({ ok: false, text: errorText(s.error) })
+        else setStatus((cur) => (cur?.ok && cur.text.startsWith('上一条已按') ? cur : null))
+      })
     }, WRITE_DELAY_MS)
     return () => clearTimeout(t)
   }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 任务单被一条消息取走后：输入区回到"自由对话"，写明上一条按什么运行的（界面显示 = 下一条实际会用的）
+  useEffect(() => {
+    const t = setInterval(() => {
+      void sheet.poll().then((used) => {
+        if (!used || used.label === null) return
+        setSelection(caseRef.case_id, { capsuleId: null, skill: null, params: null, inputs: [] })
+        setStatus({ ok: true, text: `上一条已按「${used.label}」运行；下一条按自由对话，要继续用请重新选择` })
+      })
+    }, POLL_MS)
+    return () => clearInterval(t)
+  }, [sheet, caseRef.case_id])
 
   const pickCapsule = (id: string) => {
     const c = capsules.find((x) => x.id === id)

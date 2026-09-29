@@ -4,13 +4,13 @@ import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport, withCase } from './cases.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, useLoad } from './kit.tsx'
-import { app, call, confirm, currentCase, lb, notice, pushDialog, setSelection, type CaseRef, type SkillInfo } from './state.ts'
+import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, pushDialog, setSelection, type CaseRef, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
-import { errorText } from './format.ts'
+import { errorText, lawyerMessage } from './format.ts'
 
 export function HomePage() {
   const [caps, reload] = useLoad(() => call<Capsules>('getCapsules'), [])
-  const [skills] = useLoad(async () => { try { return await lb().listSkills() } catch (e) { return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: (e as Error).message } } } }, [])
+  const [skills] = useLoad(async () => { try { return await lb().listSkills() } catch (e) { return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: lawyerMessage((e as Error).message) } } } }, [])
   const [managing, setManaging] = useState(false)
   const skillList = skills.state === 'ok' ? skills.value.skills : []
   return (
@@ -82,6 +82,8 @@ function RecentCases() {
   useEffect(() => { void loadRecent().then((r) => { if (!Array.isArray(r)) setErr(r) }) }, [])
   const drop = (c: CaseRef) => (e: DragEvent) => {
     e.preventDefault(); e.stopPropagation(); setOver(null) // 不冒泡到 DSH 的 document 拖入监听（否则会被当成聊天附件）
+    // 文件夹不在原处的卡片：拦下默认行为（Electron 里可能跳到 file://），不导入
+    if (c.exists === false) return
     const paths = [...e.dataTransfer.files].map((f) => getNav().pathFor(f))
     startImport(c, paths, '案件卡片')
   }
@@ -99,7 +101,7 @@ function RecentCases() {
       {cases.length === 0 && !err ? <Empty>还没有案件。打开或新建一个案件文件夹开始。</Empty> : null}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
         {cases.map((c) => (
-          <div key={c.case_id} onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); if (c.exists !== false) { e.preventDefault(); setOver(c.case_id) } }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}
+          <div key={c.case_id} onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (c.exists === false) e.dataTransfer.dropEffect = 'none'; else setOver(c.case_id) }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}
             style={{ ...S.card, borderColor: over === c.case_id ? C.brand : C.border, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={S.between}>
               <span style={{ fontWeight: 600 }}>{c.name}</span>
@@ -251,7 +253,7 @@ function AddCapsule({ c, skills, installed, onClose, onAdd }: { c: Capsules; ski
         {kind === 'skill' ? (
           <div style={{ maxHeight: 240, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={S.sub}>按勾选顺序排列，第一个是点胶囊后默认选中的。</div>
-            {skills.filter((s) => s.mode === 'agent').map((s) => (
+            {skills.filter((s) => s.mode === MODE_AGENT).map((s) => (
               <label key={s.name} style={S.row}>
                 <input type="checkbox" checked={picked.includes(s.name)} onChange={() => toggle(s.name)} />
                 {s.title}{picked.includes(s.name) ? <Badge tone="info">第 {picked.indexOf(s.name) + 1}</Badge> : null}

@@ -127,3 +127,20 @@ describe('远程返回剥层', () => {
     await expect(api.nope!()).rejects.toThrow()
   })
 })
+
+describe('给律师看的错误提示（返修 P3-2）', () => {
+  it('网关的英文技术信息换成通用中文提示；中文提示原样保留', async () => {
+    const { lawyerMessage, errorText, GENERIC_ERROR } = await import('../ui/format.ts')
+    const { unwrapRemote, call, setApi } = await import('../ui/state.ts')
+    expect(lawyerMessage('client api: lawbench/caseRecent failed: transport failure for /api/lawbench/caseRecent: HTTP 404')).toBe(GENERIC_ERROR)
+    expect(lawyerMessage(undefined)).toBe(GENERIC_ERROR)
+    expect(lawyerMessage('找不到这个案件，请重新打开')).toBe('找不到这个案件，请重新打开')
+    expect(errorText({ code: 'INTERNAL', message: 'Unexpected end of JSON input' })).toBe(GENERIC_ERROR)
+    const api = unwrapRemote({ caseRecent: async () => ({ ok: false, error: { message: 'client api: x has no active Connection' } }) })
+    await expect(api.caseRecent!()).rejects.toThrow(GENERIC_ERROR)
+    setApi(api)
+    const r = await call('caseRecent', {})
+    expect(r).toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: GENERIC_ERROR } })
+    setApi(undefined)
+  })
+})

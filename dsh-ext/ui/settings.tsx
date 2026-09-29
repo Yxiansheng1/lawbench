@@ -3,7 +3,8 @@
 // 发票购买方名称、Word 转 PDF 的程序、关于。保存时服务器地址原样带回，不在这里改。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, C, ErrorLine, getNav, S } from './kit.tsx'
-import { app, lb, type Params, type SkillInfo } from './state.ts'
+import { lawyerMessage } from './format.ts'
+import { app, lb, MODE_AGENT, type Params, type SkillInfo } from './state.ts'
 
 interface Settings {
   v: 1
@@ -42,7 +43,7 @@ export function SettingsSection() {
   useEffect(() => {
     void loadSettingsIntoState().then((s) => { if (s) { setLoaded(s); setDraft(structuredClone(s)) } else setErr({ code: 'SERVICE_UNAVAILABLE', message: '没能读取设置，请稍后重试' }) })
     void lb().setupState().then((s) => setHasKey(s.hasKey)).catch(() => setHasKey(null))
-    void lb().listSkills().then((r) => setSkills(r.value.skills.filter((x) => x.mode === 'agent'))).catch(() => undefined)
+    void lb().listSkills().then((r) => setSkills(r.value.skills.filter((x) => x.mode === MODE_AGENT))).catch(() => undefined)
   }, [])
   if (!draft || !loaded) return <div style={{ padding: 16 }}><h2 style={S.h2}>律师工作台</h2><ErrorLine error={err} />{err ? null : <div style={S.sub}>读取中…</div>}</div>
 
@@ -53,7 +54,7 @@ export function SettingsSection() {
       await lb().putSettings({ ...draft, servers: loaded.servers, ocr_fallback_llm: loaded.ocr_fallback_llm })
       setLoaded(structuredClone(draft)); setErr(null); setSaved(true)
       app.set((st) => ({ ...st, defaults: draft.defaults, presets: draft.skill_presets }))
-    } catch (e) { setErr({ code: 'INVALID_ARGUMENT', message: (e as Error).message || '没有保存成功' }) }
+    } catch (e) { setErr({ code: 'INVALID_ARGUMENT', message: lawyerMessage((e as Error).message) }) }
   }
   const skillTitle = (n: string) => skills.find((s) => s.name === n)?.title ?? n
   const unset = skills.filter((s) => !draft.skill_presets[s.name])

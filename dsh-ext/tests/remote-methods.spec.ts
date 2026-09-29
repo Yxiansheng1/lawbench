@@ -57,3 +57,25 @@ describe('lawbench 远程方法表', () => {
     expect(new Set(symbols).size).toBe(symbols.length)
   })
 })
+
+describe('界面调用的方法名都在方法表里（返修一并做：方法表盲点）', () => {
+  // 两边都由 REMOTE_METHODS 生成，从表里删掉一个方法时两边一起消失、上面的测试仍绿；界面按字符串调用，要另外守
+  const { readdirSync, readFileSync } = require('node:fs') as typeof import('node:fs')
+  const { join } = require('node:path') as typeof import('node:path')
+  const uiDir = join(__dirname, '..', 'ui')
+  const sources = readdirSync(uiDir).filter((f: string) => /\.tsx?$/.test(f)).map((f: string) => readFileSync(join(uiDir, f), 'utf8')).join('\n')
+  const called = new Set<string>()
+  for (const m of sources.matchAll(/\bcall(?:<[\s\S]*?>)?\(\s*'([A-Za-z]+)'/g)) called.add(m[1]!)
+  for (const m of sources.matchAll(/\blb\(\)\.([A-Za-z]+)\(/g)) called.add(m[1]!)
+
+  it('找到的调用不少于已知的这些（防止扫描写法失效）', () => {
+    for (const name of ['caseOpen', 'materialsImport', 'taskCreate', 'tasksList', 'importPastedImage', 'listSkills', 'getSettings', 'putSettings', 'setupState']) {
+      expect(called, name).toContain(name)
+    }
+  })
+
+  it('每一个都在方法表里', () => {
+    const table = new Set(REMOTE_METHODS.map((m) => m.method))
+    expect([...called].filter((n) => !table.has(n))).toEqual([])
+  })
+})

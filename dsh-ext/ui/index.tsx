@@ -157,10 +157,10 @@ export async function apply(ctx: Ctx): Promise<() => Promise<void>> {
   // 以下各块不等待：所需服务不在时只是那一块不出现
   const others = [
     ctx.inject(['slots', 'layout'], registerHome),
-    ctx.inject(['workspaces', 'uiWorkspace'], registerWorkspace),
-    ctx.inject(['sessions', 'uiSession'], registerSessionTracking),
+    ctx.inject(['workspaces', 'uiWorkspace'], registerWorkspace), // ui-words: 标识符（DSH 服务名）
+    ctx.inject(['sessions', 'uiSession'], registerSessionTracking), // ui-words: 标识符（DSH 服务名）
     ctx.inject(['slots', 'sidebarRight', 'sidebarRightTabs'], registerTabs),
-    ctx.inject(['conversationFileIntake', 'sessions'], registerIntake),
+    ctx.inject(['conversationFileIntake', 'sessions'], registerIntake), // ui-words: 标识符（DSH 服务名）
   ]
   return async () => {
     for (const o of others) await o.dispose()

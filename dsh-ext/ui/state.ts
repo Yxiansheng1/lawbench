@@ -2,6 +2,7 @@
 // 案件 = DSH 的工作区（Spec 1.2）：会话的工作目录就是案件文件夹。界面不接受、也不保存案件文件内容。
 import type { ApiResult } from '../host/index.ts'
 import { createStore } from './store.ts'
+import { lawyerMessage } from './format.ts'
 
 export interface CaseRef { case_id: string; name: string; root: string; exists?: boolean }
 
@@ -70,8 +71,11 @@ export type LawbenchApi = Record<string, (arg?: unknown) => Promise<ApiResult>> 
   listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }>
 }
 
+/** Skill 头部 mode 为对话型的取值（contracts\skillrontmatter.schema.json）。 */
+export const MODE_AGENT = 'agent' as const // ui-words: 标识符（契约取值，不显示）
+
 export interface SkillInfo {
-  name: string; title: string; description: string; mode: 'agent' | 'pipeline'; kind: string
+  name: string; title: string; description: string; mode: 'agent' | 'pipeline'; kind: string // ui-words: 标识符（SKILL.md 头部 mode 的取值）
   params: Params; inputs: string[]; questions: { key: string; question: string; fromMaterials: boolean }[]
 }
 
@@ -87,7 +91,7 @@ export function unwrapRemote(remote: Record<string, (...a: unknown[]) => Promise
       const fn = remote[method]
       if (typeof fn !== 'function') throw new Error('工作台服务还没接上，请稍后重试')
       const r = (await fn.apply(remote, args)) as { ok: boolean; value?: unknown; error?: { message?: string } }
-      if (!r || r.ok !== true) throw new Error(r?.error?.message || '工作台服务未启动，请稍后重试')
+      if (!r || r.ok !== true) throw new Error(lawyerMessage(r?.error?.message))
       return r.value
     },
   }) as LawbenchApi
@@ -104,6 +108,6 @@ export async function call<T = unknown>(method: string, request?: unknown): Prom
   try {
     return (await lb()[method]!(request)) as { ok: true; value: T }
   } catch (e) {
-    return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: (e as Error)?.message || '工作台服务未启动，请稍后重试' } }
+    return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: lawyerMessage((e as Error)?.message) } }
   }
 }
