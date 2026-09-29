@@ -1,15 +1,15 @@
 // 会话输入区上方（DSH 插槽 conversation.input.dock）：当前胶囊和 Skill 选择、必问问题、参数、选用的前序成果（PRD 7.9）。
 // 选定后写任务单 /api/task（Spec 9.2：界面事先为该会话写待执行的任务单，Agent 插件在该会话下一次请求时使用）。
-// entry 填胶囊 id（T13 执行令 Q5）。一张任务单管一条消息，写入与复位规则见 tasksheet.ts（返修 P2-1、P2-3）。
+// entry 填胶囊 id（T13 执行令 Q5）。一张任务单管一条消息，写入与复位规则见 tasksheet.ts（返修 P2-1、P2-3，第二次返修 F1、F4）。
 // 运行状态和停止沿用 DSH 对话区自带的。
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
 import { errorText } from './format.ts'
 import { Badge, Button, C, S } from './kit.tsx'
 import { app, call, lb, MODE_AGENT, setSelection, type CaseRef, type Params, type Selection, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
-import { sheetFor } from './tasksheet.ts'
+import { afterConsumed, FREE_KEY, selectionKey, sheetFor, type Selection as TaskSelection, type SheetStatus } from './tasksheet.ts'
 
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
 const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
@@ -55,27 +55,36 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
     },
   }), [sessionId, caseRef.case_id])
   const label = capsule ? capsule.name : sel.inputs.length ? '自由对话（带选用的成果）' : '自由对话'
+  const current: TaskSelection = { capsuleId: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params, label }
+  const free = sel.capsuleId === null && sel.inputs.length === 0
+  const key = free ? FREE_KEY : selectionKey(current)
+  const latest = useRef({ current, key })
+  latest.current = { current, key }
 
-  // 选择一变就按新选择写（防抖）；"已按某胶囊运行"的提示不被随后的复位冲掉
-  const key = JSON.stringify([sel.capsuleId, sel.skill, params, sel.inputs])
+  const showApplied = (s: SheetStatus) => {
+    if (s.kind === 'ready') setStatus({ ok: true, text: `已就绪：下一条消息按「${s.label}」运行（只管这一条）` })
+    else if (s.kind === 'error') setStatus({ ok: false, text: errorText(s.error) })
+    else setStatus((cur) => (cur?.ok && cur.text.startsWith('上一条已按') ? cur : null))
+  }
+
+  // 选择一变就按新选择写（防抖；同一选择不重复写）；刚挂上时也按当前选择走一遍（重启、重载后"不知道"时会写自由对话单）
   useEffect(() => {
-    const t = setTimeout(() => {
-      void sheet.apply({ capsuleId: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params, label }).then((s) => {
-        if (s.kind === 'ready') setStatus({ ok: true, text: `已就绪：下一条消息按「${s.label}」运行（只管这一条）` })
-        else if (s.kind === 'error') setStatus({ ok: false, text: errorText(s.error) })
-        else setStatus((cur) => (cur?.ok && cur.text.startsWith('上一条已按') ? cur : null))
-      })
-    }, WRITE_DELAY_MS)
+    const t = setTimeout(() => { void sheet.apply(latest.current.current).then(showApplied) }, WRITE_DELAY_MS)
     return () => clearTimeout(t)
-  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, sheet]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 任务单被一条消息取走后：输入区回到"自由对话"，写明上一条按什么运行的（界面显示 = 下一条实际会用的）
+  // 任务单被一条消息取走后（界面显示 = 下一条实际会用的）：
+  // - 用掉的是最后写的那张、且律师还没改选：输入区回到"自由对话"，并写一张自由对话单压住服务那边可能残留的旧单；
+  // - 律师已经改选了：保持新的选择（它会照常写）；
+  // - 用掉的是更早的一张：最后写的那张仍是下一条要用的，显示不变，只说明上一条按什么跑的。
   useEffect(() => {
     const t = setInterval(() => {
-      void sheet.poll().then((used) => {
-        if (!used || used.label === null) return
-        setSelection(caseRef.case_id, { capsuleId: null, skill: null, params: null, inputs: [] })
-        setStatus({ ok: true, text: `上一条已按「${used.label}」运行；下一条按自由对话，要继续用请重新选择` })
+      void sheet.poll().then((c) => {
+        if (!c) return
+        const d = afterConsumed(c, latest.current.key, latest.current.current.label)
+        if (d.resetToFree) setSelection(caseRef.case_id, { capsuleId: null, skill: null, params: null, inputs: [] })
+        if (d.writeFree) void sheet.apply({ capsuleId: null, skill: null, inputs: [], params: latest.current.current.params, label: '自由对话' })
+        if (d.text) setStatus({ ok: true, text: d.text })
       })
     }, POLL_MS)
     return () => clearInterval(t)

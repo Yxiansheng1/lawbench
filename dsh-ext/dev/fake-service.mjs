@@ -29,6 +29,21 @@ const FAIL_BEGIN = flag('--fail-begin')
 const BAD_RESPONSE = flag('--bad-response')
 const FIXTURES = flag('--fixtures')
 const CASE_ROOT = arg('--case-root', null)
+// T13 第二次返修：任务单按线 B 的语义模拟——/api/task 每次给新编号；/api/tasks 只列已开始执行的；
+// --consume-after-ms N：模拟"一条消息"在任务单写入 N 毫秒后取走该会话最新的一张（created_at 精确到秒）。不给就不取走
+const CONSUME_AFTER = Number(arg('--consume-after-ms', '0')) || 0
+const created = []
+const taskIdNow = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomBytes(2).toString('hex')}` }
+function consumeDue() {
+  if (!CONSUME_AFTER) return
+  for (const session of new Set(created.map((c) => c.session_id))) {
+    const pending = created.filter((c) => c.session_id === session && !c.started)
+    if (!pending.length) continue
+    const maxSec = Math.max(...pending.map((c) => Math.floor(c.at / 1000)))
+    const latest = pending.filter((c) => Math.floor(c.at / 1000) === maxSec).at(-1)
+    if (Date.now() - latest.at >= CONSUME_AFTER) latest.started = true
+  }
+}
 const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'fixtures')
 if (PORT < 18801 || PORT > 18809) throw new Error('假服务端口限 18801–18809')
@@ -141,6 +156,19 @@ function fromFixtures(method, path, query, body) {
     return [ok(request)]
   }
   if (r.method === 'capsulesReset') rmSync(saved, { force: true })
+  if (r.method === 'taskCreate') {
+    const t = { task_id: taskIdNow(), session_id: request.session_id, skill: request.skill, at: Date.now(), started: false }
+    created.push(t)
+    return [ok({ task_id: t.task_id })]
+  }
+  if (r.method === 'tasksList') {
+    consumeDue()
+    const base = fixture('tasks_list.json')
+    const mine = created.filter((c) => c.started).map((c) => ({ task_id: c.task_id, skill: c.skill, status: 'running', drafts: [], citation_passed: null, finished_at: null }))
+    // 假数据里那张运行中的任务编号与 task_create 假数据相同，去掉，免得界面误判为"刚写的被取走了"
+    const fixed = base.value.tasks.filter((t) => t.task_id !== fixture('task_create.json').value.task_id)
+    return [ok({ tasks: [...mine, ...fixed] })]
+  }
   if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
   const out = fixture(`${r.contract}.json`)
   if (CASE_ROOT && r.method === 'caseRecent' && out.ok && out.value.cases[0]) out.value.cases[0].root = CASE_ROOT

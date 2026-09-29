@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DEFAULT_TARGET, startImport, TABS } from './cases.ts'
-import { citationTargets, errorText, ocrConfirmText, pageRanges, parsePageRanges, STATUS_WORD, TYPE_WORD, UNIT_WORD, wikiConfirmText, type Material } from './format.ts'
+import { citationTargets, errorText, shouldNotifyWikiDone, ocrConfirmText, pageRanges, parsePageRanges, STATUS_WORD, TYPE_WORD, UNIT_WORD, wikiConfirmText, type Material } from './format.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoad } from './kit.tsx'
 import { app, call, confirm, notice, type CaseRef, type Params } from './state.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
@@ -233,8 +233,7 @@ function WikiSection({ caseRef, materials, onOpen }: { caseRef: CaseRef; materia
     if (!running) {
       // 只在成功完成时通知；被停止、失败的不发"已完成"（返修一并做）
       if (watched.current) {
-        const done = tasks.state === 'ok' ? tasks.value.tasks.find((t) => t.task_id === watched.current) : undefined
-        if (done?.status === 'completed') osNotify('整理任务已完成')
+        if (shouldNotifyWikiDone(watched.current, tasks.state === 'ok' ? tasks.value.tasks : undefined)) osNotify('整理任务已完成')
         watched.current = null
         void reloadSugs()
       }

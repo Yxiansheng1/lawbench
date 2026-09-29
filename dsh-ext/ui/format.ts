@@ -127,3 +127,9 @@ export function citationTargets(citation: string, materials: ReadonlyArray<{ mat
     return { text: part, material_id: m?.material_id, citation: `〔${part}〕` }
   })
 }
+
+/** wiki 整理结束时是否发"整理任务已完成"：只在被观察的那个任务状态为 completed 时（被停止、失败、读不到都不发）。 */
+export function shouldNotifyWikiDone(watchedId: string | null, tasks: ReadonlyArray<{ task_id: string; status: string }> | undefined): boolean {
+  if (!watchedId || !tasks) return false
+  return tasks.find((t) => t.task_id === watchedId)?.status === 'completed'
+}

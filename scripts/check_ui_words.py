@@ -3,7 +3,8 @@
 扫 dsh-ext\\ui\\ 下源码里律师能看到的文字——字符串字面量、JSX 文本、词条表——找出不该出现的词。
 注释、import 路径、对象键名、标识符不算（只看字符串和 JSX 文本）。
 英文词连同复数按整词、不分大小写匹配（sessionId 这类标识符在字符串外，不受影响）；中文词按子串匹配。
-代码里恰好等于禁用词的标识符字符串（如 cordis 的服务名 'sessions'）在该行写注释 `ui-words: 标识符` 豁免，并写明是什么。
+代码里恰好等于禁用词的标识符字符串（如 cordis 的服务名 'sessions'）在该行写注释 `ui-words: 标识符` 豁免，并写明是什么；
+豁免只管该行上整串恰好等于禁用词的字符串，同一行的其他文字照查。
 
 用法：python scripts\\check_ui_words.py [目录，默认 dsh-ext\\ui] [--out 报告文件]
 退出码：0 = 零命中；1 = 有命中；2 = 参数错误。
@@ -31,7 +32,9 @@ _EN_EXACT = re.compile(_WORDS, re.IGNORECASE)
 _STRING = re.compile(r"""(?P<q>['"`])(?P<body>(?:\\.|(?!(?P=q)).)*)(?P=q)""", re.DOTALL)
 # JSX 文本：> 与 < 之间，去掉其中的 {…} 表达式后剩下的文字（返修 P3-1："Token 用量：{n}" 这类紧挨表达式的文字）
 _JSX_RUN = re.compile(r">([^<>]*)<")
-_CODEISH = re.compile(r"[{};]|=>|&&|\|\||===|!==")
+# 第二次返修 F3：单独的分号不算代码（"Token 上限; 请调小"是文字）；HTML 实体先换成空格再判断
+_CODEISH = re.compile(r"[{}]|=>|&&|\|\||===|!==")
+_ENTITY = re.compile(r"&(?:[A-Za-z][A-Za-z0-9]*|#[0-9]+|#x[0-9A-Fa-f]+);")
 _LINE_COMMENT = re.compile(r"(^|[^:\\])//[^\n]*")
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _IMPORT = re.compile(r"^\s*(import|export)\b[^\n]*\bfrom\s*['\"][^'\"]+['\"]|^\s*import\s*['\"][^'\"]+['\"]", re.MULTILINE)
@@ -63,7 +66,7 @@ def visible_texts(src: str, suffix: str):
         yield clean.count("\n", 0, m.start()) + 1, body
     if suffix in {".tsx", ".jsx"}:
         for m in _JSX_RUN.finditer(clean):
-            run = m.group(1)
+            run = _ENTITY.sub(" ", m.group(1))
             prev = None
             while prev != run:  # 由内向外去掉 {…}
                 prev, run = run, re.sub(r"\{[^{}]*\}", " ", run)
@@ -84,7 +87,8 @@ def scan(root: pathlib.Path):
         src = path.read_text(encoding="utf-8", errors="replace")
         ignored = {i + 1 for i, line in enumerate(src.split("\n")) if IGNORE_MARK in line}
         for line, text in visible_texts(src, path.suffix):
-            if line in ignored:
+            # 豁免只管"整串恰好等于禁用词"的那个字符串（第二次返修一并做），同一行上的其他文字照查
+            if line in ignored and _EN_EXACT.fullmatch(text.strip()):
                 continue
             words = [m.group(1) for m in _EN.finditer(text)] + [w for w in BANNED_ZH if w in text]
             for w in words:

@@ -144,3 +144,17 @@ describe('给律师看的错误提示（返修 P3-2）', () => {
     setApi(undefined)
   })
 })
+
+describe('wiki 整理结束的通知（第二次返修一并做）', () => {
+  it('只在被观察的任务成功完成时通知；停止、失败、中断、读不到都不发', async () => {
+    const { shouldNotifyWikiDone } = await import('../ui/format.ts')
+    const id = 'P-20260930120000-ab12'
+    expect(shouldNotifyWikiDone(id, [{ task_id: id, status: 'completed' }])).toBe(true)
+    for (const status of ['cancelled', 'failed', 'interrupted', 'budget_stopped', 'running']) {
+      expect(shouldNotifyWikiDone(id, [{ task_id: id, status }]), status).toBe(false)
+    }
+    expect(shouldNotifyWikiDone(id, [{ task_id: 'P-20260930120000-ffff', status: 'completed' }])).toBe(false)
+    expect(shouldNotifyWikiDone(id, undefined)).toBe(false)
+    expect(shouldNotifyWikiDone(null, [{ task_id: id, status: 'completed' }])).toBe(false)
+  })
+})
