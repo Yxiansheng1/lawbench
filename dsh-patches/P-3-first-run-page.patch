@@ -1,0 +1,2172 @@
+diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
+index 8fcde7768a..55ee700558 100644
+--- a/apps/desktop/src/client/WelcomePage.tsx
++++ b/apps/desktop/src/client/WelcomePage.tsx
+@@ -1,221 +1,117 @@
+-/** Desktop welcome presentation; account and credential operations stay in the preload. */
+-import { useEffect, useRef, useState } from 'react'
+-import type { FormEvent } from 'react'
+-import { Toast } from '@deepseek-ai/dsh-client-ui-primitives/src/Toast.tsx'
+-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/src/StateDot.tsx'
+-import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
+-import type { WelcomeApi } from '../welcome-api.ts'
++/** First-run configuration page (lawbench P-3): law-firm server addresses, personal Key, connection test. */
++import { useEffect, useState } from 'react'
++import type { CSSProperties, FormEvent } from 'react'
++import type { ConnectionResult, FirstRunInput, ServerAddresses, WelcomeApi } from '../welcome-api.ts'
+ 
+-type Page = 'entry' | 'key' | 'account'
++type Fields = { llm: string; llmAlt: string; prep: string; prepAlt: string; key: string }
++
++const S: Record<string, CSSProperties> = {
++  page: { boxSizing: 'border-box', height: '100vh', padding: '48px 40px 28px', display: 'flex', flexDirection: 'column', gap: 14, fontSize: 14, overflowY: 'auto' },
++  title: { fontSize: 22, fontWeight: 600, margin: 0 },
++  hint: { opacity: 0.7, margin: 0, lineHeight: 1.6 },
++  group: { display: 'grid', gridTemplateColumns: '110px 1fr', gap: '8px 12px', alignItems: 'center' },
++  legend: { gridColumn: '1 / -1', fontWeight: 600, marginTop: 6 },
++  input: { font: 'inherit', padding: '7px 10px', borderRadius: 8, border: '1px solid rgba(127,127,127,0.45)', background: 'transparent', color: 'inherit' },
++  row: { display: 'flex', gap: 10, marginTop: 'auto', paddingTop: 12 },
++  button: { font: 'inherit', padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(127,127,127,0.45)', background: 'transparent', color: 'inherit', cursor: 'pointer' },
++  primary: { font: 'inherit', padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2f6bff', color: '#fff', cursor: 'pointer' },
++  error: { color: '#d33', margin: 0 },
++  result: { margin: 0, lineHeight: 1.7 },
++}
++
++const toServers = (f: Fields): ServerAddresses => ({
++  llm_base_url: f.llm.trim(),
++  llm_alt_base_url: f.llmAlt.trim() === '' ? null : f.llmAlt.trim(),
++  prep_base_url: f.prep.trim(),
++  prep_alt_base_url: f.prepAlt.trim() === '' ? null : f.prepAlt.trim(),
++})
++
++const describe = (name: string, r: ConnectionResult): string => {
++  if (!r.reachable) return `${name}：连不上（${r.message}）`
++  const route = r.route === 'alternate' ? '所外地址' : r.route === 'primary' ? '所内地址' : ''
++  const key = r.key_valid === false ? '，Key 无效或已停用' : r.key_valid === true ? '，Key 有效' : ''
++  return `${name}：已连通${route ? `（${route}` + (r.latency_ms !== null ? `，${r.latency_ms} 毫秒）` : '）') : ''}${key}`
++}
+ 
+ /**
+- * Render the standalone welcome flow using shell-owned operations and localized copy.
+- * Clearing the account attempt returns the sign-in status page to the initial choices.
+- * @param props.api - isolated preload API; no account credentials reach the renderer.
+- * @returns welcome pages with fixed bottom actions.
++ * Render the first-run form. The Key never comes back from the Host: the form only knows whether one is stored.
++ * @param props.api - isolated preload API.
++ * @returns the configuration form.
+  */
+ export function Welcome({ api }: { api: WelcomeApi }) {
+-  const { messages: m } = api
+-  const [expiryNotice, setExpiryNotice] = useState(false)
+-  const [page, setPage] = useState<Page>('entry')
+-  const pageRef = useRef<Page>('entry')
+-  const [attempt, setAttempt] = useState<AccountView['attempt']>(null)
+-  const attemptRef = useRef<AccountView['attempt']>(null)
+-  const [starting, setStarting] = useState(false)
+-  const [cancelling, setCancelling] = useState(false)
+-  const [copyFeedback, setCopyFeedback] = useState<{ status: 'idle' | 'busy' | 'copied' | 'failed' }>({ status: 'idle' })
+-  const copyState = copyFeedback.status
+-  const [draft, setDraft] = useState('')
++  const [fields, setFields] = useState<Fields>({ llm: '', llmAlt: '', prep: '', prepAlt: '', key: '' })
++  const [hasKey, setHasKey] = useState(false)
++  const [loading, setLoading] = useState(true)
++  const [busy, setBusy] = useState<'' | 'test' | 'save'>('')
+   const [error, setError] = useState('')
+-  const [busy, setBusy] = useState(false)
+-  const busyRef = useRef(false)
+-  const mounted = useRef(true)
+-  const revision = useRef(0)
+-  const input = useRef<HTMLInputElement>(null)
+-  const keyButton = useRef<HTMLButtonElement>(null)
+-  const focusEntry = useRef(false)
+-
+-  function navigate(next: Page) {
+-    pageRef.current = next
+-    setPage(next)
+-  }
+-  function showAccount(state: AccountView) {
+-    if (pageRef.current === 'key' || (state.attempt === null && pageRef.current === 'entry')) return
+-    attemptRef.current = state.attempt
+-    setAttempt(state.attempt)
+-    setStarting(false)
+-    setCopyFeedback({ status: 'idle' })
+-    navigate(state.attempt === null || state.attempt.phase === 'cancelled' ? 'entry' : 'account')
+-  }
++  const [results, setResults] = useState<string[]>([])
+ 
+   useEffect(() => {
+-    mounted.current = true
+     document.documentElement.lang = api.id
+-    document.title = m.welcomeTitle
+-    const takeNotice = (): void => {
+-      void api.takeNotice().then((notice) => {
+-        if (mounted.current && notice === 'session-expired') setExpiryNotice(true)
+-      }).catch((_closedChannel: unknown) => {
+-        // A closed Welcome IPC channel must not interrupt the sign-in page.
+-      })
+-    }
+-    takeNotice()
+-    const stop = api.onAccountState((state) => {
+-      revision.current++
+-      takeNotice()
+-      showAccount(state)
++    document.title = '首次配置'
++    void api.getSetup().then((r) => {
++      setLoading(false)
++      if (!r.ok || r.value === undefined) { setError(r.ok ? '工作台服务未启动，请稍后重试' : r.message); return }
++      const s = r.value.servers
++      setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '' }))
++      setHasKey(r.value.hasKey)
+     })
+-    return () => { mounted.current = false; stop() }
+-  }, [api, m.welcomeTitle])
++  }, [api])
+ 
+-  useEffect(() => {
+-    if (page === 'key') input.current?.focus()
+-    else if (page === 'entry' && focusEntry.current) {
+-      focusEntry.current = false
+-      keyButton.current?.focus()
+-    }
+-  }, [page])
++  const input = (): FirstRunInput | undefined => {
++    const servers = toServers(fields)
++    if (!servers.llm_base_url.startsWith('http://') || !servers.prep_base_url.startsWith('http://')) { setError('所内地址必须以 http:// 开头'); return undefined }
++    const key = fields.key.trim()
++    if (key === '' && !hasKey) { setError('请填写个人 Key'); return undefined }
++    if (key !== '' && !/^[\x21-\x7e]{8,512}$/.test(key)) { setError('Key 格式不对：只能是字母、数字和符号，不含空格'); return undefined }
++    return key === '' ? { servers } : { servers, key }
++  }
+ 
+-  useEffect(() => {
+-    if (copyState !== 'copied' && copyState !== 'failed') return
+-    const timer = setTimeout(() => { setCopyFeedback({ status: 'idle' }) }, 2000)
+-    return () => { clearTimeout(timer) }
+-  }, [copyFeedback])
++  const test = async () => {
++    setError(''); setResults([])
++    const payload = input(); if (payload === undefined) return
++    setBusy('test')
++    const r = await api.testConnection(payload)
++    setBusy('')
++    if (!r.ok || r.value === undefined) { setError(r.ok ? '测试失败' : r.message); return }
++    if (payload.key !== undefined) { setHasKey(true); setFields(f => ({ ...f, key: '' })) }
++    setResults([describe('模型服务器（6000D）', r.value.llm), describe('识别服务器（395）', r.value.prep)])
++  }
+ 
+-  async function saveKey(event: FormEvent) {
++  const save = async (event: FormEvent) => {
+     event.preventDefault()
+-    if (busyRef.current) return
+-    const value = draft.trim()
+-    if (!/^[\x21-\x7e]+$/.test(value) || /^[A-Z][A-Z0-9_]*=[^=]/.test(value)
+-      || ((value.startsWith('"') || value.startsWith("'") || value.charCodeAt(0) === 96) && value.at(-1) === value[0])) {
+-      setError(value === '' ? m.welcomeKeyBlank : m.welcomeKeyInvalid)
+-      input.current?.focus()
+-      return
+-    }
+-    busyRef.current = true
+-    setBusy(true)
+     setError('')
+-    try {
+-      const result = await api.saveApiKey(value)
+-      if (!mounted.current) return
+-      if (result.ok) setDraft('')
+-      else setError(m.welcomeKeyFailed)
+-    } catch {
+-      if (mounted.current) setError(m.welcomeKeyFailed)
+-    } finally {
+-      busyRef.current = false
+-      if (mounted.current) setBusy(false)
+-    }
+-  }
+-  async function skip() {
+-    if (busyRef.current) return
+-    busyRef.current = true
+-    setBusy(true)
+-    try {
+-      await api.skip()
+-      if (mounted.current) setDraft('')
+-    } catch {
+-      if (mounted.current) setError(m.welcomeContinueFailed)
+-    } finally {
+-      busyRef.current = false
+-      if (mounted.current) setBusy(false)
+-    }
+-  }
+-  async function start() {
+-    navigate('account')
+-    setStarting(true)
+-    setAttempt(null)
+-    attemptRef.current = null
+-    const current = ++revision.current
+-    try {
+-      const state = await api.startSignIn()
+-      if (mounted.current && revision.current === current) showAccount(state)
+-    } catch {
+-      if (mounted.current && revision.current === current) setStarting(false)
+-    }
+-  }
+-  async function cancel() {
+-    if (cancelling || attemptRef.current === null) return
+-    setCancelling(true)
+-    const current = ++revision.current
+-    try {
+-      const state = await api.cancelSignIn(attemptRef.current.id)
+-      if (mounted.current && revision.current === current) showAccount(state)
+-    } catch {
+-      // The current attempt remains visible so cancellation can be retried.
+-    } finally {
+-      if (mounted.current) setCancelling(false)
+-    }
+-  }
+-  async function copyLink() {
+-    const current = attemptRef.current
+-    if (current?.phase !== 'waiting-browser' || (copyState === 'busy' || copyState === 'copied')) return
+-    setCopyFeedback({ status: 'busy' })
+-    try {
+-      await api.copySignInLink(current.id)
+-      if (mounted.current && attemptRef.current === current) setCopyFeedback({ status: 'copied' })
+-    } catch {
+-      if (mounted.current && attemptRef.current === current) setCopyFeedback({ status: 'failed' })
+-    }
++    const payload = input(); if (payload === undefined) return
++    setBusy('save')
++    const r = await api.save(payload)
++    setBusy('')
++    if (!r.ok) setError(r.message)
+   }
+ 
+-  const phase = starting ? 'initializing' : attempt?.phase ?? 'failed'
+-  const waiting = phase === 'waiting-browser'
+-  const failed = phase === 'expired' || phase === 'failed'
+-  const title = phase === 'initializing' ? m.welcomeAuthStarting
+-    : waiting ? m.welcomeAuthWaiting : phase === 'expired' ? m.welcomeAuthExpired
+-      : phase === 'failed' ? m.welcomeAuthFailed : m.welcomeAuthExchanging
+-  const heading = page === 'entry' ? 'welcome-heading' : page === 'key' ? 'key-title' : 'auth-status'
++  const bind = (k: keyof Fields) => ({ value: fields[k], onChange: (e: { target: { value: string } }) => { setFields(f => ({ ...f, [k]: e.target.value })) } })
+ 
+-  return <>
+-    {expiryNotice && <Toast text={m.welcomeSessionExpired} onDone={() => { setExpiryNotice(false) }} />}
+-    <div className="titlebar" aria-hidden="true" />
+-    <main className="welcome" aria-labelledby={heading}>
+-      <img className="brand" src="assets/welcome-brand.svg" alt={m.welcomeBrand} width="472" height="40" />
+-      <div id="tagline" className="tagline" hidden={page !== 'entry'}>
+-        <h1 id="welcome-heading"><span>{m.welcomeTaglineBefore}</span><em>{m.welcomeTaglineBrand}</em><span>{m.welcomeTaglineAfter}</span></h1>
+-        <p id="welcome-description">{m.welcomeDescription}</p>
+-      </div>
+-      <form id="key-form" className="key-form" hidden={page !== 'key'} noValidate onSubmit={(event) => { void saveKey(event) }} aria-busy={busy}>
+-        <header className="key-heading"><h1 id="key-title">{m.welcomeKeyTitle}</h1><p id="key-description">{m.welcomeKeyDescription}</p></header>
+-        <div className="key-field">
+-          <label className="visually-hidden" htmlFor="key-input">{m.welcomeKeyPlaceholder}</label>
+-          <input ref={input} id="key-input" type="password" autoComplete="new-password" autoCapitalize="off" spellCheck={false} required
+-            aria-describedby="key-description key-error" aria-invalid={error !== ''} placeholder={m.welcomeKeyPlaceholder}
+-            value={draft} disabled={busy} onChange={(event) => { setDraft(event.target.value); setError('') }} />
+-          <p id="key-error" className="key-error" role="alert" hidden={error === ''}>{error}</p>
+-        </div>
+-      </form>
+-      <section id="auth-page" className={`key-heading ${waiting ? 'auth-waiting' : phase === 'expired' ? 'auth-expired' : ''}`}
+-        hidden={page !== 'account'} aria-live="polite">
+-        <h1 id="auth-status">{title}</h1>
+-        <p id="auth-description" hidden={!waiting && phase !== 'expired'}>{waiting ? m.welcomeAuthWaitingDescription : m.welcomeAuthExpiredDescription}</p>
+-        <button id="auth-copy" className="copy-link" type="button" hidden={!waiting} disabled={!waiting || (copyState === 'busy' || copyState === 'copied')} onClick={() => { void copyLink() }}>
+-          {copyState === 'copied' ? m.welcomeAuthCopied : copyState === 'failed' ? m.welcomeAuthCopyFailed : m.welcomeAuthCopyLink}
+-        </button>
+-      </section>
+-      <div id="auth-actions" className="actions" hidden={page !== 'account'}>
+-        <button id="auth-loading" className="primary" type="button" hidden={failed} disabled aria-label={m.welcomeAuthExchanging}>
+-          <StateDot state="ongoing" size={16} className="welcome-loading" />
+-        </button>
+-        <button id="auth-retry" className="primary" type="button" hidden={!failed} onClick={() => { void start() }}>{m.welcomeAuthRetry}</button>
+-        <button id="auth-api-key" className="secondary" type="button" hidden={!failed} onClick={() => { navigate('key') }}>{m.welcomeApiKey}</button>
+-        <button id="auth-cancel" className="secondary" type="button" hidden={failed}
+-          disabled={cancelling || phase === 'committing' || phase === 'succeeded' || (phase === 'initializing' && !attempt?.id)}
+-          onClick={() => { void cancel() }}>{m.welcomeAuthCancel}</button>
+-      </div>
+-      <div id="entry-actions" className="actions" hidden={page !== 'entry'}>
+-        <button id="sign-in" className="primary" type="button" onClick={() => { void start() }}>{m.welcomeSignIn}</button>
+-        <button ref={keyButton} id="api-key" className="secondary" type="button" onClick={() => { navigate('key') }}>{m.welcomeApiKey}</button>
++  return (
++    <form style={S.page} onSubmit={e => { void save(e) }}>
++      <h1 style={S.title}>首次配置</h1>
++      <p style={S.hint}>填写律所服务器地址和你的个人 Key。所内地址连不上时，会自动改用所外地址。Key 保存在本机"凭据管理器"中，不写入任何文件。</p>
++      <div style={S.group}>
++        <span style={S.legend}>模型服务器（6000D）</span>
++        <label htmlFor="llm">所内地址</label><input id="llm" style={S.input} disabled={loading} {...bind('llm')} />
++        <label htmlFor="llmAlt">所外地址</label><input id="llmAlt" style={S.input} disabled={loading} placeholder="可不填" {...bind('llmAlt')} />
++        <span style={S.legend}>识别服务器（395）</span>
++        <label htmlFor="prep">所内地址</label><input id="prep" style={S.input} disabled={loading} {...bind('prep')} />
++        <label htmlFor="prepAlt">所外地址</label><input id="prepAlt" style={S.input} disabled={loading} placeholder="可不填" {...bind('prepAlt')} />
++        <span style={S.legend}>个人 Key</span>
++        <label htmlFor="key">Key</label>
++        <input id="key" type="password" autoComplete="off" spellCheck={false} style={S.input} disabled={loading}
++          placeholder={hasKey ? '已保存；要更换才填' : '管理员发给你的 Key'} {...bind('key')} />
+       </div>
+-      <div id="key-actions" className="actions" hidden={page !== 'key'}>
+-        <button id="save-key" className="primary" type="submit" form="key-form" disabled={busy || draft.trim() === ''}>{m.welcomeKeySave}</button>
+-        <button id="skip-key" className="secondary" type="button" disabled={busy} onClick={() => { void skip() }}>{m.welcomeKeyLater}</button>
+-        <button id="back-to-login" className="back" type="button" disabled={busy} onClick={() => {
+-          if (busyRef.current) return
+-          setDraft(''); setError(''); focusEntry.current = true; navigate('entry')
+-        }}>{m.welcomeKeyBack}</button>
++      {results.length > 0 && <p style={S.result} role="status">{results.map(t => <span key={t}>{t}<br /></span>)}</p>}
++      {error !== '' && <p style={S.error} role="alert">{error}</p>}
++      <div style={S.row}>
++        <button type="button" style={S.button} disabled={loading || busy !== ''} onClick={() => { void test() }}>{busy === 'test' ? '正在测试…' : '测试连接'}</button>
++        <button type="submit" style={S.primary} disabled={loading || busy !== ''}>{busy === 'save' ? '正在保存…' : '保存并进入'}</button>
+       </div>
+-    </main>
+-  </>
++    </form>
++  )
+ }
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index a59a8a8b35..fb7cbfdf41 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url'
+ import {
+   app,
+   BrowserWindow,
+-  clipboard,
+   dialog,
+   ipcMain,
+   Menu,
+@@ -36,7 +35,7 @@ import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-
+ import { DesktopFatalRecovery } from './fatal-recovery.ts'
+ import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
+ import { openWelcomeWindow } from './welcome-window.ts'
+-import { WELCOME_IPC, needsWelcome, type WelcomeNotice } from './welcome-api.ts'
++import { needsWelcome } from './welcome-api.ts'
+ import { connectDesktopWelcome, type DesktopWelcomeBackend } from './welcome-backend.ts'
+ import { DesktopUpdateJournal } from './update-journal.ts'
+ import { DesktopUpdatePreparationError } from './update-error.ts'
+@@ -185,20 +184,6 @@ function chromeFallbackFill(): string {
+   return nativeTheme.shouldUseDarkColors ? '#1b1b1c' : '#f9fafb'
+ }
+ 
+-/**
+- * Add the effective Desktop palette to a Platform authorization URL so the
+- * login page opens in the application's theme. `system` resolves through
+- * `nativeTheme.shouldUseDarkColors`, which follows the theme source the
+- * application preload publishes.
+- * @param authorizeUrl - validated Platform authorization URL.
+- * @returns the authorization URL carrying `theme=light` or `theme=dark`.
+- */
+-function platformLoginUrl(authorizeUrl: string): string {
+-  const url = new URL(authorizeUrl)
+-  url.searchParams.set('theme', nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
+-  return url.href
+-}
+-
+ function createWindow(preload: string, show = false, primary = false): BrowserWindow {
+   const window = new BrowserWindow({
+     width: 1280,
+@@ -376,11 +361,6 @@ async function main(): Promise<void> {
+   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
+   let injections: readonly unknown[] = []
+   let welcomeBackend: DesktopWelcomeBackend | undefined
+-  let stopAccount: (() => void) | undefined
+-  let openedAttempt: string | undefined
+-  let returnedAttempt: string | undefined
+-  let pendingWelcomeNotice: WelcomeNotice | undefined
+-  let previousAccountStatus: string | undefined
+   const assertProductSender = (event: IpcMainInvokeEvent): void => {
+     assertDesktopSender(event, ['app'])
+     if (mainWindow === undefined || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents
+@@ -418,45 +398,8 @@ async function main(): Promise<void> {
+         hostUrl = ready.url
+         if (ready.injections === undefined) throw new Error('Desktop Host did not provide boot injections')
+         injections = ready.injections
+-        welcomeBackend = await connectDesktopWelcome(ready.url, (input, init) => net.fetch(input, init), async () => (await session.defaultSession.cookies.get({ url: ready.url })).map(cookie => `${cookie.name}=${cookie.value}`).join('; '))
+-        stopAccount?.()
+-        const accountBackend = welcomeBackend.account
+-        stopAccount = accountBackend.watch((state) => {
+-          if (quitting) return
+-          if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.webContents.send(WELCOME_IPC.state, state)
+-          const attempt = state.attempt
+-          if (attempt?.phase === 'waiting-browser' && attempt.authorizeUrl !== undefined && openedAttempt !== attempt.id) {
+-            openedAttempt = attempt.id
+-            void shell.openExternal(platformLoginUrl(attempt.authorizeUrl)).catch(() => undefined)
+-          }
+-          if ((attempt?.phase === 'failed' || attempt?.phase === 'expired') && returnedAttempt !== attempt.id) {
+-            returnedAttempt = attempt.id
+-            focusPrimaryWindow()
+-          }
+-          if (state.status === 'credential-stored' && attempt?.phase === 'succeeded' && welcomeWindow !== undefined) void enterWorkspace({ activate: false }).catch(() => undefined)
+-          if (previousAccountStatus === 'credential-stored' && state.status === 'signed-out') {
+-            void readWelcomeState().then(async (value) => {
+-              if (needsWelcome(value) && !quitting) {
+-                enteredWorkspace = false
+-                await showWelcome()
+-                if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.webContents.send(WELCOME_IPC.state, state)
+-              }
+-              return undefined
+-            }).catch(() => undefined)
+-          }
+-          previousAccountStatus = state.status
+-        }, () => {
+-          // The stream reconnects; a transport failure does not change account state.
+-        }, () => {
+-          void readWelcomeState().then(async (value) => {
+-            if (!needsWelcome(value) || quitting) return
+-            pendingWelcomeNotice = 'session-expired'
+-            enteredWorkspace = false
+-            await showWelcome()
+-            const state = await accountBackend.state()
+-            if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.webContents.send(WELCOME_IPC.state, state)
+-          }).catch(() => undefined)
+-        })
++        // lawbench P-3：首次配置页只经 Host 的 lawbench 与 credentials 远程接口；不再监听 DeepSeek 账号状态
++        welcomeBackend = await connectDesktopWelcome(ready.url, (input, init) => net.fetch(input, init))
+       },
+       stop: async () => {
+         try { await host.stop(requireCleanStop) }
+@@ -1088,43 +1031,19 @@ async function main(): Promise<void> {
+       return Promise.resolve()
+     }
+     openingWelcome ??= (async () => {
++      const unavailable = { ok: false, message: '工作台服务未启动，请稍后重试' } as const
+       welcomeWindow = await openWelcomeWindow(locale, {
+-        takeNotice: () => {
+-          const notice = pendingWelcomeNotice
+-          pendingWelcomeNotice = undefined
+-          return Promise.resolve(notice)
+-        },
+-        startSignIn: async () => {
+-          if (welcomeBackend === undefined) throw new Error('desktop welcome: backend unavailable')
+-          return welcomeBackend.account.start(desktopClientMetadata(locale.id))
+-        },
+-        cancelSignIn: async (id) => {
+-          if (welcomeBackend === undefined) throw new Error('desktop welcome: backend unavailable')
+-          return welcomeBackend.account.cancel(id)
+-        },
+-        copySignInLink: async (id) => {
+-          const state = await welcomeBackend?.account.state()
+-          if (state?.attempt?.id !== id || state.attempt.phase !== 'waiting-browser' || state.attempt.authorizeUrl === undefined) {
+-            throw new Error('desktop welcome: login link is unavailable')
+-          }
+-          await clipboard.writeText(platformLoginUrl(state.attempt.authorizeUrl))
+-        },
+-        saveApiKey: async (apiKey) => {
+-          if (backend.host === undefined || welcomeBackend === undefined) return { ok: false }
+-          const saved = await welcomeBackend.save(apiKey)
++        getSetup: async () => (backend.host === undefined || welcomeBackend === undefined ? unavailable : welcomeBackend.getSetup()),
++        testConnection: async input => (backend.host === undefined || welcomeBackend === undefined ? unavailable : welcomeBackend.testConnection(input)),
++        save: async (input) => {
++          if (backend.host === undefined || welcomeBackend === undefined) return unavailable
++          const saved = await welcomeBackend.save(input)
+           if (!saved.ok) return saved
+           await enterWorkspace()
+           return { ok: true }
+         },
+-        skip: enterWorkspace,
+       })
+       const window = welcomeWindow
+-      window.once('closed', () => {
+-        void welcomeBackend?.account.state().then((state) => {
+-          if (state.attempt !== null && !enteredWorkspace) return welcomeBackend?.account.cancel(state.attempt.id)
+-          return undefined
+-        }).catch(() => undefined)
+-      })
+       window.once('closed', () => {
+         if (welcomeWindow === window) welcomeWindow = undefined
+         if (enteredWorkspace || recovery.active) return
+@@ -1145,7 +1064,7 @@ async function main(): Promise<void> {
+     locale = resolveDesktopStartupLocale(state.localePreference, systemLanguages)
+     windowsLanguage = locale.id
+     refreshApplicationMenu()
+-    if (!enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })) {
++    if (!enteredWorkspace && needsWelcome({ configured: state.configured })) {
+       // A later login must retain its own activation policy instead of replaying startup focus.
+       raiseAfterUpdate = false
+       await showWelcome()
+@@ -1189,7 +1108,6 @@ async function main(): Promise<void> {
+     quitConfirmation.dispose()
+     backgroundNotice?.dispose()
+     tray?.dispose()
+-    stopAccount?.()
+     if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.hide()
+     if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.hide()
+     updateSchedule.dispose()
+diff --git a/apps/desktop/src/preload-welcome.ts b/apps/desktop/src/preload-welcome.ts
+index e9ec1aa910..ff4c0d2f8f 100644
+--- a/apps/desktop/src/preload-welcome.ts
++++ b/apps/desktop/src/preload-welcome.ts
+@@ -1,25 +1,16 @@
+-import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
+-/** Localized welcome copy and write-only credential actions. */
++/** Localized first-run copy and first-run actions (lawbench P-3). */
+ 
+ import { contextBridge, ipcRenderer } from 'electron'
+ import { resolveDesktopLocale } from './locale.ts'
+-import { WELCOME_IPC, type WelcomeApi, type WelcomeNotice, type WelcomeSaveResult } from './welcome-api.ts'
++import { WELCOME_IPC, type WelcomeApi } from './welcome-api.ts'
+ 
+ const prefix = '--dsh-welcome-locale='
+ const locale = process.argv.find(argument => argument.startsWith(prefix))?.slice(prefix.length)
+ if (locale === undefined) throw new Error('desktop welcome: missing window locale')
+ const api: WelcomeApi = {
+   ...resolveDesktopLocale(locale),
+-  takeNotice: () => ipcRenderer.invoke(WELCOME_IPC.takeNotice) as Promise<WelcomeNotice | undefined>,
+-  startSignIn: () => ipcRenderer.invoke(WELCOME_IPC.start) as Promise<AccountView>,
+-  cancelSignIn: (id: SignInAttemptId) => ipcRenderer.invoke(WELCOME_IPC.cancel, id) as Promise<AccountView>,
+-  copySignInLink: (id: SignInAttemptId) => ipcRenderer.invoke(WELCOME_IPC.copyLink, id) as Promise<void>,
+-  onAccountState: (listener) => {
+-    const receive = (_event: Electron.IpcRendererEvent, state: AccountView): void =>{  listener(state) }
+-    ipcRenderer.on(WELCOME_IPC.state, receive)
+-    return () => { ipcRenderer.removeListener(WELCOME_IPC.state, receive) }
+-  },
+-  saveApiKey: (value: string) => ipcRenderer.invoke(WELCOME_IPC.saveApiKey, value) as Promise<WelcomeSaveResult>,
+-  skip: () => ipcRenderer.invoke(WELCOME_IPC.skip) as Promise<void>,
++  getSetup: () => ipcRenderer.invoke(WELCOME_IPC.getSetup) as ReturnType<WelcomeApi['getSetup']>,
++  testConnection: input => ipcRenderer.invoke(WELCOME_IPC.testConnection, input) as ReturnType<WelcomeApi['testConnection']>,
++  save: input => ipcRenderer.invoke(WELCOME_IPC.save, input) as ReturnType<WelcomeApi['save']>,
+ }
+ contextBridge.exposeInMainWorld('dshWelcome', api)
+diff --git a/apps/desktop/src/welcome-api.ts b/apps/desktop/src/welcome-api.ts
+index 015296776a..3a685b6b97 100644
+--- a/apps/desktop/src/welcome-api.ts
++++ b/apps/desktop/src/welcome-api.ts
+@@ -1,66 +1,90 @@
+-/** Operations available to the isolated native welcome renderer. */
++/** Operations available to the isolated native first-run renderer (lawbench P-3). */
+ 
+-import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
+ import type { DesktopLocale } from './locale.ts'
+ 
+-/** Private native welcome channels, installed only while its window exists. */
++/** Private first-run channels, installed only while its window exists. */
+ export const WELCOME_IPC = {
+-  saveApiKey: 'dsh-welcome:save-api-key',
+-  skip: 'dsh-welcome:skip',
+-  start: 'dsh-welcome:start',
+-  cancel: 'dsh-welcome:cancel',
+-  copyLink: 'dsh-welcome:copy-link',
+-  state: 'dsh-welcome:state',
+-  takeNotice: 'dsh-welcome:take-notice',
++  getSetup: 'dsh-welcome:get-setup',
++  testConnection: 'dsh-welcome:test-connection',
++  save: 'dsh-welcome:save',
+ } as const
+ 
+-/** Credential writes return a safe outcome without exposing Host diagnostics. */
+-export type WelcomeSaveResult = { readonly ok: true } | { readonly ok: false }
++/** The four law-firm server addresses (contracts/files/settings.schema.json `servers`). */
++export interface ServerAddresses {
++  readonly llm_base_url: string
++  readonly prep_base_url: string
++  readonly llm_alt_base_url: string | null
++  readonly prep_alt_base_url: string | null
++}
+ 
+-/** One-time notification retained by the main process until Welcome receives it. */
+-export type WelcomeNotice = 'session-expired'
++/** Values the form starts from: the service's current settings (defaults when none were saved) and whether a Key exists. */
++export interface FirstRunSetup {
++  readonly servers: ServerAddresses
++  readonly hasKey: boolean
++}
+ 
+-/** Host-owned operations used by the welcome window. */
+-export interface WelcomeOperations {
+-  /** @returns the pending notification, clearing it before another renderer can receive it. */
+-  takeNotice(): Promise<WelcomeNotice | undefined>
+-  /** @returns account state after starting a login attempt. */
+-  startSignIn(): Promise<AccountView>
+-  /** @param id - attempt to cancel. @returns the settled state. */
+-  cancelSignIn(id: SignInAttemptId): Promise<AccountView>
+-  /** @param id - current waiting attempt whose authorization URL is copied to the system clipboard. */
+-  copySignInLink(id: SignInAttemptId): Promise<void>
++/** Result of one server probe (contracts/api/connection_test.schema.json `value`). */
++export interface ConnectionResult {
++  readonly reachable: boolean
++  readonly key_valid: boolean | null
++  readonly latency_ms: number | null
++  readonly route: 'primary' | 'alternate' | null
++  readonly message: string
++}
+ 
+-  /**
+-   * Store the official provider's key before entering the workspace.
+-   * @param value - validated, trimmed API key.
+-   * @returns whether the write completed, without private error details.
+-   */
+-  saveApiKey(value: string): Promise<WelcomeSaveResult>
+-  /**
+-   * Enter the workspace without writing an onboarding-completion setting.
+-   * @returns completion after the workspace opens.
+-   */
+-  skip(): Promise<void>
++/** What the lawyer submits. `key` is omitted when a Key is already stored and was not changed. */
++export interface FirstRunInput {
++  readonly servers: ServerAddresses
++  readonly key?: string
+ }
+ 
+-/** The renderer receives localized copy, login operations, and safe account snapshots. */
+-export type WelcomeApi = DesktopLocale & WelcomeOperations & {
+-  /** @param listener - safe account snapshot recipient. @returns subscription disposer. */
+-  onAccountState(listener: (state: AccountView) => void): () => void
++/** Writes and probes return a safe outcome; `message` is lawyer-facing Chinese without diagnostics. */
++export type FirstRunResult<T = undefined> = { readonly ok: true; readonly value?: T } | { readonly ok: false; readonly message: string }
++
++/** Host-owned operations used by the first-run window. */
++export interface WelcomeOperations {
++  getSetup(): Promise<FirstRunResult<FirstRunSetup>>
++  /** Saves the typed addresses (and Key when given) first, because the service probes its stored settings. */
++  testConnection(input: FirstRunInput): Promise<FirstRunResult<{ llm: ConnectionResult; prep: ConnectionResult }>>
++  /** Saves addresses and Key, then enters the workspace. */
++  save(input: FirstRunInput): Promise<FirstRunResult>
+ }
+ 
+-/** Authentication facts supplied at cold start or after a completed sign-out. */
++/** The renderer receives localized copy and the first-run operations. */
++export type WelcomeApi = DesktopLocale & WelcomeOperations
++
++/** First-run facts read at cold start. */
+ export interface WelcomeAuthentication {
+-  readonly loggedIn: boolean
+-  readonly hasApiKey: boolean
++  /** lawbench 执行令 Q3：settings.json 存在且凭据管理器中有 Key。 */
++  readonly configured: boolean
+ }
+ 
+ /**
+- * Decide whether a startup or sign-out requires the welcome entry.
+- * @param authentication - current account and independently stored API-key facts.
+- * @returns true only when neither authentication route is configured.
++ * Decide whether startup requires the first-run page (lawbench P-3: "没有配置过律所服务器").
++ * @param authentication - current first-run facts.
++ * @returns true until law-firm servers and the personal Key have been saved.
+  */
+ export function needsWelcome(authentication: WelcomeAuthentication): boolean {
+-  return !authentication.loggedIn && !authentication.hasApiKey
++  return !authentication.configured
++}
++
++const HTTP_URL = /^http:\/\/[^\s/?#]+(?:\/[^\s?#]*)?$/
++
++/** Validate addresses coming from the renderer (the service validates again against the contract). */
++export function isServerAddresses(value: unknown): value is ServerAddresses {
++  if (typeof value !== 'object' || value === null) return false
++  const v = value as Record<string, unknown>
++  const req = (x: unknown) => typeof x === 'string' && HTTP_URL.test(x)
++  const opt = (x: unknown) => x === null || req(x)
++  return req(v.llm_base_url) && req(v.prep_base_url) && opt(v.llm_alt_base_url) && opt(v.prep_alt_base_url)
++    && Object.keys(v).every(k => ['llm_base_url', 'prep_base_url', 'llm_alt_base_url', 'prep_alt_base_url'].includes(k))
++}
++
++/** Validate a submission from the renderer; the Key must be visible ASCII. */
++export function isFirstRunInput(value: unknown): value is FirstRunInput {
++  if (typeof value !== 'object' || value === null) return false
++  const v = value as Record<string, unknown>
++  if (!isServerAddresses(v.servers)) return false
++  if (v.key !== undefined && (typeof v.key !== 'string' || !/^[\x21-\x7e]{8,512}$/.test(v.key))) return false
++  return Object.keys(v).every(k => k === 'servers' || k === 'key')
+ }
+diff --git a/apps/desktop/src/welcome-backend.ts b/apps/desktop/src/welcome-backend.ts
+index a0bb4e9440..565fbe2246 100644
+--- a/apps/desktop/src/welcome-backend.ts
++++ b/apps/desktop/src/welcome-backend.ts
+@@ -1,136 +1,114 @@
+-/** Native welcome operations using the shared Web authentication and RPC APIs. */
++/** Native first-run operations over the shared Web authentication and RPC APIs (lawbench P-3). */
+ 
+ import { randomUUID } from 'node:crypto'
+-import { desktopAccountBackend, type DesktopAccountBackend } from './account-backend.ts'
++import type { ConnectionResult, FirstRunInput, FirstRunResult, FirstRunSetup, ServerAddresses } from './welcome-api.ts'
+ 
+ /** Metadata needed before the native entry or workspace becomes visible. */
+ export interface WelcomeState {
+-  readonly loggedIn: boolean
++  /** settings.json exists and a Key is stored (lawbench 执行令 Q3). */
++  readonly configured: boolean
+   readonly hasApiKey: boolean
+-  readonly writable: boolean
+   readonly localePreference: string | null
+ }
+ 
+-/** Narrow operations available to the native welcome flow. */
++/** Narrow operations available to the native first-run flow. */
+ export interface DesktopWelcomeBackend {
+-  readonly account: DesktopAccountBackend
+-  /** @returns Configured-key presence and the shared language preference, without credential values. */
+   read(): Promise<WelcomeState>
+-  /** @returns The saved UI language without account or provider requests. */
+   readLocalePreference(): Promise<string | null>
+-  /**
+-   * @param apiKey - User-entered official provider key.
+-   * @returns A safe write outcome without provider diagnostics.
+-   */
+-  save(apiKey: string): Promise<{ ok: boolean }>
++  getSetup(): Promise<FirstRunResult<FirstRunSetup>>
++  testConnection(input: FirstRunInput): Promise<FirstRunResult<{ llm: ConnectionResult; prep: ConnectionResult }>>
++  save(input: FirstRunInput): Promise<FirstRunResult>
+ }
+ 
+ function record(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value)
+ }
+ 
++/** Lawyer-facing messages only; Host diagnostics never reach the renderer. */
++const UNAVAILABLE = '工作台服务未启动，请稍后重试'
++const FAILED = '保存失败，请重试；多次出现请联系技术支持'
++
+ /**
+  * Authenticate the native HTTP client through the Web application's launch URL.
+  * @param authenticatedUrl - URL supplied by the running Desktop Host.
+  * @param send - Electron session fetch, retaining the Web authentication cookie.
+- * @returns metadata reads and write-only credential operations over standard RPC.
++ * @returns first-run reads and writes over the Host's `lawbench` and `credentials` Remotes.
+  */
+ export async function connectDesktopWelcome(
+   authenticatedUrl: string,
+   send: (input: string, init?: RequestInit) => Promise<Response>,
+-  cookies: () => Promise<string> = () => Promise.resolve(''),
+ ): Promise<DesktopWelcomeBackend> {
+   const origin = new URL(authenticatedUrl).origin
+   const authenticated = await send(authenticatedUrl, { credentials: 'include' })
+   await authenticated.body?.cancel()
+   if (!authenticated.ok) throw new Error('desktop welcome: Web authentication failed')
+-  const invoke = async (request: { namespace: string; method: string; args: Record<string, unknown> }): Promise<unknown> => {
++  /** @returns the Remote value, or throws an Error whose message is the Remote's lawyer-facing message. */
++  const invoke = async (namespace: string, method: string, args: Record<string, unknown>): Promise<unknown> => {
+     const rpcId = randomUUID()
+-    const method = `${request.namespace}/${request.method}`
+-    const response = await send(new URL(`/api/${method}`, origin).href, {
++    const name = `${namespace}/${method}`
++    const response = await send(new URL(`/api/${name}`, origin).href, {
+       method: 'POST', credentials: 'include', redirect: 'error',
+       headers: { 'content-type': 'application/json' },
+-      body: JSON.stringify({ type: 'client-request', rpcId, method, payload: { args: request.args } }),
++      body: JSON.stringify({ type: 'client-request', rpcId, method: name, payload: { args } }),
+     })
+-    if (!response.ok) throw new Error('desktop welcome: Web request failed')
++    if (!response.ok) throw new Error(UNAVAILABLE)
+     const envelope: unknown = await response.json()
+-    if (!record(envelope) || envelope.type !== 'server-response' || envelope.rpcId !== rpcId
+-      || !record(envelope.result) || envelope.result.ok !== true) {
+-      throw new Error('desktop welcome: Web RPC failed')
++    if (!record(envelope) || envelope.type !== 'server-response' || envelope.rpcId !== rpcId || !record(envelope.result)) {
++      throw new Error(UNAVAILABLE)
++    }
++    if (envelope.result.ok !== true) {
++      const error = envelope.result.error
++      const message = record(error) && typeof error.message === 'string' && /[一-鿿]/.test(error.message) ? error.message : UNAVAILABLE
++      throw new Error(message)
+     }
+     return envelope.result.value
+   }
+-  const account = desktopAccountBackend(origin, invoke, cookies)
+-  const settingsAndReference = async () => {
+-    const settings = await invoke({ namespace: 'settings', method: 'describe', args: {} })
+-    if (!record(settings) || !Array.isArray(settings.namespaces)) throw new Error('desktop welcome: missing settings namespaces')
+-    const official: unknown = settings.namespaces.find((item: unknown) => record(item) && item.ns === 'llm-deepseek')
+-    if (official === undefined) return { settings: { namespaces: settings.namespaces }, ref: undefined }
+-    if (!record(official) || !record(official.value) || typeof official.value.apiKeyEnv !== 'string') {
+-      throw new Error('desktop welcome: missing official DeepSeek credential reference')
+-    }
+-    return { settings: { namespaces: settings.namespaces }, ref: official.value.apiKeyEnv }
++  const safe = async <T>(fn: () => Promise<T>): Promise<FirstRunResult<T>> => {
++    try { return { ok: true, value: await fn() } }
++    catch (error) { return { ok: false, message: error instanceof Error && /[一-鿿]/.test(error.message) ? error.message : FAILED } }
+   }
+-  const localePreference = (namespaces: unknown[]): string | null => {
+-    const locale: unknown = namespaces.find((item: unknown) => record(item) && item.ns === 'locale')
+-    if (!record(locale) || !record(locale.value)
+-      || (locale.value.preference !== undefined && typeof locale.value.preference !== 'string')) {
+-      throw new Error('desktop welcome: invalid locale preference')
+-    }
+-    return locale.value.preference ?? null
++  const localePreference = async (): Promise<string | null> => {
++    const settings = await invoke('settings', 'describe', {})
++    if (!record(settings) || !Array.isArray(settings.namespaces)) return null
++    const locale: unknown = settings.namespaces.find((item: unknown) => record(item) && item.ns === 'locale')
++    return record(locale) && record(locale.value) && typeof locale.value.preference === 'string' ? locale.value.preference : null
+   }
+-  const read = async (): Promise<WelcomeState> => {
+-    const { settings, ref } = await settingsAndReference()
+-    const providers = await invoke({ namespace: 'llm', method: 'listConfigurableProviders', args: {} })
+-    if (!Array.isArray(providers)) throw new Error('desktop welcome: invalid provider directory')
+-    const namespaces = settings.namespaces
+-    const refs = providers.flatMap((provider: unknown) => {
+-      if (!record(provider) || typeof provider.settingsNs !== 'string' || !Array.isArray(provider.settingsPath)) {
+-        throw new Error('desktop welcome: invalid provider settings address')
+-      }
+-      const namespace: unknown = namespaces.find((item: unknown) => record(item) && item.ns === provider.settingsNs)
+-      let value: unknown = record(namespace) ? namespace.value : undefined
+-      for (const key of provider.settingsPath as unknown[]) {
+-        if (typeof key !== 'string') throw new Error('desktop welcome: invalid provider settings path')
+-        value = record(value) ? value[key] : undefined
+-      }
+-      return record(value) && typeof value.apiKeyEnv === 'string' ? [value.apiKeyEnv] : []
+-    })
+-    const unique = [...new Set([...(ref === undefined ? [] : [ref]), ...refs])]
+-    const states: Record<string, unknown> = {}
+-    // credentials.describe accepts at most 64 references per request.
+-    for (let offset = 0; offset < unique.length; offset += 64) {
+-      const batch = await invoke({ namespace: 'credentials', method: 'describe', args: { refs: unique.slice(offset, offset + 64) } })
+-      if (!record(batch)) throw new Error('desktop welcome: invalid credential metadata')
+-      Object.assign(states, batch)
+-    }
+-    if (ref !== undefined && !record(states[ref])) throw new Error('desktop welcome: missing credential metadata')
+-    return {
+-      loggedIn: (await account.state()).status === 'credential-stored',
+-      hasApiKey: Object.values(states).some(value => record(value) && value.configured === true),
+-      writable: ref !== undefined && record(states[ref]) && states[ref].writable === true,
+-      localePreference: localePreference(namespaces),
+-    }
++  const setupState = async (): Promise<{ configured: boolean; hasKey: boolean }> => {
++    const v = await invoke('lawbench', 'setupState', {})
++    if (!record(v)) throw new Error(UNAVAILABLE)
++    return { configured: v.configured === true, hasKey: v.hasKey === true }
++  }
++  /** Save addresses into the full settings object (PUT replaces it), then the Key when given. */
++  const persist = async (input: FirstRunInput): Promise<void> => {
++    const current = await invoke('lawbench', 'getSettings', {})
++    if (!record(current)) throw new Error(UNAVAILABLE)
++    await invoke('lawbench', 'putSettings', { settings: { ...current, servers: input.servers } })
++    if (input.key !== undefined) await invoke('credentials', 'set', { ref: 'LAWFIRM_KEY', value: input.key })
+   }
+   return {
+-    account,
+-    read,
+-    async readLocalePreference() {
+-      const settings = await invoke({ namespace: 'settings', method: 'describe', args: {} })
+-      if (!record(settings) || !Array.isArray(settings.namespaces)) throw new Error('desktop welcome: missing settings namespaces')
+-      return localePreference(settings.namespaces)
+-    },
+-    async save(apiKey) {
+-      if (!/^[\x21-\x7e]+$/.test(apiKey)) return { ok: false }
+-      try {
+-        const { ref } = await settingsAndReference()
+-        if (ref === undefined) return { ok: false }
+-        await invoke({ namespace: 'credentials', method: 'set', args: { ref, value: apiKey } })
+-        return { ok: true }
+-      } catch {
+-        // Provider diagnostics may contain credentials; the native form owns failure copy.
+-        return { ok: false }
+-      }
++    async read() {
++      const [state, preference] = await Promise.all([setupState(), localePreference().catch(() => null)])
++      return { configured: state.configured, hasApiKey: state.hasKey, localePreference: preference }
+     },
++    readLocalePreference: localePreference,
++    getSetup: () => safe(async () => {
++      const [settings, state] = await Promise.all([invoke('lawbench', 'getSettings', {}), setupState()])
++      if (!record(settings) || !record(settings.servers)) throw new Error(UNAVAILABLE)
++      return { servers: settings.servers as unknown as ServerAddresses, hasKey: state.hasKey }
++    }),
++    testConnection: input => safe(async () => {
++      await persist(input)
++      const [llm, prep] = await Promise.all([
++        invoke('lawbench', 'testConnection', { server: 'llm' }),
++        invoke('lawbench', 'testConnection', { server: 'prep' }),
++      ])
++      return { llm: llm as ConnectionResult, prep: prep as ConnectionResult }
++    }),
++    save: input => safe(async () => {
++      await persist(input)
++      const state = await setupState()
++      if (!state.configured) throw new Error(state.hasKey ? FAILED : '请填写个人 Key')
++      return undefined
++    }),
+   }
+ }
+diff --git a/apps/desktop/src/welcome-window.ts b/apps/desktop/src/welcome-window.ts
+index a32e1f1c56..f92c1f51c1 100644
+--- a/apps/desktop/src/welcome-window.ts
++++ b/apps/desktop/src/welcome-window.ts
+@@ -1,11 +1,10 @@
+-import type { SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
+-/** Native welcome window and its presentation-only renderer. */
++/** Native first-run window and its presentation-only renderer (lawbench P-3). */
+ 
+ import { join } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type IpcMainInvokeEvent } from 'electron'
+ import type { DesktopLocale } from './locale.ts'
+-import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
++import { WELCOME_IPC, isFirstRunInput, type WelcomeOperations } from './welcome-api.ts'
+ 
+ /**
+  * Resolve the fixed-size welcome window's native material and controls.
+@@ -63,9 +62,7 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
+   const disposeHandlers = (): void => {
+     if (!active) return
+     active = false
+-    for (const channel of [
+-      WELCOME_IPC.takeNotice, WELCOME_IPC.saveApiKey, WELCOME_IPC.skip, WELCOME_IPC.start, WELCOME_IPC.cancel, WELCOME_IPC.copyLink,
+-    ]) {
++    for (const channel of [WELCOME_IPC.getSetup, WELCOME_IPC.testConnection, WELCOME_IPC.save]) {
+       ipcMain.removeHandler(channel)
+     }
+     disposeActiveHandlers = undefined
+@@ -76,26 +73,15 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
+       throw new Error('desktop welcome: rejected action from an unowned frame')
+     }
+   }
+-  ipcMain.handle(WELCOME_IPC.takeNotice, async (event) => { assertSender(event); return operations.takeNotice() })
+-  ipcMain.handle(WELCOME_IPC.saveApiKey, async (event, value: unknown) => {
++  const invalid = { ok: false, message: '请求参数有误' } as const
++  ipcMain.handle(WELCOME_IPC.getSetup, async (event) => { assertSender(event); return operations.getSetup() })
++  ipcMain.handle(WELCOME_IPC.testConnection, async (event, input: unknown) => {
+     assertSender(event)
+-    if (typeof value !== 'string' || !/^[\x21-\x7e]+$/.test(value)) return { ok: false }
+-    return operations.saveApiKey(value)
++    return isFirstRunInput(input) ? operations.testConnection(input) : invalid
+   })
+-  ipcMain.handle(WELCOME_IPC.skip, async (event) => {
++  ipcMain.handle(WELCOME_IPC.save, async (event, input: unknown) => {
+     assertSender(event)
+-    await operations.skip()
+-  })
+-  ipcMain.handle(WELCOME_IPC.start, async (event) => { assertSender(event); return operations.startSignIn() })
+-  ipcMain.handle(WELCOME_IPC.cancel, async (event, id: unknown) => {
+-    assertSender(event)
+-    if (typeof id !== 'string') throw new Error('desktop welcome: invalid attempt')
+-    return operations.cancelSignIn(id as SignInAttemptId)
+-  })
+-  ipcMain.handle(WELCOME_IPC.copyLink, async (event, id: unknown) => {
+-    assertSender(event)
+-    if (typeof id !== 'string') throw new Error('desktop welcome: invalid attempt')
+-    return operations.copySignInLink(id as SignInAttemptId)
++    return isFirstRunInput(input) ? operations.save(input) : invalid
+   })
+   window.once('closed', disposeHandlers)
+   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+diff --git a/apps/desktop/tests/lawbench-first-run.spec.ts b/apps/desktop/tests/lawbench-first-run.spec.ts
+new file mode 100644
+index 0000000000..ea89aed62b
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-first-run.spec.ts
+@@ -0,0 +1,38 @@
++// lawbench P-3：首次配置页的判断条件与输入校验（替代原 DeepSeek 欢迎流程的测试）。
++import { describe, expect, it } from 'vitest'
++import { isFirstRunInput, isServerAddresses, needsWelcome } from '../src/welcome-api.ts'
++
++const servers = {
++  llm_base_url: 'http://192.168.8.77:8000/v1',
++  prep_base_url: 'http://192.168.8.124:9000',
++  llm_alt_base_url: 'http://10.126.126.1:8000/v1',
++  prep_alt_base_url: null,
++}
++
++describe('needsWelcome（执行令 Q3：settings.json 存在且有 Key 才算配置过）', () => {
++  it('没配置过就显示首次配置页', () => {
++    expect(needsWelcome({ configured: false })).toBe(true)
++    expect(needsWelcome({ configured: true })).toBe(false)
++  })
++})
++
++describe('渲染进程传来的输入', () => {
++  it('合法地址通过；所外地址可为 null', () => {
++    expect(isServerAddresses(servers)).toBe(true)
++  })
++  it('所内地址必须是 http://；拒绝多余字段', () => {
++    expect(isServerAddresses({ ...servers, llm_base_url: 'https://x' })).toBe(false)
++    expect(isServerAddresses({ ...servers, llm_base_url: 'file:///c:/x' })).toBe(false)
++    expect(isServerAddresses({ ...servers, extra: 1 })).toBe(false)
++    expect(isServerAddresses({ ...servers, prep_base_url: null })).toBe(false)
++  })
++  it('Key 可省略；给了就必须是 8–512 位可见 ASCII', () => {
++    expect(isFirstRunInput({ servers })).toBe(true)
++    expect(isFirstRunInput({ servers, key: 'sk-12345678' })).toBe(true)
++    expect(isFirstRunInput({ servers, key: 'short' })).toBe(false)
++    expect(isFirstRunInput({ servers, key: 'has space in it' })).toBe(false)
++    expect(isFirstRunInput({ servers, key: '中文密钥中文密钥中文' })).toBe(false)
++    expect(isFirstRunInput({ servers, other: 1 })).toBe(false)
++    expect(isFirstRunInput(null)).toBe(false)
++  })
++})
+diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
+index e47edce02d..3e1e988a1d 100644
+--- a/apps/desktop/tests/main-startup.spec.ts
++++ b/apps/desktop/tests/main-startup.spec.ts
+@@ -344,9 +344,12 @@ vi.mock('../src/platform-view.ts', async importOriginal => ({
+ vi.mock('../src/welcome-backend.ts', () => ({
+   connectDesktopWelcome: async () => ({
+     readLocalePreference: async () => null,
+-    read: async (): Promise<unknown> => (await harness.hosts.at(-1)!.fetch()).json() as Promise<unknown>,
++    // lawbench P-3：首次配置判断改为 configured；沿用各用例给出的 hasApiKey 作为"已配置"
++    read: async (): Promise<unknown> => {
++      const state = await (await harness.hosts.at(-1)!.fetch()).json() as Record<string, unknown>
++      return { ...state, configured: state.hasApiKey === true }
++    },
+     save: async () => ({ ok: true }),
+-    account: { watch: harness.watchAccount, state: async () => ({ status: 'signed-out', attempt: null }) },
+   }),
+ }))
+ 
+@@ -2124,38 +2127,4 @@ describe('desktop main startup', () => {
+   })
+ })
+ 
+-it.each(['failed', 'expired'] as const)('focuses DSH once when browser authorization becomes %s', async (phase) => {
+-  await import('../src/main.ts')
+-  await harness.preparing.promise
+-  harness.prepared.resolve()
+-  await harness.hostStarted.promise
+-  harness.hosts[0]!.ready.resolve()
+-  await Promise.resolve(invoke(DESKTOP_IPC.boot))
+-  const window = harness.windows[0]!
+-  window.focus.mockClear()
+-  const state: AccountView = {
+-    status: 'signed-out', links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' },
+-    attempt: { id: 'test-failed-attempt' as NonNullable<AccountView['attempt']>['id'], phase },
+-  }
+-  harness.publishAccount(state)
+-  harness.publishAccount(state)
+-  expect(window.focus).toHaveBeenCalledTimes(1)
+-})
+-
+-it.each([['light', false], ['dark', true]] as const)('opens Platform authorization in the effective %s palette', async (theme, shouldUseDarkColors) => {
+-  await import('../src/main.ts')
+-  await harness.preparing.promise
+-  harness.prepared.resolve()
+-  await harness.hostStarted.promise
+-  harness.hosts[0]!.ready.resolve()
+-  await Promise.resolve(invoke(DESKTOP_IPC.boot))
+-  harness.nativeTheme.shouldUseDarkColors = shouldUseDarkColors
+-  const state: AccountView = {
+-    status: 'signed-out', links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' },
+-    attempt: { id: 'test-theme-attempt' as NonNullable<AccountView['attempt']>['id'], phase: 'waiting-browser',
+-      authorizeUrl: 'https://platform.deepseek.com/dsh/authorize?state=state-1' },
+-  }
+-  harness.publishAccount(state)
+-  harness.publishAccount(state)
+-  expect(harness.openExternal).toHaveBeenCalledExactlyOnceWith(`https://platform.deepseek.com/dsh/authorize?state=state-1&theme=${theme}`)
+-})
++// lawbench P-3：DeepSeek Platform 浏览器授权流程已随原欢迎窗口删除，原有的"授权失败时聚焦""授权页配色"两组用例一并删除。
+diff --git a/apps/desktop/tests/welcome-flow.e2e.ts b/apps/desktop/tests/welcome-flow.e2e.ts
+deleted file mode 100644
+index 8640662582..0000000000
+--- a/apps/desktop/tests/welcome-flow.e2e.ts
++++ /dev/null
+@@ -1,193 +0,0 @@
+-/** Built Desktop Host acceptance; run after the repository build, without provider credentials. */
+-
+-import { createHash } from 'node:crypto'
+-import { createServer } from 'node:http'
+-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+-import { tmpdir } from 'node:os'
+-import { join } from 'node:path'
+-import { fileURLToPath } from 'node:url'
+-import { afterEach, describe, expect, it, vi } from 'vitest'
+-import { DesktopHostProcess } from '../src/host-process.ts'
+-import { DesktopProjectManager } from '../src/project-manager.ts'
+-import { resolveDesktopPaths } from '../src/paths.ts'
+-import { desktopClientMetadata } from '../src/client-metadata.ts'
+-import { connectDesktopWelcome, type DesktopWelcomeBackend } from '../src/welcome-backend.ts'
+-import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
+-import { prepareDevelopmentProject } from '../scripts/development-project.ts'
+-
+-const repository = fileURLToPath(new URL('../../../', import.meta.url))
+-const builtHost = join(repository, 'apps/desktop-host/lib/index.js')
+-afterEach(() => { vi.unstubAllEnvs() })
+-
+-function version(path: string): string {
+-  return (JSON.parse(readFileSync(path, 'utf8')) as { version: string }).version
+-}
+-
+-async function mockPlatform() {
+-  let origin = ''
+-  let init: Record<string, string> = {}
+-  let failExchange = false
+-  const server = createServer((req, res) => {
+-    // The real Host composition identifies every Platform request with the five client headers.
+-    const expected = {
+-      'x-client-bundle-id': '', 'x-client-platform': process.platform === 'win32' ? 'desktop-win' : 'desktop-mac',
+-      'x-client-version': '1.2.3', 'x-client-locale': 'en_US',
+-      'x-client-timezone-offset': String(-new Date().getTimezoneOffset() * 60),
+-    }
+-    for (const [name, value] of Object.entries(expected)) {
+-      if (req.headers[name] !== value) { res.writeHead(400).end(); return }
+-    }
+-    if (req.headers.cookie !== 'test_gate=synthetic') { res.writeHead(403).end(); return }
+-    if (req.url === '/auth-api/v0/users/logout' && req.method === 'POST') {
+-      if (req.headers['x-dsh-auth-token'] !== 'dsh_mock_composition_test') { res.writeHead(401).end(); return }
+-      res.writeHead(503).end()
+-      return
+-    }
+-    req.setEncoding('utf8')
+-    let body = ''
+-    req.on('data', (chunk: string) => { body += chunk })
+-    req.on('end', () => {
+-      const input = JSON.parse(body) as Record<string, string>
+-      let value: unknown
+-      if (req.url?.endsWith('auth_init')) {
+-        init = input
+-        if (input.locale !== 'en_US') { res.writeHead(400).end(); return }
+-        value = { authorize_url: `${origin}/dsh/authorize?authorize_id=test`, expires_in: 600, authorize_id: 'test' }
+-      } else if (req.url?.endsWith('auth_cancel')) {
+-        const challenge = createHash('sha256').update(input.code_verifier ?? '').digest('base64url')
+-        if (input.authorize_id !== 'test' || challenge !== init.code_challenge) { res.writeHead(400).end(); return }
+-        value = null
+-      } else {
+-        if (failExchange) { res.writeHead(503).end(); return }
+-        const challenge = createHash('sha256').update(input.code_verifier ?? '').digest('base64url')
+-        if (challenge !== init.code_challenge || input.redirect_uri !== init.redirect_uri) {
+-          res.writeHead(400).end()
+-          return
+-        }
+-        value = { user: null, token: 'dsh_mock_composition_test', authorized_url: `${origin}/dsh/authorized?result=test&locale=zh_CN` }
+-      }
+-      res.setHeader('content-type', 'application/json')
+-      res.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: value } }))
+-    })
+-  })
+-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+-  const address = server.address()
+-  if (address === null || typeof address === 'string') throw new Error('missing mock listener')
+-  origin = `http://127.0.0.1:${String(address.port)}`
+-  return {
+-    origin,
+-    failExchange: (value: boolean) => { failExchange = value },
+-    callback: () => `${init.redirect_uri}?code=test&state=${init.state}`,
+-    close: () => new Promise<void>((resolve) => { server.close(() => { resolve() }); server.closeAllConnections() }),
+-  }
+-}
+-
+-describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
+-  it('persists explicit API keys and browser account login independently across Host restarts', async () => {
+-    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3')
+-    const root = mkdtempSync(join(tmpdir(), 'dsh-desktop-welcome-'))
+-    let host: DesktopHostProcess | undefined
+-    const platform = await mockPlatform()
+-    try {
+-      for (const name of Object.keys(process.env)) {
+-        if (/KEY|TOKEN|SECRET|PASSWORD/u.test(name)) vi.stubEnv(name, undefined)
+-      }
+-      const home = join(root, 'home')
+-      mkdirSync(home)
+-      vi.stubEnv('DSH_HOME', home)
+-      vi.stubEnv('DSH_TELEMETRY_MODE', 'DISABLED')
+-      const project = prepareDevelopmentProject({
+-        projectDir: join(root, 'project'),
+-        cliDir: join(repository, 'apps/cli'),
+-        hostDir: join(repository, 'apps/desktop-host'),
+-        dependencyDir: join(repository, 'node_modules/.pnpm/node_modules'),
+-        release: {
+-          schemaVersion: 1,
+-          version: version(join(repository, 'apps/desktop/package.json')),
+-          pnpmVersion: version(join(repository, 'apps/desktop/node_modules/pnpm/package.json')),
+-          nodeVersion: process.versions.node,
+-          hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
+-        },
+-        // This suite assembles a synthetic project on hosts that prepare no Desktop target, and
+-        // nothing it exercises compares the descriptor's platform/arch outside packaging.
+-        target: 'mac-x64',
+-      })
+-      cpSync(join(repository, 'packages/skill/skill-office/assets'), join(root, 'runtime/office-skills'), { recursive: true })
+-      const nodeBin = join(root, 'runtime/primary-runtime/dependencies/node/bin')
+-      mkdirSync(nodeBin, { recursive: true })
+-      cpSync(process.execPath, join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node'))
+-      const paths = resolveDesktopPaths(home)
+-      const manager = new DesktopProjectManager(paths, {
+-        dsh: project,
+-      })
+-      await manager.applyRelease()
+-      writeFileSync(join(paths.profile, 'cordis.patch.yml'), `- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n- id: deepseek-account\n  config:\n${process.platform === 'linux' ? '    desktopPlatform: darwin\n' : ''}    platformOrigin: ${platform.origin}\n    allowLoopbackHttp: true\n    requestHeaders:\n      Cookie: test_gate=synthetic\n`)
+-      let backend: DesktopWelcomeBackend
+-      let hostOrigin = ''
+-      const restart = async (): Promise<void> => {
+-        await host?.stop()
+-        host = new DesktopHostProcess(process.execPath, project, paths.profile)
+-        const { url } = await host.start()
+-        hostOrigin = new URL(url).origin
+-        let cookie = ''
+-        const send: typeof fetch = async (input, init) => {
+-          const headers = new Headers(init?.headers)
+-          if (cookie !== '') headers.set('cookie', cookie)
+-          const response = await fetch(input, { ...init, headers, redirect: 'manual' })
+-          if (response.status !== 303) return response
+-          cookie = response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+-          await response.body?.cancel()
+-          return fetch(new URL(response.headers.get('location')!, url), { headers: { cookie } })
+-        }
+-        backend = await connectDesktopWelcome(url, send, () => Promise.resolve(cookie))
+-      }
+-      const status = async () => backend.read()
+-      const fingerprint = (): string => createHash('sha256')
+-        .update(readFileSync(join(home, '.credentials.yaml'))).digest('hex')
+-      await restart()
+-      expect(await status()).toMatchObject({ hasApiKey: false, localePreference: null })
+-      const before = fingerprint()
+-      await host!.stop()
+-      writeFileSync(join(paths.profile, 'cordis.patch.yml'),
+-        readFileSync(join(paths.profile, 'cordis.patch.yml'), 'utf8') + '- id: locale\n  config:\n    preference: zh\n')
+-      await restart()
+-      expect(await status()).toMatchObject({ hasApiKey: false, localePreference: 'zh' })
+-      expect(fingerprint()).toBe(before)
+-      expect(await backend!.save('sk-local-onboarding-test')).toEqual({ ok: true })
+-      expect(await status()).toMatchObject({ hasApiKey: true, localePreference: 'zh' })
+-      await restart()
+-      expect(await status()).toMatchObject({ hasApiKey: true })
+-      await backend!.account.start(desktopClientMetadata('en'))
+-      await expect.poll(async () => (await backend!.account.state()).attempt?.phase).toBe('waiting-browser')
+-      expect(new URL(platform.callback()).origin).toBe(hostOrigin)
+-      platform.failExchange(true)
+-      const failed = await fetch(platform.callback(), { redirect: 'manual' })
+-      expect(failed.status).toBe(204)
+-      expect(await backend!.account.state()).toMatchObject({ status: 'signed-out', attempt: { phase: 'failed' } })
+-      expect(await status()).toMatchObject({ hasApiKey: true, loggedIn: false })
+-      platform.failExchange(false)
+-      await backend!.account.start(desktopClientMetadata('en'))
+-      await expect.poll(async () => (await backend!.account.state()).attempt?.phase).toBe('waiting-browser')
+-      const response = await fetch(platform.callback(), { redirect: 'manual' })
+-      expect(response.status).toBe(302)
+-      expect(response.headers.get('location')).toBe(`${platform.origin}/dsh/authorized?result=test&locale=zh_CN&login_source=desktop`)
+-      expect(await status()).toMatchObject({ hasApiKey: true, loggedIn: true })
+-      await restart()
+-      expect(await status()).toMatchObject({ hasApiKey: true, loggedIn: true })
+-      // A failed remote logout must not block local sign-out through the real Host composition.
+-      await backend!.account.signOut(desktopClientMetadata('en'))
+-      expect(await status()).toMatchObject({ hasApiKey: true, loggedIn: false })
+-      await backend!.account.start(desktopClientMetadata('en'))
+-      await expect.poll(async () => (await backend!.account.state()).attempt?.phase).toBe('waiting-browser')
+-      const waiting = await backend!.account.state()
+-      const late = platform.callback()
+-      await backend!.account.cancel(waiting.attempt!.id)
+-      expect((await fetch(late, { redirect: 'manual' })).status).not.toBe(302)
+-      expect(await status()).toMatchObject({ loggedIn: false })
+-    } finally {
+-      await host?.stop()
+-      await platform.close()
+-      rmSync(root, { recursive: true, force: true })
+-    }
+-  })
+-})
+diff --git a/apps/desktop/tests/welcome-host.spec.ts b/apps/desktop/tests/welcome-host.spec.ts
+deleted file mode 100644
+index 3c2066ae34..0000000000
+--- a/apps/desktop/tests/welcome-host.spec.ts
++++ /dev/null
+@@ -1,97 +0,0 @@
+-/** Native onboarding reuses authenticated Web RPC and never reads credential values. */
+-import { describe, expect, it, vi } from 'vitest'
+-import { connectDesktopWelcome } from '../src/welcome-backend.ts'
+-
+-function transport(preference?: string) {
+-  const keys = new Map<string, string>()
+-  const namespaces = [
+-    { ns: 'llm-deepseek', value: { apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY' } },
+-    { ns: 'llm-pi-ai', value: { profiles: { example: { apiKeyEnv: 'EXAMPLE_API_KEY' } } } },
+-    { ns: 'locale', value: preference === undefined ? {} : { preference } },
+-  ]
+-  const send = vi.fn<Parameters<typeof connectDesktopWelcome>[1]>(async (_input, init) => {
+-    if (init?.method !== 'POST') return new Response('index')
+-    const { rpcId, method, payload } = JSON.parse(init.body as string) as {
+-      rpcId: string
+-      method: string
+-      payload: { args: { ref: string; value: string; refs: string[] } }
+-    }
+-    let value: unknown
+-    if (method === 'account/getState') value = { links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null }
+-    else if (method === 'settings/describe') value = { namespaces }
+-    else if (method === 'llm/listConfigurableProviders') value = [{ settingsNs: 'llm-pi-ai', settingsPath: ['profiles', 'example'] }]
+-    else if (method === 'credentials/set') keys.set(payload.args.ref, payload.args.value)
+-    else value = Object.fromEntries(payload.args.refs.map(ref => [ref, { configured: keys.has(ref), writable: true }]))
+-    return Response.json({ type: 'server-response', rpcId, result: { ok: true, value } })
+-  })
+-  return { send, keys, namespaces }
+-}
+-
+-const url = 'http://127.0.0.1:19387/?token=fixture'
+-
+-describe('desktop welcome Web operations', () => {
+-  it('authenticates through Web and stores only through the configured credential reference', async () => {
+-    const host = transport()
+-    const backend = await connectDesktopWelcome(url, host.send)
+-    expect(host.send).toHaveBeenCalledExactlyOnceWith(url, { credentials: 'include' })
+-    expect(await backend.save('sk-example')).toEqual({ ok: true })
+-    expect(host.keys.get('CUSTOM_DEEPSEEK_KEY')).toBe('sk-example')
+-    expect(await backend.read()).toEqual({ loggedIn: false, hasApiKey: true, writable: true, localePreference: null })
+-    for (const [input, init] of host.send.mock.calls.slice(1)) {
+-      expect(input).toMatch(/^http:\/\/127\.0\.0\.1:19387\/api\//u)
+-      expect(init).toMatchObject({ credentials: 'include', redirect: 'error' })
+-    }
+-  })
+-
+-  it('reads the explicit language preference and recognizes another provider key', async () => {
+-    const host = transport('zh')
+-    host.keys.set('EXAMPLE_API_KEY', 'sk-other')
+-    const backend = await connectDesktopWelcome(url, host.send)
+-    expect(await backend.read()).toMatchObject({ localePreference: 'zh', hasApiKey: true })
+-    host.keys.clear()
+-    expect(await backend.read()).toMatchObject({ hasApiKey: false })
+-    expect(host.send.mock.calls.every(([, init]) => !(init?.body as string | undefined)?.includes('credentials/set'))).toBe(true)
+-  })
+-
+-  it('reads language without querying account or model providers', async () => {
+-    const host = transport('zh')
+-    const backend = await connectDesktopWelcome(url, host.send)
+-    host.send.mockClear()
+-    expect(await backend.readLocalePreference()).toBe('zh')
+-    expect(host.send).toHaveBeenCalledOnce()
+-    expect(host.send.mock.calls[0]![0]).toContain('/api/settings/describe')
+-  })
+-
+-  it('allows profiles without the official provider and retains custom key detection', async () => {
+-    const host = transport()
+-    host.namespaces.splice(0, 1)
+-    const backend = await connectDesktopWelcome(url, host.send)
+-    expect(await backend.read()).toMatchObject({ hasApiKey: false, writable: false })
+-    host.keys.set('EXAMPLE_API_KEY', 'custom-key')
+-    expect(await backend.read()).toMatchObject({ hasApiKey: true, writable: false })
+-    expect(await backend.save('official-key')).toEqual({ ok: false })
+-    expect(host.keys.has('undefined')).toBe(false)
+-  })
+-
+-  it.each(['', 'bad key', 'key\n'])('rejects malformed keys without contacting a provider: %s', async (value) => {
+-    const host = transport()
+-    const backend = await connectDesktopWelcome(url, host.send)
+-    host.send.mockClear()
+-    expect(await backend.save(value)).toEqual({ ok: false })
+-    expect(host.send).not.toHaveBeenCalled()
+-  })
+-
+-  it('keeps provider diagnostics out of failures and rejects unmatched RPC envelopes', async () => {
+-    const host = transport()
+-    const backend = await connectDesktopWelcome(url, host.send)
+-    host.send.mockRejectedValueOnce(new Error('private credential sk-must-not-leak'))
+-    expect(await backend.save('sk-example')).toEqual({ ok: false })
+-    host.send.mockResolvedValueOnce(Response.json({ type: 'server-response', rpcId: 'other', result: { ok: true } }))
+-    await expect(backend.read()).rejects.toThrow('Web RPC failed')
+-  })
+-
+-  it('refuses an unauthenticated Web launch', async () => {
+-    const send = vi.fn<Parameters<typeof connectDesktopWelcome>[1]>(async () => new Response(null, { status: 401 }))
+-    await expect(connectDesktopWelcome(url, send)).rejects.toThrow('Web authentication failed')
+-  })
+-})
+diff --git a/apps/desktop/tests/welcome-renderer.client.spec.tsx b/apps/desktop/tests/welcome-renderer.client.spec.tsx
+deleted file mode 100644
+index ee0f06fb09..0000000000
+--- a/apps/desktop/tests/welcome-renderer.client.spec.tsx
++++ /dev/null
+@@ -1,328 +0,0 @@
+-// @vitest-environment jsdom
+-import { readFileSync } from 'node:fs'
+-import { join } from 'node:path'
+-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+-import { Welcome } from '../src/client/WelcomePage.tsx'
+-import { afterEach, describe, expect, it, vi } from 'vitest'
+-import { resolveDesktopLocale } from '../src/locale.ts'
+-import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
+-import type { WelcomeSaveResult, WelcomeNotice } from '../src/welcome-api.ts'
+-
+-const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
+-afterEach(cleanup)
+-
+-function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined)) {
+-  cleanup()
+-  const stopAccount = vi.fn()
+-  const api = {
+-    takeNotice,
+-    onAccountState: vi.fn((_listener: (state: AccountView) => void) => stopAccount),
+-    startSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
+-    cancelSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
+-    copySignInLink: vi.fn(async () => undefined),
+-    ...resolveDesktopLocale(language),
+-    saveApiKey: vi.fn<(value: string) => Promise<WelcomeSaveResult>>().mockResolvedValue({ ok: true }),
+-    skip: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+-  }
+-  const mounted = render(<Welcome api={api} />)
+-  const input = document.querySelector('input')!
+-  const button = (id: string) => document.querySelector<HTMLButtonElement>(id)!
+-  const enterKey = (value: string) => {
+-    fireEvent.change(input, { target: { value } })
+-  }
+-  const submit = () => fireEvent.submit(document.querySelector('form')!)
+-  const copy = () => {
+-    const heading = document.querySelector('main')!.getAttribute('aria-labelledby')!
+-    return [
+-      document.title, document.querySelector('img')!.alt, document.getElementById(heading)!.textContent,
+-      ...heading === 'welcome-heading' ? [document.querySelector('#welcome-description')!.textContent] : [],
+-      ...heading === 'key-title' ? [document.querySelector('#key-description')!.textContent, `${input.placeholder} [password]`] : [],
+-      ...[...document.querySelectorAll('button')].filter(item => item.closest('[hidden]') === null)
+-        .map(item => `${item.textContent || item.getAttribute('aria-label')}${item.disabled ? ' [disabled]' : ''}`),
+-      '',
+-    ].join('\n')
+-  }
+-  return { document, api, input, button, enterKey, submit, copy, unmount: mounted.unmount, stopAccount }
+-}
+-
+-describe('desktop welcome presentation', () => {
+-  it.each(['zh-CN', 'en'])('renders the %s entry and API-key step', async (language) => {
+-    const view = mount(language)
+-    expect(view.document.documentElement.lang).toBe(language)
+-    expect(view.document.querySelector('img')!.getAttribute('src')).toBe('assets/welcome-brand.svg')
+-    await expect(view.copy()).toMatchFileSnapshot(`./expected/welcome/${language}.expected.txt`)
+-    fireEvent.click(view.button('#api-key'))
+-    expect(view.document.activeElement).toBe(view.input)
+-    expect(view.input.type).toBe('password')
+-    await expect(view.copy()).toMatchFileSnapshot(`./expected/welcome/${language}-api-key.expected.txt`)
+-  })
+-
+-  it('sends one trimmed key, prevents competing actions, and clears it after saving', async () => {
+-    const view = mount()
+-    const saved = Promise.withResolvers<WelcomeSaveResult>()
+-    view.api.saveApiKey.mockReturnValue(saved.promise)
+-    fireEvent.click(view.button('#api-key'))
+-    view.enterKey('  sk-desktop-example  ')
+-    view.submit()
+-    view.submit()
+-    fireEvent.click(view.button('#skip-key'))
+-    fireEvent.click(view.button('#back-to-login'))
+-    expect(view.api.saveApiKey).toHaveBeenCalledExactlyOnceWith('sk-desktop-example')
+-    expect(view.api.skip).not.toHaveBeenCalled()
+-    expect(view.button('#save-key').disabled).toBe(true)
+-    expect(view.button('#save-key').textContent).toBe(view.api.messages.welcomeKeySave)
+-    expect(view.button('#back-to-login').disabled).toBe(true)
+-    expect(view.document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(false)
+-    saved.resolve({ ok: true })
+-    await vi.waitFor(() => { expect(view.input.value).toBe('') })
+-    expect(view.document.body.textContent).not.toContain('sk-desktop-example')
+-  })
+-
+-  it.each(['', 'bad key', '密钥', 'DEEPSEEK_API_KEY=sk-example', '"sk-example"', '`sk-example`'])(
+-    'rejects invalid input before sending it: %s', (value) => {
+-      const view = mount()
+-      fireEvent.click(view.button('#api-key'))
+-      view.enterKey(value)
+-      view.submit()
+-      expect(view.api.saveApiKey).not.toHaveBeenCalled()
+-      expect(view.document.querySelector<HTMLElement>('#key-error')!.hidden).toBe(false)
+-      expect(view.input.getAttribute('aria-invalid')).toBe('true')
+-    },
+-  )
+-
+-  it('retains an unsaved draft and allows retry after a refused save', async () => {
+-    const view = mount()
+-    view.api.saveApiKey.mockResolvedValue({ ok: false })
+-    fireEvent.click(view.button('#api-key'))
+-    view.enterKey('sk-retry')
+-    view.submit()
+-    await vi.waitFor(() => { expect(view.button('#save-key').disabled).toBe(false) })
+-    expect(view.input.value).toBe('sk-retry')
+-    expect(view.document.querySelector('#key-error')!.textContent).toBe(view.api.messages.welcomeKeyFailed)
+-    view.api.saveApiKey.mockResolvedValue({ ok: true })
+-    view.submit()
+-    await vi.waitFor(() => { expect(view.input.value).toBe('') })
+-  })
+-
+-  it('skips without saving and starts a fresh renderer at the entry again', async () => {
+-    const view = mount()
+-    const skipped = Promise.withResolvers<undefined>()
+-    view.api.skip.mockReturnValue(skipped.promise)
+-    fireEvent.click(view.button('#api-key'))
+-    view.enterKey('sk-not-saved')
+-    fireEvent.click(view.button('#skip-key'))
+-    try {
+-      expect(view.button('#save-key').textContent).toBe(view.api.messages.welcomeKeySave)
+-      expect(view.button('#skip-key').textContent).toBe(view.api.messages.welcomeKeyLater)
+-      expect(view.button('#save-key').disabled).toBe(true)
+-      expect(view.button('#skip-key').disabled).toBe(true)
+-      expect(view.button('#back-to-login').disabled).toBe(true)
+-      fireEvent.click(view.button('#skip-key'))
+-      view.submit()
+-      expect(view.api.skip).toHaveBeenCalledOnce()
+-      expect(view.api.saveApiKey).not.toHaveBeenCalled()
+-    } finally {
+-      skipped.resolve(undefined)
+-    }
+-    await vi.waitFor(() => { expect(view.input.value).toBe('') })
+-    expect(view.api.skip).toHaveBeenCalledOnce()
+-    expect(view.api.saveApiKey).not.toHaveBeenCalled()
+-    expect(mount().document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(true)
+-  })
+-
+-  it('returns to the entry without saving and clears the draft and validation error', () => {
+-    const view = mount()
+-    fireEvent.click(view.button('#api-key'))
+-    view.enterKey('invalid key')
+-    view.submit()
+-    fireEvent.click(view.button('#back-to-login'))
+-    expect(view.document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(true)
+-    expect(view.document.activeElement).toBe(view.button('#api-key'))
+-    expect(view.input.value).toBe('')
+-    expect(view.api.saveApiKey).not.toHaveBeenCalled()
+-    expect(view.api.skip).not.toHaveBeenCalled()
+-    fireEvent.click(view.button('#api-key'))
+-    expect(view.input.value).toBe('')
+-    expect(view.document.querySelector<HTMLElement>('#key-error')!.hidden).toBe(true)
+-    expect(view.button('#save-key').disabled).toBe(true)
+-  })
+-
+-  it('keeps visible copy in the shell dictionaries and denies network access', () => {
+-    expect([...html.matchAll(/>([^<]*\p{L}[^<]*)</gu)]).toEqual([])
+-    expect(html).toContain("default-src 'none'")
+-    expect(html).toContain("form-action 'none'")
+-  })
+-})
+-
+-it.each(['zh-CN', 'en'])('renders %s timeout with manual retry and API-key alternative', async (language) => {
+-  const view = mount(language)
+-  const receive = (state: AccountView) => { act(() => { view.api.onAccountState.mock.calls[0]![0](state) }) }
+-  receive({ status: 'signed-out', links: { usageUrl: '', topUpUrl: '' }, attempt: { id: 'expired' as NonNullable<AccountView['attempt']>['id'], phase: 'expired' } })
+-  expect(view.button('#auth-retry').hidden).toBe(false)
+-  expect(view.button('#auth-api-key').hidden).toBe(false)
+-  expect(view.api.startSignIn).not.toHaveBeenCalled()
+-  await expect(view.copy() + view.document.querySelector('#auth-description')!.textContent + '\n').toMatchFileSnapshot(`./expected/welcome/${language}-timeout.expected.txt`)
+-  fireEvent.click(view.button('#auth-api-key'))
+-  expect(view.document.querySelector('#auth-page')!.hasAttribute('hidden')).toBe(true)
+-  expect(view.document.querySelector('#key-form')!.hasAttribute('hidden')).toBe(false)
+-})
+-
+-it.each(['zh-CN', 'en'])('renders %s browser fallback and copies only the active login link', async (language) => {
+-  const view = mount(language)
+-  const receive = (state: AccountView) => { act(() => { view.api.onAccountState.mock.calls[0]![0](state) }) }
+-  const waiting: AccountView = { status: 'signed-out', links: { usageUrl: '', topUpUrl: '' },
+-    attempt: { id: 'waiting' as NonNullable<AccountView['attempt']>['id'], phase: 'waiting-browser', authorizeUrl: 'https://example.test/login' } }
+-  receive(waiting)
+-  await expect(view.copy() + view.document.querySelector('#auth-description')!.textContent + '\n')
+-    .toMatchFileSnapshot(`./expected/welcome/${language}-waiting.expected.txt`)
+-  fireEvent.click(view.button('#auth-copy'))
+-  await vi.waitFor(() => { expect(view.button('#auth-copy').textContent).toBe(view.api.messages.welcomeAuthCopied) })
+-  expect(view.api.copySignInLink).toHaveBeenCalledWith('waiting')
+-  await vi.waitFor(() => { expect(view.button('#auth-copy').disabled).toBe(false) }, { timeout: 3000 })
+-  view.api.copySignInLink.mockRejectedValueOnce(new Error('clipboard unavailable'))
+-  fireEvent.click(view.button('#auth-copy'))
+-  await vi.waitFor(() => { expect(view.button('#auth-copy').textContent).toBe(view.api.messages.welcomeAuthCopyFailed) })
+-  expect(view.button('#auth-cancel').disabled).toBe(false)
+-  receive({ ...waiting, attempt: { ...waiting.attempt!, phase: 'exchanging' } })
+-  expect(view.button('#auth-copy').hidden).toBe(true)
+-  expect(view.button('#auth-loading').hidden).toBe(false)
+-  receive({ ...waiting, attempt: { ...waiting.attempt!, phase: 'cancelled' } })
+-  expect(view.document.querySelector('main')!.classList.contains('waiting-page')).toBe(false)
+-})
+-
+-it('keeps a newer account notification when the start response arrives late', async () => {
+-  const view = mount()
+-  const started = Promise.withResolvers<AccountView>()
+-  view.api.startSignIn.mockReturnValueOnce(started.promise)
+-  fireEvent.click(view.button('#sign-in'))
+-  expect(view.button('#auth-cancel').disabled).toBe(true)
+-  const state: AccountView = { status: 'signed-out', links: { usageUrl: '', topUpUrl: '' },
+-    attempt: { id: 'attempt' as NonNullable<AccountView['attempt']>['id'], phase: 'expired' } }
+-  act(() => { view.api.onAccountState.mock.calls[0]![0](state) })
+-  await act(async () => { started.resolve({ ...state, attempt: { ...state.attempt!, phase: 'waiting-browser' } }); await started.promise })
+-  expect(view.document.querySelector('#auth-status')!.textContent).toBe(view.api.messages.welcomeAuthExpired)
+-  expect(view.button('#auth-retry').hidden).toBe(false)
+-})
+-
+-it('does not restore a copied-link status after leaving the waiting phase', async () => {
+-  const view = mount()
+-  const copied = Promise.withResolvers<undefined>()
+-  view.api.copySignInLink.mockReturnValueOnce(copied.promise)
+-  const waiting: AccountView = { status: 'signed-out', links: { usageUrl: '', topUpUrl: '' },
+-    attempt: { id: 'attempt' as NonNullable<AccountView['attempt']>['id'], phase: 'waiting-browser' } }
+-  act(() => { view.api.onAccountState.mock.calls[0]![0](waiting) })
+-  fireEvent.click(view.button('#auth-copy'))
+-  expect(view.button('#auth-copy').disabled).toBe(true)
+-  act(() => { view.api.onAccountState.mock.calls[0]![0]({ ...waiting, attempt: { ...waiting.attempt!, phase: 'exchanging' } }) })
+-  await act(async () => { copied.resolve(undefined); await copied.promise })
+-  expect(view.button('#auth-copy').hidden).toBe(true)
+-  expect(view.button('#auth-copy').textContent).toBe(view.api.messages.welcomeAuthCopyLink)
+-})
+-
+-it('keeps the key draft while account notifications arrive and releases the subscription on unmount', () => {
+-  const view = mount()
+-  fireEvent.click(view.button('#api-key'))
+-  view.enterKey('sk-draft')
+-  act(() => { view.api.onAccountState.mock.calls[0]![0]({ status: 'signed-out', links: { usageUrl: '', topUpUrl: '' },
+-    attempt: { id: 'expired' as NonNullable<AccountView['attempt']>['id'], phase: 'expired' } }) })
+-  expect(view.document.querySelector<HTMLElement>('#key-form')!.hidden).toBe(false)
+-  expect(view.input.value).toBe('sk-draft')
+-  view.unmount()
+-  expect(view.stopAccount).toHaveBeenCalledOnce()
+-})
+-
+-it.each(['copied', 'failed'] as const)('restores the copy action after %s feedback and cleans up on unmount', async (result) => {
+-  vi.useFakeTimers()
+-  try {
+-    const view = mount('en')
+-    if (result === 'failed') view.api.copySignInLink.mockRejectedValue(new Error('clipboard unavailable'))
+-    const waiting: AccountView = { status: 'signed-out', links: { usageUrl: '', topUpUrl: '' },
+-      attempt: { id: 'waiting' as NonNullable<AccountView['attempt']>['id'], phase: 'waiting-browser' } }
+-    act(() => { view.api.onAccountState.mock.calls[0]![0](waiting) })
+-    const feedback = result === 'copied' ? view.api.messages.welcomeAuthCopied : view.api.messages.welcomeAuthCopyFailed
+-    const copy = async () => { await act(async () => { fireEvent.click(view.button('#auth-copy')) }) }
+-    await copy()
+-    expect(view.button('#auth-copy').textContent).toBe(feedback)
+-    expect(view.button('#auth-copy').disabled).toBe(result === 'copied')
+-    await act(async () => { await vi.advanceTimersByTimeAsync(1500) })
+-    await copy()
+-    expect(view.api.copySignInLink).toHaveBeenCalledTimes(result === 'copied' ? 1 : 2)
+-    await act(async () => { await vi.advanceTimersByTimeAsync(result === 'copied' ? 499 : 1999) })
+-    expect(view.button('#auth-copy').textContent).toBe(feedback)
+-    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+-    expect(view.button('#auth-copy').textContent).toBe(view.api.messages.welcomeAuthCopyLink)
+-    expect(view.button('#auth-copy').disabled).toBe(false)
+-    await copy()
+-    expect(view.api.copySignInLink).toHaveBeenCalledTimes(result === 'copied' ? 2 : 3)
+-    view.unmount()
+-    expect(vi.getTimerCount()).toBe(0)
+-  } finally {
+-    cleanup()
+-    vi.useRealTimers()
+-  }
+-})
+-
+-it.each(['zh-CN', 'en'])('keeps the expiry notice visible after returning to Welcome: %s', async (language) => {
+-  vi.useFakeTimers()
+-  try {
+-    const takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined).mockResolvedValueOnce('session-expired')
+-    const view = mount(language, takeNotice)
+-    await act(async () => {})
+-    const publish = view.api.onAccountState.mock.calls[0]![0]
+-    const expired: AccountView = { status: 'signed-out', attempt: null,
+-      links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' } }
+-    await act(async () => { publish(expired) })
+-    const notice = screen.getByRole('alert')
+-    expect(notice.textContent).toBe(view.api.messages.welcomeSessionExpired)
+-    await expect(`${notice.textContent}\n`).toMatchFileSnapshot(`./expected/welcome/${language}-expired.expected.txt`)
+-    expect(view.button('#sign-in').closest('[hidden]')).toBeNull()
+-    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+-    expect(screen.queryByRole('alert')).toBeNull()
+-    await act(async () => { publish(expired) })
+-    expect(screen.queryByRole('alert')).toBeNull()
+-    view.unmount()
+-    mount(language, takeNotice)
+-    await act(async () => {})
+-    expect(screen.queryByRole('alert')).toBeNull()
+-  } finally { cleanup(); vi.useRealTimers() }
+-})
+-
+-it('does not infer a notification from a retained expired account snapshot', async () => {
+-  const view = mount()
+-  await act(async () => {
+-    view.api.onAccountState.mock.calls[0]![0]({ status: 'signed-out', attempt: null,
+-      links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' } })
+-  })
+-  expect(screen.queryByRole('alert')).toBeNull()
+-})
+-
+-it('keeps the entry usable when notification IPC fails', async () => {
+-  const view = mount('en', vi.fn<() => Promise<WelcomeNotice | undefined>>().mockRejectedValue(new Error('closed')))
+-  await act(async () => {})
+-  expect(screen.queryByRole('alert')).toBeNull()
+-  fireEvent.click(view.button('#api-key'))
+-  expect(view.input.closest('[hidden]')).toBeNull()
+-})
+-
+-it('ignores a notification received after its renderer unmounts', async () => {
+-  const pending = Promise.withResolvers<WelcomeNotice | undefined>()
+-  const view = mount('en', vi.fn<() => Promise<WelcomeNotice | undefined>>().mockReturnValue(pending.promise))
+-  view.unmount()
+-  mount('en')
+-  await act(async () => { pending.resolve('session-expired') })
+-  expect(screen.queryByRole('alert')).toBeNull()
+-})
+-
+-
+-it.each(['zh-CN', 'en'])('returns from completed sign-in to the initial page after sign-out: %s', async (language) => {
+-  const view = mount(language)
+-  const publish = view.api.onAccountState.mock.calls[0]![0]
+-  const links = { usageUrl: 'https://example.test/usage', topUpUrl: 'https://example.test/top_up' }
+-  act(() => { publish({ status: 'credential-stored', links,
+-    attempt: { id: 'completed' as NonNullable<AccountView['attempt']>['id'], phase: 'succeeded' } }) })
+-  expect(view.document.querySelector<HTMLElement>('#auth-page')!.hidden).toBe(false)
+-  act(() => { publish({ status: 'signed-out', links, attempt: null }) })
+-  expect(view.button('#sign-in').closest('[hidden]')).toBeNull()
+-  expect(view.document.querySelector<HTMLElement>('#auth-page')!.hidden).toBe(true)
+-  await expect(view.copy()).toMatchFileSnapshot(`./expected/welcome/${language}.expected.txt`)
+-})
+diff --git a/apps/desktop/tests/welcome-startup.spec.ts b/apps/desktop/tests/welcome-startup.spec.ts
+deleted file mode 100644
+index 7518cc74af..0000000000
+--- a/apps/desktop/tests/welcome-startup.spec.ts
++++ /dev/null
+@@ -1,295 +0,0 @@
+-vi.mock('../src/web-document.ts', () => ({ authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn() }))
+-/** Welcome startup uses the Host before transitioning to the workspace. */
+-
+-import { afterEach, expect, it, vi } from 'vitest'
+-import type { BrowserWindowConstructorOptions } from 'electron'
+-import type { DesktopLocale } from '../src/locale.ts'
+-import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
+-import type { WelcomeOperations } from '../src/welcome-api.ts'
+-import { DESKTOP_IPC } from '../src/ipc.ts'
+-
+-const state = vi.hoisted(() => ({
+-  appListeners: new Map<string, (...args: unknown[]) => void>(),
+-  dialogLocale: undefined as (() => DesktopLocale) | undefined,
+-  beforeRead: vi.fn(async () => {}),
+-  beforeWelcome: vi.fn(async () => {}),
+-  copy: vi.fn(),
+-  expiryListener: undefined as (() => void) | undefined,
+-  accountListener: undefined as ((value: AccountView) => void) | undefined,
+-  accountState: vi.fn<() => Promise<AccountView>>().mockResolvedValue({
+-    status: 'signed-out', attempt: null, links: { usageUrl: '', topUpUrl: '' },
+-  }),
+-  quit: vi.fn(),
+-  startHost: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:3080/?token=test', injections: [] }),
+-  stopHost: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+-  loadWorkspace: vi.fn<(url: string) => Promise<void>>().mockResolvedValue(undefined),
+-  showWorkspace: vi.fn(),
+-  showInactiveWorkspace: vi.fn(),
+-  focusWorkspace: vi.fn(),
+-  moveTopWorkspace: vi.fn(),
+-  openDevTools: vi.fn(),
+-  closeWelcome: vi.fn(),
+-  welcomeLocale: undefined as DesktopLocale | undefined,
+-  preference: 'zh',
+-  hasApiKey: false,
+-  handlers: new Map<string, (...args: unknown[]) => unknown>(),
+-  listeners: new Map<string, (...args: unknown[]) => void>(),
+-  contents: undefined as { mainFrame: { url: string } } | undefined,
+-  windowOptions: undefined as BrowserWindowConstructorOptions | undefined,
+-  menu: vi.fn(),
+-  operations: undefined as WelcomeOperations | undefined,
+-  nativeTheme: { themeSource: 'system', shouldUseDarkColors: false },
+-}))
+-
+-vi.mock('../src/crash-report.ts', async importOriginal => ({
+-  ...await importOriginal<typeof import('../src/crash-report.ts')>(),
+-  writeCrashReport: vi.fn(async () => undefined),
+-  pruneCrashReports: vi.fn(async () => {}),
+-}))
+-vi.mock('electron', () => ({
+-  clipboard: { writeText: state.copy },
+-  app: {
+-    isPackaged: false,
+-    name: 'Harness',
+-    requestSingleInstanceLock: () => true,
+-    setAsDefaultProtocolClient: vi.fn(),
+-    whenReady: () => Promise.resolve(),
+-    getLocale: () => 'en',
+-    getVersion: () => '1.0.0',
+-    setAboutPanelOptions: vi.fn(),
+-    getAppPath: () => '/development-app',
+-    getPath: (name: string) => name === 'userData' ? '/desktop-user-data' : `/development-${name}`,
+-    setAppLogsPath: vi.fn(),
+-    getPreferredSystemLanguages: () => ['en-US'],
+-    on: (name: string, callback: (...args: unknown[]) => void) => { state.appListeners.set(name, callback) },
+-    quit: state.quit,
+-    exit: vi.fn(),
+-  },
+-  powerMonitor: { on: vi.fn(), off: vi.fn() },
+-  BrowserWindow: class {
+-    constructor(options: BrowserWindowConstructorOptions) { state.windowOptions = options }
+-    private ready: (() => void) | undefined
+-    webContents = { mainFrame: { url: 'dsh-app://app/' }, setWindowOpenHandler: vi.fn(),
+-      on: vi.fn(), once: vi.fn(), send: vi.fn(), openDevTools: state.openDevTools }
+-    static getAllWindows() { return [] }
+-    once(name: string, callback: () => void) { if (name === 'ready-to-show') this.ready = callback; return this }
+-    on() { return this }
+-    isDestroyed() { return false }
+-    isMinimized() { return false }
+-    restore = vi.fn()
+-    focus = state.focusWorkspace
+-    moveTop = state.moveTopWorkspace
+-    hide = vi.fn()
+-    show = state.showWorkspace
+-    showInactive = state.showInactiveWorkspace
+-    async loadURL(url: string) { state.contents = this.webContents; await state.loadWorkspace(url); this.ready?.() }
+-  },
+-  net: { fetch: vi.fn() },
+-  nativeTheme: state.nativeTheme,
+-  session: { defaultSession: {
+-    setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() },
+-  } },
+-  protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
+-  ipcMain: {
+-    handle: (name: string, callback: (...args: unknown[]) => unknown) => { state.handlers.set(name, callback) },
+-    on: (name: string, callback: (...args: unknown[]) => void) => { state.listeners.set(name, callback) },
+-  },
+-  dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn() },
+-  Menu: { buildFromTemplate: state.menu, setApplicationMenu: vi.fn() },
+-  nativeImage: { createFromPath: (path: string) => ({ path }) },
+-}))
+-// The Windows tray relabels through Menu as well; keep the menu call counts below platform-neutral.
+-vi.mock('../src/tray.ts', () => ({ DesktopTray: class { relabel() {} dispose() {} } }))
+-
+-vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: '/profile' }) }))
+-vi.mock('../src/project-manager.ts', () => ({ DesktopProjectManager: class {
+-  applyRelease = vi.fn(async () => {})
+-  canRecoverProfile = vi.fn(() => true)
+-} }))
+-vi.mock('../src/host-process.ts', () => ({
+-  DesktopHostProcess: class {
+-    start = state.startHost
+-    stop = state.stopHost
+-    fetch() {
+-      return Promise.resolve(Response.json({
+-        loggedIn: false, hasApiKey: state.hasApiKey, writable: true, localePreference: state.preference,
+-      }))
+-    }
+-  },
+-}))
+-vi.mock('../src/welcome-backend.ts', () => ({
+-  connectDesktopWelcome: async () => ({
+-    readLocalePreference: async () => state.preference,
+-    read: async () => {
+-      await state.beforeRead()
+-      return { loggedIn: false, hasApiKey: state.hasApiKey, writable: true, localePreference: state.preference }
+-    },
+-    save: async () => ({ ok: true }),
+-    account: {
+-      watch: (listener: (value: AccountView) => void, _failed: () => void, expired: () => void) => {
+-        state.accountListener = listener
+-        state.expiryListener = expired
+-        return () => {}
+-      },
+-      state: state.accountState,
+-    },
+-  }),
+-}))
+-vi.mock('node:fs/promises', async importOriginal => ({
+-  ...await importOriginal<typeof import('node:fs/promises')>(),
+-  readFile: vi.fn(async () => '{}'),
+-}))
+-vi.mock('../src/update-dialog.ts', () => ({ DesktopUpdateDialog: class {
+-  constructor(_preload: string, locale: () => DesktopLocale) { state.dialogLocale = locale }
+-  dispose() {}
+-} }))
+-vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class {
+-  state = { phase: 'idle' }
+-  check = vi.fn(async () => this.state)
+-  dispose = vi.fn()
+-} }))
+-vi.mock('../src/welcome-window.ts', () => ({
+-  openWelcomeWindow: async (locale: DesktopLocale, operations: WelcomeOperations) => {
+-    state.welcomeLocale = locale
+-    state.operations = operations
+-    await state.beforeWelcome()
+-    return { once: vi.fn(), close: state.closeWelcome, isDestroyed: () => false,
+-      show: vi.fn(), focus: vi.fn(), webContents: { send: vi.fn() } }
+-  },
+-}))
+-
+-afterEach(() => {
+-  vi.clearAllTimers()
+-  vi.useRealTimers()
+-  vi.unstubAllEnvs()
+-  vi.unstubAllGlobals()
+-  vi.restoreAllMocks()
+-})
+-
+-it.each([false, true])('starts welcome onboarding without carrying update focus into login or skip (Windows update=%s)', async (updated) => {
+-  vi.resetModules()
+-  vi.clearAllMocks()
+-  state.preference = 'zh'
+-  state.hasApiKey = false
+-  state.operations = undefined
+-  state.accountState.mockResolvedValue({ status: 'signed-out', attempt: null, links: { usageUrl: '', topUpUrl: '' } })
+-  if (updated) vi.stubGlobal('process', { ...process, platform: 'win32', argv: ['desktop', '--updated'] })
+-  vi.useFakeTimers()
+-  vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', '/development-profile')
+-  vi.stubEnv('DSH_DESKTOP_NODE_BINARY', '/runtime/node')
+-  vi.stubEnv('DSH_DESKTOP_PNPM_ENTRY', '/runtime/pnpm')
+-  vi.stubEnv('DSH_DESKTOP_DSH_DIR', '/runtime/dsh')
+-  vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', '/runtime/primary-runtime')
+-  vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
+-  vi.stubEnv('DSH_DESKTOP_OPEN_DEVTOOLS', '0')
+-  vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
+-  vi.stubEnv('DSH_DESKTOP_UPDATE_JOURNAL_DIR', undefined)
+-  const reading = Promise.withResolvers<undefined>()
+-  const loading = Promise.withResolvers<undefined>()
+-  state.beforeRead.mockReturnValueOnce(reading.promise)
+-  state.beforeWelcome.mockReturnValueOnce(loading.promise)
+-  const activate = () => {
+-    state.appListeners.get('second-instance')!()
+-    state.appListeners.get('open-url')!({ preventDefault: vi.fn() }, 'dsh://open')
+-  }
+-  await import('../src/main.ts')
+-  await vi.waitFor(() => { expect(state.beforeRead).toHaveBeenCalledOnce() })
+-  try {
+-    activate()
+-    expect(state.showWorkspace).not.toHaveBeenCalled()
+-    reading.resolve(undefined)
+-    await vi.waitFor(() => { expect(state.beforeWelcome).toHaveBeenCalledOnce() })
+-    activate()
+-    expect(state.showWorkspace).not.toHaveBeenCalled()
+-  } finally {
+-    reading.resolve(undefined)
+-    loading.resolve(undefined)
+-  }
+-  await vi.waitFor(() => { expect(state.operations).toBeDefined() })
+-  expect(state.startHost).toHaveBeenCalledOnce()
+-  expect(state.loadWorkspace).toHaveBeenCalledExactlyOnceWith('dsh-app://app/')
+-  expect(state.showWorkspace).not.toHaveBeenCalled()
+-  state.loadWorkspace.mockClear()
+-  expect(state.welcomeLocale).toMatchObject({ id: 'zh-CN' })
+-  expect(await state.operations!.takeNotice()).toBeUndefined()
+-  expect(state.dialogLocale!().id).toBe('zh-CN')
+-  const attemptId = 'login' as NonNullable<AccountView['attempt']>['id']
+-  const account: AccountView = { status: 'signed-out', links: { usageUrl: '', topUpUrl: '' },
+-    attempt: { id: attemptId, phase: 'waiting-browser', authorizeUrl: 'https://example.test/login' } }
+-  state.accountState.mockResolvedValue(account)
+-  await state.operations!.copySignInLink(attemptId)
+-  expect(state.copy).toHaveBeenCalledExactlyOnceWith('https://example.test/login?theme=light')
+-  state.nativeTheme.shouldUseDarkColors = true
+-  await state.operations!.copySignInLink(attemptId)
+-  expect(state.copy).toHaveBeenLastCalledWith('https://example.test/login?theme=dark')
+-  state.nativeTheme.shouldUseDarkColors = false
+-  await expect(state.operations!.copySignInLink('stale' as typeof attemptId)).rejects.toThrow('login link is unavailable')
+-  state.accountState.mockResolvedValue({ ...account, attempt: { id: attemptId, phase: 'expired' } })
+-  await expect(state.operations!.copySignInLink(attemptId)).rejects.toThrow('login link is unavailable')
+-  expect(state.copy).toHaveBeenCalledTimes(2)
+-  await state.operations!.skip()
+-  expect(state.loadWorkspace).not.toHaveBeenCalled()
+-  expect(state.showWorkspace).toHaveBeenCalledOnce()
+-  expect(state.moveTopWorkspace).not.toHaveBeenCalled()
+-  expect(state.focusWorkspace).not.toHaveBeenCalled()
+-  expect(state.windowOptions).toMatchObject({
+-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 }, vibrancy: 'sidebar' } : {}),
+-    webPreferences: { contextIsolation: true, sandbox: true },
+-  })
+-  expect(state.closeWelcome).toHaveBeenCalledOnce()
+-  activate()
+-  expect(state.showWorkspace).toHaveBeenCalledTimes(3)
+-  expect(state.quit).not.toHaveBeenCalled()
+-  expect(state.stopHost).not.toHaveBeenCalled()
+-  const contents = state.contents as { mainFrame: { url: string }; send: ReturnType<typeof vi.fn> }
+-  expect(contents.send).toHaveBeenCalledWith(DESKTOP_IPC.enterWorkspace)
+-  const event = { sender: contents, senderFrame: contents.mainFrame }
+-  const bootstrap = state.handlers.get(DESKTOP_IPC.localeBootstrap)!
+-  expect(await bootstrap(event)).toEqual({ languages: ['en-US'], preference: 'zh' })
+-  state.preference = 'en'
+-  expect(await bootstrap(event)).toEqual({ languages: ['en-US'], preference: 'en' })
+-  const changed = state.listeners.get(DESKTOP_IPC.localeChanged)!
+-  const initialMenus = state.menu.mock.calls.length
+-  changed({ ...event, senderFrame: {} }, 'en')
+-  changed(event, 42)
+-  expect(state.menu).toHaveBeenCalledTimes(initialMenus)
+-  changed(event, 'en')
+-  expect(state.dialogLocale!().id).toBe('en')
+-  expect(state.menu).toHaveBeenCalledTimes(initialMenus + 1)
+-  expect(await bootstrap(event)).toEqual({ languages: ['en-US'], preference: 'en' })
+-  const welcomeCount = state.beforeWelcome.mock.calls.length
+-  state.hasApiKey = true
+-  state.accountListener!({ ...account, status: 'credential-stored', attempt: null })
+-  state.accountListener!({ ...account, status: 'signed-out', attempt: null })
+-  state.expiryListener!()
+-  await vi.advanceTimersByTimeAsync(0)
+-  expect(state.beforeWelcome).toHaveBeenCalledTimes(welcomeCount)
+-  expect(await state.operations!.takeNotice()).toBeUndefined()
+-  state.hasApiKey = false
+-  state.accountListener!({ ...account, status: 'credential-stored', attempt: null })
+-  state.accountListener!({ ...account, status: 'signed-out', attempt: null })
+-  state.expiryListener!()
+-  await vi.waitFor(() => { expect(state.beforeWelcome).toHaveBeenCalledTimes(welcomeCount + 1) })
+-  expect(await state.operations!.takeNotice()).toBe('session-expired')
+-  expect(await state.operations!.takeNotice()).toBeUndefined()
+-  state.accountListener!({ ...account, status: 'signed-out', attempt: null })
+-  await vi.advanceTimersByTimeAsync(0)
+-  expect(await state.operations!.takeNotice()).toBeUndefined()
+-  state.accountListener!({ ...account, status: 'credential-stored', attempt: null })
+-  state.accountListener!({ ...account, status: 'signed-out', attempt: null })
+-  await vi.advanceTimersByTimeAsync(0)
+-  expect(await state.operations!.takeNotice()).toBeUndefined()
+-  state.showWorkspace.mockClear()
+-  state.focusWorkspace.mockClear()
+-  vi.stubEnv('DSH_DESKTOP_OPEN_DEVTOOLS', '1')
+-  state.accountListener!({ ...account, status: 'credential-stored', attempt: { id: attemptId, phase: 'succeeded' } })
+-  await vi.waitFor(() => { expect(state.showInactiveWorkspace).toHaveBeenCalledOnce() })
+-  expect(state.showWorkspace).not.toHaveBeenCalled()
+-  expect(state.focusWorkspace).not.toHaveBeenCalled()
+-  expect(state.moveTopWorkspace).not.toHaveBeenCalled()
+-  expect(state.openDevTools).not.toHaveBeenCalled()
+-  state.appListeners.get('open-url')!({ preventDefault: vi.fn() }, 'dsh://open')
+-  expect(state.showWorkspace).toHaveBeenCalledOnce()
+-  expect(state.focusWorkspace).toHaveBeenCalledOnce()
+-
+-})
+diff --git a/apps/desktop/tests/welcome-window.spec.ts b/apps/desktop/tests/welcome-window.spec.ts
+deleted file mode 100644
+index 5ab4a1c031..0000000000
+--- a/apps/desktop/tests/welcome-window.spec.ts
++++ /dev/null
+@@ -1,188 +0,0 @@
+-import { join } from 'node:path'
+-import { beforeEach, describe, expect, it, vi } from 'vitest'
+-import { resolveDesktopLocale } from '../src/locale.ts'
+-import { needsWelcome, WELCOME_IPC } from '../src/welcome-api.ts'
+-
+-const electron = vi.hoisted(() => ({
+-  create: vi.fn<(options: unknown) => ReturnType<typeof createWindow>>(),
+-  root: '/desktop-app',
+-  handlers: new Map<string, (event: unknown, value?: unknown) => Promise<unknown>>(),
+-}))
+-vi.mock('electron', () => ({
+-  app: { getAppPath: () => electron.root },
+-  BrowserWindow: vi.fn(function (options: unknown) { return electron.create(options) }),
+-  ipcMain: {
+-    handle: (name: string, handler: (event: unknown, value?: unknown) => Promise<unknown>) => {
+-      if (electron.handlers.has(name)) throw new Error(`duplicate IPC handler: ${name}`)
+-      electron.handlers.set(name, handler)
+-    },
+-    removeHandler: (name: string) => electron.handlers.delete(name),
+-  },
+-}))
+-
+-const { openWelcomeWindow, welcomeWindowOptions } = await import('../src/welcome-window.ts')
+-
+-function createWindow() {
+-  return {
+-    webContents: {
+-      mainFrame: {},
+-      setWindowOpenHandler: vi.fn<(handler: () => { action: string }) => void>(),
+-      on: vi.fn<(name: string, handler: (event: { preventDefault(): void }) => void) => void>(),
+-    },
+-    loadFile: vi.fn<(path: string) => Promise<undefined>>().mockResolvedValue(undefined),
+-    isDestroyed: vi.fn().mockReturnValue(false),
+-    destroy: vi.fn(),
+-    show: vi.fn(),
+-    once: vi.fn<(name: string, callback: () => void) => void>(),
+-  }
+-}
+-
+-beforeEach(() => { electron.create.mockReset(); electron.handlers.clear() })
+-
+-const operations = {
+-  takeNotice: async () => undefined,
+-  startSignIn: async () => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out' as const, attempt: null }),
+-  cancelSignIn: async () => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out' as const, attempt: null }),
+-  copySignInLink: async () => undefined,
+-  saveApiKey: () => Promise.resolve({ ok: true as const }),
+-  skip: () => Promise.resolve(),
+-}
+-
+-describe('desktop welcome window', () => {
+-  it.each(['darwin', 'win32', 'linux'] as const)('keeps the %s preview fixed-size and sandboxed', (platform) => {
+-    const options = welcomeWindowOptions(platform, resolveDesktopLocale('zh-CN'))
+-    expect(options).toMatchObject({
+-      width: 600, height: 700, useContentSize: true, center: true, show: false,
+-      resizable: false, maximizable: false, fullscreenable: false,
+-      webPreferences: {
+-        nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true,
+-        additionalArguments: ['--dsh-welcome-locale=zh-CN'],
+-      },
+-    })
+-    expect(options.webPreferences?.preload).toMatch(/preload-welcome\.cjs$/u)
+-    if (platform === 'darwin') {
+-      expect(options.vibrancy).toBe('menu')
+-      expect(options.visualEffectState).toBe('active')
+-      expect(options.trafficLightPosition).toEqual({ x: 21, y: 21 })
+-    } else if (platform === 'win32') {
+-      expect(options.backgroundMaterial).toBe('acrylic')
+-      expect(options.titleBarOverlay).toMatchObject({ height: 42 })
+-    } else {
+-      expect(options.backgroundColor).toBe('#FFFFFF')
+-      expect(options.vibrancy).toBeUndefined()
+-      expect(options.backgroundMaterial).toBeUndefined()
+-    }
+-  })
+-
+-  it('waits for its local document and blocks renderer navigation', async () => {
+-    const window = createWindow()
+-    const loaded = Promise.withResolvers<undefined>()
+-    window.loadFile.mockReturnValue(loaded.promise)
+-    electron.create.mockReturnValue(window)
+-    const opening = openWelcomeWindow(resolveDesktopLocale('en'), operations)
+-    expect(window.show).not.toHaveBeenCalled()
+-    expect(window.loadFile).toHaveBeenCalledWith(join(electron.root, 'renderer', 'welcome.html'))
+-    expect(window.webContents.setWindowOpenHandler.mock.calls[0]![0]()).toEqual({ action: 'deny' })
+-    const event = { preventDefault: vi.fn() }
+-    window.webContents.on.mock.calls[0]![1](event)
+-    expect(event.preventDefault).toHaveBeenCalledOnce()
+-    loaded.resolve(undefined)
+-    expect(await opening).toBe(window)
+-    expect(window.show).toHaveBeenCalledOnce()
+-  })
+-
+-  it('destroys a window whose document fails to load', async () => {
+-    const window = createWindow()
+-    window.loadFile.mockRejectedValue(new Error('missing welcome document'))
+-    electron.create.mockReturnValue(window)
+-    await expect(openWelcomeWindow(resolveDesktopLocale('en'), operations)).rejects.toThrow('missing welcome document')
+-    expect(window.destroy).toHaveBeenCalledOnce()
+-    expect(electron.handlers.size).toBe(0)
+-    expect(window.show).not.toHaveBeenCalled()
+-  })
+-
+-  it('does not show a window closed while its document was loading', async () => {
+-    const window = createWindow()
+-    window.isDestroyed.mockReturnValue(true)
+-    electron.create.mockReturnValue(window)
+-    await openWelcomeWindow(resolveDesktopLocale('en'), operations)
+-    expect(window.show).not.toHaveBeenCalled()
+-    expect(window.destroy).not.toHaveBeenCalled()
+-  })
+-
+-  it('accepts actions only from its own top frame and removes handlers on close', async () => {
+-    const window = createWindow()
+-    electron.create.mockReturnValue(window)
+-    const saveApiKey = vi.fn(operations.saveApiKey)
+-    const skip = vi.fn(operations.skip)
+-    const copySignInLink = vi.fn(operations.copySignInLink)
+-    const takeNotice = vi.fn(async () => 'session-expired' as const)
+-    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, saveApiKey, skip, copySignInLink, takeNotice })
+-    const own = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
+-    const take = electron.handlers.get(WELCOME_IPC.takeNotice)!
+-    await expect(take({ ...own, senderFrame: {} })).rejects.toThrow('unowned frame')
+-    expect(takeNotice).not.toHaveBeenCalled()
+-    expect(await take(own)).toBe('session-expired')
+-    expect(takeNotice).toHaveBeenCalledOnce()
+-    const save = electron.handlers.get(WELCOME_IPC.saveApiKey)!
+-    await expect(save({ sender: {}, senderFrame: {} }, 'sk-test')).rejects.toThrow('unowned frame')
+-    await expect(save({ ...own, senderFrame: {} }, 'sk-test')).rejects.toThrow('unowned frame')
+-    expect(await save(own, 'bad key')).toEqual({ ok: false })
+-    expect(saveApiKey).not.toHaveBeenCalled()
+-    expect(await save(own, 'sk-test')).toEqual({ ok: true })
+-    await electron.handlers.get(WELCOME_IPC.skip)!(own)
+-    expect(skip).toHaveBeenCalledOnce()
+-    const copy = electron.handlers.get(WELCOME_IPC.copyLink)!
+-    await expect(copy({ ...own, senderFrame: {} }, 'attempt')).rejects.toThrow('unowned frame')
+-    await expect(copy(own, 42)).rejects.toThrow('invalid attempt')
+-    await copy(own, 'attempt')
+-    expect(copySignInLink).toHaveBeenCalledExactlyOnceWith('attempt')
+-    window.once.mock.calls[0]![1]()
+-    expect(electron.handlers.size).toBe(0)
+-  })
+-
+-  it('does not show a superseded window when its delayed document finishes loading', async () => {
+-    const previous = createWindow()
+-    const current = createWindow()
+-    const loaded = Promise.withResolvers<undefined>()
+-    previous.loadFile.mockReturnValue(loaded.promise)
+-    electron.create.mockReturnValueOnce(previous).mockReturnValueOnce(current)
+-    const opening = openWelcomeWindow(resolveDesktopLocale('en'), operations)
+-    await openWelcomeWindow(resolveDesktopLocale('en'), operations)
+-    loaded.resolve(undefined)
+-    await opening
+-    expect(previous.show).not.toHaveBeenCalled()
+-    expect(current.show).toHaveBeenCalledOnce()
+-    previous.once.mock.calls[0]![1]()
+-    current.once.mock.calls[0]![1]()
+-  })
+-
+-  it('replaces handlers before the previous native window emits closed', async () => {
+-    const previous = createWindow()
+-    const current = createWindow()
+-    electron.create.mockReturnValueOnce(previous).mockReturnValueOnce(current)
+-    const previousStart = vi.fn(operations.startSignIn)
+-    const currentStart = vi.fn(operations.startSignIn)
+-    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, startSignIn: previousStart })
+-    const previousHandler = electron.handlers.get(WELCOME_IPC.start)!
+-    const previousSender = { sender: previous.webContents, senderFrame: previous.webContents.mainFrame }
+-    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, startSignIn: currentStart })
+-    const currentHandler = electron.handlers.get(WELCOME_IPC.start)!
+-    await expect(previousHandler(previousSender)).rejects.toThrow('unowned frame')
+-    await expect(currentHandler(previousSender)).rejects.toThrow('unowned frame')
+-    previous.once.mock.calls[0]![1]()
+-    expect(electron.handlers.get(WELCOME_IPC.start)).toBe(currentHandler)
+-    await currentHandler({ sender: current.webContents, senderFrame: current.webContents.mainFrame })
+-    expect(currentStart).toHaveBeenCalledOnce()
+-    expect(previousStart).not.toHaveBeenCalled()
+-    current.once.mock.calls[0]![1]()
+-    expect(electron.handlers.size).toBe(0)
+-  })
+-
+-  it('shows the entry after logout only without a separately configured API key', () => {
+-    expect(needsWelcome({ loggedIn: true, hasApiKey: false })).toBe(false)
+-    expect(needsWelcome({ loggedIn: false, hasApiKey: false })).toBe(true)
+-    expect(needsWelcome({ loggedIn: false, hasApiKey: true })).toBe(false)
+-    expect(needsWelcome({ loggedIn: true, hasApiKey: true })).toBe(false)
+-  })
+-})

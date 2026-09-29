@@ -1,0 +1,37 @@
+# T7 验收：会话中模型调用 case_list_materials（2026-09-29 23:16，桌面端 dev 模式，服务为本机假服务）
+# 内容已去除：只保留字段结构、编号、枚举值和数字。
+
+## 该轮对话 Agent 插件 → 工作台服务的全部调用（假服务调用记录，UTC）
+{"ts": "2026-09-29T15:16:50.644Z", "method": "POST", "path": "/core/task/begin", "status": 200, "ms": 20, "ok": true}
+{"ts": "2026-09-29T15:16:50.667Z", "method": "POST", "path": "/core/context", "status": 200, "ms": 9, "ok": true}
+{"ts": "2026-09-29T15:16:55.603Z", "method": "POST", "path": "/core/tool", "status": 200, "ms": 8, "tool": "case_list_materials", "ok": true}
+{"ts": "2026-09-29T15:16:56.856Z", "method": "POST", "path": "/core/progress", "status": 200, "ms": 6, "ok": true}
+{"ts": "2026-09-29T15:16:56.864Z", "method": "POST", "path": "/core/task/end", "status": 200, "ms": 7, "ok": true}
+
+## /core/tool 请求体（task_id 为本次任务编号；args 为空对象）
+{"task_id": "T-<本次任务编号>", "tool": "case_list_materials", "args": {}}
+
+## /core/tool 返回体（假服务按 contracts/examples/tool_list.result.json 返回）
+{
+  "ok": true,
+  "value": {
+    "materials": [
+      {
+        "material_id": "M0001",
+        "name": "<已去除>",
+        "type": "pdf",
+        "status": "parsed",
+        "unit": "page",
+        "unit_count": 3,
+        "is_ocr": "<已去除>",
+        "stale_ocr": false,
+        "error": null
+      }
+    ],
+    "total": 1
+  }
+}
+
+## 契约校验
+- Agent 插件 CoreClient：请求按 core/tool.schema.json#request、返回按 #response 校验；工具结果另按 tools/case_list_materials.schema.json#result 校验（agent/index.ts executeTool）。
+- 假服务侧：每个请求按契约校验，结果写入调用记录的 violations / response_violations 字段；上面 5 条均无此字段，即请求与返回都通过。

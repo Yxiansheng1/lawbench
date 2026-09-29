@@ -1,0 +1,94 @@
+// 凭据插件 legal-credentials（Spec 8.1、D9；T7 步骤 4、执行令 Q1/Q2）。全局行。
+// 提供 Cordis 服务 credentials，接口与 credentials-local 相同（按鸭子类型）；补丁里原 credentials 行设 disabled。
+// Q2 裁决：只认 LAWFIRM_KEY，从 Windows 凭据管理器读写；其他名字一律"未配置"；
+// 授权记录读取返回空、写入拒绝；不读环境变量（环境变量优先会留一个绕过凭据管理器的口子）。
+import { deleteKey, readKey, writeKey } from './credman.ts'
+
+export const name = 'lawbench-credentials'
+
+export const KEY_REF = 'LAWFIRM_KEY'
+const SOURCE = 'windows-credential-manager'
+const CACHE_MS = 5 * 60_000
+
+export interface Store {
+  read(): Promise<string | undefined>
+  write(value: string): Promise<void>
+  remove(): Promise<unknown>
+}
+
+/** credentials-local 接口的我方实现。Key 只放在内存缓存（5 分钟），不落盘。 */
+export class LawbenchCredentials {
+  private cache: { value: string | undefined; at: number } | undefined
+
+  constructor(private readonly store: Store, private readonly now: () => number = Date.now) {}
+
+  private async current(): Promise<string | undefined> {
+    const t = this.now()
+    if (this.cache && t - this.cache.at < CACHE_MS) return this.cache.value
+    const value = await this.store.read()
+    this.cache = { value, at: t }
+    return value
+  }
+
+  async resolve(ref: string): Promise<{ value: string; source: string } | undefined> {
+    if (ref !== KEY_REF) return undefined
+    const value = await this.current()
+    return value ? { value, source: SOURCE } : undefined
+  }
+
+  async describe(ref: string): Promise<{ configured: boolean; source?: string; writable: boolean }> {
+    if (ref !== KEY_REF) return { configured: false, writable: false }
+    const configured = (await this.current()) !== undefined
+    return configured ? { configured, source: SOURCE, writable: true } : { configured, writable: true }
+  }
+
+  async set(ref: string, value: string): Promise<void> {
+    if (ref !== KEY_REF) throw new Error(`只能设置 ${KEY_REF}`)
+    if (typeof value !== 'string' || value.length === 0) throw new Error('Key 不能为空')
+    await this.store.write(value)
+    this.cache = undefined
+  }
+
+  async unset(ref: string): Promise<void> {
+    if (ref !== KEY_REF) return
+    await this.store.remove()
+    this.cache = undefined
+  }
+
+  // ── 授权记录 ─────────────────────────────────────────────────────────────
+  // Q2 原裁决是"读取返回空、写入拒绝"。实测 DSH 自己的连接插件（client-connection）启动时要用
+  // modifyRecord 保存浏览器会话密钥（packages/client/connection/lib/index.js:330 initializeSecret），
+  // 写入拒绝会让桌面端起不来。所以改为：记录只放在进程内存，不落盘、不进凭据管理器，每次启动重新生成。
+  // Key 仍然只在凭据管理器（上面的 resolve/set 与记录无关）。已落注记件请主编排确认。
+  private readonly records = new Map<string, Record<string, unknown>>()
+
+  async readRecord(key: string): Promise<Record<string, unknown> | undefined> { return this.records.get(key) }
+
+  async describeRecord(key: string): Promise<{ configured: boolean; kind?: string; writable: true }> {
+    const r = this.records.get(key)
+    return r ? { configured: true, kind: r.kind as string, writable: true } : { configured: false, writable: true }
+  }
+
+  async listRecords(): Promise<ReadonlyArray<{ key: string; kind: string }>> {
+    return [...this.records].map(([key, r]) => ({ key, kind: r.kind as string }))
+  }
+
+  async modifyRecord(
+    key: string,
+    mutate: (cur: Record<string, unknown> | undefined) => Promise<Record<string, unknown> | undefined>,
+  ): Promise<Record<string, unknown> | undefined> {
+    const next = await mutate(this.records.get(key))
+    if (next === undefined) this.records.delete(key)
+    else this.records.set(key, next)
+    return next
+  }
+
+  async deleteRecord(key: string): Promise<void> { this.records.delete(key) }
+}
+
+type Ctx = { provide(name: string, value: unknown): () => void; effect(fn: () => () => void, label?: string): void }
+
+export function apply(ctx: Ctx): void {
+  const impl = new LawbenchCredentials({ read: () => readKey(), write: (v) => writeKey(v), remove: () => deleteKey() })
+  ctx.effect(() => ctx.provide('credentials', impl), 'lawbench-credentials: provider')
+}

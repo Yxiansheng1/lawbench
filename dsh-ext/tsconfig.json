@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "esModuleInterop": true,
+    "typeRoots": ["../dsh/node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["shared/**/*.ts", "agent/**/*.ts", "host/**/*.ts", "credentials/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,18 @@
+﻿# T7 验收：杀掉工作台服务进程后 15 秒内自动重启（2026-09-29 23:20，桌面端 dev 模式，服务为本机假服务）
+# 操作：Stop-Process -Force 结束假服务进程；每 0.5 秒查新进程。
+fake pid(s): 21696
+killed at 23:20:34.391（本地时间）
+new pid: 25208 after 886 ms（进程表中出现新服务进程）
+
+## Host 插件日志（%LOCALAPPDATA%\lawbench\logs\plugins-YYYYMMDD.log，时间为 UTC，只有元数据）
+{"ts":"2026-09-29T15:20:11.929Z","source":"host","level":"info","event":"service.spawn","port":18801}
+{"ts":"2026-09-29T15:20:12.621Z","source":"host","level":"info","event":"service.state","state":"running"}
+{"ts":"2026-09-29T15:20:34.518Z","source":"host","level":"warn","event":"service.exit","code":4294967295}
+{"ts":"2026-09-29T15:20:34.521Z","source":"host","level":"info","event":"service.restart","attempt":1}
+{"ts":"2026-09-29T15:20:34.523Z","source":"host","level":"info","event":"service.state","state":"starting"}
+{"ts":"2026-09-29T15:20:34.544Z","source":"host","level":"info","event":"service.spawn","port":18801}
+{"ts":"2026-09-29T15:20:35.584Z","source":"host","level":"info","event":"service.state","state":"running"}
+
+结论：15:20:34.518Z 发现退出，15:20:35.584Z 回到 running，约 1.1 秒，满足 15 秒内。
+（退出码 4294967295 即 -1：被强制结束，不是 2 或 3，按普通退出重启并计入 1 分钟内重启次数。）
+

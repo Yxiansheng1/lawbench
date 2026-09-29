@@ -1,0 +1,9 @@
+﻿OK   基线（不篡改）：退出码 0（期望 0），输出含「通过」
+OK   必须关的行从清单里消失：ui-sidebar-browser：退出码 1（期望 1），输出含「不存在（id 写错或 DSH 提交变了）：ui-sidebar-browser」
+OK   skill-filesystem.includeDefaultRoots 改为 true：退出码 1（期望 1），输出含「skill-filesystem.includeDefaultRoots 不符」
+OK   customSkillDirs 两个目录顺序对调：退出码 1（期望 1），输出含「skill-filesystem.customSkillDirs 整项相等 不符」
+OK   persona.complete 改为 false：退出码 1（期望 1），输出含「persona.complete 不符」
+OK   persona.prefix 改成读别的文件：退出码 1（期望 1），输出含「persona.prefix 读 lawbench-dsh/persona.md（整项相等） 不符」
+OK   customSkillDirs 多加第三个目录：退出码 1（期望 1），输出含「skill-filesystem.customSkillDirs 整项相等 不符」
+OK   原 credentials 行被重新启用：退出码 1（期望 1），输出含「必须关的行仍启用：credentials」
+结论： 变异全部被报出，基线通过

@@ -4,14 +4,29 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./agent-ping": "./agent-ping/index.js",
+    "./agent": "./lib/agent.js",
+    "./host": "./lib/host.js",
+    "./credentials": "./lib/credentials.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./persona.md": "./persona.md",
     "./package.json": "./package.json"
   },
   "files": [
     "cordis.patch.yml",
-    "agent-ping/index.js"
+    "persona.md",
+    "lib/agent.js",
+    "lib/host.js",
+    "lib/credentials.js"
   ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node ../dsh/node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "test": "node scripts/test.mjs"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  },
   "dsh": {
     "bundle": {
       "patch": "cordis.patch.yml"
