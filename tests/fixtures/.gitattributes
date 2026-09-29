@@ -1,0 +1,9 @@
+# T1 的 8 个样本目录按字节原样保存：不做换行转换（core.autocrlf=true 时 PDF、csv 会被改坏，sha256 也会变）
+criminal-01/** -text
+civil-01/** -text
+contract-01/** -text
+attack-01/** -text
+broken/** -text
+closed-01/** -text
+tender-01/** -text
+invoices-01/** -text
