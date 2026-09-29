@@ -16,9 +16,12 @@ PKG = SERVICE / "lawbench"
 
 # (类别, 文件, [(原文, 改坏后)], 测试选择)
 MUTATIONS = [
-    ("闸门·上跳 ..（形状检查 + 最终 realpath 校验一起去掉）", "case/gate.py", [
+    # 返修后 _relpath 把 relpath 的 ValueError 转成拒绝，也能拦住 Windows 尾点变体（"证据/.../x"），所以三层一起去掉
+    ("闸门·上跳 ..（形状检查 + 最终 realpath 校验 + relpath 异常转拒绝一起去掉）", "case/gate.py", [
         ('if p.rstrip(" .") in ("", "..") or p == "..":', "if False:"),
         ("    if not is_within(root, real):\n        raise _deny(op, \"escape\")", "    pass"),
+        ('    except ValueError:  # 不同盘符、设备路径等：一律按越界拒绝\n        raise _deny(op, "relpath_error")',
+         "    except ValueError:\n        return os.path.basename(path)"),
     ], "tests/test_gate.py"),
     ("闸门·绝对路径 / 盘符 / UNC（形状检查 + 最终校验一起去掉）", "case/gate.py", [
         ('if rel.startswith(("/", "\\\\")) or _DRIVE.match(rel) or os.path.isabs(rel):', "if False:"),

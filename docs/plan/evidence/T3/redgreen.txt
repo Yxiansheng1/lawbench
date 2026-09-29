@@ -1,20 +1,20 @@
-﻿T3 红绿验证：20 类防护
+﻿T3 红绿验证：37 类防护
 
-[01] 闸门·上跳 ..（形状检查 + 最终 realpath 校验一起去掉）
-  改坏 case/gate.py → 红：2 failed, 60 passed, 3 skipped in 1.34s
+[01] 闸门·上跳 ..（形状检查 + 最终 realpath 校验 + relpath 异常转拒绝一起去掉）
+  改坏 case/gate.py → 红：2 failed, 60 passed, 3 skipped in 1.26s
       变红的用例：
         tests/test_gate.py::test_ai_path_rejected[3]
         tests/test_gate.py::test_ai_path_rejected[4]
-  复原 → 绿：62 passed, 3 skipped in 1.14s
+  复原 → 绿：62 passed, 3 skipped in 0.96s
 
 [02] 闸门·绝对路径 / 盘符 / UNC（形状检查 + 最终校验一起去掉）
-  改坏 case/gate.py → 红：4 failed, 58 passed, 3 skipped in 2.15s
+  改坏 case/gate.py → 红：4 failed, 58 passed, 3 skipped in 1.52s
       变红的用例：
         tests/test_gate.py::test_ai_path_rejected[7]
         tests/test_gate.py::test_ai_path_rejected[8]
         tests/test_gate.py::test_ai_path_rejected[9]
         tests/test_gate.py::test_ai_path_rejected[10]
-  复原 → 绿：62 passed, 3 skipped in 1.71s
+  复原 → 绿：62 passed, 3 skipped in 1.50s
 
 [03] 闸门·备用数据流 / NUL / 保留字符
   改坏 case/gate.py → 红：3 failed, 59 passed, 3 skipped in 1.77s
@@ -22,10 +22,10 @@
         tests/test_gate.py::test_ai_path_rejected[11]
         tests/test_gate.py::test_ai_path_rejected[12]
         tests/test_gate.py::test_denied_log_has_no_argument
-  复原 → 绿：62 passed, 3 skipped in 1.53s
+  复原 → 绿：62 passed, 3 skipped in 1.52s
 
 [04] 闸门·以 . / 工作区 / 成果 开头（含尾点尾空格、大小写）
-  改坏 case/gate.py → 红：8 failed, 54 passed, 3 skipped in 1.81s
+  改坏 case/gate.py → 红：8 failed, 54 passed, 3 skipped in 2.09s
       变红的用例：
         tests/test_gate.py::test_ai_path_rejected[13]
         tests/test_gate.py::test_ai_path_rejected[14]
@@ -35,10 +35,10 @@
         tests/test_gate.py::test_ai_path_rejected[19]
         tests/test_gate.py::test_mkdir_original_only_missing
         tests/test_gate.py::test_denied_log_has_no_argument
-  复原 → 绿：62 passed, 3 skipped in 1.42s
+  复原 → 绿：62 passed, 3 skipped in 1.51s
 
 [05] 闸门·超长名 / 超长路径
-  改坏 case/gate.py → 红：2 failed, 60 passed, 3 skipped in 1.98s
+  改坏 case/gate.py → 红：2 failed, 60 passed, 3 skipped in 1.78s
       变红的用例：
         tests/test_gate.py::test_ai_path_rejected[20]
         tests/test_gate.py::test_ai_path_rejected[21]
@@ -48,33 +48,33 @@
   改坏 case/gate.py → 红：1 failed, 61 passed, 3 skipped in 1.85s
       变红的用例：
         tests/test_gate.py::test_junction_to_inside_also_rejected
-  复原 → 绿：62 passed, 3 skipped in 1.50s
+  复原 → 绿：62 passed, 3 skipped in 1.53s
 
 [07] 闸门·最终校验的大小写与分隔符（前缀相同的兄弟目录）
-  改坏 case/gate.py → 红：1 failed in 0.23s
+  改坏 case/gate.py → 红：1 failed in 0.32s
       变红的用例：
         tests/test_gate.py::test_is_within_prefix_and_case
-  复原 → 绿：1 passed in 0.02s
+  复原 → 绿：1 passed in 0.03s
 
 [08] 闸门·写权限只限 工作区/ 成果/
-  改坏 case/gate.py → 红：5 failed, 57 passed, 3 skipped in 1.73s
+  改坏 case/gate.py → 红：5 failed, 57 passed, 3 skipped in 1.91s
       变红的用例：
         tests/test_gate.py::test_write_outside_work_rejected[\u8bc1\u636e/\u65b0\u6587\u4ef6.txt]
         tests/test_gate.py::test_write_outside_work_rejected[\u65b0\u6587\u4ef6.txt]
         tests/test_gate.py::test_write_outside_work_rejected[\u5de5\u4f5c\u533ax/a.txt]
         tests/test_gate.py::test_write_outside_work_rejected[\u5de5\u4f5c\u533a./a.txt]
         tests/test_gate.py::test_write_outside_work_rejected[.dsh/a.txt]
-  复原 → 绿：62 passed, 3 skipped in 1.54s
+  复原 → 绿：62 passed, 3 skipped in 1.60s
 
 [09] 闸门·案件根目录是链接或 junction
-  改坏 case/gate.py → 红：2 failed, 112 passed, 3 skipped in 41.23s
+  改坏 case/gate.py → 红：2 failed, 112 passed, 3 skipped in 38.62s
       变红的用例：
         tests/test_gate.py::test_root_is_junction
         tests/test_api_case.py::test_case_open_junction_root
-  复原 → 绿：114 passed, 3 skipped in 39.24s
+  复原 → 绿：114 passed, 3 skipped in 37.90s
 
 [10] 闸门·云同步目录（环境变量、注册表、目录名）
-  改坏 case/gate.py → 红：16 failed, 98 passed, 3 skipped in 40.31s
+  改坏 case/gate.py → 红：16 failed, 98 passed, 3 skipped in 39.76s
       变红的用例：
         tests/test_gate.py::test_sync_env_onedrive
         tests/test_gate.py::test_sync_env_other_vars[OneDriveCommercial]
@@ -89,17 +89,17 @@
         tests/test_gate.py::test_sync_by_name[iCloudDrive]
         tests/test_gate.py::test_sync_by_name[WPS\u4e91\u76d8]
         …共 16 个
-  复原 → 绿：114 passed, 3 skipped in 40.45s
+  复原 → 绿：114 passed, 3 skipped in 45.81s
 
 [11] 标准目录·只补缺不改已有文件夹
-  改坏 case/gate.py → 红：2 failed, 112 passed, 3 skipped in 40.94s
+  改坏 case/gate.py → 红：2 failed, 112 passed, 3 skipped in 46.12s
       变红的用例：
         tests/test_api_case.py::test_template_keeps_existing
         tests/test_gate.py::test_mkdir_original_only_missing
-  复原 → 绿：114 passed, 3 skipped in 40.07s
+  复原 → 绿：114 passed, 3 skipped in 39.39s
 
 [12] 白名单·主机和端口
-  改坏 net.py → 红：12 failed, 35 passed in 54.68s
+  改坏 net.py → 红：12 failed, 35 passed in 51.05s
       变红的用例：
         tests/test_net.py::test_allowlist_denies[http://example.com/]
         tests/test_net.py::test_allowlist_denies[http://192.168.8.77:22/]
@@ -113,22 +113,22 @@
         tests/test_net.py::test_allowlist_denies[http://192.168.8.77:8000@evil.example/]
         tests/test_net.py::test_allowlist_follows_settings
         tests/test_net.py::test_blocked_request_never_sent
-  复原 → 绿：47 passed in 52.50s
+  复原 → 绿：47 passed in 51.79s
 
 [13] 白名单·不跟随重定向（3xx 视为错误）
-  改坏 net.py → 红：1 failed, 46 passed in 52.10s
+  改坏 net.py → 红：1 failed, 46 passed in 51.37s
       变红的用例：
         tests/test_net.py::test_redirect_not_followed
-  复原 → 绿：47 passed in 51.66s
+  复原 → 绿：47 passed in 50.67s
 
 [14] 白名单·不读系统代理
-  改坏 net.py → 红：1 failed, 46 passed in 70.19s (0:01:10)
+  改坏 net.py → 红：1 failed, 46 passed in 70.46s (0:01:10)
       变红的用例：
         tests/test_net.py::test_no_system_proxy
-  复原 → 绿：47 passed in 51.37s
+  复原 → 绿：47 passed in 50.92s
 
 [15] 地址选择·所内不通改用所外
-  改坏 net.py → 红：8 failed, 91 passed in 86.22s (0:01:26)
+  改坏 net.py → 红：8 failed, 91 passed in 81.59s (0:01:21)
       变红的用例：
         tests/test_net.py::test_select_primary_then_alternate
         tests/test_net.py::test_select_prep_uses_health
@@ -138,16 +138,16 @@
         tests/test_net.py::test_forward_models
         tests/test_net.py::test_forward_logs_metadata_only
         tests/test_api_case.py::test_connection_alternate
-  复原 → 绿：99 passed in 95.49s (0:01:35)
+  复原 → 绿：99 passed in 86.89s (0:01:26)
 
 [16] 地址选择·60 秒缓存
-  改坏 net.py → 红：1 failed, 46 passed in 50.54s
+  改坏 net.py → 红：1 failed, 46 passed in 49.23s
       变红的用例：
         tests/test_net.py::test_select_cached_60s
-  复原 → 绿：47 passed in 52.20s
+  复原 → 绿：47 passed in 52.07s
 
 [17] 本机转发·其余路径 404
-  改坏 net.py → 红：11 failed, 36 passed in 69.03s (0:01:09)
+  改坏 net.py → 红：11 failed, 36 passed in 68.80s (0:01:08)
       变红的用例：
         tests/test_net.py::test_forward_other_paths_404[POST-/v1/embeddings]
         tests/test_net.py::test_forward_other_paths_404[GET-/v1/embeddings]
@@ -160,10 +160,10 @@
         tests/test_net.py::test_forward_other_paths_404[GET-/v1/models/../../admin]
         tests/test_net.py::test_forward_other_paths_404[GET-/api/case/recent]
         tests/test_net.py::test_forward_other_paths_404[POST-/v1/chat/completions/x]
-  复原 → 绿：47 passed in 51.85s
+  复原 → 绿：47 passed in 51.04s
 
 [18] 令牌·缺令牌返回 401
-  改坏 app.py → 红：9 failed, 47 passed in 42.22s
+  改坏 app.py → 红：9 failed, 47 passed in 44.36s
       变红的用例：
         tests/test_api_case.py::test_token_required[None]
         tests/test_api_case.py::test_token_required[]
@@ -174,10 +174,10 @@
         tests/test_api_case.py::test_token_required[Bearer tttttttttttttttttttttttttttttttttttttttttt]
         tests/test_main.py::test_entrypoint[False]
         tests/test_main.py::test_entrypoint[True]
-  复原 → 绿：56 passed in 45.37s
+  复原 → 绿：56 passed in 45.91s
 
 [19] 胶囊·PUT 校验（Skill、工具、不能删、shared/hint）
-  改坏 capsules.py → 红：7 failed, 45 passed in 40.37s
+  改坏 capsules.py → 红：7 failed, 45 passed in 36.85s
       变红的用例：
         tests/test_api_case.py::test_capsules_put_invalid_not_saved[_bad_unknown_skill]
         tests/test_api_case.py::test_capsules_put_invalid_not_saved[_bad_removed]
@@ -186,15 +186,139 @@
         tests/test_api_case.py::test_capsules_put_invalid_not_saved[_bad_dup_group_item]
         tests/test_api_case.py::test_capsules_put_invalid_not_saved[_bad_shared]
         tests/test_api_case.py::test_capsules_put_invalid_not_saved[_bad_hint]
-  复原 → 绿：52 passed in 36.48s
+  复原 → 绿：52 passed in 36.20s
 
 [20] 日志·异常只记类名
-  改坏 app.py → 红：1 failed, 51 passed in 37.46s
+  改坏 app.py → 红：1 failed, 51 passed in 36.27s
       变红的用例：
         tests/test_api_case.py::test_logs_have_no_names_or_paths
-  复原 → 绿：52 passed in 38.69s
+  复原 → 绿：52 passed in 36.03s
+
+[21] R1·settings.json 损坏不阻止启动
+  改坏 app.py → 红：2 failed, 2 passed, 56 deselected in 1.72s
+      变红的用例：
+        tests/test_t3_rework.py::test_r1_bad_settings_still_starts[{\u574f\u7684 json]
+        tests/test_t3_rework.py::test_r1_bad_settings_still_starts[{"v": 2}]
+  复原 → 绿：4 passed, 56 deselected in 2.21s
+
+[22] R1·capsules.json 损坏不阻止启动、reset 可恢复
+  改坏 app.py → 红：2 failed, 2 passed, 56 deselected in 2.51s
+      变红的用例：
+        tests/test_t3_rework.py::test_r1_bad_capsules_reset_recovers[{\u574f\u7684 json]
+        tests/test_t3_rework.py::test_r1_bad_capsules_reset_recovers[{"v": 2, "hint": "", "shared": [], "groups": []}]
+  复原 → 绿：4 passed, 56 deselected in 2.05s
+
+[23] R2·Windows 设备名
+  改坏 case/gate.py → 红：17 failed, 8 passed, 35 deselected in 1.05s
+      变红的用例：
+        tests/test_t3_rework.py::test_r2_device_names_read[CON]
+        tests/test_t3_rework.py::test_r2_device_names_read[COM1]
+        tests/test_t3_rework.py::test_r2_device_names_read[LPT1]
+        tests/test_t3_rework.py::test_r2_device_names_read[CONIN$]
+        tests/test_t3_rework.py::test_r2_device_names_read[CONOUT$]
+        tests/test_t3_rework.py::test_r2_device_names_read[\u8bc1\u636e/NUL.txt]
+        tests/test_t3_rework.py::test_r2_device_names_read[\u8bc1\u636e/con.txt]
+        tests/test_t3_rework.py::test_r2_device_names_read[aux.tar.gz]
+        tests/test_t3_rework.py::test_r2_device_names_read[prn ]
+        tests/test_t3_rework.py::test_r2_device_names_read[com9]
+        tests/test_t3_rework.py::test_r2_device_names_read[LPT0]
+        tests/test_t3_rework.py::test_r2_device_names_read[COM\xb9]
+        …共 17 个
+  复原 → 绿：25 passed, 35 deselected in 0.36s
+
+[24] R2·relpath 的 ValueError 转成拒绝
+  改坏 case/gate.py → 红：1 failed, 24 passed, 35 deselected in 0.59s
+      变红的用例：
+        tests/test_t3_rework.py::test_r2_relpath_valueerror_is_denied
+  复原 → 绿：25 passed, 35 deselected in 0.38s
+
+[25] R3·原子写遇文件被占用时重试
+  改坏 contracts.py → 红：1 failed, 2 passed, 57 deselected in 4.19s
+      变红的用例：
+        tests/test_t3_rework.py::test_r3_replace_retries_while_file_held
+  复原 → 绿：3 passed, 57 deselected in 3.25s
+
+[26] R4·转发端口绑定失败时进程非零退出
+  改坏 __main__.py → 红：1 failed, 59 deselected in 2.85s
+      变红的用例：
+        tests/test_t3_rework.py::test_r4_forward_port_taken_exits_nonzero
+  复原 → 绿：1 passed, 59 deselected in 2.55s
+
+[27] R5·case.db 版本不对拒绝打开
+  改坏 case/registry.py → 红：1 failed, 1 passed, 58 deselected in 1.37s
+      变红的用例：
+        tests/test_t3_rework.py::test_r5_case_db_version_mismatch
+  复原 → 绿：2 passed, 58 deselected in 1.09s
+
+[28] R5·错误日志带原因代号
+  改坏 app.py → 红：1 failed, 1 passed, 58 deselected in 1.32s
+      变红的用例：
+        tests/test_t3_rework.py::test_r5_case_db_version_mismatch
+  复原 → 绿：2 passed, 58 deselected in 1.10s
+
+[29] R6·工作台 500 用中间件返回、不断开连接
+  改坏 app.py → 红：2 failed, 3 passed, 107 deselected in 5.62s
+      变红的用例：
+        tests/test_t3_rework.py::test_r6_500_keeps_connection
+        tests/test_api_case.py::test_internal_error_body
+  复原 → 绿：5 passed, 107 deselected in 5.36s
+
+[30] R6·转发在回响应头之前的其他 httpx 异常记 fail 并返回 502
+  改坏 net.py → 红：1 failed, 3 passed, 56 deselected in 5.12s
+      变红的用例：
+        tests/test_t3_rework.py::test_r6_other_httpx_error_before_headers
+  复原 → 绿：4 passed, 56 deselected in 6.55s
+
+[31] R6·转发流式中途上游断开记 fail
+  改坏 net.py → 红：1 failed, 3 passed, 56 deselected in 5.44s
+      变红的用例：
+        tests/test_t3_rework.py::test_r6_upstream_breaks_mid_stream
+  复原 → 绿：4 passed, 56 deselected in 5.10s
+
+[32] R8·回响应头之前客户端断开即取消上游
+  改坏 net.py → 红：1 failed, 59 deselected in 5.55s
+      变红的用例：
+        tests/test_t3_rework.py::test_r8_cancel_before_headers
+  复原 → 绿：1 passed, 59 deselected in 2.31s
+
+[33] R9·转发端口检查 Host、拒绝 Origin
+  改坏 net.py → 红：6 failed, 1 passed, 53 deselected in 11.85s
+      变红的用例：
+        tests/test_t3_rework.py::test_r9_host_origin_rejected[headers0]
+        tests/test_t3_rework.py::test_r9_host_origin_rejected[headers1]
+        tests/test_t3_rework.py::test_r9_host_origin_rejected[headers2]
+        tests/test_t3_rework.py::test_r9_host_origin_rejected[headers3]
+        tests/test_t3_rework.py::test_r9_host_origin_rejected[headers4]
+        tests/test_t3_rework.py::test_r9_host_origin_rejected[headers5]
+  复原 → 绿：7 passed, 53 deselected in 11.45s
+
+[34] R10·6000D 地址不能是转发端口自己
+  改坏 net.py → 红：3 failed, 57 deselected in 1.80s
+      变红的用例：
+        tests/test_t3_rework.py::test_r10_llm_cannot_be_forward_port[llm_base_url-http://127.0.0.1:18765/v1]
+        tests/test_t3_rework.py::test_r10_llm_cannot_be_forward_port[llm_alt_base_url-http://localhost:18765/v1]
+        tests/test_t3_rework.py::test_r10_saved_bad_settings_fallback
+  复原 → 绿：3 passed, 57 deselected in 2.30s
+
+[35] R11·拒绝盘符根目录
+  改坏 case/gate.py → 红：1 failed, 2 passed, 57 deselected in 1.90s
+      变红的用例：
+        tests/test_t3_rework.py::test_r11_drive_root_rejected
+  复原 → 绿：3 passed, 57 deselected in 1.57s
+
+[36] R11·拒绝包含应用数据目录的根目录
+  改坏 case/gate.py → 红：1 failed, 2 passed, 57 deselected in 1.84s
+      变红的用例：
+        tests/test_t3_rework.py::test_r11_root_containing_appdata_rejected
+  复原 → 绿：3 passed, 57 deselected in 1.55s
+
+[37] R12·标准目录某一级已是 junction 时跳过
+  改坏 case/gate.py → 红：1 failed, 59 deselected in 0.92s
+      变红的用例：
+        tests/test_t3_rework.py::test_r12_template_skips_existing_junction
+  复原 → 绿：1 passed, 59 deselected in 0.73s
 
 源码与开始时逐字节一致：是
-复原后全量：165 passed, 3 skipped in 100.68s (0:01:40)
+复原后全量：300 passed, 3 skipped in 210.57s (0:03:30)
 
-结论：20/20 类防护 改坏即红、复原即绿
+结论：37/37 类防护 改坏即红、复原即绿
