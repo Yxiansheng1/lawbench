@@ -59,6 +59,11 @@ def _data_stream_has_url(path: pathlib.Path) -> bool:
             data = ole.openstream("Data").read()
     except Exception:  # noqa: BLE001 容器坏了：交给后面的解析去报损坏
         return False
+    return data_bytes_have_url(data)
+
+
+def data_bytes_have_url(data: bytes) -> bool:
+    """Data 流里单字节存放的地址前缀；内嵌图片元数据里的命名空间网址不算。"""
     for m in _DATA_URL.finditer(data):
         host = m.group(1).lower()
         if not any(host == h or host.startswith(h) for h in _NAMESPACE_HOSTS):

@@ -133,6 +133,19 @@ def test_detector_switch_first_needs_field_check(doc_samples, monkeypatch):
     assert links.has_external_picture(docs["switch_first"]) is False
 
 
+@pytest.mark.parametrize("data,expect", [
+    (b"\x00\x00\x1ehttp://127.0.0.1:1/pic.png\x00", True),
+    (b"\x00\x1e\\\\server\\share\\a.png\x00", True),
+    (b"\x00ftp://x.example/a.png", True),
+    (b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+     b'<rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">',
+     False),                                                   # 内嵌 JPEG 自带的 XMP 元数据
+    ("http://127.0.0.1:1/x".encode("utf-16-le"), False),       # UTF-16 的地址（超链接）不在 Data 流单字节检查范围
+])
+def test_data_bytes(data, expect):
+    assert links.data_bytes_have_url(data) is expect
+
+
 def test_detector_data_stream_alone(doc_samples, monkeypatch):
     """Data 流里单字节存放的地址前缀，单独也能拦住。"""
     docs, _ = doc_samples
