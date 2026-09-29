@@ -68,9 +68,18 @@ describe('凭据服务（Q2 裁决）', () => {
   it('记录与 Key 互不影响：写记录不会写凭据管理器', async () => {
     const { s, store } = memStore()
     const c = new LawbenchCredentials(store)
-    await c.modifyRecord('x/y', async () => ({ kind: 'api-key', key: 'zzz' }))
+    await c.modifyRecord('client-connection/browser-session', async () => ({ kind: 'grant', payload: { secret: 'zzz' } }))
     expect(s.value).toBeUndefined()
     expect(await c.resolve(KEY_REF)).toBeUndefined()
+  })
+
+  it('只收已知的记录种类：其他写入拒绝并记日志（只记记录名，不记内容）', async () => {
+    const logs: Array<[string, string, Record<string, unknown> | undefined]> = []
+    const c = new LawbenchCredentials(memStore().store, Date.now, (l, e, m) => { logs.push([l, e, m]) })
+    await expect(c.modifyRecord('deepseek/account', async () => ({ kind: 'api-key', key: 'secret-value' }))).rejects.toThrow()
+    expect(await c.readRecord('deepseek/account')).toBeUndefined()
+    expect(logs).toEqual([['warn', 'credentials.record_rejected', { record: 'deepseek/account' }]])
+    expect(JSON.stringify(logs)).not.toContain('secret-value')
   })
 
   it('空 Key 拒绝', async () => {

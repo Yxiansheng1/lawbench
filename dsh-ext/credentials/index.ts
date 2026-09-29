@@ -3,10 +3,14 @@
 // Q2 裁决：只认 LAWFIRM_KEY，从 Windows 凭据管理器读写；其他名字一律"未配置"；
 // 授权记录读取返回空、写入拒绝；不读环境变量（环境变量优先会留一个绕过凭据管理器的口子）。
 import { deleteKey, readKey, writeKey } from './credman.ts'
+import type { Logger } from '../shared/core-client.ts'
+import { defaultAppData, makeLogger } from '../shared/file-log.ts'
 
 export const name = 'lawbench-credentials'
 
 export const KEY_REF = 'LAWFIRM_KEY'
+/** 允许写入内存的授权记录种类（目前只有 DSH 连接插件的浏览器会话密钥）。 */
+export const ALLOWED_RECORDS: ReadonlySet<string> = new Set(['client-connection/browser-session'])
 const SOURCE = 'windows-credential-manager'
 const CACHE_MS = 5 * 60_000
 
@@ -20,7 +24,11 @@ export interface Store {
 export class LawbenchCredentials {
   private cache: { value: string | undefined; at: number } | undefined
 
-  constructor(private readonly store: Store, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly store: Store,
+    private readonly now: () => number = Date.now,
+    private readonly log: Logger = () => {},
+  ) {}
 
   private async current(): Promise<string | undefined> {
     const t = this.now()
@@ -59,7 +67,8 @@ export class LawbenchCredentials {
   // Q2 原裁决是"读取返回空、写入拒绝"。实测 DSH 自己的连接插件（client-connection）启动时要用
   // modifyRecord 保存浏览器会话密钥（packages/client/connection/lib/index.js:330 initializeSecret），
   // 写入拒绝会让桌面端起不来。所以改为：记录只放在进程内存，不落盘、不进凭据管理器，每次启动重新生成。
-  // Key 仍然只在凭据管理器（上面的 resolve/set 与记录无关）。已落注记件请主编排确认。
+  // Key 仍然只在凭据管理器（上面的 resolve/set 与记录无关）。主编排 2026-09-29 23:32 注记同意，
+  // 并要求只收已知的记录种类：其他写入拒绝并记日志（只记记录名，不记内容），DSH 升级多出新种类时能看见。
   private readonly records = new Map<string, Record<string, unknown>>()
 
   async readRecord(key: string): Promise<Record<string, unknown> | undefined> { return this.records.get(key) }
@@ -77,6 +86,10 @@ export class LawbenchCredentials {
     key: string,
     mutate: (cur: Record<string, unknown> | undefined) => Promise<Record<string, unknown> | undefined>,
   ): Promise<Record<string, unknown> | undefined> {
+    if (!ALLOWED_RECORDS.has(key)) {
+      this.log('warn', 'credentials.record_rejected', { record: key })
+      throw new Error('律师工作台不保存这类授权记录')
+    }
     const next = await mutate(this.records.get(key))
     if (next === undefined) this.records.delete(key)
     else this.records.set(key, next)
@@ -86,9 +99,14 @@ export class LawbenchCredentials {
   async deleteRecord(key: string): Promise<void> { this.records.delete(key) }
 }
 
-type Ctx = { provide(name: string, value: unknown): () => void; effect(fn: () => () => void, label?: string): void }
+type Ctx = {
+  provide(name: string, value: unknown): () => void
+  effect(fn: () => () => void, label?: string): void
+  logger?(name: string): { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void }
+}
 
 export function apply(ctx: Ctx): void {
-  const impl = new LawbenchCredentials({ read: () => readKey(), write: (v) => writeKey(v), remove: () => deleteKey() })
+  const log = makeLogger('credentials', defaultAppData(), ctx.logger?.('lawbench-credentials'))
+  const impl = new LawbenchCredentials({ read: () => readKey(), write: (v) => writeKey(v), remove: () => deleteKey() }, Date.now, log)
   ctx.effect(() => ctx.provide('credentials', impl), 'lawbench-credentials: provider')
 }
