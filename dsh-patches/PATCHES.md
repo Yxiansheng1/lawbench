@@ -14,8 +14,8 @@ git -C dsh apply ..\dsh-patches\P-12-desktop-no-office.patch
 
 | 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
 |---|---|---|---|---|
-| P-10 | `packages/boot/app-boot/src/profile.ts`；`apps/cli/package.json`；`pnpm-lock.yaml`（补丁 `P-10-profile-lawbench-dsh.patch`） | `PROFILE_TEMPLATES.web.bundles` 末尾加 `lawbench-dsh`；`@deepseek-ai/dsh`（`apps/cli`）依赖加 `"lawbench-dsh": "link:../../../dsh-ext"`，锁文件随之更新 | Spec 14.1、3.2 P-10：我方组合包进入桌面端 profile（桌面端用 `PROFILE_TEMPLATES.web` 初始化，无单独 desktop 模板） | 删掉旧 profile（或换一个空的 `DSH_HOME`）后启动，新 profile 的 `package.json` 中 `dsh.profile.bundles` 末尾是 `lawbench-dsh`；启动日志无 "skipping profile bundle"；插件树见 `docs\plan\evidence\T4\plugin-tree.txt` |
-| P-03a | `apps/desktop/src/welcome-backend.ts`（补丁 `P-03a-welcome-no-account.patch`） | 读欢迎状态时，账号服务调用失败按"未登录"处理 | 补丁关掉 `deepseek-account` 行后，桌面端启动时欢迎状态读取失败，报 `desktop welcome: Web RPC failed`，主窗口进不了工作区（Spec 3.1"关掉某行导致其他插件加载失败的，按报错处理"）。临时处理，P-3（我方首次配置页）整体替换欢迎窗口时一并去掉 | 应用后启动，日志无 `desktop welcome` 错误，进入工作区 |
+| P-10 | `packages/boot/app-boot/src/profile.ts`；`apps/cli/package.json`；`pnpm-lock.yaml`（补丁 `P-10-profile-lawbench-dsh.patch`） | `PROFILE_TEMPLATES.web.bundles` 末尾加 `lawbench-dsh`；`@deepseek-ai/dsh`（`apps/cli`）依赖加 `"lawbench-dsh": "link:../../../dsh-ext"`，锁文件随之更新 | Spec 14.1、3.2 P-10：我方组合包进入桌面端 profile（桌面端用 `PROFILE_TEMPLATES.web` 初始化，无单独 desktop 模板） | 删掉旧 profile（或换一个空的 `DSH_HOME`）后启动，新 profile 的 `package.json` 中 `dsh.profile.bundles` 末尾是 `lawbench-dsh`；启动日志无 "skipping profile bundle"；摘录见 `docs\plan\evidence\T4\p10-profile-excerpt.txt`，运行时插件清单见 `plugin-inventory-desktop.json` |
+| P-03a | `apps/desktop/src/welcome-backend.ts`（补丁 `P-03a-welcome-no-account.patch`） | 读欢迎状态时，账号服务调用失败按"未登录"处理 | 补丁关掉 `deepseek-account` 行后，桌面端启动时欢迎状态读取失败，报 `desktop welcome: Web RPC failed`，主窗口进不了工作区（Spec 3.1"关掉某行导致其他插件加载失败的，按报错处理"）。临时处理，P-3（我方首次配置页）整体替换欢迎窗口时一并去掉。**T4 返修后仍需要**：补丁再关 `ui-settings-account`、`account-controller` 后，不带本补丁时报 `desktop welcome: Web request failed`（请求本机 `/api/account/…` 得非 200），进不了工作区。**副作用**：本补丁吞掉账号服务的全部错误（只会变成"未登录"）；账号服务不存在时，主进程的账号状态 WebSocket 失败后每 1 秒重试（`account-backend.ts:116-117`，不写日志），实测客户端到 Host 端口约每 3 秒一个短连接空转，只连 127.0.0.1。P-3 删掉原版欢迎与账号监听后消失 | 不带本补丁的失败日志：`docs\plan\evidence\T4\p03a-without-log.txt`；带补丁后进入工作区与连接空转的实测：`rework-runtime-tests.txt` |
 | P-12 | `apps/desktop-host/src/index.ts`（补丁 `P-12-desktop-no-office.patch`） | 不再挂载桌面端的 Office 组合（`desktop-office`：Office Skill 和 `load_workspace_dependencies` 工具） | 桌面端 Host 在补丁行之外直接挂载这两项，配置补丁关不掉；不关的话律师工作台会话里多出 `load_workspace_dependencies` 工具（实测抓包），Office Skill 也会进 Skill 目录（违反 Spec 3.1 工具白名单、Spec 10.1 Skill 只从两处加载）。**Spec 3.2 未列此项，待主编排确认** | 抓包工具名集合恰为 {skill, ask_user_question, case_ping}（`docs\plan\evidence\T4\request-tools.json`） |
 
 ## 结论记录
@@ -26,5 +26,12 @@ git -C dsh apply ..\dsh-patches\P-12-desktop-no-office.patch
 | 思考档参数（Spec 8.1〔待验证〕） | `qwen-chat-template` 格式只发 `enable_thinking`、不发 `reasoning_effort`，所以改用 `thinkingFormat: chat-template` 加 `chatTemplateKwargs`：`enable_thinking` 取 `thinking.enabled`，`reasoning_effort` 取 `thinking.effort`（关闭档省略） | 四档实测见 `request-tools.json` |
 | "高"档的取值 | 6000D 不接受 `reasoning_effort: "high"`（400：只支持 xhigh（默认）、medium、low），界面"高"改发 `xhigh`。**与 Spec 8.2 表不一致，待主编排定夺并修订 Spec 8.2（流水线列同样受影响）** | 2026-09-29 实测，见 `request-tools.json` 中"高（high，网关拒绝 400）"一条 |
 | 重试（Spec 8.3） | `llm-retry` 行没有配置项（写任何字段都报错），重试策略在 `llm-pi-ai` 路由的 `retryPolicy`：`mode: normal, maxRetries: 1`；默认可重试错误码只含空响应、限流、服务端、超时、传输错误，不含鉴权失败，401 / 403 不重试 | `packages/llm/llm/src/retry-policy.ts` |
-| `credentials-local` 行 | 固定提交中不存在此行 id（Spec 3.1 表中的行）。凭据插件替换留给后续工单核对 | 全部组合包补丁文件检索 |
+| Spec 3.1 的 `credentials-local` 行 | 行 id 实为 `credentials`（插件 `@deepseek-ai/dsh-credentials-local`，`packages/bundle/base/cordis.patch.yml`），Spec 3.1 表里的 id 写错了。凭据插件替换在 T7 | `plugin-inventory-desktop.json` 中 `include:credentials` |
 | G-2：打开工作区时从 `cwd` 读取的内容 | 未在 T4 核对（工单未列），留给后续工单 | — |
+| Skill 目录先后（Spec 10.1） | preset 的 customSkillDirs 为 `[%ProgramData%\lawbench\skills, 内置目录]`：DSH 同一级内先到先得，管理员目录在前才能覆盖内置同名 Skill | 实测同名 Skill 加载到管理员目录那份（ework-runtime-tests.txt） |
+
+## 待办
+
+| 归属 | 事项 |
+|---|---|
+| T20 | 打包后内置 Skill 目录由 Host 固定为 `<安装目录>\skills`，不再读环境变量 LAWBENCH_SKILLS_DIR（开发期才用它；不固定的话打包后内置 Skill 不加载，且环境变量能把 Skill 根目录指到任意位置） |

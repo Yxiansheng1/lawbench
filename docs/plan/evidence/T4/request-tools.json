@@ -166,5 +166,90 @@
       "max_tokens": 32768,
       "stream": true
     }
-  ]
+  ],
+  "返修（2026-09-29）": {
+    "说明": "P2-3 实测。前三条为返修后补丁；最后一条为对照组，证明环境变量确实传到 Host，去掉锁后出现 run_code。",
+    "请求": [
+      {
+        "场景": "DSH_TOOLS_MODE=both，补丁锁 native（加载 Skill 一轮）",
+        "ts": "2026-09-29T20:35:49",
+        "model": "qwen38-27b",
+        "tools": [
+          "ask_user_question",
+          "case_ping",
+          "skill"
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": null,
+        "enable_thinking": null,
+        "max_tokens": 32768,
+        "stream": true
+      },
+      {
+        "场景": "同上",
+        "ts": "2026-09-29T20:35:50",
+        "model": "qwen38-27b",
+        "tools": [
+          "ask_user_question",
+          "case_ping",
+          "skill"
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": null,
+        "enable_thinking": null,
+        "max_tokens": 32768,
+        "stream": true
+      },
+      {
+        "场景": "同上（输出测试链接一轮）",
+        "ts": "2026-09-29T20:36:15",
+        "model": "qwen38-27b",
+        "tools": [
+          "ask_user_question",
+          "case_ping",
+          "skill"
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": null,
+        "enable_thinking": null,
+        "max_tokens": 32768,
+        "stream": true
+      },
+      {
+        "场景": "对照组：DSH_TOOLS_MODE=both，临时去掉 tools 锁和 ptc-runtime 关闭行",
+        "ts": "2026-09-29T20:40:24",
+        "model": "qwen38-27b",
+        "tools": [
+          "ask_user_question",
+          "case_ping",
+          "run_code",
+          "skill"
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "reasoning_effort": null,
+        "enable_thinking": null,
+        "max_tokens": 32768,
+        "stream": true
+      }
+    ],
+    "返修后工具名集合": [
+      "ask_user_question",
+      "case_ping",
+      "skill"
+    ],
+    "对照组工具名集合": [
+      "ask_user_question",
+      "case_ping",
+      "run_code",
+      "skill"
+    ]
+  }
 }

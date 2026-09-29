@@ -1,0 +1,8 @@
+﻿# 第一轮：应用 P-10、P-12，不应用 P-03a；补丁已关 ui-settings-account、account-controller（2026-09-29 20:27）
+# 启动日志摘录（令牌、用户名已打码）：主窗口进不了工作区
+desktop development: DSH_HOME=C:\Users\<用户>\AppData\Local\lawbench-dev\dsh-home
+dsh web: http://127.0.0.1:19387/?token=<已打码>
+Error: desktop welcome: Web request failed
+Error occurred in handler for 'dsh-desktop:boot': Error: desktop welcome: Web request failed
+[4920:0929/202722.727:INFO:CONSOLE:126] "Error: Error invoking remote method 'dsh-desktop:boot': Error: desktop welcome
+Error: Error invoking remote method 'dsh-desktop:boot': Error: desktop welcome: Web request failed

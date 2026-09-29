@@ -1,4 +1,4 @@
-﻿# == @deepseek-ai/dsh-base
+# == @deepseek-ai/dsh-base
 - id: tool-plugin-manager
   name: '@deepseek-ai/dsh-plugin-manager/tools'
   disabled: true
@@ -20,8 +20,11 @@
   name: '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 - id: session
   name: '@deepseek-ai/dsh-session'
+# == @deepseek-ai/dsh-base, patched by lawbench-dsh
 - id: session-log-deepseek
   name: '@deepseek-ai/dsh-session-log-deepseek'
+  disabled: true
+# == @deepseek-ai/dsh-base
 - id: typert
   name: '@deepseek-ai/dsh-typert-registry'
 - id: typert-loader
@@ -352,9 +355,10 @@
     toolName: subagent_fork
     backgroundMode: one-shot
   disabled: true
-# == @deepseek-ai/dsh-base
+# == @deepseek-ai/dsh-base, patched by lawbench-dsh
 - id: ptc-runtime
   name: '@deepseek-ai/dsh-ptc-runtime-node'
+  disabled: true
 # == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app
 - id: workflow-ptc
   name: '@deepseek-ai/dsh-workflow-ptc'
@@ -440,11 +444,13 @@
 - id: mcp-resources
   name: '@deepseek-ai/dsh-mcp-resources'
   disabled: true
-# == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app
+# == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app, lawbench-dsh
 - id: tools
   name: '@deepseek-ai/dsh-tools'
   config:
-    mode: !!js process.env.DSH_TOOLS_MODE
+    mode: native
+    maxParallelSubCalls: 10
+# == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:
@@ -512,10 +518,14 @@
 - id: schedule
   name: '@deepseek-ai/dsh-schedule'
   disabled: true
+# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
 - id: ui-settings-account
   name: '@deepseek-ai/dsh-client-ui-settings-account'
+  disabled: true
 - id: account-controller
   name: '@deepseek-ai/dsh-api-account-controller'
+  disabled: true
+# == @deepseek-ai/dsh-web-app
 - id: settings-controller
   name: '@deepseek-ai/dsh-api-settings-controller'
 # == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
@@ -600,10 +610,10 @@
 - id: ui-sidebar-documentpreview
   name: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
   disabled: true
-# == @deepseek-ai/dsh-web-app
 - id: ui-sidebar-browser
   name: '@deepseek-ai/dsh-client-ui-sidebar-browser'
-  disabled: !!js ctx.get('profileContext')?.name !== 'desktop'
+  disabled: true
+# == @deepseek-ai/dsh-web-app
 - id: ui-sidebar-terminal
   name: '@deepseek-ai/dsh-client-ui-sidebar-terminal'
 - id: ui-sidebar-files
@@ -616,9 +626,10 @@
 # == @deepseek-ai/dsh-web-app
 - id: ui-settings-general
   name: '@deepseek-ai/dsh-client-ui-settings-general'
+# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
 - id: ui-settings-models
   name: '@deepseek-ai/dsh-client-ui-settings-models'
-# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
+  disabled: true
 - id: ui-plugin-manager
   name: '@deepseek-ai/dsh-client-ui-plugin-manager'
   disabled: true
@@ -1365,9 +1376,9 @@
           includeDefaultRoots: false
           watch: false
           customSkillDirs: !!js >-
-            [process.env.LAWBENCH_SKILLS_DIR,
-            process.getBuiltinModule('node:path').join(process.env.ProgramData
-            ?? 'C:\\ProgramData', 'lawbench', 'skills')].filter(Boolean)
+            [process.getBuiltinModule('node:path').join(process.env.ProgramData
+            ?? 'C:\\ProgramData', 'lawbench', 'skills'),
+            process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)
       - id: tool-skill
         name: '@deepseek-ai/dsh-tool-skill'
       - id: tool-ask-user
