@@ -32,7 +32,7 @@ def test_copy_original_never_overwrites(root):
     with pytest.raises(FileExistsError):
         gate.copy_original(r, "证据/已有.txt", src)
     assert target.read_text(encoding="utf-8") == "原件"
-    assert not list(target.parent.glob(".~lb-*"))  # 临时文件已清掉
+    assert not list(target.parent.glob(".~lb*"))  # 临时文件已清掉
 
 
 def test_copy_original_to_case_root(root):

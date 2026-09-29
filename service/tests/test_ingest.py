@@ -430,16 +430,12 @@ def test_lines_marked_every_50(make_client, cases_dir):
 
 @needs_lo
 def test_doc_and_xls_converted(make_client, cases_dir, tmp_path):
-    soffice = libreoffice.find_soffice()
     work = tmp_path / "conv"
     work.mkdir()
-    shutil.copy(FIXTURES / "tender-01" / "补充通知.docx", work / "通知.docx")
-    shutil.copy(FIXTURES / "civil-01" / "银行流水.xlsx", work / "流水.xlsx")
-    prof = (tmp_path / "prof").resolve().as_uri()
-    for src, fmt in (("通知.docx", "doc"), ("流水.xlsx", "xls")):
-        subprocess.run([soffice, "--headless", "--norestore", f"-env:UserInstallation={prof}", "--convert-to", fmt,
-                        "--outdir", str(work), str(work / src)], timeout=180, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # 样本用产品自己的转换器生成（配置目录在短路径下；测试放在很深的目录里也能跑）
+    with libreoffice.Converter(tmp_path / "gen").session() as s:
+        (work / "通知.doc").write_bytes(s.convert(FIXTURES / "tender-01" / "补充通知.docx", "doc").read_bytes())
+        (work / "流水.xls").write_bytes(s.convert(FIXTURES / "civil-01" / "银行流水.xlsx", "xls").read_bytes())
     client = make_client()
     root = cases_dir / "转换"
     root.mkdir()

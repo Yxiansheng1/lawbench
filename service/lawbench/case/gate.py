@@ -323,7 +323,8 @@ def copy_original(root: str, rel: str, src: str | os.PathLike, op: str = "import
     if os.path.lexists(path):
         raise FileExistsError(rel)
     _mkdirs(root, path.parent, op)
-    tmp = path.parent / f".~lb-{uuid.uuid4().hex}.tmp"  # 以 . 开头，扫描原件区时不会当成材料
+    # 以 . 开头，扫描原件区时不会当成材料；名字要短：比目标文件名还长时，深路径下会先于目标超过 260 字符
+    tmp = path.parent / f".~lb{uuid.uuid4().hex[:8]}"
     try:
         shutil.copy2(src, tmp)
         os.rename(tmp, path)  # Windows 上目标已存在时 rename 失败，不会覆盖

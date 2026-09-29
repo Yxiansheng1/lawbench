@@ -187,7 +187,7 @@ def test_timeout_kills_own_tree_and_cleans(make_client, cases_dir, tmp_path, mon
     script = tmp_path / "fake_soffice.py"
     script.write_text(FAKE_SOFFICE, encoding="utf-8")
     cmd = tmp_path / "fake_soffice.cmd"
-    cmd.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="ascii")
+    cmd.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="mbcs")  # cmd.exe 按系统代码页读批处理
     pid_file = tmp_path / "pid.txt"
     monkeypatch.setenv("LB_FAKE_PID_FILE", str(pid_file))
     monkeypatch.setattr(lo, "find_soffice", lambda: str(cmd))

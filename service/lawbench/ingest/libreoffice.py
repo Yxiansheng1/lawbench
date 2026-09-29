@@ -1,9 +1,11 @@
 """LibreOffice 转换（Spec 5.2）：doc/wps → docx，xls → xlsx，xlsx 重算。
 
-soffice --headless --norestore -env:UserInstallation=file:///<案件>/工作区/临时/lo_profile
+soffice --headless --norestore -env:UserInstallation=file:///<短路径>/p
         --convert-to <格式> --outdir <临时目录> <文件>
 - 原件先复制进 工作区/临时/ 再转换，LibreOffice 不直接打开原件（不在原件旁留锁文件）；
-- 用户配置目录放在案件临时目录，路径做 URL 编码；转换后连同中间文件一起删除（SEC-11）；
+- 用户配置目录和 LibreOffice 自己的临时文件（TMP/TEMP）放在系统临时目录下一个每次新建的短路径目录里：
+  配置目录内部层级很深，放在案件临时目录下时，案件路径一长就超过 Windows 260 字符上限，soffice 直接崩溃
+  （T3 第二轮复核实测）。路径做 URL 编码；会话结束时连同中间文件一起删除（SEC-11），不留材料副本；
 - 超时 120 秒；同一时刻只跑一个转换。
 """
 from __future__ import annotations
@@ -12,6 +14,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -21,6 +24,7 @@ from . import LO_TIMEOUT, ParseError
 
 _LOCK = threading.Lock()
 TIMEOUT = LO_TIMEOUT  # 秒；测试里可改小
+SHORT_PREFIX = "lbo-"  # 系统临时目录下每次新建的短路径目录
 
 CANDIDATES = [
     r"C:\Program Files\LibreOffice\program\soffice.exe",
@@ -51,13 +55,15 @@ class Converter:
 
     @contextmanager
     def session(self):
-        work = self.temp_dir / f"lo-{uuid.uuid4().hex[:8]}"
-        work.mkdir(parents=True, exist_ok=False)
+        """临时目录在第一次真正转换时才建（大多数材料不需要 LibreOffice）；会话结束时删除。"""
+        s = _Session(self)
         try:
-            yield _Session(self, work)
+            yield s
         finally:
-            _rmtree(work)
-            _rmtree(self.temp_dir / "lo_profile")
+            if s.work is not None:
+                _rmtree(s.work)
+            if s.short is not None:
+                _rmtree(s.short)
 
 
 def _rmtree(path: pathlib.Path) -> None:
@@ -97,28 +103,42 @@ def kill_tree(proc: subprocess.Popen) -> None:
 
 
 class _Session:
-    def __init__(self, conv: Converter, work: pathlib.Path):
+    def __init__(self, conv: Converter):
         self.conv = conv
-        self.work = work
+        self.work: pathlib.Path | None = None   # 工作区/临时/lo-xxxxxxxx：原件副本和转换结果
+        self.short: pathlib.Path | None = None  # 系统临时目录下的 lbo-xxxx：配置目录和 LibreOffice 的 TMP
         self.n = 0
+
+    def _ensure_dirs(self) -> None:
+        if self.work is None:
+            work = self.conv.temp_dir / f"lo-{uuid.uuid4().hex[:8]}"
+            work.mkdir(parents=True, exist_ok=False)
+            self.work = work
+        if self.short is None:
+            self.short = pathlib.Path(tempfile.mkdtemp(prefix=SHORT_PREFIX))
 
     def convert(self, src: pathlib.Path, fmt: str) -> pathlib.Path:
         """只用 --convert-to 导出，不走任何打印接口，不改系统默认打印机（Spec 12.3）。"""
         if not self.conv.soffice:
             raise ParseError("convert_failed")
+        try:
+            self._ensure_dirs()
+        except OSError:
+            raise ParseError("path_too_long")  # 案件临时目录都建不出来：多半是路径太深
         self.n += 1
         job = self.work / str(self.n)
         (job / "out").mkdir(parents=True)
-        (job / "tmp").mkdir()
         local = job / ("in" + src.suffix.lower())
         shutil.copyfile(src, local)
-        profile_dir = (self.conv.temp_dir / "lo_profile").resolve()
+        profile_dir = (self.short / "p").resolve()
         write_profile(profile_dir)
+        tmp = self.short / "t"
+        tmp.mkdir(exist_ok=True)
         args = [self.conv.soffice, "--headless", "--norestore", "--nologo", "--nodefault", "--nolockcheck",
                 f"-env:UserInstallation={profile_dir.as_uri()}", "--convert-to", fmt, "--outdir", str(job / "out"),
                 str(local)]
-        # 临时文件也落在本次的临时目录里，结束后一起删掉；系统临时目录不留材料副本
-        env = dict(os.environ, TMP=str(job / "tmp"), TEMP=str(job / "tmp"), TMPDIR=str(job / "tmp"))
+        # LibreOffice 自己的临时文件也落在本次的短路径目录里，会话结束一起删掉；系统临时目录不留材料副本
+        env = dict(os.environ, TMP=str(tmp), TEMP=str(tmp), TMPDIR=str(tmp))
         with _LOCK:
             try:
                 proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,

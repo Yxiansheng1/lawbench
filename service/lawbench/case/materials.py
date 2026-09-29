@@ -253,6 +253,9 @@ class Materials:
             entry.update(type=mtype, size=st.st_size, mtime=mt, sha256=digest, updated_at=now,
                          text_path=f"{TEXT_DIR}/{rel}.md", is_ocr="none")
             try:
+                if _too_long(root, entry["text_path"]) or (
+                        mtype in ("xlsx", "xls") and _too_long(root, f"{FORMULA_DIR}/{rel}.txt")):
+                    raise ParseError("path_too_long")  # 文本写不下去：只让这一份失败，不中断整次扫描
                 p = self._parse(root, rel, mtype, conv)
             except ParseError as e:
                 p = None
@@ -519,6 +522,22 @@ def _zip_bad(info: zipfile.ZipInfo) -> bool:
         return True
     mode = (info.external_attr >> 16) & 0o170000
     return mode == stat.S_IFLNK
+
+
+# Windows 不开长路径支持时：文件完整路径不超过 259 字符，新建目录不超过 247 字符；
+# 原子写的临时文件（.~lb-xxxxxxxx.tmp，17 字符）和目标在同一目录，也要放得下
+_MAX_FILE = 259
+_MAX_DIR = 247
+_ATOMIC_TMP_NAME = 17
+
+
+def _too_long(root: str, rel: str) -> bool:
+    if os.name != "nt":
+        return False
+    full = os.path.join(root, *rel.split("/"))
+    parent = os.path.dirname(full)
+    return (len(full) > _MAX_FILE or len(parent) > _MAX_DIR
+            or len(parent) + 1 + _ATOMIC_TMP_NAME > _MAX_FILE)
 
 
 def _join(a: str, b: str) -> str:
