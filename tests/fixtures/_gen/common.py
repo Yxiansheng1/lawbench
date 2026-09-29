@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import copy
 import io
 import math
 import os
@@ -13,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from lxml import etree
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 from reportlab import rl_config
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -398,8 +397,12 @@ def docx_all_text(docx_path: Path) -> str:
 def freeze_zip(path: Path) -> None:
     """把 docx / xlsx 包内各条目的时间戳固定下来，重新生成时字节不变（git 不出现无意义的改动）。"""
     import zipfile
+    import re
     with zipfile.ZipFile(path) as z:
         items = [(i.filename, z.read(i.filename)) for i in z.infolist()]
+    stamp = FIXED_TIME.strftime("%Y-%m-%dT%H:%M:%SZ").encode()
+    items = [(n, re.sub(rb"(<dcterms:(?:created|modified)[^>]*>)[^<]*(<)", rb"\g<1>" + stamp + rb"\g<2>", d)
+              if n == "docProps/core.xml" else d) for n, d in items]
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         for name, data in items:
             info = zipfile.ZipInfo(name, date_time=FIXED_TIME.timetuple()[:6])
