@@ -66,10 +66,17 @@ class SplitterApp:
         self.listbox.delete(0, "end")
         self.progress["value"] = 0
 
+        files, pdf = list(self.files), self.pdf.get()
+
         def work():
-            res = core.split_many(self.files, h, self.pdf.get(),
-                                  progress=lambda i, n: self.root.after(0, self._progress, i, n))
-            self.root.after(0, self.show, res)
+            res = []
+            try:
+                res = core.split_many(files, h, pdf,
+                                      progress=lambda i, n: self.root.after(0, self._progress, i, n))
+            except Exception:  # noqa: BLE001  兜底：结果一定显示、按钮一定恢复
+                res = [(f, "无法处理：处理失败（程序内部错误）") for f in files]
+            finally:
+                self.root.after(0, self.show, res)
 
         threading.Thread(target=work, daemon=True).start()
 

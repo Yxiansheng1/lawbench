@@ -101,6 +101,34 @@ def test_plan_ignores_short_runs():
     assert segs[0].warn and segs[0].bottom == 2000 and segs[1].top == 1880
 
 
+def test_rerun_does_not_overwrite(tmp_path):
+    src = copy_sample(CLEAN[0], tmp_path)
+    r1 = core.split_image(src, make_pdf=True)
+    first = {p: p.read_bytes() for p in r1.outputs}
+    r2 = core.split_image(src, make_pdf=True)
+    assert all(p.name.startswith(f"{src.stem}(2)_") for p in r2.outputs)
+    assert r2.pdf.name == f"{src.stem}(2).pdf"
+    assert all(p.read_bytes() == b for p, b in first.items())     # 上次的结果没被覆盖
+
+
+def test_batch_errors_are_chinese_and_isolated(tmp_path, monkeypatch):
+    from PIL import Image
+    good = copy_sample(CLEAN[0], tmp_path)
+    folder = tmp_path / "一个文件夹.png"
+    folder.mkdir()
+    big = tmp_path / "超大图.png"
+    Image.new("RGB", (3000, 3000)).save(big)
+    bad = tmp_path / "坏文件.png"
+    bad.write_bytes(b"not a png")
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 2_000_000)
+    res = core.split_many([folder, big, bad, good])
+    assert isinstance(res[3][1], core.Result)
+    for _, r in res[:3]:
+        assert isinstance(r, str) and r.startswith("无法处理：")
+        assert not any(w in r for w in ("Error", "OSError", "Exception"))
+    assert "过大" in res[1][1]
+
+
 def test_gui_builds():
     import tkinter as tk
     from splitter.app import SplitterApp

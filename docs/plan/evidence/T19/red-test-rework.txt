@@ -1,0 +1,18 @@
+# T19 返修红测（先在修复前的代码上跑，应失败；测完已还原）  2026-09-29 20:42:09 +0800
+
+## P1-1：修复前的 core.py（pandoc 无 --sandbox、LibreOffice 未禁外链）→ 监听应收到请求
+1 failed, 18 deselected in 29.57s
+exit=1
+E       AssertionError: ת��ʱ���������磺['/md.png', '/docx.png', '/docx.png', '/docx.png', '/docx.png']
+E       assert ['/md.png', '..., '/docx.png'] == []
+E         
+## 修复后
+FAILED tests/test_convert.py::test_conversions_do_not_fetch_remote_resources
+1 failed, 18 deselected in 29.49s
+
+## 修复后：P1-1 docx / md 路径监听 0 次请求（通过）；.doc 路径仍会取外链图片（已知，strict xfail，见交付说明）
+
+## P2-1：改正后的残留检查（查系统临时目录）第一次运行就抓到真问题
+在 pytest 的临时目录下，LibreOffice 转换后工作目录 lawbench-convert-* 删不干净（5 个 LibreOffice 用例失败）：
+配置目录层级深，路径超过 Windows 260 字符，shutil.rmtree 静默失败。改为带 \?\ 长路径前缀删除、最多重试 10 秒后全部通过。
+原来的检查查的是源文件目录，永远为真，抓不到这个问题。

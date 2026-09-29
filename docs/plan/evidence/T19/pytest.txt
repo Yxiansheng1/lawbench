@@ -1,7 +1,10 @@
-﻿# cd tools; python -m pytest -q tests    2026-09-29 19:31:22 +08:00
-# LibreOffice: C:\Program Files\LibreOffice\program\soffice.exe（26.8.0.3）；pandoc: %LOCALAPPDATA%\Pandoc\pandoc.exe（3.11）
-..........................                                               [100%]
+# cd tools; python -m pytest -q tests（T19 返修后）    2026-09-29 20:59:04 +0800
+...................x................                                     [100%]
 =================================== PASSES ====================================
+_________________ test_batch_errors_are_chinese_and_isolated __________________
+---------------------------- Captured stderr call -----------------------------
+D:\lawbench-C\.venv\Lib\site-packages\PIL\Image.py:3578: DecompressionBombWarning: Image size (3900000 pixels) exceeds limit of 2000000 pixels, could be decompression bomb DOS attack.
+  warnings.warn(
 =========================== short test summary info ===========================
 PASSED tests/test_convert.py::test_each_conversion[doc\u2192docx]
 PASSED tests/test_convert.py::test_each_conversion[wps\u2192docx]
@@ -21,6 +24,13 @@ PASSED tests/test_convert.py::test_hung_converter_killed_with_children
 PASSED tests/test_convert.py::test_no_print_calls_in_converter
 PASSED tests/test_convert.py::test_finder_order
 PASSED tests/test_convert.py::test_gui_builds
+PASSED tests/test_convert.py::test_conversions_do_not_fetch_remote_resources
+PASSED tests/test_convert.py::test_batch_survives_unexpected_errors
+PASSED tests/test_convert.py::test_unexpected_exception_becomes_chinese_reason
+PASSED tests/test_convert.py::test_failure_and_timeout_leave_no_workdir
+PASSED tests/test_convert.py::test_cleanup_stale_only_old_own_dirs
+PASSED tests/test_convert.py::test_mixed_pdf_reports_scan_pages
+PASSED tests/test_convert.py::test_gui_notes_and_close_guard
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\u8272\u80cc\u666f.png]
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u5f69\u8272\u80cc\u666f.png]
 PASSED tests/test_splitter.py::test_no_blank_overlaps_and_warns
@@ -28,7 +38,9 @@ PASSED tests/test_splitter.py::test_merge_pdf
 PASSED tests/test_splitter.py::test_custom_height_and_batch
 PASSED tests/test_splitter.py::test_plan_picks_longest_run_in_window
 PASSED tests/test_splitter.py::test_plan_ignores_short_runs
+PASSED tests/test_splitter.py::test_rerun_does_not_overwrite
+PASSED tests/test_splitter.py::test_batch_errors_are_chinese_and_isolated
 PASSED tests/test_splitter.py::test_gui_builds
-26 passed in 63.38s (0:01:03)
-
+XFAIL tests/test_convert.py::test_doc_with_external_image_does_not_fetch - 已知：LibreOffice 导入 .doc 时仍会取外链图片，配置项挡不住；已报主编排
+35 passed, 1 xfailed in 94.83s (0:01:34)
 exit=0

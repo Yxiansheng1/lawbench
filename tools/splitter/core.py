@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 DIFF = 8
 BLANK_RATIO = 0.98
@@ -98,29 +98,57 @@ def split_image(path: Path, h_target: int = DEFAULT_H, make_pdf: bool = False) -
     out_dir = path.parent / OUT_DIR_NAME
     out_dir.mkdir(exist_ok=True)
     width = len(str(len(segs))) if len(segs) >= 100 else 2
+    base = unique_base(out_dir, path.stem, len(segs), width, make_pdf)
     outputs, pieces = [], []
     for i, s in enumerate(segs, 1):
         piece = img.crop((0, s.top, img.width, s.bottom))
-        p = out_dir / f"{path.stem}_{i:0{width}d}.png"
+        p = out_dir / f"{base}_{i:0{width}d}.png"
         piece.save(p)
         outputs.append(p)
         pieces.append(piece)
     pdf = None
     if make_pdf:
-        pdf = out_dir / f"{path.stem}.pdf"
+        pdf = out_dir / f"{base}.pdf"
         pieces[0].save(pdf, "PDF", save_all=True, append_images=pieces[1:], resolution=150)
     return Result(path, outputs, segs, pdf)
 
 
+def unique_base(out_dir: Path, stem: str, n: int, width: int, make_pdf: bool) -> str:
+    """再次切分同一张图时不覆盖上次的结果：有同名文件就用"原名(2)"，与格式互转一致。"""
+    def taken(b: str) -> bool:
+        if make_pdf and (out_dir / f"{b}.pdf").exists():
+            return True
+        return any((out_dir / f"{b}_{i:0{width}d}.png").exists() for i in range(1, n + 1))
+    base, k = stem, 2
+    while taken(base):
+        base, k = f"{stem}({k})", k + 1
+    return base
+
+
+def reason(e: BaseException) -> str:
+    """给用户看的中文原因，不带英文类名和堆栈。"""
+    if isinstance(e, Image.DecompressionBombError):
+        return "图片过大，无法处理"
+    if isinstance(e, (FileNotFoundError, IsADirectoryError, NotADirectoryError)):
+        return "文件不存在或不是图片文件"
+    if isinstance(e, PermissionError):
+        return "没有读取或写入权限（文件可能被占用，或结果文件夹不可写）"
+    if isinstance(e, (UnidentifiedImageError, OSError)):
+        return "不是图片，或图片已损坏"
+    if isinstance(e, ValueError):
+        return "段高设置不对（不能小于 200 像素）"
+    return "处理失败（程序内部错误），其余文件不受影响"
+
+
 def split_many(paths: list[Path], h_target: int = DEFAULT_H, make_pdf: bool = False,
                progress=None) -> list[tuple[Path, Result | str]]:
-    """批量；单个文件出错不影响其他文件，出错的返回中文原因。"""
+    """批量；单个文件出错（含意外错误）不影响其他文件，出错的返回中文原因。"""
     out = []
     for i, p in enumerate(paths, 1):
         try:
             r: Result | str = split_image(Path(p), h_target, make_pdf)
-        except (OSError, ValueError) as e:
-            r = f"无法处理：{type(e).__name__}"
+        except Exception as e:  # noqa: BLE001
+            r = f"无法处理：{reason(e)}"
         out.append((Path(p), r))
         if progress:
             progress(i, len(paths))

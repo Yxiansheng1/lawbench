@@ -19,6 +19,8 @@ class ConvertApp:
         root.title("格式互转")
         root.geometry("720x520")
         self.files: list[Path] = []
+        self.busy = False
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         top = ttk.Frame(root, padding=10)
         top.pack(fill="x")
@@ -50,7 +52,15 @@ class ConvertApp:
         return next(k for k in core.KINDS if k.label == self.kind.get())
 
     def _update_note(self) -> None:
-        self.note["text"] = core.PDF_TO_WORD_NOTE if self.current().key == "pdf2docx" else ""
+        key = self.current().key
+        self.note["text"] = {"pdf2docx": core.PDF_TO_WORD_NOTE, "md2docx": core.IMAGES_NOTE,
+                             "docx2md": core.IMAGES_NOTE}.get(key, "")
+
+    def on_close(self) -> None:
+        if self.busy:
+            messagebox.showinfo("格式互转", "转换进行中，请等它结束。")
+            return
+        self.root.destroy()
 
     def choose(self) -> None:
         k = self.current()
@@ -67,14 +77,21 @@ class ConvertApp:
             messagebox.showinfo("格式互转", "请先选择文件。")
             return
         key = self.current().key
+        self.busy = True
         self.run_btn.state(["disabled"])
         self.listbox.delete(0, "end")
         self.progress["value"] = 0
+        files = list(self.files)
 
         def work():
-            res = core.convert_many(key, self.files,
-                                    progress=lambda i, n: self.root.after(0, self._progress, i, n))
-            self.root.after(0, self.show, res)
+            res = []
+            try:
+                res = core.convert_many(key, files,
+                                        progress=lambda i, n: self.root.after(0, self._progress, i, n))
+            except Exception:  # noqa: BLE001  兜底：结果一定显示、按钮一定恢复
+                res = [(f, core.INTERNAL, []) for f in files]
+            finally:
+                self.root.after(0, self.show, res)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -82,12 +99,15 @@ class ConvertApp:
         self.progress["value"] = 100 * i / n
 
     def show(self, res) -> None:
+        self.busy = False
         self.run_btn.state(["!disabled"])
-        for src, r in res:
+        for src, r, notes in res:
             if isinstance(r, Path):
                 self.listbox.insert("end", f"{src.name} → {r.name}")
             else:
                 self.listbox.insert("end", f"{src.name}：{r}")
+            for n in notes:
+                self.listbox.insert("end", f"　　⚠ {n}")
 
     def open_out(self) -> None:
         if self.files:
@@ -97,6 +117,7 @@ class ConvertApp:
 
 
 def main() -> None:
+    core.cleanup_stale()          # 上次转换中途被强行关掉时留下的临时目录
     root = tk.Tk()
     ConvertApp(root)
     root.mainloop()

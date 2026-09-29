@@ -4,6 +4,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -48,10 +49,24 @@ def samples(tmp_path_factory):
 
 
 def check_unchanged_and_clean(src, before):
+    import tempfile
     assert sha256(src) == before
-    # 源文件所在目录只多出"转换结果"文件夹，没有锁文件、临时文件
-    extras = [p.name for p in src.parent.iterdir() if p.name.startswith((".~lock", "~$", "lawbench-convert"))]
+    # 源文件所在目录没有锁文件、临时文件
+    extras = [p.name for p in src.parent.iterdir() if p.name.startswith((".~lock", "~$"))]
     assert extras == []
+    # 系统临时目录里没有本工具留下的工作目录（复核 P2-1：原先查错了目录）
+    left = [p.name for p in Path(tempfile.gettempdir()).glob(core.TEMP_PREFIX + "*")]
+    assert left == [], left
+
+
+@pytest.fixture(autouse=True)
+def isolated_temp(tmp_path, monkeypatch):
+    """每个测试用自己的系统临时目录，才能断言"没有留下 lawbench-convert-*"。"""
+    import tempfile
+    t = tmp_path / "systemp"
+    t.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(t))
+    return t
 
 
 CASES = [
@@ -212,3 +227,199 @@ def test_gui_builds():
     app._update_note()
     assert "只保留文字和段落" in app.note["text"]
     root.destroy()
+
+
+# ---------------------------------------------------------------- 不联网（复核 P1-1）
+
+@pytest.fixture
+def listener():
+    """本机 127.0.0.1 随机端口的 HTTP 监听，记录收到的请求数。"""
+    import http.server
+    import threading
+    hits = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            hits.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            self.wfile.write(_png())
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    yield srv.server_address[1], hits
+    srv.shutdown()
+
+
+def _png() -> bytes:
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 0, 0)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _docx_with_external_image(path, url):
+    """docx 里一张以外部链接引用（r:link、TargetMode=External）的图片。"""
+    import io
+    import re
+    from docx import Document
+    doc = Document()
+    doc.add_paragraph("外部链接图片测试（虚构）")
+    doc.add_picture(io.BytesIO(_png()))
+    tmp = path.with_suffix(".tmp.docx")
+    doc.save(tmp)
+    with zipfile.ZipFile(tmp) as zin, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == "word/document.xml":
+                data = data.replace(b'r:embed="', b'r:link="')
+            elif item.filename == "word/_rels/document.xml.rels":
+                data = re.sub(rb'Target="media/image1\.png"', f'Target="{url}" TargetMode="External"'.encode(), data)
+            zout.writestr(item, data)
+    tmp.unlink()
+
+
+@need_lo
+@need_pandoc
+def test_conversions_do_not_fetch_remote_resources(tmp_path, listener):
+    port, hits = listener
+    md = tmp_path / "远程图片.md"
+    md.write_text(f"# 测试\n\n![图](http://127.0.0.1:{port}/md.png)\n\n正文（虚构）\n", encoding="utf-8")
+    dx = tmp_path / "外链图片.docx"
+    _docx_with_external_image(dx, f"http://127.0.0.1:{port}/docx.png")
+    core.convert_file("md2docx", md)
+    core.convert_file("word2pdf", dx)
+    core.convert_file("docx2md", dx)
+    assert hits == [], f"转换时访问了网络：{hits}"
+
+
+@need_lo
+@pytest.mark.xfail(strict=True, reason="已知：LibreOffice 导入 .doc 时仍会取外链图片，配置项挡不住；已报主编排")
+def test_doc_with_external_image_does_not_fetch(tmp_path, listener):
+    port, hits = listener
+    dx = tmp_path / "外链图片.docx"
+    _docx_with_external_image(dx, f"http://127.0.0.1:{port}/docx.png")
+    doc = _as_doc(dx, tmp_path)
+    assert hits == []                     # 另存 .doc 这一步本身不联网
+    core.convert_file("doc2docx", doc)
+    assert hits == [], f"转换时访问了网络：{hits}"
+
+
+def _as_doc(dx, tmp_path):
+    """用 LibreOffice 把带外链图片的 docx 另存为 doc（配置同样禁止取外链）。"""
+    work = tmp_path / "mkdoc"
+    work.mkdir()
+    out = core._libreoffice(dx, "doc", work)
+    dst = tmp_path / "外链图片.doc"
+    shutil.copyfile(out, dst)
+    return dst
+
+
+# ---------------------------------------------------------------- 复核 P1-2、P1-3、P3-5、(e)
+
+def test_batch_survives_unexpected_errors(samples, tmp_path, monkeypatch):
+    """批量中间夹一个文件夹和一个超大图：各自给中文原因，前后文件照常转换。"""
+    from PIL import Image
+    folder = tmp_path / "只读文件夹.png"
+    folder.mkdir()
+    big = tmp_path / "超大图.png"
+    Image.new("RGB", (3000, 3000)).save(big)
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 2_000_000)   # 900 万像素 > 2 倍上限，触发"图片过大"
+    res = core.convert_many("img2pdf", [samples["jpg"], folder, big, samples["jpg"]])
+    assert isinstance(res[0][1], Path) and isinstance(res[3][1], Path)
+    for _, r, _ in res[1:3]:
+        assert isinstance(r, str) and not any(w in r for w in ("Error", "Traceback", "Exception"))
+
+
+def test_unexpected_exception_becomes_chinese_reason(samples, monkeypatch):
+    def boom(kind, src):
+        raise RuntimeError("内部细节 xyz")
+    monkeypatch.setattr(core, "convert_file_ex", boom)
+    res = core.convert_many("img2pdf", [samples["jpg"]])
+    assert res[0][1] == core.INTERNAL and "xyz" not in res[0][1]
+
+
+def test_failure_and_timeout_leave_no_workdir(samples, tmp_path, monkeypatch):
+    bad = tmp_path / "坏.pdf"
+    bad.write_bytes(b"%PDF-1.4 broken")
+    with pytest.raises(core.ConvertError):
+        core.convert_file("pdf2docx", bad)
+    check_unchanged_and_clean(bad, sha256(bad))
+    import sys
+    fake = tmp_path / "soffice.cmd"
+    fake.write_text(f'@"{sys.executable}" -c "import time; time.sleep(60)" %*\n', encoding="mbcs")
+    monkeypatch.setattr(core, "_soffice", lambda: fake)
+    monkeypatch.setattr(core, "TIMEOUT_S", 2)
+    with pytest.raises(core.ConvertError, match="转换超时"):
+        core.convert_file("word2pdf", samples["docx"])
+    check_unchanged_and_clean(samples["docx"], sha256(samples["docx"]))
+
+
+def test_cleanup_stale_only_old_own_dirs(isolated_temp, tmp_path):
+    import os
+    import time
+    old = isolated_temp / (core.TEMP_PREFIX + "old")
+    old.mkdir()
+    (old / "src.docx").write_bytes(b"x")
+    fresh = isolated_temp / (core.TEMP_PREFIX + "fresh")
+    fresh.mkdir()
+    other = isolated_temp / "other-old"
+    other.mkdir()
+    afile = isolated_temp / (core.TEMP_PREFIX + "file")
+    afile.write_bytes(b"x")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_bytes(b"x")
+    link = isolated_temp / (core.TEMP_PREFIX + "junction")
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside)], check=True, capture_output=True)
+    past = time.time() - 3600
+    for p in (old, other, afile):
+        os.utime(p, (past, past))
+    assert core.cleanup_stale() == 1
+    assert not old.exists() and fresh.exists() and other.exists() and afile.exists()
+    assert link.exists() and (outside / "keep.txt").exists()
+    os.rmdir(link)
+
+
+@need_pandoc
+def test_mixed_pdf_reports_scan_pages(samples, tmp_path):
+    from pypdf import PdfReader, PdfWriter
+    w = PdfWriter()
+    for f in (samples["pdf"], samples["scan"]):
+        for pg in PdfReader(f).pages[:2]:
+            w.add_page(pg)
+    mixed = tmp_path / "混合.pdf"
+    with open(mixed, "wb") as fh:
+        w.write(fh)
+    res = core.convert_many("pdf2docx", [mixed])
+    _, out, notes = res[0]
+    assert isinstance(out, Path)
+    assert notes == ["第 3 页是扫描页，没有转出文字", "第 4 页是扫描页，没有转出文字"]
+
+
+def test_gui_notes_and_close_guard(monkeypatch):
+    import tkinter as tk
+    from convert.app import ConvertApp
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("没有图形界面环境")
+    root.withdraw()
+    app = ConvertApp(root)
+    for key in ("md2docx", "docx2md"):
+        app.kind.set(core.BY_KEY[key].label)
+        app._update_note()
+        assert "不保留图片" in app.note["text"]
+    shown = []
+    monkeypatch.setattr("convert.app.messagebox.showinfo", lambda *a: shown.append(a))
+    app.busy = True
+    app.on_close()
+    assert shown and root.winfo_exists()        # 转换中不关窗
+    app.busy = False
+    app.on_close()
