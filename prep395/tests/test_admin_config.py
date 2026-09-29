@@ -25,6 +25,22 @@ def test_admin_requires_basic_auth(client):
     assert r.status_code == 200 and "prep395" in r.text
 
 
+def test_admin_non_ascii_username_is_401_not_500(client):
+    import base64
+    raw = base64.b64encode("管理员:admin".encode("utf-8")).decode()
+    assert client.get("/admin", headers={"Authorization": "Basic " + raw}).status_code == 401
+
+
+def test_admin_non_ascii_configured_user(tmp_path, gateway, isolated_tmp):
+    import base64
+    s = Settings(llm_base=gateway.url, home=tmp_path / "h", admin_user="管理员",
+                 admin_pass_sha256="8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918")
+    with TestClient(create_app(s, FakeBackend())) as c:
+        ok = base64.b64encode("管理员:admin".encode("utf-8")).decode()
+        assert c.get("/admin", headers={"Authorization": "Basic " + ok}).status_code == 200
+        assert c.get("/admin", headers=basic("admin", "admin")).status_code == 401
+
+
 def test_admin_stats_by_key_prefix(client):
     for _ in range(3):
         client.post("/v1/ocr/page", content=png_bytes(), headers={**auth(), "Content-Type": "image/png"})

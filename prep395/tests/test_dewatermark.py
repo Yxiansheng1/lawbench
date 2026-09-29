@@ -31,29 +31,57 @@ def gray_var(img: Image.Image, box) -> float:
 WM_BOX = (40, 1050, 620, 1700)
 
 
+def tint_mask(img, channel: int) -> np.ndarray:
+    """带红（channel=0）或蓝（channel=2）色调的像素，含浅色边缘：该通道比另两个通道高出 8 以上。"""
+    a = np.asarray(img.convert("RGB")).astype(int)
+    others = [a[..., i] for i in range(3) if i != channel]
+    return a[..., channel] - np.maximum(*others) > 8
+
+
 def test_seal_red_pixels_unchanged_and_watermark_variance_drops():
     page3 = scan_pages()[2]
-    before_red = red_count(page3)
-    assert before_red > 2000                        # 样本里确有红章
+    assert red_count(page3) > 2000                  # 样本里确有红章
     out, n = dewatermark(page3)
     assert n > 0
-    assert red_count(out) == before_red
-    assert np.array_equal(np.asarray(out)[red_mask(page3)], np.asarray(page3)[red_mask(page3)])
+    m = tint_mask(page3, 0)                         # 逐像素：所有带红色调的像素（含浅色边缘）一个不变
+    assert m.sum() > red_count(page3)
+    assert np.array_equal(np.asarray(out)[m], np.asarray(page3)[m])
     v0, v1 = gray_var(page3, WM_BOX), gray_var(out, WM_BOX)
     assert v1 < v0 * 0.3, (v0, v1)
 
 
-def red_mask(img):
-    a = np.asarray(img.convert("RGB")).astype(int)
-    return (a[..., 0] > 150) & (a[..., 1] < 110) & (a[..., 2] < 110)
-
-
 def test_blue_annotation_unchanged():
     page2 = scan_pages()[1]
-    before = blue_count(page2)
-    assert before > 500                             # 样本里确有蓝色批注
-    out, _ = dewatermark(page2)
-    assert blue_count(out) == before
+    assert blue_count(page2) > 500                  # 样本里确有蓝色批注
+    out, n = dewatermark(page2)
+    assert n > 0
+    m = tint_mask(page2, 2)
+    assert np.array_equal(np.asarray(out)[m], np.asarray(page2)[m])
+
+
+def test_light_gray_horizontal_text_untouched():
+    """一页浅灰色（灰度约 170）的横排正文不是水印，去水印后逐像素不变。"""
+    from PIL import ImageDraw, ImageFont
+    import os
+    img = Image.new("RGB", (1240, 1754), (246, 244, 238))
+    d = ImageDraw.Draw(img)
+    f = ImageFont.truetype(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "simsun.ttc"), 30)
+    for y in range(140, 1600, 52):
+        d.text((120, y), "浅灰色正文测试文字，横排排列，每一行内容都是虚构的。", font=f, fill=(170, 170, 170))
+    out, n = dewatermark(img)
+    assert n == 0 and np.array_equal(np.asarray(out), np.asarray(img))
+
+
+def test_scan_without_watermark_untouched():
+    """同样的扫描噪点、没有水印的页：候选像素不成斜向重复图案，原样返回。"""
+    import sys
+    from conftest import FIXTURES
+    sys.path.insert(0, str(FIXTURES / "_gen"))
+    import common as G
+    import case_criminal01 as K
+    img = G.render_page(K.XUNWEN[0], seed=100)
+    out, n = dewatermark(img)
+    assert n == 0 and np.array_equal(np.asarray(out), np.asarray(img))
 
 
 def test_dark_text_untouched():

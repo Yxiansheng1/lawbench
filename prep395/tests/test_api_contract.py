@@ -29,6 +29,11 @@ def test_health_contract(client):
     assert r.status_code == 200
     assert_valid(validator("prep395/health.schema.json"), r.json())
     assert r.json()["contract_version"] == "1.1"
+    assert r.json()["status"] == "degraded"         # 测试后端（fake）不能报 ok，防部署漏配
+
+
+def test_default_backend_is_llama(tmp_path):
+    assert Settings(home=tmp_path).backend == "llama"
 
 
 def test_health_degraded(settings):
@@ -189,11 +194,55 @@ def test_extract_drops_items_that_break_contract(settings):
 
     with TestClient(create_app(settings, Sloppy())) as c:
         r = c.post("/v1/extract", json={"task": "fields", "text": "x", "fields": ["金额", "日期"]}, headers=auth())
-        assert r.json()["result"] == [{"field": "金额", "value": "1.00", "loc": "第3页"}]
-        assert_valid(v_extract("#/$defs/response"), r.json())
+        expect_error(r, 500, "INTERNAL", ERR_EXT)       # 数组里混了非对象："garbage"
         r = c.post("/v1/extract", json={"task": "classify", "text": "x", "categories": ["书证", "其他"]},
                    headers=auth())
-        assert r.json()["result"] == {"category": "其他"}
-        r = c.post("/v1/extract", json={"task": "classify", "text": "x", "categories": ["书证", "合同"]},
+        expect_error(r, 500, "INTERNAL", ERR_EXT)       # 不在类别内：不再代选"其他"
+
+
+@pytest.mark.parametrize("fields_out", [{"field": "金额"}, "文本", None, 3], ids=["dict", "str", "none", "int"])
+def test_extract_wrong_shape_is_internal(settings, fields_out):
+    from fastapi.testclient import TestClient
+
+    class Odd(FakeBackend):
+        async def extract_fields(self, text, fields):
+            return fields_out
+
+        async def classify(self, text, categories):
+            return fields_out
+
+    with TestClient(create_app(settings, Odd())) as c:
+        r = c.post("/v1/extract", json={"task": "fields", "text": "x", "fields": ["金额"]}, headers=auth())
+        expect_error(r, 500, "INTERNAL", ERR_EXT)
+        r = c.post("/v1/extract", json={"task": "classify", "text": "x", "categories": ["书证", "其他"]},
                    headers=auth())
         expect_error(r, 500, "INTERNAL", ERR_EXT)
+
+
+def test_extract_valid_items_kept_invalid_values_dropped(settings):
+    from fastapi.testclient import TestClient
+
+    class Mixed(FakeBackend):
+        async def extract_fields(self, text, fields):
+            return [{"field": "金额", "value": "1.00", "loc": "第3页"},
+                    {"field": "金额", "value": "2.00", "loc": "【第3页】"},
+                    {"field": "未请求", "value": "x", "loc": "第1页"}]
+
+    with TestClient(create_app(settings, Mixed())) as c:
+        r = c.post("/v1/extract", json={"task": "fields", "text": "x", "fields": ["金额"]}, headers=auth())
+    assert r.json()["result"] == [{"field": "金额", "value": "1.00", "loc": "第3页"}]
+    assert_valid(v_extract("#/$defs/response"), r.json())
+
+
+def test_deeply_nested_json_is_bad_request(client):
+    body = b'{"task": "fields", "text": ' + b"[" * 200000 + b"]" * 200000 + b', "fields": ["a"]}'
+    r = client.post("/v1/extract", content=body, headers={**auth(), "Content-Type": "application/json"})
+    expect_error(r, 400, "BAD_REQUEST", ERR_EXT)
+
+
+def test_non_ascii_key_is_invalid_without_calling_6000d(client, gateway):
+    n0 = len(gateway.app.state.calls)
+    hdr = [(b"authorization", "Bearer 密钥测试".encode("utf-8")), (b"content-type", b"image/png")]
+    r = client.post("/v1/ocr/page", content=png_bytes(), headers=hdr)
+    expect_error(r, 401, "KEY_INVALID")
+    assert len(gateway.app.state.calls) == n0

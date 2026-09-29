@@ -11,8 +11,8 @@ import hmac
 import html
 import io
 import json
+import os
 import re
-import shutil
 import tempfile
 import time
 from contextlib import asynccontextmanager
@@ -22,6 +22,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.requests import ClientDisconnect
 from PIL import Image, UnidentifiedImageError
 
 from . import CONTRACT_VERSION, __version__
@@ -63,21 +64,23 @@ def error_response(code: str, headers: dict | None = None) -> JSONResponse:
 
 
 def startup_cleanup(settings: Settings) -> int:
-    """删除系统临时目录和服务目录下本服务前缀的残留文件（进程被强制结束时的兜底）。"""
+    """删除本服务前缀的残留文件（进程被强制结束时的兜底）。
+
+    只看两处的**顶层**：系统临时目录、服务目录下专用的 tmp 子目录；只删普通文件，
+    不删目录、不碰链接和联接，不递归（服务目录里的程序文件、WinSW 配置等不受影响）。
+    """
     n = 0
-    targets = [p for p in Path(tempfile.gettempdir()).glob(TEMP_PREFIX + "*")]
-    if settings.home.exists():
-        targets += [p for p in settings.home.rglob(TEMP_PREFIX + "*")
-                    if settings.log_dir not in p.parents and p != settings.log_dir]
-    for p in targets:
-        try:
-            if p.is_dir() and not p.is_symlink():
-                shutil.rmtree(p)
-            else:
+    for d in (Path(tempfile.gettempdir()), settings.home / "tmp"):
+        if not d.is_dir():
+            continue
+        for p in d.glob(TEMP_PREFIX + "*"):
+            try:
+                if p.is_symlink() or os.path.isjunction(p) or not p.is_file():
+                    continue
                 p.unlink()
-            n += 1
-        except OSError:
-            pass
+                n += 1
+            except OSError:
+                pass
     return n
 
 
@@ -185,7 +188,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None,
 
     async def authorize(request: Request) -> str:
         key = _bearer(request)
-        if not key:
+        if not key or not key.isascii():      # 含非 ASCII 字符的不可能是有效 Key，不发给 6000D
             raise Fail("KEY_INVALID")
         st = await keychecker.check(key)
         if st is KeyStatus.invalid:
@@ -214,7 +217,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None,
         except Fail as f:
             status, err = STATUS[f.code], f.code
             resp = error_response(f.code, f.headers)
-        except ClientGone:
+        except (ClientGone, ClientDisconnect):   # 排队、推理或上传途中客户端断开
             status, err = CLIENT_GONE, "ClientGone"
             resp = Response(status_code=204)     # 连接已断，这个响应不会送达
         except Exception as e:  # noqa: BLE001
@@ -232,7 +235,8 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None,
     async def health():
         ocr_ok, llm_ok = await backend.health()
         return {
-            "status": "ok" if ocr_ok and llm_ok else "degraded",
+            # 测试后端返回的是假文本，部署漏配时不能报 ok
+            "status": "ok" if ocr_ok and llm_ok and backend.name != "fake" else "degraded",
             "ocr": "ok" if ocr_ok else "down",
             "llm9b": "ok" if llm_ok else "down",
             "queue": ocr_slots.waiting + llm_slots.waiting,
@@ -294,7 +298,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None,
             ctx["bytes"] = len(raw)
             try:
                 req = json.loads(raw)
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError, UnicodeDecodeError, RecursionError):
                 raise Fail("BAD_REQUEST") from None
             task, items = _validate_extract(req, settings.max_text_chars)
             try:
@@ -358,7 +362,7 @@ def _basic_ok(request: Request, user: str, pass_sha256: str) -> bool:
     except (ValueError, UnicodeDecodeError):
         return False
     digest = hashlib.sha256(p.encode("utf-8")).hexdigest()
-    return hmac.compare_digest(u, user) & hmac.compare_digest(digest, pass_sha256.lower())
+    return hmac.compare_digest(u.encode("utf-8"), user.encode("utf-8")) &         hmac.compare_digest(digest.encode("ascii"), pass_sha256.lower().encode("utf-8"))
 
 
 def _validate_extract(req, max_chars: int) -> tuple[str, list[str]]:
@@ -379,11 +383,12 @@ def _validate_extract(req, max_chars: int) -> tuple[str, list[str]]:
 
 
 def _clean_fields(out, fields: list[str]) -> list[dict]:
-    """只保留符合契约的条目：字段是请求里的、值为非空字符串、位置形如 第N页。"""
+    """模型输出不是对象数组时按内部错误处理；数组里值不合格的条目（字段不是请求里的、值为空、
+    位置不是 第N页/段/行）丢掉。"""
+    if not isinstance(out, list) or not all(isinstance(it, dict) for it in out):
+        raise Fail("INTERNAL")
     res = []
-    for it in out if isinstance(out, list) else []:
-        if not isinstance(it, dict):
-            continue
+    for it in out:
         f, v, loc = it.get("field"), it.get("value"), it.get("loc")
         if f in fields and isinstance(v, str) and v and isinstance(loc, str) and LOC_OK.match(loc):
             res.append({"field": f, "value": v, "loc": loc})
@@ -391,8 +396,7 @@ def _clean_fields(out, fields: list[str]) -> list[dict]:
 
 
 def _clean_category(out, categories: list[str]) -> str:
-    if out in categories:
+    """分类结果必须是给定类别之一，否则按内部错误处理（不代选"其他"）。"""
+    if isinstance(out, str) and out in categories:
         return out
-    if "其他" in categories:
-        return "其他"
     raise Fail("INTERNAL")

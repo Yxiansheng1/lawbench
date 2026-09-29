@@ -9,10 +9,10 @@ cd D:\lawbench-C
 py -3.12 -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".\prep395[test]"
 
-# 用测试后端（不需要模型），6000D 指向所内网关做 Key 校验
+# 开发时显式用测试后端（不需要模型；此时 /health 报 degraded），6000D 指向所内网关做 Key 校验
 $env:PREP395_BACKEND = "fake"
 $env:PREP395_LLM_BASE = "http://192.168.8.77:8000"
-$env:PREP395_HOME = "$env:TEMP\prep395-dev-home"   # 开发时的服务目录（日志写在其下 logs\）
+$env:PREP395_HOME = "$env:USERPROFILE\lb395-dev"   # 开发时的服务目录（日志在其下 logs\）；不要放在 TEMP 下
 .\.venv\Scripts\python -m prep395                   # 默认监听 127.0.0.1:9000
 ```
 
@@ -31,17 +31,17 @@ cd D:\lawbench-C\prep395
 |---|---|---|
 | `PREP395_HOST` / `PREP395_PORT` | `127.0.0.1` / `9000` | 监听地址；部署时 HOST 设为 395 的局域网 IP |
 | `PREP395_LLM_BASE` | `http://192.168.8.77:8000` | 6000D 网关，用于 Key 校验；只允许 6000D 的所内、所外地址或 127.0.0.1 |
-| `PREP395_BACKEND` | `fake` | `fake` 或 `llama` |
+| `PREP395_BACKEND` | `llama` | `llama`（部署）或 `fake`（只用于开发和测试：返回固定假文本，`/health` 的 `status` 报 `degraded`） |
 | `PREP395_OCR_URL` / `PREP395_LLM9B_URL` | `http://127.0.0.1:9101` / `:9102` | 本机 llama-server；只允许 127.0.0.1 |
 | `PREP395_OCR_MODEL` / `PREP395_LLM9B_MODEL` | `ocr` / `llm9b` | 发给 llama-server 的 model 名 |
 | `PREP395_OCR_CONCURRENCY` | `2` | 识别同时处理页数 N（按 G-5 实测调整）；9B 固定 1 |
 | `PREP395_QUEUE_MAX` | `20` | 排队上限，超出返回 503 `QUEUE_FULL` + `Retry-After` |
 | `PREP395_OCR_TIMEOUT` | `120` | 单页识别超时（秒），超时返回 504 |
-| `PREP395_HOME` | `C:\prep395` | 服务目录；启动清理范围之一 |
+| `PREP395_HOME` | `C:\prep395` | 服务目录；启动清理只看其下专用 `tmp\` 子目录的顶层 |
 | `PREP395_LOG_DIR` | `<HOME>\logs` | 访问日志 `access.log`，按天滚动、保留 30 天 |
 | `PREP395_ADMIN_USER` / `PREP395_ADMIN_PASS_SHA256` | 空 | `/admin` 的 HTTP Basic 账号；口令只配 SHA-256（十六进制），不配明文。未配置时 `/admin` 返回 503 |
 
-生成口令摘要（在部署机上执行，不要把口令写进任何文件）：
+`/admin` 口令必须是随机强口令（16 位以上），`/admin` 只在律所局域网内使用。生成口令摘要（在部署机上执行，不要把口令写进任何文件）：
 
 ```powershell
 $p = Read-Host -AsSecureString "管理员口令"
@@ -64,9 +64,9 @@ $plain = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServi
 
 - 不用 multipart，`request.stream()` 读进内存；先按 `Content-Length` 拒绝超过 10MB 的请求，没有 `Content-Length` 时边读边数。
 - 图片在内存中解码、纠偏、去水印、编码为 PNG，以 base64 经本机 HTTP 发给 llama-server；不写临时文件。
-- 启动时删除系统临时目录和服务目录下 `prep395-` 前缀的残留（本服务不产生这类文件，是进程被强杀时的兜底），日志只记删除个数。
+- 启动时删除系统临时目录顶层、`<HOME>\tmp\` 顶层以 `prep395-` 开头的普通文件（本服务不产生这类文件，是进程被强杀时的兜底）；不删目录、不碰链接和联接、不递归；日志只记删除个数。
 - 访问日志字段固定为 `ts, key, api, pages, bytes, elapsed_ms, status, err`；`key` 为 SHA-256 前 8 位，`err` 为错误码或异常类名。uvicorn 自带访问日志关闭。
 - 客户端断开：排队中的出队；推理中的取消对 llama-server 的请求（连接断开，llama-server 停止生成）。日志里记为 `status: 499`。
-- 去水印默认关闭；只把浅灰、低饱和、占全图 ≥1% 的像素换成纸张底色，深色文字、红色、蓝色像素不动。
+- 去水印默认关闭；只有浅灰、低饱和、占全图 ≥1% 且呈重复斜向图案时才把这些像素换成纸张底色；横排浅灰正文、没有水印的扫描页原样返回；带红或蓝色调的像素（含浅色边缘）及其周围 2 像素一律不动。
 
 部署（WinSW 服务、专用账号、防火墙、llama-server 参数）在 T11 做。

@@ -31,7 +31,7 @@ def check_url(url: str, what: str) -> str:
 @dataclass
 class Settings:
     llm_base: str = "http://192.168.8.77:8000"          # 6000D 网关（Key 校验用）
-    backend: str = "fake"                                # fake | llama
+    backend: str = "llama"                               # llama | fake（fake 只用于开发和测试）
     ocr_url: str = "http://127.0.0.1:9101"               # 视觉模型 llama-server
     llm9b_url: str = "http://127.0.0.1:9102"             # 9B llama-server
     ocr_model: str = "ocr"

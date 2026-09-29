@@ -160,14 +160,13 @@ class LlamaServerBackend:
     async def extract_fields(self, text: str, fields: list[str]) -> list[dict]:
         out = await self._chat(self.llm9b_url, self.llm9b_model,
                                FIELDS_PROMPT.format(fields="、".join(fields), text=text), 2048)
-        data = _json_from(out)
-        return data if isinstance(data, list) else []
+        return _json_from(out)            # 形状由 app 核对，不对按内部错误处理
 
     async def classify(self, text: str, categories: list[str]) -> str:
         out = await self._chat(self.llm9b_url, self.llm9b_model,
                                CLASSIFY_PROMPT.format(cats="、".join(categories), text=text), 64)
         data = _json_from(out)
-        return str(data.get("category", "")) if isinstance(data, dict) else ""
+        return data.get("category") if isinstance(data, dict) else None
 
     async def health(self) -> tuple[bool, bool]:
         async def one(base: str) -> bool:

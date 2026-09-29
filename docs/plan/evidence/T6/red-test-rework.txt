@@ -1,0 +1,35 @@
+# 返修红测（变异后应失败，测完已还原）  2026-09-29 19:48:53 +0800
+
+## P2-3：预处理里临时写一个 TemporaryFile（写完自动删除）→ 不落盘测试应失败
+tests\test_privacy.py:79: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_privacy.py::test_fifty_images_leave_no_files - AssertionErr...
+1 failed, 3 deselected in 32.22s
+exit=1
+
+## P1-1：换回返修前的启动清理（递归删服务目录下 prep395-*）→ 清理安全测试应失败
+tests\test_privacy.py:131: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_privacy.py::test_startup_cleanup_only_own_top_level_files
+1 failed, 3 deselected in 1.81s
+exit=1
+
+## P2-1 / P2-4 / P3-1 / P3-2 / P3-3：新测试在返修前的 app.py 上应失败
+FAILED tests/test_admin_config.py::test_admin_non_ascii_username_is_401_not_500
+FAILED tests/test_admin_config.py::test_admin_non_ascii_configured_user - Typ...
+FAILED tests/test_api_contract.py::test_health_contract - AssertionError: ass...
+FAILED tests/test_api_contract.py::test_extract_wrong_shape_is_internal[dict]
+FAILED tests/test_api_contract.py::test_extract_wrong_shape_is_internal[str]
+FAILED tests/test_api_contract.py::test_extract_wrong_shape_is_internal[none]
+FAILED tests/test_api_contract.py::test_extract_wrong_shape_is_internal[int]
+FAILED tests/test_api_contract.py::test_deeply_nested_json_is_bad_request - A...
+FAILED tests/test_api_contract.py::test_non_ascii_key_is_invalid_without_calling_6000d
+FAILED tests/test_queue.py::test_upload_aborted_midway_logged_as_client_gone
+10 failed, 68 deselected in 6.41s
+exit=1
+## P2-2：去水印测试在返修前的 dewatermark.py 上应失败
+FAILED tests/test_dewatermark.py::test_seal_red_pixels_unchanged_and_watermark_variance_drops
+FAILED tests/test_dewatermark.py::test_blue_annotation_unchanged - assert False
+FAILED tests/test_dewatermark.py::test_light_gray_horizontal_text_untouched
+FAILED tests/test_dewatermark.py::test_scan_without_watermark_untouched - ass...
+4 failed, 4 passed in 7.15s

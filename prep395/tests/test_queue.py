@@ -97,6 +97,27 @@ def test_extract_runs_one_at_a_time(served):
     asyncio.run(go())
 
 
+def test_upload_aborted_midway_logged_as_client_gone(served):
+    """上传途中客户端断开：日志记 499 / ClientGone，不是 500。"""
+    import json
+    import socket
+    s, app, be = served
+    be.gate = None                  # 请求到不了推理，不需要卡住
+    with socket.create_connection(("127.0.0.1", s.port)) as sk:
+        head = ("POST /v1/ocr/page HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-key-good\r\n"
+                "Content-Type: image/png\r\nContent-Length: 1000000\r\n\r\n").encode()
+        sk.sendall(head + b"x" * 50000)
+        time.sleep(1.0)
+    log = app.state.log.path
+
+    def last():
+        lines = log.read_text(encoding="utf-8").splitlines()
+        return json.loads(lines[-1]) if lines else {}
+    wait_until(lambda: last().get("api") == "ocr/page", timeout=5)
+    rec = last()
+    assert rec["status"] == 499 and rec["err"] == "ClientGone", rec
+
+
 # ---------------------------------------------------------------- Slots 单元
 
 
