@@ -132,6 +132,46 @@ describe('看护：策略（模拟进程）', () => {
     expect(events).toContain('service.launch_failed')
   })
 
+  it('首次启动挑端口就失败：状态 failed，不停在 starting（T7 第二次返修 F3）', async () => {
+    const events: string[] = []
+    const deps = {
+      spawn(): ChildHandle { throw new Error('不应被调用') },
+      probe: async () => '1.1',
+      pickPort: async () => { throw new Error('服务端口范围内没有空闲端口') },
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      log: (_l: string, e: string) => { events.push(e) },
+    }
+    const s = new Supervisor(deps)
+    await s.start()
+    expect(s.state).toBe('failed')
+    expect(events).toContain('service.launch_failed')
+  })
+
+  it('重启失败时已在停止中：状态保持 stopped，不改成 failed（T7 第二次返修 F4）', async () => {
+    let calls = 0
+    let releaseSecond!: () => void
+    let exit!: (c: number | null) => void
+    const deps = {
+      spawn(): ChildHandle { return { pid: 1, exited: new Promise<number | null>((r) => { exit = r }), kill: () => {} } },
+      probe: async () => '1.1',
+      // 第二次挑端口（重启时）先挂起，放行后抛错
+      pickPort: async () => { calls++; if (calls === 1) return 18400; await new Promise<void>((r) => { releaseSecond = r }); throw new Error('端口挑选失败') },
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      log: () => {},
+    }
+    const s = new Supervisor(deps)
+    await s.start()
+    expect(s.state).toBe('running')
+    exit(1)                       // 进程退出 → 触发重启，重启卡在挑端口
+    await waitFor(() => calls === 2, 2000)
+    s.stop()                      // 重启途中主动停止
+    releaseSecond()               // 重启失败
+    await new Promise((r) => setTimeout(r, 50))
+    expect(s.state).toBe('stopped')
+  })
+
   it('挑端口期间 stop()：不再拉起进程（T7 返修 P3-2）', async () => {
     const spawned: number[] = []
     let release!: (p: number) => void

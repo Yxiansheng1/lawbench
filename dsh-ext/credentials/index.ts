@@ -53,14 +53,15 @@ export class LawbenchCredentials {
   async set(ref: string, value: string): Promise<void> {
     if (ref !== KEY_REF) throw new Error(`只能设置 ${KEY_REF}`)
     if (typeof value !== 'string' || value.length === 0) throw new Error('Key 不能为空')
-    await this.store.write(value)
+    // 写之前先作废缓存：写入超时时可能已经写成功，之后的读取必须回到凭据管理器核对（T7 第二次返修）
     this.cache = undefined
+    try { await this.store.write(value) } finally { this.cache = undefined }
   }
 
   async unset(ref: string): Promise<void> {
     if (ref !== KEY_REF) return
-    await this.store.remove()
     this.cache = undefined
+    try { await this.store.remove() } finally { this.cache = undefined }
   }
 
   // ── 授权记录 ─────────────────────────────────────────────────────────────

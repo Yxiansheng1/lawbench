@@ -1,16 +1,15 @@
 # 我方测试命令（执行令 Q7：dsh-ext 自带配置，借 dsh 依赖环境运行）
 # 命令：cd dsh-ext; node scripts/test.mjs
-# 日期：2026-09-30 01:59（第 3 节 P3-2/3/4 之后重跑；凭据管理器用例需 LB_TEST_CREDMAN=1，默认跳过）
+# 日期：2026-09-30 02:34（T7 第二次返修后重跑；凭据管理器用例需 LB_TEST_CREDMAN=1，默认跳过）
 
 
  RUN  v4.1.8 D:/lawbench-A/dsh-ext
 
 
  Test Files  9 passed (9)
-      Tests  56 passed | 5 skipped (61)
-   Start at  01:59:39
-   Duration  6.70s (transform 836ms, setup 0ms, import 2.42s, tests 11.34s, environment 2ms)
+      Tests  64 passed | 5 skipped (69)
+   Start at  02:34:25
+   Duration  6.76s (transform 894ms, setup 0ms, import 2.45s, tests 11.51s, environment 1ms)
 
 
 # 类型检查：tsc -p tsconfig.json --noEmit → 退出码 0
-# 另：LB_TEST_CREDMAN=1 单独跑 tests/credman.spec.ts → 6 passed

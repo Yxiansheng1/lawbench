@@ -72,7 +72,8 @@ export class Supervisor {
   async start(): Promise<void> {
     this.stopping = false
     this.restarts = []
-    await this.launch(0)
+    // 首次启动挑端口就失败时也设为 failed，不停在 starting（T7 第二次返修 F3）
+    await this.launch(0).catch((e: unknown) => this.launchFailed(e))
   }
 
   stop(): void {
@@ -170,9 +171,12 @@ export class Supervisor {
 
   /** 重启时接住 launch 的异常（例如端口范围全被占）：记日志并把状态设为 failed（T7 返修 P3-2）。 */
   private relaunch(portRetries: number): void {
-    this.launch(portRetries).catch((e: unknown) => {
-      this.deps.log('error', 'service.launch_failed', { error: String((e as Error)?.message ?? e) })
-      this.setState('failed')
-    })
+    this.launch(portRetries).catch((e: unknown) => this.launchFailed(e))
+  }
+
+  /** launch 抛错：记日志；已经在停止中的不改状态（T7 第二次返修 F4），否则设为 failed。 */
+  private launchFailed(e: unknown): void {
+    this.deps.log('error', 'service.launch_failed', { error: String((e as Error)?.message ?? e) })
+    if (!this.stopping) this.setState('failed')
   }
 }

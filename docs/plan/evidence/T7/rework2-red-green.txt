@@ -1,0 +1,243 @@
+# T7 第二次返修红测（F1/F2/F3/F4/F6）
+# 红：把 host/index.ts、host/supervisor.ts、credentials/index.ts 换回上一次提交（da11752）的版本，跑新测试；绿：换回修好的版本再跑
+
+## 红
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+ ❯ tests/trial-connection.spec.ts (11 tests | 5 failed) 719ms
+     × F1 恢复时服务不可用：地址恢复失败不影响 Key 恢复；给出"未能恢复"提示 20ms
+     × F1 恢复 Key 超时、实际已写回：读回核对一致，算恢复成功 14ms
+     × F1 过程中出错且恢复成功：抛"……；已恢复为测试前的配置"，地址和 Key 都回到原样 12ms
+     × F2 两次测试连接并发：串行执行，第二次不会把第一次写进去的错误值当旧值 25ms
+     × F6 没改 Key 且测试没通过：不碰 Key（不写不删） 12ms
+ ❯ tests/supervisor.spec.ts (10 tests | 2 failed) 6182ms
+     × 首次启动挑端口就失败：状态 failed，不停在 starting（T7 第二次返修 F3） 5ms
+     × 重启失败时已在停止中：状态保持 stopped，不改成 failed（T7 第二次返修 F4） 171ms
+node : 
+At line:1 char:655
++ ... ) }; $red = node scripts/test.mjs tests/trial-connection.spec.ts test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/supervisor.spec.ts > 看护：策略（模拟进程） > 首次启动挑端口就失败：状态 failed，不停在 starting（T7 第二次返修 F3）
+Error: 服务端口范围内没有空闲端口
+ ❯ Object.pickPort tests/supervisor.spec.ts:140:37
+    138|       spawn(): ChildHandle { throw new Error('不应被调用') },
+    139|       probe: async () => '1.1',
+    140|       pickPort: async () => { throw new Error('服务端口范围内没有空闲端口') },
+       |                                     ^
+    141|       newToken: () => 't'.repeat(32),
+    142|       expectedVersion: '1.1',
+ ❯ Supervisor.launch host/supervisor.ts:91:34
+ ❯ Supervisor.start host/supervisor.ts:75:16
+ ❯ tests/supervisor.spec.ts:146:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/supervisor.spec.ts > 看护：策略（模拟进程） > 重启失败时已在停止中：状态保持 stopped，不改成 failed（T7 第二次返修 F4）
+AssertionError: expected 'failed' to be 'stopped' // Object.is equality
+
+Expected: "stopped"
+Received: "failed"
+
+ ❯ tests/supervisor.spec.ts:172:21
+    170|     releaseSecond()               // 重启失败
+    171|     await new Promise((r) => setTimeout(r, 50))
+    172|     expect(s.state).toBe('stopped')
+       |                     ^
+    173|   })
+    174|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > F1 恢复时服务不可用：地址恢复失败不影响 Key 恢复；给出"未能恢复"提示
+AssertionError: expected 'sk-typo-87654321' to be 'sk-old-12345678' // Object.is equality
+
+Expected: "sk-old-12345678"
+Received: "sk-typo-87654321"
+
+ ❯ tests/trial-connection.spec.ts:74:19
+     72|     const sup = { endpoint: () => (++calls <= 2 ? { port: fake.port, t…
+     73|     await expect(new LawbenchRemote(sup, fake.appdata, () => c).trialC…
+     74|     expect(get()).toBe('sk-old-12345678')
+       |                   ^
+     75|   })
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > F1 恢复 Key 超时、实际已写回：读回核对一致，算恢复成功
+Error: 凭据管理器操作超时（15 秒）
+ ❯ Object.c.set tests/trial-connection.spec.ts:80:87
+     78|     const { c, get } = memCredentials('sk-old-12345678')
+     79|     const origSet = c.set
+     80|     c.set = async (r, v) => { await origSet(r, v); if (v === 'sk-old-1…
+       |                                                                                       ^
+     81|     const r = await new LawbenchRemote(supervisorFor(fake), fake.appda…
+     82|     expect(r.restored).toBe(true)
+ ❯ LawbenchRemote.trialConnection host/index.ts:156:35
+ ❯ tests/trial-connection.spec.ts:81:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > F1 过程中出错且恢复成功：抛"……；已恢复为测试前的配置"，地址和 Key 都回到原样
+AssertionError: expected [Function] to throw error including '已恢复为测试前的配置' but got '凭据管理器操作失败（退出码 1）：拒绝访问'
+
+Expected: "已恢复为测试前的配置"
+Received: "凭据管理器操作失败（退出码 1）：拒绝访问"
+
+ ❯ tests/trial-connection.spec.ts:98:121
+     96|     const origSet = c.set
+     97|     c.set = async (r, v) => { if (v === 'sk-new-12345678') throw new E…
+     98|     await expect(new LawbenchRemote(supervisorFor(fake), fake.appdata,…
+       |                                                                                                               
+          ^
+     99|     expect(JSON.parse(readFileSync(settingsFile(), 'utf8')).servers).t…
+    100|     expect(get()).toBe('sk-old-12345678')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > F2 两次测试连接并发：串行执行，第二次不会把第一次写进去的错误值当旧值
+AssertionError: expected [ 'resolve', 'resolve', …(4) ] to deeply equal [ 'resolve', …(5) ]
+
+- Expected
++ Received
+
+  [
+    "resolve",
+-   "set:sk-typo-87654321",
+-   "set:sk-old-12345678",
+    "resolve",
++   "set:sk-typo-87654321",
+    "set:sk-typo2-8765432",
++   "set:sk-old-12345678",
+    "set:sk-old-12345678",
+  ]
+
+ ❯ tests/trial-connection.spec.ts:117:17
+    115|     expect(r1.restored).toBe(true)
+    116|     expect(r2.restored).toBe(true)
+    117|     expect(ops).toEqual([
+       |                 ^
+    118|       'resolve', 'set:sk-typo-87654321', 'set:sk-old-12345678',
+    119|       'resolve', 'set:sk-typo2-8765432', 'set:sk-old-12345678',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > F6 没改 Key 且测试没通过：不碰 Key（不写不删）
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/trial-connection.spec.ts:133:20
+    131|     const r = await new LawbenchRemote(supervisorFor(fake), fake.appda…
+    132|     expect(r.restored).toBe(true)
+    133|     expect(writes).toBe(0)
+       |                    ^
+    134|     expect(get()).toBe('sk-old-12345678')
+    135|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  7 failed | 14 passed (21)
+   Start at  02:32:39
+   Duration  6.69s (transform 195ms, setup 0ms, import 520ms, tests 6.90s, environment 0ms)
+
+
+## 绿
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+
+ Test Files  2 passed (2)
+      Tests  21 passed (21)
+   Start at  02:32:46
+   Duration  6.76s (transform 243ms, setup 0ms, import 540ms, tests 6.97s, environment 0ms)
+
+
+
+# F5（DSH apps/desktop，已应用四个补丁）：让 safe() 把本地异常原文交给页面
+## 红
+node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:1084
++ ... $u); $red = node node_modules\vitest\vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+ ❯ |thread-safe| apps/desktop/tests/lawbench-first-run.spec.ts (8 tests | 1 failed | 7 skipped) 40ms
+     × 本地异常（如网络错误）的信息不含中文时换成通用文案（T7 第二次返修 F5） 37ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/lawbench-first-run.spec.ts > connectDesktopWelcome（T7 返修 P2-2） > 本地异常（如网络错误）的信息
+不含中文时换成通用文案（T7 第二次返修 F5）
+AssertionError: expected { ok: false, …(1) } to deeply equal { ok: false, …(1) }
+
+- Expected
++ Received
+
+  {
+-   "message": "保存失败，请重试；多次出现请联系技术支持",
++   "message": "fetch failed: connect ECONNREFUSED 127.0.0.1:19387 at C:\\Users\\x\\node.js",
+    "ok": false,
+  }
+
+ ❯ apps/desktop/tests/lawbench-first-run.spec.ts:38:15
+     36|     const backend = await connectDesktopWelcome(AUTH_URL, send)
+     37|     const r = await backend.getSetup()
+     38|     expect(r).toEqual({ ok: false, message: '保存失败，请重试；多次出现请联系技术支持' })
+       |               ^
+     39|     expect(JSON.stringify(r)).not.toContain('ECONNREFUSED')
+     40|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  02:33:29
+   Duration  1.26s (transform 390ms, setup 804ms, import 99ms, tests 40ms, environment 0ms)
+
+
+## 绿
+node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:1242
++ ... ); $green = node node_modules\vitest\vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 7 skipped (8)
+   Start at  02:33:32
+   Duration  1.29s (transform 393ms, setup 844ms, import 95ms, tests 31ms, environment 0ms)
+
+

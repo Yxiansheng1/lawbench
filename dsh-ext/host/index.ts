@@ -126,40 +126,82 @@ export class LawbenchRemote {
     return this.api('POST', '/api/connection/test', { server })
   }
 
+  /** 串行执行"测试连接"（T7 第二次返修 F2）：两次并发时，后一次必须等前一次（含恢复）做完再取"旧值"。 */
+  private trialQueue: Promise<unknown> = Promise.resolve()
+
   /**
-   * 首次配置页的"测试连接"（T7 返修 P3-5）：先保存页面上的地址（和 Key），再测两台服务器；
-   * 测试没通过（任一台连不上，或 Key 被判无效，或过程中出错）就恢复成测试之前的地址和 Key——
-   * 之前没有设置文件的删掉设置文件，之前没有 Key 的删掉 Key。旧 Key 只在本进程内存里过一下，不写日志、不落盘。
+   * 首次配置页的"测试连接"（T7 返修 P3-5、第二次返修 F1/F2/F6）：先保存页面上的地址（和 Key），再测两台服务器；
+   * 测试没通过（任一台连不上、Key 被判无效，或过程中出错）就恢复成测试之前的地址和 Key——之前没有设置文件的删掉，
+   * 之前没有 Key 的删掉 Key；没改 Key 的不碰 Key。地址和 Key 各自恢复，一个失败不影响另一个；
+   * 任一步恢复失败（含凭据写入超时后读回核对不符）就抛出 RESTORE_FAILED。旧 Key 只在本进程内存里过一下，不写日志、不落盘。
+   * 每一步抛错后的状态见 T7 交付说明第 9 节的表。
    * @param servers - 四个地址（servers 对象）。@param key - 新 Key；不改 Key 时为 null。
+   * @returns 测试完成时的两项结果；没通过且已恢复时 restored 为 true。过程中出错且已恢复时抛出"……；已恢复为测试前的配置"。
    */
-  async trialConnection(servers: unknown, key: unknown): Promise<{ llm: unknown; prep: unknown; restored: boolean }> {
+  trialConnection(servers: unknown, key: unknown): Promise<{ llm: unknown; prep: unknown; restored: boolean }> {
+    const run = this.trialQueue.then(() => this.trialOnce(servers, key), () => this.trialOnce(servers, key))
+    this.trialQueue = run.catch(() => undefined)
+    return run
+  }
+
+  private async trialOnce(servers: unknown, key: unknown): Promise<{ llm: unknown; prep: unknown; restored: boolean }> {
+    // ① 参数与前置条件：抛错时什么都没改
     if (key !== null && (typeof key !== 'string' || !/^[\x21-\x7e]{8,512}$/.test(key))) throw new Error('请求参数有误')
     const cred = this.credentials()
-    if (!cred) throw new Error('工作台服务未启动，请稍后重试')
+    if (!cred) throw new Error(UNAVAILABLE)
+    // ② 快照：抛错时什么都没改
     const settingsFile = join(this.appData, 'settings.json')
     const hadSettings = existsSync(settingsFile)
     const oldSettings = (await this.getSettings()) as Record<string, unknown>
-    const oldKey = (await cred.resolve('LAWFIRM_KEY'))?.value
+    const changeKey = typeof key === 'string'
+    const oldKey = changeKey ? (await cred.resolve('LAWFIRM_KEY'))?.value : undefined
+    // ③ 试写与测试：写之前先记"可能已写"（超时可能发生在写成功之后）
+    let settingsTouched = false
+    let keyTouched = false
     let llm: { reachable?: boolean; key_valid?: boolean | null } | undefined
     let prep: { reachable?: boolean } | undefined
-    let ok = false
+    let failure: unknown
     try {
+      settingsTouched = true
       await this.putSettings({ ...oldSettings, servers })
-      if (typeof key === 'string') await cred.set('LAWFIRM_KEY', key)
+      if (changeKey) {
+        keyTouched = true
+        await cred.set('LAWFIRM_KEY', key as string)
+      }
       llm = (await this.testConnection('llm')) as typeof llm
       prep = (await this.testConnection('prep')) as typeof prep
-      ok = llm?.reachable === true && llm.key_valid !== false && prep?.reachable === true
-    } finally {
-      if (!ok) {
+      if (llm?.reachable === true && llm.key_valid !== false && prep?.reachable === true) return { llm, prep, restored: false }
+    } catch (e) {
+      failure = e
+    }
+    // ④ 恢复：地址、Key 各自独立
+    let restoreFailed = false
+    if (settingsTouched) {
+      try {
         if (hadSettings) await this.putSettings(oldSettings)
         else rmSync(settingsFile, { force: true })
+      } catch { restoreFailed = true }
+    }
+    if (keyTouched) {
+      try {
         if (oldKey !== undefined) await cred.set('LAWFIRM_KEY', oldKey)
         else await cred.unset('LAWFIRM_KEY')
+      } catch {
+        // 凭据写入超时时写入可能已经成功：读一次核对，读不到或不符都算未能恢复
+        try { if ((await cred.resolve('LAWFIRM_KEY'))?.value !== oldKey) restoreFailed = true } catch { restoreFailed = true }
       }
     }
-    return { llm, prep, restored: !ok }
+    if (restoreFailed) throw new Error(RESTORE_FAILED)
+    if (failure !== undefined) {
+      const msg = failure instanceof Error && /[一-鿿]/.test(failure.message) ? failure.message : UNAVAILABLE
+      throw new Error(`${msg}；已恢复为测试前的配置`)
+    }
+    return { llm, prep, restored: true }
   }
 }
+
+const UNAVAILABLE = '工作台服务未启动，请稍后重试'
+export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS, {
   configurable: true,
   value: Object.freeze({
