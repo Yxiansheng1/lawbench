@@ -67,10 +67,6 @@ $plain = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServi
 - 启动时删除系统临时目录顶层、`<HOME>\tmp\` 顶层以 `prep395-` 开头的普通文件（本服务不产生这类文件，是进程被强杀时的兜底）；不删目录、不碰链接和联接、不递归；日志只记删除个数。
 - 访问日志字段固定为 `ts, key, api, pages, bytes, elapsed_ms, status, err`；`key` 为 SHA-256 前 8 位，`err` 为错误码或异常类名。uvicorn 自带访问日志关闭。
 - 客户端断开：排队中的出队；推理中的取消对 llama-server 的请求（连接断开，llama-server 停止生成）。日志里记为 `status: 499`。
-- 去水印默认关闭（`dewatermark=true` 才做）。实际行为：
-  - **会去**：浅灰、低饱和、占全图 ≥1%，且沿某个斜向角度（±30°、±45°、±60°）投影有至少 3 个峰、强于横竖方向的页——这些候选像素全部换成纸张底色。
-  - **原样返回**：没有水印的扫描页；浅灰横排正文页（含叠了水印的浅灰正文页，因为横排结构压过了斜向结构）。
-  - **一律不动**：带红或蓝色调的像素（含浅色边缘）及其周围 2 像素；深色正文。
-  - **已知不足**：页面既有斜向水印、又有少量浅灰手写（如铅笔批注）时，手写会和水印一起被抹掉（`tests\test_dewatermark.py` 中标为已知失败的用例）；是否本版停用去水印由主编排决定。
+- **本版去水印未启用**：`dewatermark=true` 照常接受（契约不变），但图片原样送识别，`return_image=true` 返回的图与不勾选时逐像素相同。原因：扫描页上的浅灰手写（如铅笔批注）与水印靠像素统计分不开，启用会把手写一起抹掉。算法保留在 `prep395\dewatermark.py`（开关常量 `DEWATERMARK_ENABLED = False`，不做成配置项），测量数据见 `docs\plan\evidence\T6\p2a-measure.txt`。
 
 部署（WinSW 服务、专用账号、防火墙、llama-server 参数）在 T11 做。

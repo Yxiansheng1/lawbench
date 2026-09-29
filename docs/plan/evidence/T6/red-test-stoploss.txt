@@ -1,0 +1,7 @@
+# T6 去水印止损红测：把开关改成 True（启用去水印）→ 接口级原样返回的测试应失败；测完已还原  2026-09-29 21:23:01 +0800
+FAILED tests/test_dewatermark.py::test_dewatermark_disabled_in_this_version
+FAILED tests/test_dewatermark.py::test_api_dewatermark_true_returns_original[\u84dd\u8272\u6279\u6ce8\u9875]
+FAILED tests/test_dewatermark.py::test_api_dewatermark_true_returns_original[\u7ea2\u7ae0\u9875]
+FAILED tests/test_dewatermark.py::test_scan_with_watermark_and_pencil_notes_left_alone
+4 failed, 8 passed in 19.16s
+exit=1

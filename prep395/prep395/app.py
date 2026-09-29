@@ -28,7 +28,7 @@ from PIL import Image, UnidentifiedImageError
 from . import CONTRACT_VERSION, __version__
 from .backends import Backend, FakeBackend, LlamaServerBackend
 from .config import TEMP_PREFIX, Settings
-from .dewatermark import deskew, dewatermark
+from .dewatermark import DEWATERMARK_ENABLED, deskew, dewatermark
 from .keycheck import KeyChecker, KeyStatus, key_prefix
 from .logs import AccessLog
 from .queue import ClientGone, QueueFull, Slots, Timeout, run_cancellable
@@ -136,7 +136,7 @@ def _open_image(body: bytes, max_long_side: int) -> Image.Image:
 def _preprocess(img: Image.Image, do_deskew: bool, do_dewatermark: bool) -> tuple[bytes, Image.Image]:
     if do_deskew:
         img, _ = deskew(img)
-    if do_dewatermark:
+    if do_dewatermark and DEWATERMARK_ENABLED:      # 本版未启用：勾选了也原样送识别
         img, _ = dewatermark(img)
     out = io.BytesIO()
     img.save(out, "PNG")

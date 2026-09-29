@@ -32,6 +32,9 @@ def gray_var(img: Image.Image, box) -> float:
 WM_BOX = (40, 1050, 620, 1700)
 
 
+# 以下直接调用 dewatermark() 的用例测的是本版未启用、留档备查的算法（服务不调用它），保留以免算法无人看管。
+
+
 def tint_mask(img, channel: int) -> np.ndarray:
     """带红（channel=0）或蓝（channel=2）色调的像素，含浅色边缘：该通道比另两个通道高出 8 以上。"""
     a = np.asarray(img.convert("RGB")).astype(int)
@@ -109,18 +112,27 @@ def test_deskew_small_angle_not_rotated_and_tilt_corrected():
     assert abs(ang2 + 2.0) <= 0.8, ang2
 
 
-def test_api_dewatermark_off_by_default(client):
-    """不带 dewatermark 参数时，返回的工作副本里水印还在；带 dewatermark=true 时去掉。"""
-    page3 = scan_pages()[2]
-    raw = to_bytes(page3)
+def _roundtrip(client, img, query="return_image=true&deskew=false&dewatermark=true"):
     hdr = {**auth(), "Content-Type": "image/png"}
-    r0 = client.post("/v1/ocr/page?return_image=true&deskew=false", content=raw, headers=hdr)
-    r1 = client.post("/v1/ocr/page?return_image=true&deskew=false&dewatermark=true", content=raw, headers=hdr)
-    im0 = Image.open(io.BytesIO(base64.b64decode(r0.json()["image_png_base64"])))
-    im1 = Image.open(io.BytesIO(base64.b64decode(r1.json()["image_png_base64"])))
-    assert np.array_equal(np.asarray(im0.convert("RGB")), np.asarray(page3))
-    assert gray_var(im1, WM_BOX) < gray_var(im0, WM_BOX) * 0.3
-    assert red_count(im1) == red_count(page3)
+    r = client.post(f"/v1/ocr/page?{query}", content=to_bytes(img), headers=hdr)
+    assert r.status_code == 200, r.text                      # 契约不变：dewatermark=true 照常接受
+    return Image.open(io.BytesIO(base64.b64decode(r.json()["image_png_base64"]))).convert("RGB")
+
+
+def test_dewatermark_disabled_in_this_version():
+    from prep395.dewatermark import DEWATERMARK_ENABLED
+    assert DEWATERMARK_ENABLED is False
+
+
+@pytest.mark.parametrize("idx", [1, 2], ids=["蓝色批注页", "红章页"])
+def test_api_dewatermark_true_returns_original(client, idx):
+    """本版去水印未启用：带水印的页 dewatermark=true 时，返回的工作副本与原图逐像素相同，红章、蓝色批注不变。"""
+    page = scan_pages()[idx]
+    out = _roundtrip(client, page)
+    assert np.array_equal(np.asarray(out), np.asarray(page))
+    assert red_count(out) == red_count(page) and blue_count(out) == blue_count(page)
+    same = _roundtrip(client, page, "return_image=true&deskew=false")
+    assert np.array_equal(np.asarray(out), np.asarray(same))  # 与不勾选时相同
 
 
 def _page_with(lines, base, fill, kind="song", size=30, x=120, y0=140, step=52):
@@ -158,14 +170,13 @@ def test_gray_text_page_with_watermark_left_alone():
     assert n == 0
 
 
-@pytest.mark.xfail(strict=True, reason="T6 第二轮返修 P2-A：扫描页上的浅灰手写与水印区分不稳，见 p2a-measure.txt，交主编排止损决定")
-def test_scan_with_watermark_and_pencil_notes_left_alone():
-    """扫描页叠加水印再加几行灰度约 160 的手写：手写像素逐像素不变。"""
+def test_scan_with_watermark_and_pencil_notes_left_alone(client):
+    """扫描页叠加水印再加几行灰度约 160 的手写：经接口 dewatermark=true 后逐像素原样返回（本版去水印未启用）。"""
     G, K = _gen()
     base = G.add_watermark(G.render_page(K.XUNWEN[0], seed=100), "仅供办案使用")
     notes = _page_with(["铅笔批注：此处需核对转账时间", "与银行流水第三页对照", "询问笔录前后不一致"],
                        Image.new("RGB", G.PAGE_PX, (255, 255, 255)), (160, 160, 160), "kai", 40, 150, 1250, 70)
     hand = np.asarray(notes).max(axis=2) < 200
     img = Image.fromarray(np.where(hand[..., None], np.asarray(notes), np.asarray(base)).astype(np.uint8))
-    out, _ = dewatermark(img)
-    assert np.array_equal(np.asarray(out)[hand], np.asarray(img)[hand])
+    out = _roundtrip(client, img)
+    assert np.array_equal(np.asarray(out), np.asarray(img))

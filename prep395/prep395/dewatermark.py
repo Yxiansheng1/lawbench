@@ -1,5 +1,8 @@
 """图片预处理（Spec 6.2、6.7）：纠偏与保守去水印，全部在内存中用 Pillow / numpy 完成。
 
+**去水印本版未启用**（DEWATERMARK_ENABLED = False）：扫描页上的浅灰手写与水印靠像素统计分不开，
+原因和测量数据见 docs/plan/evidence/T6/交付说明.md 第 8、9 节。下面的算法留档备查，服务不调用它。
+
 去水印只在同时满足下面几条时动手，拿不准就原样返回：
 - 候选像素是浅灰、低饱和的，并且占全图 ≥1%；
 - 候选像素排成**重复的斜向**图案（沿某个斜向角度投影有至少 3 个峰（只数峰的个数，不查间距），而横排、竖排方向没有更强的规律），
@@ -11,6 +14,9 @@ from __future__ import annotations
 
 import numpy as np
 from PIL import Image, ImageFilter
+
+# 本版去水印未启用（主编排 2026-09-29 止损决定）。只能改这里，不做成环境变量或配置项，免得部署时被误开。
+DEWATERMARK_ENABLED = False
 
 # 浅灰判定：各通道最大值与最小值之差（饱和度的近似）不超过 SAT_MAX，亮度落在 [GRAY_LO, GRAY_HI]
 SAT_MAX = 25
