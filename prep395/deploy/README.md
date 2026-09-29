@@ -66,6 +66,14 @@ Restart-Computer                                     # 重启后 Get-Service pre
 
 残留检查按 `acceptance\manual\395残留检查.md`。
 
+G-5 / G-6 实测（选模型、定并发数 N 之后，或换模型时）：在开发机上运行
+
+```powershell
+python prep395\deploy\bench_g5g6.py --base http://192.168.8.124:9000 --pages 20
+```
+
+它用讯问笔录的 3 页扫描件加现造的 20 页虚构扫描页（一半带水印），量每页耗时、并发 1 / 2 / 3 的吞吐、字符相似度、姓名 / 日期 / 金额 / 证件号的命中率，以及 9B 抽取的值能否在所标页原样找到；结果写 `docs\plan\evidence\T11\g5-g6.md`（只有数字，不含识别出的正文）。已在开发机上对测试后端跑通过。
+
 ## 4. 卸载
 
 ```powershell
