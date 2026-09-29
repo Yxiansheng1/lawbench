@@ -1,0 +1,24 @@
+T2 合流记录（主编排，2026-09-29 19:24 +08:00）
+
+合并方式：git merge --no-ff ab53c3a（line-A 基座是 5232cf8，main 已前进，无冲突：改动面与 main 上的改动不相交）
+合并前 main：24525fcf2ae0a43b799567c0dbdb370beba788c5
+被合并的提交：ab53c3a954a65a3596ad90f673c2333a9df58073
+合并后 main：7701c196adf1341416d559d37bf381310e5a70f4
+子模块指针：160000 commit 477b4f420553e8a52c2fbccc464d7561b239c443	dsh
+
+== 1. pytest 全量 ==
+不适用：合并后的 main 上还没有 service\ 和 prep395\（T3、T6 在复核中，未合并）。
+DSH 自带测试由线 A 在其工作目录跑过（evidence\T2\dsh-test-gui.txt：9190 过 / 3 败 / 6 跳，3 败为 DSH 自身用例：1 个需要创建符号链接的权限，2 个 10 秒超时）；主编排的 main 工作目录不初始化子模块，不重跑。
+
+== 2. 契约自检：python contracts\check_examples.py --skills skills ==
+[对] case-archiving/catalogs/刑事卷.json
+[对] case-archiving/catalogs/常法卷.json
+[对] case-archiving/catalogs/民事行政卷.json
+退出码=0
+
+== 3. python skills\_scripts\build_skills.py --root skills --check ==
+
+结果：✔ 通过
+退出码=0
+
+结论：契约自检、build_skills 退出码均为 0；pytest 不适用；对基线零新增失败。
