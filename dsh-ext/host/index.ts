@@ -3,7 +3,7 @@
 // - 提供 Cordis 服务 lawbenchCore：Agent 插件经它拿端口和令牌；
 // - 提供远程命名空间 lawbench（最小集：设置读写、测试连接、首次配置状态），首次配置页经 Host 的 /api 调用。
 import { randomBytes } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
@@ -73,13 +73,21 @@ async function probeHealth(port: number): Promise<string | undefined> {
 
 const REMOTE_METHODS = '@deepseek-ai/dsh-typert-protocol/remote-methods'
 
+/** Host 用到的凭据服务方法（由 legal-credentials 提供）。 */
+export type CredentialsLike = {
+  describe(ref: string): Promise<{ configured: boolean }>
+  resolve(ref: string): Promise<{ value: string } | undefined>
+  set(ref: string, value: string): Promise<void>
+  unset(ref: string): Promise<void>
+}
+
 /** 远程命名空间 lawbench：首次配置页（Electron 主进程）经 Host 的 POST /api/lawbench/<方法> 调用。 */
 export class LawbenchRemote {
   readonly typertRemote: unknown
   constructor(
     private readonly supervisor: Supervisor,
     private readonly appData: string,
-    private readonly credentials: () => { describe(ref: string): Promise<{ configured: boolean }> } | undefined,
+    private readonly credentials: () => CredentialsLike | undefined,
   ) {
     this.typertRemote = Object.freeze({ service: this, serviceKey: 'lawbenchRemote', namespace: 'lawbench' })
   }
@@ -117,12 +125,46 @@ export class LawbenchRemote {
     if (server !== 'llm' && server !== 'prep') throw new Error('请求参数有误')
     return this.api('POST', '/api/connection/test', { server })
   }
+
+  /**
+   * 首次配置页的"测试连接"（T7 返修 P3-5）：先保存页面上的地址（和 Key），再测两台服务器；
+   * 测试没通过（任一台连不上，或 Key 被判无效，或过程中出错）就恢复成测试之前的地址和 Key——
+   * 之前没有设置文件的删掉设置文件，之前没有 Key 的删掉 Key。旧 Key 只在本进程内存里过一下，不写日志、不落盘。
+   * @param servers - 四个地址（servers 对象）。@param key - 新 Key；不改 Key 时为 null。
+   */
+  async trialConnection(servers: unknown, key: unknown): Promise<{ llm: unknown; prep: unknown; restored: boolean }> {
+    if (key !== null && (typeof key !== 'string' || !/^[\x21-\x7e]{8,512}$/.test(key))) throw new Error('请求参数有误')
+    const cred = this.credentials()
+    if (!cred) throw new Error('工作台服务未启动，请稍后重试')
+    const settingsFile = join(this.appData, 'settings.json')
+    const hadSettings = existsSync(settingsFile)
+    const oldSettings = (await this.getSettings()) as Record<string, unknown>
+    const oldKey = (await cred.resolve('LAWFIRM_KEY'))?.value
+    let llm: { reachable?: boolean; key_valid?: boolean | null } | undefined
+    let prep: { reachable?: boolean } | undefined
+    let ok = false
+    try {
+      await this.putSettings({ ...oldSettings, servers })
+      if (typeof key === 'string') await cred.set('LAWFIRM_KEY', key)
+      llm = (await this.testConnection('llm')) as typeof llm
+      prep = (await this.testConnection('prep')) as typeof prep
+      ok = llm?.reachable === true && llm.key_valid !== false && prep?.reachable === true
+    } finally {
+      if (!ok) {
+        if (hadSettings) await this.putSettings(oldSettings)
+        else rmSync(settingsFile, { force: true })
+        if (oldKey !== undefined) await cred.set('LAWFIRM_KEY', oldKey)
+        else await cred.unset('LAWFIRM_KEY')
+      }
+    }
+    return { llm, prep, restored: !ok }
+  }
 }
 Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS, {
   configurable: true,
   value: Object.freeze({
     version: 1,
-    methods: ['setupState', 'getSettings', 'putSettings', 'testConnection'].map((method) => Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) })),
+    methods: ['setupState', 'getSettings', 'putSettings', 'testConnection', 'trialConnection'].map((method) => Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) })),
   }),
 })
 

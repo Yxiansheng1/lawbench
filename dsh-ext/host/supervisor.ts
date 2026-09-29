@@ -4,7 +4,8 @@
 // - 1 分钟内重启超过 3 次就停止重启，状态记为 failed（界面提示"工作台服务异常"，由 T13 显示）；
 // - 启动后比对 contract_version，不一致记为 version_mismatch，不继续（"组件版本不一致，请重新安装"）；
 // - 端口由 Host 自己挑（服务不支持 --port 0）；退出码 2 = 端口绑定失败，换端口重启且不计入重启次数；
-// - 退出码 3 = 被信号停止；Host 主动停止时不重启。
+// - 退出码 3 = 被信号停止。是否重启看是谁停的，不看退出码：Host 自己发起的停止（stop()）不重启；
+//   不是 Host 发起的（包括退出码 3）照常重启，并计入 1 分钟内的重启次数（T7 返修令第 4 节）。
 
 export interface ChildHandle {
   readonly pid: number | undefined

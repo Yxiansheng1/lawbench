@@ -1,7 +1,8 @@
 // 开发期本机假工作台服务（T7 步骤 6）：只监听 127.0.0.1，按契约校验每个请求，按样例回答。
 // 不属于产品。T3/T8 合并后换真服务复测。
 // 用法：node dev/fake-service.mjs --port 18801  （令牌取环境变量 LB_TOKEN；应用数据目录取 LB_APPDATA）
-// 另支持：--fail-begin（task/begin 返回 CASE_NOT_FOUND）、--calls <jsonl>（记录每次调用的元数据）
+// 另支持：--fail-begin（task/begin 返回 CASE_NOT_FOUND）、--calls <jsonl>（记录每次调用的元数据）、
+//   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）
 import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -21,6 +22,7 @@ const TOKEN = process.env.LB_TOKEN ?? ''
 const APPDATA = process.env.LB_APPDATA ?? join(dirname(fileURLToPath(import.meta.url)), '.fake-appdata')
 const CALLS = arg('--calls', null)
 const FAIL_BEGIN = flag('--fail-begin')
+const BAD_RESPONSE = flag('--bad-response')
 if (PORT < 18801 || PORT > 18809) throw new Error('假服务端口限 18801–18809')
 if (TOKEN.length < 16) throw new Error('需要环境变量 LB_TOKEN（至少 16 位）')
 
@@ -64,12 +66,12 @@ function handle(method, path, body) {
     }
     case 'POST /core/context': {
       const v = check('core/context', 'request', body); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
-      if (!tasks.has(body.task_id)) return [fail('TASK_NOT_FOUND', '找不到该任务')]
+      if (!tasks.has(body.task_id) && !BAD_RESPONSE) return [fail('TASK_NOT_FOUND', '找不到该任务')]
       return [example('core_context.res.json')]
     }
     case 'POST /core/tool': {
       const v = check('core/tool', 'request', body); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
-      if (!tasks.has(body.task_id)) return [fail('TASK_NOT_FOUND', '找不到该任务')]
+      if (!tasks.has(body.task_id) && !BAD_RESPONSE) return [fail('TASK_NOT_FOUND', '找不到该任务')]
       const va = check(`tools/${body.tool}`, 'args', body.args); if (va.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), va]
       if (LATER.has(body.tool)) return [fail('SERVICE_UNAVAILABLE', '工作台服务未启动，请稍后重试')]
       const make = TOOL_RESULTS[body.tool]
@@ -96,6 +98,13 @@ function handle(method, path, body) {
     }
     case 'POST /api/connection/test': {
       const v = check('api/connection_test', 'request', body); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
+      // 已保存的地址里含 .invalid（保留域名，永不解析）就当连不上，供测试"测试失败时恢复"用
+      const f = join(APPDATA, 'settings.json')
+      const servers = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')).servers : {}
+      const url = body.server === 'llm' ? servers.llm_base_url : servers.prep_base_url
+      if (typeof url === 'string' && url.includes('.invalid')) {
+        return [ok({ reachable: false, key_valid: null, latency_ms: null, route: null, message: '无法连接服务器，请检查网络' })]
+      }
       return [ok({ reachable: true, key_valid: body.server === 'llm' ? true : null, latency_ms: 12, route: 'primary', message: '连接正常（假服务）' })]
     }
     default:
@@ -124,7 +133,14 @@ createServer((req, res) => {
     try { body = raw ? JSON.parse(raw) : undefined } catch { return send(200, fail('INVALID_ARGUMENT', '请求参数有误')) }
     const out = handle(req.method, url.pathname, body)
     if (!out) return send(404, fail('INVALID_ARGUMENT', '请求参数有误'))
-    const [payload, violations] = out
+    let [payload, violations] = out
+    if (BAD_RESPONSE && payload.ok) {
+      // 去掉一个必填字段：/core/tool 去掉工具结果里的第一个字段；其他命令在 value 里塞一个契约没有的字段或删字段
+      const v = structuredClone(payload.value)
+      const firstKey = v && typeof v === 'object' ? Object.keys(v)[0] : undefined
+      if (firstKey) delete v[firstKey]; else payload = { ...payload, unexpected: true }
+      payload = { ...payload, value: v }
+    }
     const rs = RESPONSE_SCHEMA[url.pathname]
     const selfCheck = rs ? check(rs, 'response', payload) : []
     res.meta = {

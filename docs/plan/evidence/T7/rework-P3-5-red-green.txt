@@ -1,0 +1,80 @@
+# T7 返修 P3-5 红测：测试连接失败时恢复测试前的地址和 Key
+# 红：临时去掉 host/index.ts trialConnection 里的恢复分支后跑 tests/trial-connection.spec.ts；绿：恢复原代码后再跑
+
+## 红
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+ ❯ tests/trial-connection.spec.ts (5 tests | 2 failed) 649ms
+     × 失败时恢复：原有设置和 Key 都回到测试前 192ms
+     × 失败时恢复：测试前没有设置文件和 Key 的，删掉 17ms
+node : 
+At line:1 char:803
++ ... $u); $red = node scripts/test.mjs tests/trial-connection.spec.ts 2>&1 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > 失败时恢复：原有设置和 Key 都回到测试前
+AssertionError: expected { …(4) } to deeply equal { …(4) }
+
+- Expected
++ Received
+
+  {
+    "llm_alt_base_url": "http://10.126.126.1:8000/v1",
+-   "llm_base_url": "http://192.168.8.77:8000/v1",
+-   "prep_alt_base_url": null,
++   "llm_base_url": "http://llm.invalid:8000/v1",
++   "prep_alt_base_url": "http://10.126.126.3:9000",
+    "prep_base_url": "http://192.168.8.124:9000",
+  }
+
+ ❯ tests/trial-connection.spec.ts:38:70
+     36|     const r = await new LawbenchRemote(supervisorFor(fake), fake.appda…
+     37|     expect(r.restored).toBe(true)
+     38|     expect(JSON.parse(readFileSync(settingsFile(), 'utf8')).servers).t…
+       |                                                                      ^
+     39|     expect(get()).toBe('sk-old-12345678')
+     40|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/trial-connection.spec.ts > trialConnection > 失败时恢复：测试前没有设置文件和 Key 的，删掉
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/trial-connection.spec.ts:46:40
+     44|     const r = await new LawbenchRemote(supervisorFor(fake), fake.appda…
+     45|     expect(r.restored).toBe(true)
+     46|     expect(existsSync(settingsFile())).toBe(false)
+       |                                        ^
+     47|     expect(get()).toBeUndefined()
+     48|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  01:53:08
+   Duration  1.45s (transform 178ms, setup 0ms, import 430ms, tests 649ms, environment 0ms)
+
+
+## 绿
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  01:53:10
+   Duration  1.39s (transform 187ms, setup 0ms, import 443ms, tests 612ms, environment 0ms)
+

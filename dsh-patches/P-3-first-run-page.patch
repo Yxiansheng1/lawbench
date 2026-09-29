@@ -1,8 +1,8 @@
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
-index 8fcde7768a..55ee700558 100644
+index 8fcde7768a..052e8cfc97 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
 +++ b/apps/desktop/src/client/WelcomePage.tsx
-@@ -1,221 +1,117 @@
+@@ -1,221 +1,123 @@
 -/** Desktop welcome presentation; account and credential operations stay in the preload. */
 -import { useEffect, useRef, useState } from 'react'
 -import type { FormEvent } from 'react'
@@ -150,8 +150,14 @@ index 8fcde7768a..55ee700558 100644
 +    const r = await api.testConnection(payload)
 +    setBusy('')
 +    if (!r.ok || r.value === undefined) { setError(r.ok ? '测试失败' : r.message); return }
-+    if (payload.key !== undefined) { setHasKey(true); setFields(f => ({ ...f, key: '' })) }
-+    setResults([describe('模型服务器（6000D）', r.value.llm), describe('识别服务器（395）', r.value.prep)])
++    const lines = [describe('模型服务器（6000D）', r.value.llm), describe('识别服务器（395）', r.value.prep)]
++    if (r.value.restored) {
++      // 测试没通过：Host 已恢复成测试前的地址和 Key，页面上保留刚填的内容供修改
++      lines.push('测试未通过，已恢复为测试前的配置；请修改后重试。')
++    } else if (payload.key !== undefined) {
++      setHasKey(true); setFields(f => ({ ...f, key: '' }))
++    }
++    setResults(lines)
 +  }
  
 -  async function saveKey(event: FormEvent) {
@@ -525,10 +531,10 @@ index e9ec1aa910..ff4c0d2f8f 100644
  }
  contextBridge.exposeInMainWorld('dshWelcome', api)
 diff --git a/apps/desktop/src/welcome-api.ts b/apps/desktop/src/welcome-api.ts
-index 015296776a..3a685b6b97 100644
+index 015296776a..1104a5856e 100644
 --- a/apps/desktop/src/welcome-api.ts
 +++ b/apps/desktop/src/welcome-api.ts
-@@ -1,66 +1,90 @@
+@@ -1,66 +1,100 @@
 -/** Operations available to the isolated native welcome renderer. */
 +/** Operations available to the isolated native first-run renderer (lawbench P-3). */
  
@@ -587,7 +593,26 @@ index 015296776a..3a685b6b97 100644
 +  readonly message: string
 +}
  
--  /**
++/** Outcome of "测试连接": both probes, and whether the previous configuration was restored because the test did not pass. */
++export interface ConnectionTestOutcome {
++  readonly llm: ConnectionResult
++  readonly prep: ConnectionResult
++  readonly restored: boolean
++}
++
++/** What the lawyer submits. `key` is omitted when a Key is already stored and was not changed. */
++export interface FirstRunInput {
++  readonly servers: ServerAddresses
++  readonly key?: string
++}
++
++/** Writes and probes return a safe outcome; `message` is lawyer-facing Chinese without diagnostics. */
++export type FirstRunResult<T = undefined> = { readonly ok: true; readonly value?: T } | { readonly ok: false; readonly message: string }
++
++/** Host-owned operations used by the first-run window. */
++export interface WelcomeOperations {
++  getSetup(): Promise<FirstRunResult<FirstRunSetup>>
+   /**
 -   * Store the official provider's key before entering the workspace.
 -   * @param value - validated, trimmed API key.
 -   * @returns whether the write completed, without private error details.
@@ -596,34 +621,24 @@ index 015296776a..3a685b6b97 100644
 -  /**
 -   * Enter the workspace without writing an onboarding-completion setting.
 -   * @returns completion after the workspace opens.
--   */
++   * Saves the typed addresses (and Key when given) first, because the service probes its stored settings;
++   * when the test does not pass, the Host restores the addresses and Key from before the test (`restored`).
+    */
 -  skip(): Promise<void>
-+/** What the lawyer submits. `key` is omitted when a Key is already stored and was not changed. */
-+export interface FirstRunInput {
-+  readonly servers: ServerAddresses
-+  readonly key?: string
++  testConnection(input: FirstRunInput): Promise<FirstRunResult<ConnectionTestOutcome>>
++  /** Saves addresses and Key, then enters the workspace. */
++  save(input: FirstRunInput): Promise<FirstRunResult>
  }
  
 -/** The renderer receives localized copy, login operations, and safe account snapshots. */
 -export type WelcomeApi = DesktopLocale & WelcomeOperations & {
 -  /** @param listener - safe account snapshot recipient. @returns subscription disposer. */
 -  onAccountState(listener: (state: AccountView) => void): () => void
-+/** Writes and probes return a safe outcome; `message` is lawyer-facing Chinese without diagnostics. */
-+export type FirstRunResult<T = undefined> = { readonly ok: true; readonly value?: T } | { readonly ok: false; readonly message: string }
-+
-+/** Host-owned operations used by the first-run window. */
-+export interface WelcomeOperations {
-+  getSetup(): Promise<FirstRunResult<FirstRunSetup>>
-+  /** Saves the typed addresses (and Key when given) first, because the service probes its stored settings. */
-+  testConnection(input: FirstRunInput): Promise<FirstRunResult<{ llm: ConnectionResult; prep: ConnectionResult }>>
-+  /** Saves addresses and Key, then enters the workspace. */
-+  save(input: FirstRunInput): Promise<FirstRunResult>
- }
- 
--/** Authentication facts supplied at cold start or after a completed sign-out. */
+-}
 +/** The renderer receives localized copy and the first-run operations. */
 +export type WelcomeApi = DesktopLocale & WelcomeOperations
-+
+ 
+-/** Authentication facts supplied at cold start or after a completed sign-out. */
 +/** First-run facts read at cold start. */
  export interface WelcomeAuthentication {
 -  readonly loggedIn: boolean
@@ -666,16 +681,16 @@ index 015296776a..3a685b6b97 100644
 +  return Object.keys(v).every(k => k === 'servers' || k === 'key')
  }
 diff --git a/apps/desktop/src/welcome-backend.ts b/apps/desktop/src/welcome-backend.ts
-index a0bb4e9440..565fbe2246 100644
+index a0bb4e9440..acf451e456 100644
 --- a/apps/desktop/src/welcome-backend.ts
 +++ b/apps/desktop/src/welcome-backend.ts
-@@ -1,136 +1,114 @@
+@@ -1,136 +1,112 @@
 -/** Native welcome operations using the shared Web authentication and RPC APIs. */
 +/** Native first-run operations over the shared Web authentication and RPC APIs (lawbench P-3). */
  
  import { randomUUID } from 'node:crypto'
 -import { desktopAccountBackend, type DesktopAccountBackend } from './account-backend.ts'
-+import type { ConnectionResult, FirstRunInput, FirstRunResult, FirstRunSetup, ServerAddresses } from './welcome-api.ts'
++import type { ConnectionResult, ConnectionTestOutcome, FirstRunInput, FirstRunResult, FirstRunSetup, ServerAddresses } from './welcome-api.ts'
  
  /** Metadata needed before the native entry or workspace becomes visible. */
  export interface WelcomeState {
@@ -701,7 +716,7 @@ index a0bb4e9440..565fbe2246 100644
 -   */
 -  save(apiKey: string): Promise<{ ok: boolean }>
 +  getSetup(): Promise<FirstRunResult<FirstRunSetup>>
-+  testConnection(input: FirstRunInput): Promise<FirstRunResult<{ llm: ConnectionResult; prep: ConnectionResult }>>
++  testConnection(input: FirstRunInput): Promise<FirstRunResult<ConnectionTestOutcome>>
 +  save(input: FirstRunInput): Promise<FirstRunResult>
  }
  
@@ -858,13 +873,11 @@ index a0bb4e9440..565fbe2246 100644
 +      if (!record(settings) || !record(settings.servers)) throw new Error(UNAVAILABLE)
 +      return { servers: settings.servers as unknown as ServerAddresses, hasKey: state.hasKey }
 +    }),
++    // T7 返修 P3-5：Host 先保存再测；没通过就恢复成测试前的地址和 Key（旧 Key 只在 Host 进程内存里过一下）
 +    testConnection: input => safe(async () => {
-+      await persist(input)
-+      const [llm, prep] = await Promise.all([
-+        invoke('lawbench', 'testConnection', { server: 'llm' }),
-+        invoke('lawbench', 'testConnection', { server: 'prep' }),
-+      ])
-+      return { llm: llm as ConnectionResult, prep: prep as ConnectionResult }
++      const r = await invoke('lawbench', 'trialConnection', { servers: input.servers, key: input.key ?? null })
++      if (!record(r)) throw new Error(UNAVAILABLE)
++      return { llm: r.llm as ConnectionResult, prep: r.prep as ConnectionResult, restored: r.restored === true }
 +    }),
 +    save: input => safe(async () => {
 +      await persist(input)
@@ -938,13 +951,45 @@ index a32e1f1c56..f92c1f51c1 100644
    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 diff --git a/apps/desktop/tests/lawbench-first-run.spec.ts b/apps/desktop/tests/lawbench-first-run.spec.ts
 new file mode 100644
-index 0000000000..ea89aed62b
+index 0000000000..720b3cb36a
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-first-run.spec.ts
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,70 @@
 +// lawbench P-3：首次配置页的判断条件与输入校验（替代原 DeepSeek 欢迎流程的测试）。
 +import { describe, expect, it } from 'vitest'
 +import { isFirstRunInput, isServerAddresses, needsWelcome } from '../src/welcome-api.ts'
++import { connectDesktopWelcome } from '../src/welcome-backend.ts'
++
++/** 假的 Host：认证地址返回 authStatus；/api/<ns>/<method> 按 reply 回信封。 */
++function fakeHost(authStatus: number, reply: (method: string) => { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } }) {
++  return async (input: string, init?: RequestInit): Promise<Response> => {
++    const url = new URL(input)
++    if (!url.pathname.startsWith('/api/')) return new Response(null, { status: authStatus })
++    const body = JSON.parse(String(init?.body)) as { rpcId: string; method: string }
++    return Response.json({ type: 'server-response', rpcId: body.rpcId, result: reply(body.method) })
++  }
++}
++const AUTH_URL = 'http://127.0.0.1:19387/?token=t'
++
++describe('connectDesktopWelcome（T7 返修 P2-2）', () => {
++  it('未认证就拒绝：认证地址返回非 200 时抛错，不返回后端', async () => {
++    await expect(connectDesktopWelcome(AUTH_URL, fakeHost(401, () => ({ ok: true, value: {} })))).rejects.toThrow('Web authentication failed')
++  })
++
++  it('诊断信息不外泄：远端错误信息不是中文提示时换成通用文案，不把原文交给页面', async () => {
++    const backend = await connectDesktopWelcome(AUTH_URL, fakeHost(200, () => ({
++      ok: false, error: { code: 'gateway/internal', message: 'TypeError at C:\\Users\\x\\secret-path.js:12 token=abc' },
++    })))
++    const r = await backend.getSetup()
++    expect(r).toEqual({ ok: false, message: '工作台服务未启动，请稍后重试' })
++    expect(JSON.stringify(r)).not.toContain('secret-path')
++  })
++
++  it('远端给出的中文提示原样交给页面', async () => {
++    const backend = await connectDesktopWelcome(AUTH_URL, fakeHost(200, () => ({ ok: false, error: { code: 'x', message: '请求参数有误' } })))
++    expect(await backend.getSetup()).toEqual({ ok: false, message: '请求参数有误' })
++  })
++})
 +
 +const servers = {
 +  llm_base_url: 'http://192.168.8.77:8000/v1',
@@ -1977,132 +2022,65 @@ index 7518cc74af..0000000000
 -
 -})
 diff --git a/apps/desktop/tests/welcome-window.spec.ts b/apps/desktop/tests/welcome-window.spec.ts
-deleted file mode 100644
-index 5ab4a1c031..0000000000
+index 5ab4a1c031..faf4ad3799 100644
 --- a/apps/desktop/tests/welcome-window.spec.ts
-+++ /dev/null
-@@ -1,188 +0,0 @@
--import { join } from 'node:path'
--import { beforeEach, describe, expect, it, vi } from 'vitest'
--import { resolveDesktopLocale } from '../src/locale.ts'
--import { needsWelcome, WELCOME_IPC } from '../src/welcome-api.ts'
--
--const electron = vi.hoisted(() => ({
--  create: vi.fn<(options: unknown) => ReturnType<typeof createWindow>>(),
--  root: '/desktop-app',
--  handlers: new Map<string, (event: unknown, value?: unknown) => Promise<unknown>>(),
--}))
--vi.mock('electron', () => ({
--  app: { getAppPath: () => electron.root },
--  BrowserWindow: vi.fn(function (options: unknown) { return electron.create(options) }),
--  ipcMain: {
--    handle: (name: string, handler: (event: unknown, value?: unknown) => Promise<unknown>) => {
--      if (electron.handlers.has(name)) throw new Error(`duplicate IPC handler: ${name}`)
--      electron.handlers.set(name, handler)
--    },
--    removeHandler: (name: string) => electron.handlers.delete(name),
--  },
--}))
--
--const { openWelcomeWindow, welcomeWindowOptions } = await import('../src/welcome-window.ts')
--
--function createWindow() {
--  return {
--    webContents: {
--      mainFrame: {},
--      setWindowOpenHandler: vi.fn<(handler: () => { action: string }) => void>(),
--      on: vi.fn<(name: string, handler: (event: { preventDefault(): void }) => void) => void>(),
--    },
--    loadFile: vi.fn<(path: string) => Promise<undefined>>().mockResolvedValue(undefined),
--    isDestroyed: vi.fn().mockReturnValue(false),
--    destroy: vi.fn(),
--    show: vi.fn(),
--    once: vi.fn<(name: string, callback: () => void) => void>(),
--  }
--}
--
--beforeEach(() => { electron.create.mockReset(); electron.handlers.clear() })
--
--const operations = {
++++ b/apps/desktop/tests/welcome-window.spec.ts
+@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
+ import { resolveDesktopLocale } from '../src/locale.ts'
+ import { needsWelcome, WELCOME_IPC } from '../src/welcome-api.ts'
+ 
++// lawbench P-3：首次配置页沿用原欢迎窗口的隔离与 IPC 防护；本文件由原 welcome-window.spec.ts 改写，
++// 只把通道和 operations 换成 getSetup / testConnection / save（T7 返修 P2-2）。
++
+ const electron = vi.hoisted(() => ({
+   create: vi.fn<(options: unknown) => ReturnType<typeof createWindow>>(),
+   root: '/desktop-app',
+@@ -39,16 +42,20 @@ function createWindow() {
+ 
+ beforeEach(() => { electron.create.mockReset(); electron.handlers.clear() })
+ 
++const servers = {
++  llm_base_url: 'http://192.168.8.77:8000/v1',
++  prep_base_url: 'http://192.168.8.124:9000',
++  llm_alt_base_url: null,
++  prep_alt_base_url: null,
++}
++const probe = { reachable: true, key_valid: null, latency_ms: 1, route: 'primary' as const, message: 'ok' }
+ const operations = {
 -  takeNotice: async () => undefined,
 -  startSignIn: async () => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out' as const, attempt: null }),
 -  cancelSignIn: async () => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out' as const, attempt: null }),
 -  copySignInLink: async () => undefined,
 -  saveApiKey: () => Promise.resolve({ ok: true as const }),
 -  skip: () => Promise.resolve(),
--}
--
++  getSetup: async () => ({ ok: true as const, value: { servers, hasKey: false } }),
++  testConnection: async () => ({ ok: true as const, value: { llm: probe, prep: probe, restored: false } }),
++  save: async () => ({ ok: true as const }),
+ }
+ 
 -describe('desktop welcome window', () => {
--  it.each(['darwin', 'win32', 'linux'] as const)('keeps the %s preview fixed-size and sandboxed', (platform) => {
--    const options = welcomeWindowOptions(platform, resolveDesktopLocale('zh-CN'))
--    expect(options).toMatchObject({
--      width: 600, height: 700, useContentSize: true, center: true, show: false,
--      resizable: false, maximizable: false, fullscreenable: false,
--      webPreferences: {
--        nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true,
--        additionalArguments: ['--dsh-welcome-locale=zh-CN'],
--      },
--    })
--    expect(options.webPreferences?.preload).toMatch(/preload-welcome\.cjs$/u)
--    if (platform === 'darwin') {
--      expect(options.vibrancy).toBe('menu')
--      expect(options.visualEffectState).toBe('active')
--      expect(options.trafficLightPosition).toEqual({ x: 21, y: 21 })
--    } else if (platform === 'win32') {
--      expect(options.backgroundMaterial).toBe('acrylic')
--      expect(options.titleBarOverlay).toMatchObject({ height: 42 })
--    } else {
--      expect(options.backgroundColor).toBe('#FFFFFF')
--      expect(options.vibrancy).toBeUndefined()
--      expect(options.backgroundMaterial).toBeUndefined()
--    }
--  })
--
--  it('waits for its local document and blocks renderer navigation', async () => {
--    const window = createWindow()
--    const loaded = Promise.withResolvers<undefined>()
--    window.loadFile.mockReturnValue(loaded.promise)
--    electron.create.mockReturnValue(window)
--    const opening = openWelcomeWindow(resolveDesktopLocale('en'), operations)
--    expect(window.show).not.toHaveBeenCalled()
--    expect(window.loadFile).toHaveBeenCalledWith(join(electron.root, 'renderer', 'welcome.html'))
--    expect(window.webContents.setWindowOpenHandler.mock.calls[0]![0]()).toEqual({ action: 'deny' })
--    const event = { preventDefault: vi.fn() }
--    window.webContents.on.mock.calls[0]![1](event)
--    expect(event.preventDefault).toHaveBeenCalledOnce()
--    loaded.resolve(undefined)
--    expect(await opening).toBe(window)
--    expect(window.show).toHaveBeenCalledOnce()
--  })
--
--  it('destroys a window whose document fails to load', async () => {
--    const window = createWindow()
--    window.loadFile.mockRejectedValue(new Error('missing welcome document'))
--    electron.create.mockReturnValue(window)
--    await expect(openWelcomeWindow(resolveDesktopLocale('en'), operations)).rejects.toThrow('missing welcome document')
--    expect(window.destroy).toHaveBeenCalledOnce()
--    expect(electron.handlers.size).toBe(0)
--    expect(window.show).not.toHaveBeenCalled()
--  })
--
--  it('does not show a window closed while its document was loading', async () => {
--    const window = createWindow()
--    window.isDestroyed.mockReturnValue(true)
--    electron.create.mockReturnValue(window)
--    await openWelcomeWindow(resolveDesktopLocale('en'), operations)
--    expect(window.show).not.toHaveBeenCalled()
--    expect(window.destroy).not.toHaveBeenCalled()
--  })
--
++describe('desktop first-run window (lawbench P-3)', () => {
+   it.each(['darwin', 'win32', 'linux'] as const)('keeps the %s preview fixed-size and sandboxed', (platform) => {
+     const options = welcomeWindowOptions(platform, resolveDesktopLocale('zh-CN'))
+     expect(options).toMatchObject({
+@@ -110,33 +117,38 @@ describe('desktop welcome window', () => {
+     expect(window.destroy).not.toHaveBeenCalled()
+   })
+ 
 -  it('accepts actions only from its own top frame and removes handlers on close', async () => {
--    const window = createWindow()
--    electron.create.mockReturnValue(window)
++  it('accepts actions only from its own top frame, validates input, and removes handlers on close', async () => {
+     const window = createWindow()
+     electron.create.mockReturnValue(window)
 -    const saveApiKey = vi.fn(operations.saveApiKey)
 -    const skip = vi.fn(operations.skip)
 -    const copySignInLink = vi.fn(operations.copySignInLink)
 -    const takeNotice = vi.fn(async () => 'session-expired' as const)
 -    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, saveApiKey, skip, copySignInLink, takeNotice })
--    const own = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
++    const getSetup = vi.fn(operations.getSetup)
++    const testConnection = vi.fn(operations.testConnection)
++    const save = vi.fn(operations.save)
++    await openWelcomeWindow(resolveDesktopLocale('en'), { getSetup, testConnection, save })
+     const own = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
 -    const take = electron.handlers.get(WELCOME_IPC.takeNotice)!
 -    await expect(take({ ...own, senderFrame: {} })).rejects.toThrow('unowned frame')
 -    expect(takeNotice).not.toHaveBeenCalled()
@@ -2121,52 +2099,71 @@ index 5ab4a1c031..0000000000
 -    await expect(copy(own, 42)).rejects.toThrow('invalid attempt')
 -    await copy(own, 'attempt')
 -    expect(copySignInLink).toHaveBeenCalledExactlyOnceWith('attempt')
--    window.once.mock.calls[0]![1]()
--    expect(electron.handlers.size).toBe(0)
--  })
--
--  it('does not show a superseded window when its delayed document finishes loading', async () => {
--    const previous = createWindow()
--    const current = createWindow()
--    const loaded = Promise.withResolvers<undefined>()
--    previous.loadFile.mockReturnValue(loaded.promise)
--    electron.create.mockReturnValueOnce(previous).mockReturnValueOnce(current)
--    const opening = openWelcomeWindow(resolveDesktopLocale('en'), operations)
--    await openWelcomeWindow(resolveDesktopLocale('en'), operations)
--    loaded.resolve(undefined)
--    await opening
--    expect(previous.show).not.toHaveBeenCalled()
--    expect(current.show).toHaveBeenCalledOnce()
--    previous.once.mock.calls[0]![1]()
--    current.once.mock.calls[0]![1]()
--  })
--
--  it('replaces handlers before the previous native window emits closed', async () => {
--    const previous = createWindow()
--    const current = createWindow()
--    electron.create.mockReturnValueOnce(previous).mockReturnValueOnce(current)
++    const foreignSender = { sender: {}, senderFrame: {} }
++    const foreignFrame = { ...own, senderFrame: {} }
++
++    const setup = electron.handlers.get(WELCOME_IPC.getSetup)!
++    await expect(setup(foreignFrame)).rejects.toThrow('unowned frame')
++    expect(getSetup).not.toHaveBeenCalled()
++    expect(await setup(own)).toEqual({ ok: true, value: { servers, hasKey: false } })
++
++    const test = electron.handlers.get(WELCOME_IPC.testConnection)!
++    await expect(test(foreignSender, { servers })).rejects.toThrow('unowned frame')
++    await expect(test(foreignFrame, { servers })).rejects.toThrow('unowned frame')
++    expect(await test(own, { servers: { ...servers, llm_base_url: 'file:///c:/x' } })).toEqual({ ok: false, message: '请求参数有误' })
++    expect(await test(own, { servers, key: 'has space' })).toEqual({ ok: false, message: '请求参数有误' })
++    expect(testConnection).not.toHaveBeenCalled()
++    expect(await test(own, { servers, key: 'sk-12345678' })).toMatchObject({ ok: true })
++    expect(testConnection).toHaveBeenCalledExactlyOnceWith({ servers, key: 'sk-12345678' })
++
++    const submit = electron.handlers.get(WELCOME_IPC.save)!
++    await expect(submit(foreignFrame, { servers })).rejects.toThrow('unowned frame')
++    expect(await submit(own, { servers, extra: true })).toEqual({ ok: false, message: '请求参数有误' })
++    expect(save).not.toHaveBeenCalled()
++    expect(await submit(own, { servers })).toEqual({ ok: true })
++    expect(save).toHaveBeenCalledOnce()
++
+     window.once.mock.calls[0]![1]()
+     expect(electron.handlers.size).toBe(0)
+   })
+@@ -161,28 +173,26 @@ describe('desktop welcome window', () => {
+     const previous = createWindow()
+     const current = createWindow()
+     electron.create.mockReturnValueOnce(previous).mockReturnValueOnce(current)
 -    const previousStart = vi.fn(operations.startSignIn)
 -    const currentStart = vi.fn(operations.startSignIn)
 -    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, startSignIn: previousStart })
 -    const previousHandler = electron.handlers.get(WELCOME_IPC.start)!
--    const previousSender = { sender: previous.webContents, senderFrame: previous.webContents.mainFrame }
++    const previousSetup = vi.fn(operations.getSetup)
++    const currentSetup = vi.fn(operations.getSetup)
++    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, getSetup: previousSetup })
++    const previousHandler = electron.handlers.get(WELCOME_IPC.getSetup)!
+     const previousSender = { sender: previous.webContents, senderFrame: previous.webContents.mainFrame }
 -    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, startSignIn: currentStart })
 -    const currentHandler = electron.handlers.get(WELCOME_IPC.start)!
--    await expect(previousHandler(previousSender)).rejects.toThrow('unowned frame')
--    await expect(currentHandler(previousSender)).rejects.toThrow('unowned frame')
--    previous.once.mock.calls[0]![1]()
++    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, getSetup: currentSetup })
++    const currentHandler = electron.handlers.get(WELCOME_IPC.getSetup)!
+     await expect(previousHandler(previousSender)).rejects.toThrow('unowned frame')
+     await expect(currentHandler(previousSender)).rejects.toThrow('unowned frame')
+     previous.once.mock.calls[0]![1]()
 -    expect(electron.handlers.get(WELCOME_IPC.start)).toBe(currentHandler)
--    await currentHandler({ sender: current.webContents, senderFrame: current.webContents.mainFrame })
++    expect(electron.handlers.get(WELCOME_IPC.getSetup)).toBe(currentHandler)
+     await currentHandler({ sender: current.webContents, senderFrame: current.webContents.mainFrame })
 -    expect(currentStart).toHaveBeenCalledOnce()
 -    expect(previousStart).not.toHaveBeenCalled()
--    current.once.mock.calls[0]![1]()
--    expect(electron.handlers.size).toBe(0)
--  })
--
++    expect(currentSetup).toHaveBeenCalledOnce()
++    expect(previousSetup).not.toHaveBeenCalled()
+     current.once.mock.calls[0]![1]()
+     expect(electron.handlers.size).toBe(0)
+   })
+ 
 -  it('shows the entry after logout only without a separately configured API key', () => {
 -    expect(needsWelcome({ loggedIn: true, hasApiKey: false })).toBe(false)
 -    expect(needsWelcome({ loggedIn: false, hasApiKey: false })).toBe(true)
 -    expect(needsWelcome({ loggedIn: false, hasApiKey: true })).toBe(false)
 -    expect(needsWelcome({ loggedIn: true, hasApiKey: true })).toBe(false)
--  })
--})
++  it('shows the first-run page until law-firm servers and Key are configured', () => {
++    expect(needsWelcome({ configured: false })).toBe(true)
++    expect(needsWelcome({ configured: true })).toBe(false)
+   })
+ })

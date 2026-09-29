@@ -103,12 +103,15 @@ describe('看护：策略（模拟进程）', () => {
     expect(spawned).toHaveLength(4) // 首次 + 3 次重启
   })
 
-  it('退出码 2（端口被占）换端口重试，不计入重启次数', async () => {
-    const { deps, spawned } = simDeps([2, 2, undefined as unknown as number])
+  it('退出码 2（端口被占）换端口重试，不计入重启次数：连续 4 次退出码 2 后仍是 running', async () => {
+    // 4 次超过"1 分钟内 3 次"的上限：若退出码 2 被计入重启次数，这里会变成 failed（T7 返修 P3-1）
+    const { deps, spawned } = simDeps([2, 2, 2, 2, undefined as unknown as number])
     const s = new Supervisor(deps)
     await s.start()
-    await waitFor(() => s.state === 'running' && spawned.length === 3, 5000)
-    expect(new Set(spawned).size).toBe(3)
+    await waitFor(() => spawned.length === 5, 5000)
+    await new Promise((r) => setTimeout(r, 100))
+    expect(s.state).toBe('running')
+    expect(new Set(spawned).size).toBe(5)
     s.stop()
   })
 

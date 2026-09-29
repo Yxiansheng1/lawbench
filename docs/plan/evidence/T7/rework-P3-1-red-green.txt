@@ -1,0 +1,48 @@
+# T7 返修 P3-1 红测：退出码 2 不计入重启次数
+# 红：临时关掉 supervisor.ts 的退出码 2 分支（复核员的变异 M5）后跑该用例；绿：从 git 恢复后再跑
+
+## 红
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+ ❯ tests/supervisor.spec.ts (6 tests | 1 failed | 5 skipped) 5019ms
+     × 退出码 2（端口被占）换端口重试，不计入重启次数：连续 4 次退出码 2 后仍是 running 5017ms
+node : 
+At line:1 char:732
++ ... $u); $red = node scripts/test.mjs tests/supervisor.spec.ts -t "退出码 2" ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/supervisor.spec.ts > 看护：策略（模拟进程） > 退出码 2（端口被占）换端口重试，不计入重启次数：连续 4 次退出码 2 后仍是 running
+Error: 等待超时
+ ❯ waitFor tests/supervisor.spec.ts:35:49
+     33| const waitFor = async (cond: () => boolean, ms = 20000) => {
+     34|   const end = Date.now() + ms
+     35|   while (!cond()) { if (Date.now() > end) throw new Error('等待超时'); awa…
+       |                                                 ^
+     36| }
+     37|
+ ❯ tests/supervisor.spec.ts:111:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  01:51:41
+   Duration  5.52s (transform 64ms, setup 0ms, import 131ms, tests 5.02s, environment 0ms)
+
+
+## 绿
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 5 skipped (6)
+   Start at  01:51:47
+   Duration  809ms (transform 58ms, setup 0ms, import 121ms, tests 330ms, environment 0ms)
+

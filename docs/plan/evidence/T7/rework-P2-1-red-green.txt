@@ -1,0 +1,127 @@
+# T7 返修 P2-1 红测：/core/* 返回校验与工具结果校验
+# 红：临时把 core-client.ts 的返回校验、agent/index.ts 的工具结果校验改成空（复核员的变异 M4）后跑 tests/core-response.spec.ts
+# 绿：从 git 恢复原代码后再跑
+
+## 红
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+ ❯ tests/core-response.spec.ts (4 tests | 3 failed) 565ms
+     × task/begin 返回缺 task_id → INTERNAL，并记 core.response_contract 122ms
+     × progress 返回多出契约没有的字段 → INTERNAL 14ms
+     × case_list_materials 结果缺 materials → 抛内部错误，并记 agent.tool_result_contract 14ms
+node : 
+At line:1 char:823
++ ... $u); $red = node scripts/test.mjs tests/core-response.spec.ts 2>&1 |  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/core-response.spec.ts > CoreClient：返回不合契约 > task/begin 返回缺 task_id → INTERNAL，并记 core.response_contract
+AssertionError: expected { ok: true, value: { …(4) } } to deeply equal { ok: false, error: { …(2) } }
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "code": "INTERNAL",
+-     "message": "内部错误，请重试；多次出现请联系技术支持",
++   "ok": true,
++   "value": {
++     "budget": {
++       "minutes": 45,
++       "model_calls": 8,
++       "tool_calls": 24,
++     },
++     "case_id": "3f2b9c1e-7a4d-4e8b-9c2a-1b5d6e7f8a90",
++     "params": {
++       "max_tokens": 16384,
++       "thinking": "低",
++       "window": "64K",
+      },
+-   "ok": false,
++     "skill": "criminal-reading-notes",
++   },
+  }
+
+ ❯ tests/core-response.spec.ts:20:78
+     18| describe('CoreClient：返回不合契约', () => {
+     19|   it('task/begin 返回缺 task_id → INTERNAL，并记 core.response_contract', as…
+     20|     expect(await client().call('task/begin', { session_id: 's', cwd: '…
+       |                                                                              ^
+     21|     expect(logs.some(([l, e, m]) => l === 'error' && e === 'core.respo…
+     22|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/core-response.spec.ts > CoreClient：返回不合契约 > progress 返回多出契约没有的字段 → INTERNAL
+AssertionError: expected { ok: true, value: {}, …(1) } to deeply equal { ok: false, error: { …(2) } }
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "code": "INTERNAL",
+-     "message": "内部错误，请重试；多次出现请联系技术支持",
+-   },
+-   "ok": false,
++   "ok": true,
++   "unexpected": true,
++   "value": {},
+  }
+
+ ❯ tests/core-response.spec.ts:25:125
+     23|
+     24|   it('progress 返回多出契约没有的字段 → INTERNAL', async () => {
+     25|     expect(await client().call('progress', { task_id: 'T-2026093001000…
+       |                                                                                                               
+              ^
+     26|     expect(logs.some(([, e, m]) => e === 'core.response_contract' && m…
+     27|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/core-response.spec.ts > executeTool：工具结果不合工具契约 > case_list_materials 结果缺 materials → 抛内部错误，并记 agent.tool_r
+esult_contract
+AssertionError: promise resolved "{ total: 1 }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "total": 1,
+  }
+
+ ❯ tests/core-response.spec.ts:39:67
+     37|     const a = new LegalAgent(client(), log)
+     38|     a.tasks.set('s-bad', new TaskState('T-20260930010000-abcd', { mode…
+     39|     await expect(a.executeTool('s-bad', 'case_list_materials', {})).re…
+       |                                                                   ^
+     40|     expect(logs.some(([l, e, m]) => l === 'error' && e === 'agent.tool…
+     41|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  01:51:20
+   Duration  1.53s (transform 220ms, setup 0ms, import 555ms, tests 565ms, environment 0ms)
+
+
+## 绿
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  01:51:23
+   Duration  1.42s (transform 191ms, setup 0ms, import 474ms, tests 590ms, environment 0ms)
+
