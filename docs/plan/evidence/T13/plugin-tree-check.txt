@@ -1,0 +1,220 @@
+# 桌面端运行时插件核对（pluginInventory/list，enabled 为桌面端语境下的实际状态）
+
+## 1. 必须关的行（49 行）
+  account-controller                   关
+  agent-instructions                   关
+  command-goal                         关
+  credentials                          关
+  deepseek-account                     关
+  llm-deepseek                         关
+  llm-deepseek-account                 关
+  mcp-resources                        关
+  message-feedback                     关
+  office-to-pdf                        关
+  plan-mode                            关
+  plugin-manager                       关
+  plugin-package-inventory-deepseek    关
+  preset-cordis                        关
+  preset-minimal                       关
+  preset-ptc                           关
+  preset-standard                      关
+  ptc-runtime                          关
+  session-log-deepseek                 关
+  session-telemetry-otel               关
+  session-title-llm                    关
+  skill-filesystem                     关
+  tool-bash                            关
+  tool-fs                              关
+  tool-fs-search                       关
+  tool-goal                            关
+  tool-jobs                            关
+  tool-plugin-manager                  关
+  tool-pwsh                            关
+  tool-ralph                           关
+  tool-skill                           关
+  tool-subagent                        关
+  tool-subagent-control                关
+  tool-subagent-fork                   关
+  tool-subagent-list-agents            关
+  tool-todo                            关
+  tool-web                             关
+  tool-workflow                        关
+  ui-brand-official                    关
+  ui-message-feedback                  关
+  ui-plugin-manager                    关
+  ui-settings-account                  关
+  ui-settings-models                   关
+  ui-sidebar-browser                   关
+  ui-sidebar-documentpreview           关
+  web                                  关
+  web-fetch-http                       关
+  web-search-deepseek                  关
+  workflow-ptc                         关
+
+## 2. 反向检查：启用的行 132 个，逐条对白名单
+### 核心运行时（66）
+  agent                                Agent 运行服务
+  agent-default-model                  新会话默认模型，已改成律所路由
+  agent-loop                           Agent 循环
+  agent-preset-registry                preset 注册表，default: lawbench
+  approval                             用户审批服务
+  authorization                        本机界面鉴权
+  command-feedback                     /feedback 只在本机会话日志追加 feedback/record 事件；上传它的 session-telemetry-otel 已关
+  commands                             斜杠命令注册表
+  config-editor                        把设置写进 profile 自己的补丁（叠在我方补丁之后、即时重载）；界面入口：插件页已随 ui-plugin-manager 关闭，设置页"打开配置文件"由 P-13 在桌面端去掉；设置接口的远程写入（update / mutate）归 T17，由 P-7 地址白名单兜底
+  deepseek-llm-api-extensions          DeepSeek 官方 API 附加字段注册表，只被已关的 llm-deepseek 使用，处于空转
+  directory-picker                     目录选择器（打开案件用）
+  fs-observation-policy                文件观察策略
+  fs-sandbox                           文件沙箱；文件工具已关
+  goal                                 目标状态服务；模型侧 tool-goal、command-goal 已关
+  goal-round-driver                    目标续跑驱动；无目标时空转
+  hmr                                  开发期插件热更新；只重载本地文件
+  image-offload                        图片卸载；Agent 路由 input 只有 text
+  include                              Cordis 组合包加载器本身
+  job-controller                       后台任务远程接口
+  jobs                                 后台任务注册表；产生任务的工具行都已关
+  llm                                  LLM 适配器注册表，路由由 llm-pi-ai 提供
+  llm-pi-ai                            律所模型路由（唯一路由，指向 127.0.0.1:18765）
+  llm-retry                            LLM 重试服务，策略在 llm-pi-ai 路由的 retryPolicy
+  permission                           权限预设
+  plugin-inventory                     只读插件清单；本证据即由它导出
+  pwsh-sandbox                         PowerShell 沙箱后端；tool-pwsh 已关，没有模型入口
+  repeat-tool-reminder                 重复工具调用提醒（提示词段）
+  sandbox                              沙箱服务；命令工具已关，只作基础设施
+  sandbox-policy                       沙箱策略
+  session                              会话服务
+  session-checkpoint-policy            会话检查点
+  session-controller                   会话命令远程接口
+  session-projection                   会话投影（界面显示用）
+  session-projection-cache             会话列表缓存；Spec 3.3 要求抽查不含正文（T17）
+  session-query-sqlite                 会话检索，内存库且不开启
+  session-stats                        会话统计（界面）
+  session-title                        会话标题服务；LLM 生成标题的行已关，T7 由我方插件设标题
+  session-turn-outline                 会话轮次大纲（界面）
+  settings                             设置服务
+  settings-controller                  设置远程接口（读 describe、写 update / mutate）；远程写入可改 profile 补丁，归 T17，由 P-7 地址白名单兜底
+  shell-env                            Shell 环境变量；命令工具已关
+  skill                                Skill 注册表；只由 preset 内 skill-filesystem 注册两处目录
+  spill-local                          溢出文件存储；阈值已调到 100 万 token，不会产生文件
+  spill-policy                         溢出阈值 1000000
+  storage                              存储服务
+  storage-domain                       存储分域
+  storage-json                         JSON 存储后端
+  subagent                             子智能体注册表；所有子智能体工具行已关
+  subagent-fork-in-process             子智能体后端；无工具入口
+  subagent-model-selection-settings    子智能体模型选择设置；无工具入口
+  subagent-spawn-in-process            子智能体后端；无工具入口
+  subprocess                           子进程服务；T7 的 Host 插件用它拉起工作台服务
+  system-prompt                        系统提示组装；preset 的 persona complete: true 覆盖默认
+  timeout-policy                       工具调用超时策略
+  timer                                定时器服务，供其他插件调度
+  token-meter                          用量统计，preset 的 compaction 依赖它
+  tools                                工具注册表，mode 锁成 native
+  typert                               Typert 远程接口注册表（界面与 Host 通信）
+  typert-gateway                       界面到 Host 的 /api 网关，只监听 127.0.0.1
+  typert-loader                        Typert 远程接口加载
+  user-questions                       ask_user_question 工具背后的提问服务
+  web-runtime                          界面静态资源与启动地址
+  web-startup                          Web 启动参数
+  webserver                            本机 Web 服务，绑定 127.0.0.1
+  workspace-changes                    按 git 快照记录每轮改动文件；律师工作台无文件工具，只读
+  workspace-controller                 工作区远程接口，documentsDirectory 已改
+### 界面框架（36）
+  7cf60c96（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
+  api-remotes                          远程接口装配
+  client-hmr                           界面热更新（开发期）
+  connection                           界面到 Host 的连接
+  ee257852（随机 id）                      桌面端原生目录选择器（界面半边）
+  file-upload                          界面上传通道（附件改导入归 P-5 / T17）
+  locale                               语言，固定中文
+  modules                              界面插件模块表
+  resources                            资源协议
+  shortcuts                            快捷键服务
+  ui-agent-preset                      preset 选择入口；开发者模式（ui-settings.enabled）关闭时不显示
+  ui-approval                          审批界面
+  ui-chat                              聊天界面
+  ui-commands                          斜杠命令菜单
+  ui-conversation                      对话区（附件入口改造归 P-5 / T17）
+  ui-deliverables                      每轮成果卡片
+  ui-goal                              目标条
+  ui-input-trigger                     输入框 / 和 @ 触发
+  ui-jobs                              后台任务列表
+  ui-layout                            布局
+  ui-model-selection                   模型与思考档选择
+  ui-permission                        权限模式选择
+  ui-plan                              计划模式入口；plan-mode 已关
+  ui-renderer                          渲染器
+  ui-session                           会话界面
+  ui-shortcuts                         快捷键界面
+  ui-sidebar                           左侧栏
+  ui-sidebar-files                     右侧栏工作区文件树（只读浏览）
+  ui-sidebar-right                     右侧栏容器
+  ui-skill                             Skill 引用
+  ui-subagent                          子智能体卡片；工具已关
+  ui-theme                             主题
+  ui-tool                              工具调用卡片
+  ui-trajectory                        执行轨迹
+  ui-user-questions                    ask_user_question 的界面
+  ui-workflow-run                      工作流运行卡片；工作流工具已关
+### 设置（8）
+  ui-settings                          设置页外壳；enabled: false 即开发者模式关
+  ui-settings-agent-loop               Agent 循环设置页
+  ui-settings-general                  通用设置页（权限、语言、外观、字号、开发者模式开关等）；其中"打开配置文件"按钮会用系统编辑器打开 profile 补丁，已由 P-13 在桌面端去掉
+  ui-settings-plugin-inventory         只读插件清单页，不能改配置
+  ui-settings-plugins                  内置插件设置分区外壳（只读清单）
+  ui-settings-shell                    Shell 设置页；命令工具已关
+  ui-settings-subagent                 子智能体设置页；工具已关
+  ui-settings-web-search               联网搜索设置页，只在 web-search-deepseek 服务存在时出现；该行已关，页面不出现
+### 我方（4）
+  legal-credentials                    我方凭据插件：只认 LAWFIRM_KEY、读写 Windows 凭据管理器；授权记录只在内存；不读环境变量
+  legal-host                           我方 Host 插件：启动并看护工作台服务（只监听 127.0.0.1），提供 lawbenchCore 服务和 lawbench 远程接口（首次配置页用）；不对模型暴露工具
+  legal-ui                             我方界面插件：首页、胶囊管理、右侧栏材料 / 成果 / 原文查看、输入区上方选择、设置页一节；一切数据经 lawbench 远程接口（Host 转 127.0.0.1 的工作台服务），不读写案件文件
+  preset-lawbench                      律师工作台 preset
+### 后续工单处理（18）
+  attachment-local                     附件存 $DSH_HOME，改为导入（P-5，T17）
+  cordis-client-runner                 同上，界面半边（T17）
+  cordis-host-runner                   在界面里运行动态 Cordis 包（T17）
+  cordis-inspect-providers             Cordis 检查提供者；tool-cordis 不在我方 preset（T17）
+  file-reference-local                 @ 文件引用（T17）
+  open-in-app                          用外部应用打开（T17）
+  session-log-download                 会话记录导出 ZIP 下载，下载位置由用户选（T17 数据落点）
+  session-persistence-jsonl            会话记录存 $DSH_HOME，改为按案件存（P-8，T17）
+  session-reference                    跨会话引用，会把别的会话快照注入本会话（T17）
+  terminal-controller                  侧栏终端的 Host 半边（T17）
+  ui-attachment                        附件界面（P-5，T17）
+  ui-cordis                            Cordis 界面（T17）
+  ui-open-in-app                       用外部应用打开的界面（T17）
+  ui-reference                         @ 引用界面（T17）
+  ui-sidebar-terminal                  侧栏终端（T17）
+  ui-workspace                         "默认工作区"入口界面（T13）
+  workspace                            工作区服务与"默认工作区"入口（T13）
+  workspace-files                      工作区文件读取，可读工作区外路径（T17）
+
+## 3. 改配置的行（比较取值，来源 plugin-tree.txt）
+  agent-preset-registry    一致  {"default": "lawbench"}
+  agent-default-model      一致  {"provider": "lawfirm", "model": "qwen38-27b"}
+  spill-policy             一致  {"maxInlineTokens": 1000000}
+  spill-local              一致  {"cleanupPeriodDays": 1}
+  locale                   一致  {"preference": "zh"}
+  ui-settings              一致  {"enabled": false}
+  tools                    一致  {"mode": "native", "maxParallelSubCalls": 10}
+  llm-pi-ai.baseURL            一致  "http://127.0.0.1:18765/v1"
+  llm-pi-ai.api                一致  "openai-completions"
+  llm-pi-ai.apiKeyEnv          一致  "LAWFIRM_KEY"
+  llm-pi-ai.retryPolicy        一致  {"mode": "normal", "maxRetries": 1}
+  llm-pi-ai.models             一致  [["qwen38-27b", 131072, {"off": null, "low": "low", "medium": "medium", "high": "xhigh"}]]
+  workspace-controller.documentsDirectory 一致  !!js process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench', 'dsh-documents')
+  skill-filesystem.includeDefaultRoots             一致  false
+  skill-filesystem.watch                           一致  false
+  skill-filesystem.providerName                    一致  "lawbench-skills"
+  skill-filesystem.customSkillDirs 整项相等            一致  "!!js [process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+  persona.complete                                 一致  true
+  persona.includeRuntimeContext                    一致  false
+  persona.prefix 读 lawbench-dsh/persona.md（整项相等）   一致  "!!js process.getBuiltinModule('node:fs').readFileSync(proces…"
+  persona.md 含身份与不执行材料指令两条                         一致  "persona.md"
+
+## 4. preset-lawbench 实际挂载的插件（运行时）
+  lawbench（默认=True）：['persona', 'skill-filesystem', 'tool-skill', 'tool-ask-user', 'legal-agent', 'compaction-basic', 'tool-result-pruner']
+
+## 结论
+通过

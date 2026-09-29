@@ -81,7 +81,7 @@ function RecentCases() {
   const [over, setOver] = useState<string | null>(null)
   useEffect(() => { void loadRecent().then((r) => { if (!Array.isArray(r)) setErr(r) }) }, [])
   const drop = (c: CaseRef) => (e: DragEvent) => {
-    e.preventDefault(); setOver(null)
+    e.preventDefault(); e.stopPropagation(); setOver(null) // 不冒泡到 DSH 的 document 拖入监听（否则会被当成聊天附件）
     const paths = [...e.dataTransfer.files].map((f) => getNav().pathFor(f))
     startImport(c, paths, '案件卡片')
   }
@@ -99,7 +99,7 @@ function RecentCases() {
       {cases.length === 0 && !err ? <Empty>还没有案件。打开或新建一个案件文件夹开始。</Empty> : null}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
         {cases.map((c) => (
-          <div key={c.case_id} onDragOver={(e) => { if (c.exists !== false) { e.preventDefault(); setOver(c.case_id) } }} onDragLeave={() => setOver(null)} onDrop={drop(c)}
+          <div key={c.case_id} onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); if (c.exists !== false) { e.preventDefault(); setOver(c.case_id) } }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}
             style={{ ...S.card, borderColor: over === c.case_id ? C.brand : C.border, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={S.between}>
               <span style={{ fontWeight: 600 }}>{c.name}</span>

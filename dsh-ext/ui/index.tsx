@@ -13,6 +13,7 @@ import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { TABS } from './cases.ts'
 import { setNav, type Nav } from './kit.tsx'
 import { app, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
+import { makeIntakeHook, type IntakeHook } from './intake.ts'
 
 export const inject = ['slots', 'remote']
 
@@ -35,6 +36,8 @@ type Ctx = {
   workspaces: { create(req: { path: string }): Promise<{ workspaceId: string }> }
   sidebarRight: { openTab(kind: string, opts?: { params?: Record<string, string> }): unknown; mounted: Observable<string | undefined> }
   sidebarRightTabs: { register(def: Record<string, unknown>): Disposer }
+  /** P-5 源码补丁提供；没打补丁时不存在。 */
+  conversationFileIntake: { register(hook: IntakeHook): Disposer }
 }
 
 type DesktopWindow = Window & {
@@ -112,6 +115,11 @@ function registerSessionTracking(ctx: Ctx): void {
   ctx.effect(() => ctx.sessions.list.subscribe(update), '律师工作台界面：会话列表')
 }
 
+/** P-5：拖入、粘贴、选择到对话框的文件导入案件文件夹（要 DSH 源码补丁提供的 conversationFileIntake）。 */
+function registerIntake(ctx: Ctx): void {
+  ctx.effect(() => ctx.conversationFileIntake.register(makeIntakeHook((id) => ctx.sessions.list.getSnapshot().byId[id]?.cwd)), '律师工作台界面：对话框导入')
+}
+
 /** 右侧栏三个标签：材料、成果、原文查看。 */
 function registerTabs(ctx: Ctx): void {
   const tabs: Array<[string, string, string, number, unknown]> = [
@@ -152,6 +160,7 @@ export async function apply(ctx: Ctx): Promise<() => Promise<void>> {
     ctx.inject(['workspaces', 'uiWorkspace'], registerWorkspace),
     ctx.inject(['sessions', 'uiSession'], registerSessionTracking),
     ctx.inject(['slots', 'sidebarRight', 'sidebarRightTabs'], registerTabs),
+    ctx.inject(['conversationFileIntake', 'sessions'], registerIntake),
   ]
   return async () => {
     for (const o of others) await o.dispose()

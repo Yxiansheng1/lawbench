@@ -4,7 +4,8 @@
 // 另支持：--fail-begin（task/begin 返回 CASE_NOT_FOUND）、--calls <jsonl>（记录每次调用的元数据）、
 //   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）、
 //   --fixtures（T13：其余 /api/* 按 ui/fixtures/<契约>.json 回答，供界面开发和截图；胶囊配置存在 LB_APPDATA 里，重启后保持）、
-//   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）
+//   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）、
+//   --case-root <目录>（T13：假数据里第一个案件的文件夹改成这个真实存在的空目录，桌面端才能把它当工作区打开）
 import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
 import { API_ROUTES } from '../shared/api-routes.ts'
@@ -27,6 +28,7 @@ const CALLS = arg('--calls', null)
 const FAIL_BEGIN = flag('--fail-begin')
 const BAD_RESPONSE = flag('--bad-response')
 const FIXTURES = flag('--fixtures')
+const CASE_ROOT = arg('--case-root', null)
 const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'fixtures')
 if (PORT < 18801 || PORT > 18809) throw new Error('假服务端口限 18801–18809')
@@ -140,7 +142,9 @@ function fromFixtures(method, path, query, body) {
   }
   if (r.method === 'capsulesReset') rmSync(saved, { force: true })
   if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
-  return [fixture(`${r.contract}.json`)]
+  const out = fixture(`${r.contract}.json`)
+  if (CASE_ROOT && r.method === 'caseRecent' && out.ok && out.value.cases[0]) out.value.cases[0].root = CASE_ROOT
+  return [out]
 }
 
 const RESPONSE_SCHEMA = { '/core/task/begin': 'core/task_begin', '/core/context': 'core/context', '/core/tool': 'core/tool', '/core/progress': 'core/progress', '/core/task/end': 'core/task_end', '/api/connection/test': 'api/connection_test' }

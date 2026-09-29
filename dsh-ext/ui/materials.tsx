@@ -60,7 +60,8 @@ function Materials({ caseRef }: { caseRef: CaseRef }) {
   }, [jobs, reloadMats])
 
   const importPaths = (paths: string[]) => startImport(caseRef, paths, '材料面板')
-  const onDrop = (e: DragEvent) => { e.preventDefault(); setOver(false); importPaths([...e.dataTransfer.files].map((f) => getNav().pathFor(f))) }
+  // 拦在这里、不再冒泡：DSH 在 document 上监听拖入，放过去会被当成聊天附件收下（D13 不允许）
+  const onDrop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setOver(false); importPaths([...e.dataTransfer.files].map((f) => getNav().pathFor(f))) }
   const pickFolder = async () => { const d = await getNav().pickDirectory(); if (d) importPaths([d]) }
   const rescan = async () => {
     const r = await call<{ added: number; changed: number; removed: number; failed: number; review_needed: boolean }>('materialsScan', { case_id: id })
@@ -71,7 +72,7 @@ function Materials({ caseRef }: { caseRef: CaseRef }) {
 
   return (
     <div style={{ ...S.pane, outline: over ? `2px dashed ${C.brand}` : 'none', outlineOffset: -4 }}
-      onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+      onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true) }} onDragLeave={(e) => { e.stopPropagation(); setOver(false) }} onDrop={onDrop}>
       <div style={S.between}>
         <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>{caseRef.name}</div><div style={S.sub}>拖入文件或文件夹即导入到"{DEFAULT_TARGET}"（可在确认框里改）</div></div>
       </div>

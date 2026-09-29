@@ -9,6 +9,8 @@ import { app, call, lb, notice, setSelection, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
 
+const NO_INPUTS: string[] = []
+
 interface Draft { title: string; path: string; version: number }
 interface Task { task_id: string; skill: string | null; status: string; drafts: Draft[]; finished_at: string | null }
 
@@ -25,7 +27,8 @@ function Results({ caseRef }: { caseRef: CaseRef }) {
   const id = caseRef.case_id
   const [tasks, reload] = useLoad(() => call<{ tasks: Task[] }>('tasksList', { case_id: id }), [id], 5000)
   const [titles, setTitles] = useState<Record<string, string>>({})
-  const inputs = useStore(app, (s) => s.selections[id]?.inputs ?? [])
+  // 选择器必须返回稳定的引用：每次新建 [] 会让 useSyncExternalStore 无限重渲染（React #185）
+  const inputs = useStore(app, (s) => s.selections[id]?.inputs) ?? NO_INPUTS
   const [confirming, setConfirming] = useState<{ task: Task; draft: Draft } | null>(null)
   useEffect(() => { void lb().listSkills().then((r) => setTitles(Object.fromEntries(r.value.skills.map((s) => [s.name, s.title])))).catch(() => undefined) }, [])
   const skillName = (t: Task) => t.task_id.startsWith('P-') ? '案件 wiki 整理' : t.skill ? titles[t.skill] ?? t.skill : '自由对话'
