@@ -1,0 +1,30 @@
+T5 · LibreOffice 转换与打印机（Spec 12.3"不依赖打印机"、工单 T5 补充）
+实测时间：2026-09-29 21:20 前后；开发机；线 B
+
+一、转换方式
+- 只用 soffice --headless --norestore --nologo --nodefault --nolockcheck --convert-to <格式> 导出；
+  不调用任何打印接口（无 --print-to-file、--pt、PrintOut），不改系统默认打印机（测试 test_no_print_interface 核对源码）。
+- 每次转换用独立用户配置目录（工作区\临时\lo_profile），启动前写入 BlockUntrustedRefererLinks=true；
+  TMP / TEMP 指向本次临时目录；结束后连同中间文件一起删除。
+- 超时 120 秒：taskkill /F /T /PID <本次启动的进程>，只结束本次启动的进程树，不动其他进程
+  （test_timeout_kills_own_tree_and_cleans 用会卡住的假程序代替 soffice 实测：进程树已结束、旁边的进程还活着、材料进失败清单且原因为中文、案件临时目录和系统临时目录都没有副本）。
+
+二、本机默认打印机（Get-CimInstance Win32_Printer，Default=True）
+- Name: Microsoft Print to PDF；Network: False；WorkOffline: False
+- 注意：用户原话件说开发机默认打印机是连不上的网络打印机，实测此刻的默认打印机是 Microsoft Print to PDF（本地）。
+  本机因此没能在"默认网络打印机连不上"的条件下实测；按原话件，验收时要在有网络打印机的机器上再试一次（交 T22）。
+
+三、实测（LibreOffice 26.8.0.3，C:\Program Files\LibreOffice\program\soffice.exe；每种两次）
+| 输入 | 输出 | 结果 | 耗时 | 临时目录残留 |
+|---|---|---|---|---|
+| 通知.doc（由 tender-01\补充通知.docx 另存） | docx | 成功 / 成功 | 8.2 秒 / 8.1 秒 | 0 / 0 |
+| 流水.xls（由 civil-01\银行流水.xlsx 另存） | xlsx | 成功 / 成功 | 7.7 秒 / 7.7 秒 | 0 / 0 |
+| civil-01\银行流水.xlsx（无缓存值的公式重算） | xlsx | 成功 / 成功 | 8.3 秒 / 7.9 秒 | 0 / 0 |
+| .wps | — | 未实测 | — | — |
+- .wps：本机没有 WPS 文字格式的样本，LibreOffice 也不能导出 .wps，无法造样本；代码路径与 .doc 相同（先查外链图片，再经 LibreOffice 转 docx）。
+- 首次启动（新建用户配置目录）约 17–18 秒，之后每次约 8 秒；每次都是新的配置目录，所以每次都要付这份启动成本。
+
+四、弹窗
+- 转换全程无头运行（--headless），没有出现窗口，也没有卡住：六次转换都在 9 秒内正常结束。
+- 转换前后都没有残留的 soffice 进程（tasklist 核对）。
+- 我看不到屏幕，"没有弹窗"的判据是进程按时退出、没有等待用户操作；在有网络打印机的机器上的表现待验收时确认。

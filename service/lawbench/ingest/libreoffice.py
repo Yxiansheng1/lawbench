@@ -13,12 +13,14 @@ import pathlib
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 
 from . import LO_TIMEOUT, ParseError
 
 _LOCK = threading.Lock()
+TIMEOUT = LO_TIMEOUT  # 秒；测试里可改小
 
 CANDIDATES = [
     r"C:\Program Files\LibreOffice\program\soffice.exe",
@@ -54,8 +56,44 @@ class Converter:
         try:
             yield _Session(self, work)
         finally:
-            shutil.rmtree(work, ignore_errors=True)
-            shutil.rmtree(self.temp_dir / "lo_profile", ignore_errors=True)
+            _rmtree(work)
+            _rmtree(self.temp_dir / "lo_profile")
+
+
+def _rmtree(path: pathlib.Path) -> None:
+    """进程刚被结束时文件可能还被占用：重试几次，保证不留材料副本。"""
+    for _ in range(20):
+        shutil.rmtree(path, ignore_errors=True)
+        if not path.exists():
+            return
+        time.sleep(0.1)
+
+
+# Spec 14.3：LibreOffice 会按文档里的外部链接去取图；每次启动前在独立用户配置目录里关掉
+BLOCK_LINKS_XCU = """<?xml version="1.0" encoding="UTF-8"?>
+<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="BlockUntrustedRefererLinks" oor:op="fuse"><value>true</value></prop></item>
+</oor:items>
+"""
+
+
+def write_profile(profile_dir: pathlib.Path) -> None:
+    user = profile_dir / "user"
+    user.mkdir(parents=True, exist_ok=True)
+    (user / "registrymodifications.xcu").write_text(BLOCK_LINKS_XCU, encoding="utf-8")
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """只结束本次启动的进程及其子进程（soffice.exe 会再拉起 soffice.bin），不动律师自己开着的程序。"""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    else:
+        proc.kill()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 class _Session:
@@ -65,21 +103,32 @@ class _Session:
         self.n = 0
 
     def convert(self, src: pathlib.Path, fmt: str) -> pathlib.Path:
+        """只用 --convert-to 导出，不走任何打印接口，不改系统默认打印机（Spec 12.3）。"""
         if not self.conv.soffice:
             raise ParseError("convert_failed")
         self.n += 1
         job = self.work / str(self.n)
         (job / "out").mkdir(parents=True)
+        (job / "tmp").mkdir()
         local = job / ("in" + src.suffix.lower())
         shutil.copyfile(src, local)
-        profile = (self.conv.temp_dir / "lo_profile").resolve().as_uri()
+        profile_dir = (self.conv.temp_dir / "lo_profile").resolve()
+        write_profile(profile_dir)
         args = [self.conv.soffice, "--headless", "--norestore", "--nologo", "--nodefault", "--nolockcheck",
-                f"-env:UserInstallation={profile}", "--convert-to", fmt, "--outdir", str(job / "out"), str(local)]
+                f"-env:UserInstallation={profile_dir.as_uri()}", "--convert-to", fmt, "--outdir", str(job / "out"),
+                str(local)]
+        # 临时文件也落在本次的临时目录里，结束后一起删掉；系统临时目录不留材料副本
+        env = dict(os.environ, TMP=str(job / "tmp"), TEMP=str(job / "tmp"), TMPDIR=str(job / "tmp"))
         with _LOCK:
             try:
-                subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=LO_TIMEOUT,
-                               check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            except (subprocess.TimeoutExpired, OSError):
+                proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            except OSError:
+                raise ParseError("convert_failed")
+            try:
+                proc.wait(timeout=TIMEOUT)
+            except subprocess.TimeoutExpired:
+                kill_tree(proc)
                 raise ParseError("convert_failed")
         out = job / "out" / ("in." + fmt)
         if not out.is_file() or out.stat().st_size == 0:

@@ -26,7 +26,7 @@ from datetime import datetime
 from .. import contracts, logs
 from ..errors import ApiError
 from ..ingest import MAX_BYTES, REASONS, Parsed, ParseError
-from ..ingest import detect, docx, image, pdf, text, xlsx
+from ..ingest import detect, docx, image, links, pdf, text, xlsx
 from ..ingest.libreoffice import Converter
 from . import gate
 from .registry import TEMPLATES, CaseRegistry
@@ -189,6 +189,8 @@ class Materials:
             if mtype in ("doc", "wps"):
                 if detect.is_ole(path) and detect.ole_encrypted(path):
                     raise ParseError("encrypted")
+                if links.has_external_picture(path):
+                    raise ParseError("external_link")  # 不交给 LibreOffice（Spec 14.3 ②a）
                 return docx.parse(s.convert(path, "docx"), note=CONVERTED_NOTE[mtype])
             if mtype == "xlsx":
                 return xlsx.parse(path, recalc=lambda p: s.convert(p, "xlsx"))

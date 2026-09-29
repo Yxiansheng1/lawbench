@@ -20,6 +20,8 @@ REASONS = {
     "corrupt": "文件无法打开，可能已损坏",
     "too_large": "文件过大，请拆分后导入",
     "convert_failed": "无法转换该文件，请在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
+    # Spec 14.3 ②a；措辞按注记 致B-ORCH-注记-doc外链图片要拒绝-20260929-2106
+    "external_link": "文档里有指向外部地址的图片，为避免联网没有解析；请在 Word 或 WPS 里断开链接（或另存为 docx）后再导入",
 }
 
 
