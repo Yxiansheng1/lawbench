@@ -1,0 +1,29 @@
+T21 合流记录（主编排，2026-09-29 20:23 +08:00，无人值守窗内）
+
+合并方式：git cherry-pick。line-C 上 T21 的提交排在 T6（仍在返修）和 T19（复核中）之后，不能整条分支合并，所以只拣入已核过的三个提交。
+合并前 main：443112e
+拣入：bc30f2e（T1 追加：xlsx 属性时间固定，主编排 19:30 已核）→ bbbe784
+拣入：2d45ca9（T21 进行中）→ fc0e4e3
+拣入：6f1b380（T21）→ b241e53
+合并后 main：b241e533015e6c4b0e972409109714da6c2de741
+
+拣入后的内容与 line-C 上的是否一致（路径 acceptance、docs/plan/evidence/T21/交付说明.md、dry-run.txt、tests/fixtures）：
+  无差异
+
+== 1. pytest 全量 ==
+service、prep395 尚未合并进 main（T3、T6 返修中），不适用。
+
+== 2. 契约自检 ==
+[对] case-archiving/catalogs/常法卷.json
+[对] case-archiving/catalogs/民事行政卷.json
+退出码=0
+
+== 3. build_skills --check ==
+结果：✔ 通过
+退出码=0
+
+== 4. 测试样本核对（T1 追加提交后）==
+通过 229 项，失败 0 项。
+退出码=0
+
+结论：契约自检、build_skills、样本核对退出码均为 0；pytest 不适用；对基线零新增失败。
