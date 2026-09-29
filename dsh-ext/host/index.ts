@@ -4,12 +4,15 @@
 // - 提供远程命名空间 lawbench（最小集：设置读写、测试连接、首次配置状态），首次配置页经 Host 的 /api 调用。
 import { randomBytes } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
 import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
 import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
+import { API_ROUTES, buildRequest, type ApiRoute } from '../shared/api-routes.ts'
+import { listSkills, type SkillInfo } from './skills.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -27,6 +30,8 @@ export interface Config {
   portRange?: [number, number]
   /** 其余透传给服务的环境变量（如 LB_SKILLS_DIRS、LB_CONTRACTS_DIR、LB_VALIDATE_RESPONSES）。 */
   env?: Record<string, string>
+  /** Skill 目录，先后顺序与服务一致（管理员目录在前）；listSkills 读这些目录（T13 执行令 Q4）。 */
+  skillDirs?: string[]
 }
 
 type Ctx = {
@@ -82,15 +87,103 @@ export type CredentialsLike = {
   unset(ref: string): Promise<void>
 }
 
-/** 远程命名空间 lawbench：首次配置页（Electron 主进程）经 Host 的 POST /api/lawbench/<方法> 调用。 */
+/** /api 接口的统一返回（契约 common.schema.json 的 fail，或 {ok: true, value}）。 */
+export type ApiResult = { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } }
+type LogFn = (level: 'info' | 'warn' | 'error', event: string, meta?: Record<string, unknown>) => void
+
+const fail = (code: string, message: string): ApiResult => ({ ok: false, error: { code, message } })
+const BAD_ARGS = '请求参数有误'
+const BAD_RESPONSE = '工作台服务返回的内容不符合约定，请重试；多次出现请联系技术支持'
+const PASTE_MAX_BYTES = 20 * 1024 * 1024
+/** 粘贴截图的导入位置（T13 执行令 Q3②）。 */
+export const PASTE_TARGET = '02案件材料/粘贴图片'
+
+/**
+ * 远程命名空间 lawbench：首次配置页（Electron 主进程）经 Host 的 POST /api/lawbench/<方法> 调用；
+ * 界面插件经 ctx.remote.lawbench.<方法>() 调用（T13）。
+ */
 export class LawbenchRemote {
   readonly typertRemote: unknown
   constructor(
     private readonly supervisor: Supervisor,
     private readonly appData: string,
     private readonly credentials: () => CredentialsLike | undefined,
+    private readonly skillDirs: readonly string[] = [],
+    private readonly log: LogFn = () => {},
   ) {
     this.typertRemote = Object.freeze({ service: this, serviceKey: LAWBENCH_SERVICE, namespace: LAWBENCH_NAMESPACE })
+  }
+
+  /**
+   * 调一个 /api 接口（T13 执行令 Q6）：按契约校验请求和完整的返回，失败时带错误码和中文提示返回，不抛出。
+   * 日志只记方法名、结果、错误码、耗时（Spec 4.5），不记请求和返回内容。
+   */
+  async callApi(route: ApiRoute, request: unknown): Promise<ApiResult> {
+    const t0 = Date.now()
+    const done = (r: ApiResult, extra: Record<string, unknown> = {}): ApiResult => {
+      this.log(r.ok ? 'info' : 'warn', 'api.call', { method: route.method, ok: r.ok, code: r.ok ? undefined : r.error.code, ms: Date.now() - t0, ...extra })
+      return r
+    }
+    const id = `lawbench://contracts/api/${route.contract}.schema.json`
+    const req = (request ?? {}) as Record<string, unknown>
+    if (!route.noRequest) {
+      if (typeof request !== 'object' || request === null || Array.isArray(request)) return done(fail('INVALID_ARGUMENT', BAD_ARGS))
+      if (validate(id, 'request', req).length) return done(fail('INVALID_ARGUMENT', BAD_ARGS))
+      if (route.require?.some((k) => req[k] === undefined)) return done(fail('INVALID_ARGUMENT', BAD_ARGS))
+    }
+    const built = buildRequest(route, req)
+    if (!built) return done(fail('INVALID_ARGUMENT', BAD_ARGS))
+    const ep = this.supervisor.endpoint()
+    if (!ep) return done(fail('SERVICE_UNAVAILABLE', UNAVAILABLE))
+    let json: unknown
+    try {
+      const r = await fetch(`http://127.0.0.1:${ep.port}${built.path}`, {
+        method: route.http, redirect: 'error', signal: AbortSignal.timeout(route.timeoutMs ?? 30_000),
+        headers: { authorization: `Bearer ${ep.token}`, ...(built.body === undefined ? {} : { 'content-type': 'application/json' }) },
+        body: built.body === undefined ? undefined : JSON.stringify(built.body),
+      })
+      json = await r.json()
+    } catch (e) {
+      const timeout = (e as Error)?.name === 'TimeoutError'
+      return done(timeout ? fail('TIMEOUT', '工作台服务响应超时，请稍后重试') : fail('SERVICE_UNAVAILABLE', UNAVAILABLE))
+    }
+    const errs = validate(id, 'response', json)
+    if (errs.length) return done(fail('INTERNAL', BAD_RESPONSE), { invalid: errs.length })
+    return done(json as ApiResult)
+  }
+
+  /** Skill 列表（T13 执行令 Q4）：读 SKILL.md 头部并按契约校验；同名时先读到的目录（管理员目录）为准。 */
+  async listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }> {
+    const { skills, invalid } = await listSkills(this.skillDirs)
+    if (invalid) this.log('warn', 'skills.invalid_frontmatter', { count: invalid })
+    return { ok: true, value: { skills } }
+  }
+
+  /**
+   * 粘贴的截图（T13 执行令 Q3②）：存到 <应用数据>\临时\粘贴\，用绝对路径调 /api/materials/import 导入到
+   * 02案件材料\粘贴图片\，不论成败都删掉临时文件。Host 不直接写案件文件夹。
+   * @param request - { case_id, image_base64 }；只收 PNG、JPEG，最大 20 MB。
+   */
+  async importPastedImage(request: unknown): Promise<ApiResult> {
+    const r = (request ?? {}) as { case_id?: unknown; image_base64?: unknown }
+    if (typeof r.case_id !== 'string' || typeof r.image_base64 !== 'string') return fail('INVALID_ARGUMENT', BAD_ARGS)
+    const bytes = Buffer.from(r.image_base64, 'base64')
+    const ext = bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
+      : bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff ? 'jpg' : undefined
+    if (!ext || bytes.length > PASTE_MAX_BYTES) return fail('INVALID_ARGUMENT', '只能粘贴 PNG 或 JPEG 图片，且不超过 20 MB')
+    const dir = pasteDir(this.appData)
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+    const file = join(dir, `粘贴-${stamp}-${randomBytes(2).toString('hex')}.${ext}`)
+    try {
+      await mkdir(dir, { recursive: true })
+      await writeFile(file, bytes)
+      const route = API_ROUTES.find((x) => x.method === 'materialsImport')!
+      return await this.callApi(route, { case_id: r.case_id, paths: [file], target: PASTE_TARGET, unzip: false })
+    } catch {
+      return fail('INTERNAL', '粘贴的图片没能导入，请重试')
+    } finally {
+      await rm(file, { force: true }).catch(() => undefined)
+    }
   }
 
   private async api(method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown): Promise<unknown> {
@@ -203,6 +296,30 @@ export class LawbenchRemote {
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
+
+/** 粘贴截图的临时目录 <应用数据>\临时\粘贴\。 */
+export const pasteDir = (appData: string): string => join(appData, '临时', '粘贴')
+
+/** 启动时清掉上次没删成的粘贴临时文件（T13 执行令 Q3②）。只删这个目录里的文件，返回删了几个。 */
+export async function cleanPasteDir(appData: string): Promise<number> {
+  const dir = pasteDir(appData)
+  let names: string[]
+  try { names = await readdir(dir) } catch { return 0 }
+  let n = 0
+  for (const name of names) {
+    try { await rm(join(dir, name), { force: true, recursive: true }); n++ } catch { /* 下次启动再删 */ }
+  }
+  return n
+}
+
+// /api 路由表里的每个接口对应一个只收 request 的方法（形参名须与方法表一致，tests/remote-methods.spec.ts 守着）
+for (const route of API_ROUTES) {
+  Object.defineProperty(LawbenchRemote.prototype, route.method, {
+    configurable: true, writable: true,
+    value: function (this: LawbenchRemote, request: unknown) { return this.callApi(route, request) },
+  })
+}
+
 Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS_KEY, {
   configurable: true,
   value: Object.freeze({
@@ -248,7 +365,8 @@ export function apply(ctx: Ctx, config: Config): void {
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))
-  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never))
+  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log))
+  void cleanPasteDir(config.appData).then((n) => { if (n) log('info', 'paste.cleaned', { count: n }) })
   ctx.effect(() => {
     void supervisor.start().catch((e: unknown) => log('error', 'service.start_failed', { error: String((e as Error)?.message ?? e) }))
     return () => supervisor.stop()

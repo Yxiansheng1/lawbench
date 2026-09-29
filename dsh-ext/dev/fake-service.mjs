@@ -2,9 +2,12 @@
 // 不属于产品。T3/T8 合并后换真服务复测。
 // 用法：node dev/fake-service.mjs --port 18801  （令牌取环境变量 LB_TOKEN；应用数据目录取 LB_APPDATA）
 // 另支持：--fail-begin（task/begin 返回 CASE_NOT_FOUND）、--calls <jsonl>（记录每次调用的元数据）、
-//   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）
+//   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）、
+//   --fixtures（T13：其余 /api/* 按 ui/fixtures/<契约>.json 回答，供界面开发和截图；胶囊配置存在 LB_APPDATA 里，重启后保持）、
+//   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
+import { API_ROUTES } from '../shared/api-routes.ts'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
@@ -23,6 +26,9 @@ const APPDATA = process.env.LB_APPDATA ?? join(dirname(fileURLToPath(import.meta
 const CALLS = arg('--calls', null)
 const FAIL_BEGIN = flag('--fail-begin')
 const BAD_RESPONSE = flag('--bad-response')
+const FIXTURES = flag('--fixtures')
+const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'fixtures')
 if (PORT < 18801 || PORT > 18809) throw new Error('假服务端口限 18801–18809')
 if (TOKEN.length < 16) throw new Error('需要环境变量 LB_TOKEN（至少 16 位）')
 
@@ -112,6 +118,31 @@ function handle(method, path, body) {
   }
 }
 
+// T13 --fixtures：按路由表匹配方法和路径，校验请求后回答 ui/fixtures 里的假数据
+const ROUTE_RE = API_ROUTES.map((r) => ({ r, re: new RegExp('^' + r.path.replace(/\{(\w+)\}/g, '(?<$1>[^/]+)') + '$') }))
+const fixture = (name) => JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8'))
+function fromFixtures(method, path, query, body) {
+  const hit = ROUTE_RE.map(({ r, re }) => ({ r, m: re.exec(path) })).find(({ r, m }) => m && r.http === method)
+  if (!hit) return null
+  const { r, m } = hit
+  const params = Object.fromEntries(Object.entries(m.groups ?? {}).map(([k, v]) => [k, decodeURIComponent(v)]))
+  const request = method === 'GET' ? { ...Object.fromEntries(query), ...params } : { ...(body ?? {}), ...params }
+  if (!r.noRequest) {
+    const v = check(`api/${r.contract}`, 'request', request); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
+  }
+  if (FAIL_API.has(r.contract)) return [fixture(`${r.contract}.fail.json`)]
+  const saved = join(APPDATA, 'capsules.json')
+  if (r.method === 'getCapsules' && existsSync(saved)) return [ok(JSON.parse(readFileSync(saved, 'utf8')))]
+  if (r.method === 'putCapsules') {
+    mkdirSync(APPDATA, { recursive: true })
+    writeFileSync(saved, JSON.stringify(request, null, 2), 'utf8')
+    return [ok(request)]
+  }
+  if (r.method === 'capsulesReset') rmSync(saved, { force: true })
+  if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
+  return [fixture(`${r.contract}.json`)]
+}
+
 const RESPONSE_SCHEMA = { '/core/task/begin': 'core/task_begin', '/core/context': 'core/context', '/core/tool': 'core/tool', '/core/progress': 'core/progress', '/core/task/end': 'core/task_end', '/api/connection/test': 'api/connection_test' }
 
 createServer((req, res) => {
@@ -131,7 +162,7 @@ createServer((req, res) => {
   req.on('end', () => {
     let body
     try { body = raw ? JSON.parse(raw) : undefined } catch { return send(200, fail('INVALID_ARGUMENT', '请求参数有误')) }
-    const out = handle(req.method, url.pathname, body)
+    const out = handle(req.method, url.pathname, body) ?? (FIXTURES ? fromFixtures(req.method, url.pathname, url.searchParams, body) : null)
     if (!out) return send(404, fail('INVALID_ARGUMENT', '请求参数有误'))
     let [payload, violations] = out
     if (BAD_RESPONSE && payload.ok) {
@@ -141,7 +172,8 @@ createServer((req, res) => {
       if (firstKey) delete v[firstKey]; else payload = { ...payload, unexpected: true }
       payload = { ...payload, value: v }
     }
-    const rs = RESPONSE_SCHEMA[url.pathname]
+    const route = ROUTE_RE.find(({ r, re }) => r.http === req.method && re.test(url.pathname))?.r
+    const rs = RESPONSE_SCHEMA[url.pathname] ?? (route ? `api/${route.contract}` : undefined)
     const selfCheck = rs ? check(rs, 'response', payload) : []
     res.meta = {
       tool: body?.tool, ok: payload.ok, code: payload.ok ? undefined : payload.error.code,

@@ -1,0 +1,51 @@
+{
+  "ok": true,
+  "value": {
+    "jobs": [
+      {
+        "job_id": "J-20260929101200-a1c4",
+        "material_id": "M0008",
+        "name": "借条",
+        "status": "running",
+        "pause_reason": null,
+        "total": 3,
+        "done": 1,
+        "failed": 0,
+        "created_at": "2026-09-29T10:12:00+08:00"
+      },
+      {
+        "job_id": "J-20260929100500-7b30",
+        "material_id": "M0003",
+        "name": "转账凭证扫描件",
+        "status": "paused",
+        "pause_reason": "prep_down",
+        "total": 4,
+        "done": 0,
+        "failed": 0,
+        "created_at": "2026-09-29T10:05:00+08:00"
+      },
+      {
+        "job_id": "J-20260929094000-c5e2",
+        "material_id": "M0005",
+        "name": "转账截图",
+        "status": "done",
+        "pause_reason": null,
+        "total": 1,
+        "done": 1,
+        "failed": 0,
+        "created_at": "2026-09-29T09:40:00+08:00"
+      },
+      {
+        "job_id": "J-20260928163000-19fa",
+        "material_id": "M0009",
+        "name": "对账单",
+        "status": "partial_failed",
+        "pause_reason": null,
+        "total": 2,
+        "done": 1,
+        "failed": 1,
+        "created_at": "2026-09-28T16:30:00+08:00"
+      }
+    ]
+  }
+}

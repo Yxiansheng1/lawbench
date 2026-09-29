@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "value": {
+    "status": "running",
+    "step_index": 4,
+    "step_total": 9,
+    "current": "借款合同",
+    "queue_wait_ms": 1800
+  }
+}

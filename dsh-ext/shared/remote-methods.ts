@@ -9,14 +9,22 @@ export interface RemoteMethodSpec {
   readonly params: readonly string[]
 }
 
+import { API_ROUTES } from './api-routes.ts'
+
 export const LAWBENCH_NAMESPACE = 'lawbench'
 export const LAWBENCH_SERVICE = 'lawbenchRemote'
 
 export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
-  // T7：首次配置页用
+  // T7：首次配置页用（抛中文错误，不带错误码；N34 定之前不动）
   { method: 'setupState', params: [] },
   { method: 'getSettings', params: [] },
   { method: 'putSettings', params: ['settings'] },
   { method: 'testConnection', params: ['server'] },
   { method: 'trialConnection', params: ['servers', 'key'] },
+  // T13 执行令 Q4：Host 自己读 Skill 目录的 SKILL.md 头部，不是 /api 契约接口
+  { method: 'listSkills', params: [] },
+  // T13 执行令 Q3②：粘贴的截图由 Host 存临时文件后经 /api/materials/import 导入
+  { method: 'importPastedImage', params: ['request'] },
+  // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
+  ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

@@ -1,0 +1,12 @@
+{
+  "case_id": "8c5e2a17-4b9d-4f36-a1c8-6d2e9b073f54",
+  "session_id": "sess-demo-0001",
+  "entry": "contract-review",
+  "skill": "contract-review",
+  "inputs": [],
+  "params": {
+    "thinking": "中",
+    "window": "64K",
+    "max_tokens": 8192
+  }
+}

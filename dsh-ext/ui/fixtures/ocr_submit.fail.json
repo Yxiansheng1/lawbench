@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "PREP_UNAVAILABLE",
+    "message": "文字识别服务暂时连不上，请检查网络或稍后再试；已提交的页不受影响"
+  }
+}

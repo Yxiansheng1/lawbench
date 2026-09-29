@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "CASE_IN_SYNC_FOLDER",
+    "message": "该案件文件夹在云同步目录（如 OneDrive）中，为避免材料被同步到云端，请把案件移到本机普通文件夹后再导入"
+  }
+}

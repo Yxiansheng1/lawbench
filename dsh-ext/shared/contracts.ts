@@ -45,6 +45,14 @@ export function validate(id: string, def: string, value: unknown): string[] {
   return (fn.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message ?? ''}`.trim())
 }
 
+/** 按整个 schema（`$id` 本身，不取 `$defs`）校验；返回值同 validate。 */
+export function validateRoot(id: string, value: unknown): string[] {
+  const fn = getAjv().getSchema(id)
+  if (!fn) throw new Error(`契约中没有 ${id}`)
+  if (fn(value)) return []
+  return (fn.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message ?? ''}`.trim())
+}
+
 export const coreId = (command: string): string => `${CORE}${command}.schema.json`
 export const toolId = (tool: string): string => `${TOOLS}${tool}.schema.json`
 

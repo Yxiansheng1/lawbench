@@ -14,6 +14,9 @@ importers:
       ajv-formats:
         specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 
@@ -41,6 +44,11 @@ packages:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
 snapshots:
 
   ajv-formats@3.0.1(ajv@8.20.0):
@@ -61,3 +69,5 @@ snapshots:
   json-schema-traverse@1.0.0: {}
 
   require-from-string@2.0.2: {}
+
+  yaml@2.9.0: {}

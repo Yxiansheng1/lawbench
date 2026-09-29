@@ -250,3 +250,5 @@
         forwardPort: 18765
         portRange: !!js "process.env.LAWBENCH_SERVICE_PORTS ? process.env.LAWBENCH_SERVICE_PORTS.split('-').map(Number) : undefined"
         env: !!js "JSON.parse(process.env.LAWBENCH_SERVICE_ENV ?? '{}')"
+        # listSkills 读的 Skill 目录（T13 执行令 Q4），与上面 preset 的 skill-filesystem 同一写法、同一顺序（管理员目录在前）
+        skillDirs: !!js "[process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"

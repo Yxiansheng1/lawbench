@@ -1,0 +1,64 @@
+{
+  "ok": true,
+  "value": {
+    "tasks": [
+      {
+        "task_id": "P-20260929103000-5f60",
+        "skill": "case-wiki-build",
+        "status": "running",
+        "drafts": [],
+        "citation_passed": null,
+        "finished_at": null
+      },
+      {
+        "task_id": "T-20260929141500-b2e8",
+        "skill": "litigation-docs",
+        "status": "running",
+        "drafts": [],
+        "citation_passed": null,
+        "finished_at": null
+      },
+      {
+        "task_id": "T-20260929101000-e5a3",
+        "skill": "litigation-docs",
+        "status": "completed",
+        "drafts": [
+          {
+            "title": "起诉状（周某诉青禾贸易）",
+            "path": "工作区/任务/T-20260929101000-e5a3/草稿/起诉状.md",
+            "version": 2
+          },
+          {
+            "title": "证据目录",
+            "path": "工作区/任务/T-20260929101000-e5a3/草稿/证据目录.md",
+            "version": 1
+          }
+        ],
+        "citation_passed": false,
+        "finished_at": "2026-09-29T11:02:00+08:00"
+      },
+      {
+        "task_id": "T-20260929093000-7c1f",
+        "skill": "contract-review",
+        "status": "completed",
+        "drafts": [
+          {
+            "title": "委托代理合同审查意见",
+            "path": "工作区/任务/T-20260929093000-7c1f/草稿/审查意见.md",
+            "version": 1
+          }
+        ],
+        "citation_passed": true,
+        "finished_at": "2026-09-29T09:41:00+08:00"
+      },
+      {
+        "task_id": "T-20260928170000-04d9",
+        "skill": "contract-draft",
+        "status": "failed",
+        "drafts": [],
+        "citation_passed": null,
+        "finished_at": "2026-09-28T17:06:00+08:00"
+      }
+    ]
+  }
+}

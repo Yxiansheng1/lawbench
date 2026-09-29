@@ -1,0 +1,47 @@
+{
+  "ok": true,
+  "value": {
+    "suggestions": [
+      {
+        "id": "S0001",
+        "field": "当事人",
+        "value": "周某（出借人）",
+        "source": "〔借条 第1页〕",
+        "reason": null,
+        "task_id": "T-20260929093000-7c1f",
+        "created_at": "2026-09-29T09:30:00+08:00",
+        "status": "pending"
+      },
+      {
+        "id": "S0002",
+        "field": "借款金额",
+        "value": "人民币 30 万元",
+        "source": "〔借款合同 第2页〕",
+        "reason": "合同第二条与借条金额一致",
+        "task_id": "T-20260929093000-7c1f",
+        "created_at": "2026-09-29T09:31:00+08:00",
+        "status": "pending"
+      },
+      {
+        "id": "S0003",
+        "field": "还款期限",
+        "value": "2026 年 6 月 30 日",
+        "source": "〔借款合同 第3页、借条 第1页〕",
+        "reason": "两处表述一致",
+        "task_id": "T-20260929093000-7c1f",
+        "created_at": "2026-09-29T09:32:00+08:00",
+        "status": "accepted"
+      },
+      {
+        "id": "S0004",
+        "field": "利率",
+        "value": "年利率 24%",
+        "source": "〔推断〕",
+        "reason": "合同未写明，由聊天记录推断，需律师核对",
+        "task_id": "T-20260929101000-e5a3",
+        "created_at": "2026-09-29T11:00:00+08:00",
+        "status": "rejected"
+      }
+    ]
+  }
+}
