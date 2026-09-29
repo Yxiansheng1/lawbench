@@ -1,0 +1,39 @@
+diff --git a/apps/cli/package.json b/apps/cli/package.json
+index 8b9dbbac17..8775648c9b 100644
+--- a/apps/cli/package.json
++++ b/apps/cli/package.json
+@@ -20,6 +20,7 @@
+   ],
+   "license": "MIT",
+   "dependencies": {
++    "lawbench-dsh": "link:../../../dsh-ext",
+     "@deepseek-ai/cordis": "workspace:~",
+     "@deepseek-ai/dsh-hmr": "workspace:*",
+     "@deepseek-ai/cordis-plugin-include": "workspace:~",
+diff --git a/packages/boot/app-boot/src/profile.ts b/packages/boot/app-boot/src/profile.ts
+index da580c762e..755cc99d45 100644
+--- a/packages/boot/app-boot/src/profile.ts
++++ b/packages/boot/app-boot/src/profile.ts
+@@ -181,7 +181,7 @@ export const PROFILE_TEMPLATES: Record<string, ProfileTemplate> = {
+     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'],
+   },
+   web: {
+-    bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
++    bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'lawbench-dsh'],
+   },
+   headless: {
+     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 36dc0506d3..864f07172e 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -424,6 +424,9 @@ importers:
+       js-yaml:
+         specifier: ^4.2.0
+         version: 4.2.0
++      lawbench-dsh:
++        specifier: link:../../../dsh-ext
++        version: link:../../../dsh-ext
+       node-addon-require-builtin:
+         specifier: ^0.1.6
+         version: 0.1.6

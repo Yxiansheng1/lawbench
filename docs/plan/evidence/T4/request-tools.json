@@ -1,0 +1,170 @@
+{
+  "说明": "T4 抓包（本机代理 docs/plan/evidence/T4/capture_proxy.py 只记录下列字段，不记消息内容和 Key）。每轮对话两次请求：第一次模型调用 case_ping，第二次带工具结果生成回复。",
+  "工具名集合": [
+    "ask_user_question",
+    "case_ping",
+    "skill"
+  ],
+  "请求": [
+    {
+      "档位": "关闭",
+      "ts": "2026-09-29T19:54:52",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "关闭",
+      "ts": "2026-09-29T19:54:53",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "低",
+      "ts": "2026-09-29T19:55:21",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "low"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "低",
+      "ts": "2026-09-29T19:55:23",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "low"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "中",
+      "ts": "2026-09-29T19:55:41",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "medium"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "中",
+      "ts": "2026-09-29T19:55:42",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "medium"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "高（high，网关拒绝 400）",
+      "ts": "2026-09-29T19:56:00",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "high"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "高（改发 xhigh 后）",
+      "ts": "2026-09-29T19:58:50",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "xhigh"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    },
+    {
+      "档位": "高（改发 xhigh 后）",
+      "ts": "2026-09-29T19:58:51",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_ping",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "xhigh"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 32768,
+      "stream": true
+    }
+  ]
+}

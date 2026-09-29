@@ -2,6 +2,16 @@
   "name": "lawbench-dsh",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "exports": {
+    "./agent-ping": "./agent-ping/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "agent-ping/index.js"
+  ],
   "dsh": {
     "bundle": {
       "patch": "cordis.patch.yml"

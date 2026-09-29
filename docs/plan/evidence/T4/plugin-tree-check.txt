@@ -1,0 +1,33 @@
+﻿Spec 3.1 关掉的行（web profile 导出；!!js 表达式按未求值打印）
+  preset-standard                      disabled
+  preset-ptc                           disabled
+  preset-minimal                       disabled
+  preset-cordis                        disabled
+  web                                  disabled
+  web-search-deepseek                  disabled
+  web-fetch-http                       disabled
+  mcp-resources                        disabled
+  plugin-manager                       disabled
+  ui-plugin-manager                    disabled
+  plugin-package-inventory-deepseek    disabled
+  deepseek-account                     disabled
+  llm-deepseek                         disabled
+  llm-deepseek-account                 disabled
+  session-telemetry-otel               disabled
+  message-feedback                     disabled
+  ui-message-feedback                  disabled
+  session-title-llm                    disabled
+  ui-sidebar-documentpreview           disabled
+  office-to-pdf                        disabled
+  ui-brand-official                    disabled
+改配置的行
+  agent-preset-registry    config 已覆盖
+  agent-default-model      config 已覆盖
+  spill-policy             config 已覆盖
+  spill-local              config 已覆盖
+  locale                   config 已覆盖
+  ui-settings              config 已覆盖
+  workspace-controller     config 已覆盖
+  llm-pi-ai                config 已覆盖
+preset-lawbench: 存在 ['persona', 'skill-filesystem', 'tool-skill', 'tool-ask-user', 'compaction', 'legal-agent']
+结论: 通过
