@@ -88,7 +88,10 @@ export class Supervisor {
     if (this.stopping) return
     const gen = ++this.generation
     this.setState('starting')
-    this.port = await this.deps.pickPort()
+    const port = await this.deps.pickPort()
+    // T7 返修 P3-2：挑端口期间可能已 stop() 或已换代，此时不再拉起进程
+    if (this.stopping || gen !== this.generation) return
+    this.port = port
     this.token = this.deps.newToken()
     this.missed = 0
     const child = this.deps.spawn(this.port, this.token)
@@ -151,7 +154,7 @@ export class Supervisor {
     this.deps.log(code === 0 || this.stopping ? 'info' : 'warn', 'service.exit', { code })
     if (this.stopping || this.state === 'version_mismatch') return
     if (code === EXIT_PORT_IN_USE && portRetries < MAX_PORT_RETRIES) {
-      void this.launch(portRetries + 1)
+      this.relaunch(portRetries + 1)
       return
     }
     const t = this.now()
@@ -162,6 +165,14 @@ export class Supervisor {
     }
     this.restarts.push(t)
     this.deps.log('info', 'service.restart', { attempt: this.restarts.length })
-    void this.launch(0)
+    this.relaunch(0)
+  }
+
+  /** 重启时接住 launch 的异常（例如端口范围全被占）：记日志并把状态设为 failed（T7 返修 P3-2）。 */
+  private relaunch(portRetries: number): void {
+    this.launch(portRetries).catch((e: unknown) => {
+      this.deps.log('error', 'service.launch_failed', { error: String((e as Error)?.message ?? e) })
+      this.setState('failed')
+    })
   }
 }

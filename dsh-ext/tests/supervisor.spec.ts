@@ -115,6 +115,44 @@ describe('看护：策略（模拟进程）', () => {
     s.stop()
   })
 
+  it('重启时挑端口抛错：记日志、状态 failed，不留未处理的拒绝（T7 返修 P3-2）', async () => {
+    const events: string[] = []
+    let calls = 0
+    const deps = {
+      spawn(): ChildHandle { let r!: (c: number | null) => void; const exited = new Promise<number | null>((res) => { r = res }); setTimeout(() => r(1), 20); return { pid: 1, exited, kill: () => r(null) } },
+      probe: async () => '1.1',
+      pickPort: async () => { calls++; if (calls > 1) throw new Error('服务端口范围内没有空闲端口'); return 18200 },
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      log: (_l: string, e: string) => { events.push(e) },
+    }
+    const s = new Supervisor(deps)
+    await s.start()
+    await waitFor(() => s.state === 'failed', 3000)
+    expect(events).toContain('service.launch_failed')
+  })
+
+  it('挑端口期间 stop()：不再拉起进程（T7 返修 P3-2）', async () => {
+    const spawned: number[] = []
+    let release!: (p: number) => void
+    const deps = {
+      spawn(port: number): ChildHandle { spawned.push(port); return { pid: 1, exited: new Promise(() => {}), kill: () => {} } },
+      probe: async () => '1.1',
+      pickPort: () => new Promise<number>((r) => { release = r }),
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      log: () => {},
+    }
+    const s = new Supervisor(deps)
+    const starting = s.start()
+    await new Promise((r) => setTimeout(r, 10))
+    s.stop()
+    release(18300)
+    await starting
+    expect(spawned).toEqual([])
+    expect(s.state).toBe('stopped')
+  })
+
   it('连续 3 次探测没响应就结束进程并重启', async () => {
     let ok = true
     const timers: Array<() => void> = []

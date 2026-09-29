@@ -39,16 +39,23 @@ public static class LbCred {
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 `
 
-function run(script: string, stdin: string): Promise<string> {
+/** PowerShell 子进程的总时限（T7 返修 P3-3）：挂住时结束它并报错，免得首次配置页和模型请求一直等。 */
+export const TIMEOUT_MS = 15_000
+
+function run(script: string, stdin: string, timeoutMs = TIMEOUT_MS): Promise<string> {
   const encoded = Buffer.from(PREAMBLE + script, 'utf16le').toString('base64')
   return new Promise((resolve, reject) => {
     const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true })
     let out = ''
     let err = ''
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; child.kill() }, timeoutMs)
     child.stdout.setEncoding('utf8').on('data', (d: string) => { out += d })
     child.stderr.setEncoding('utf8').on('data', (d: string) => { err += d })
-    child.on('error', reject)
+    child.on('error', (e) => { clearTimeout(timer); reject(e) })
     child.on('close', (code) => {
+      clearTimeout(timer)
+      if (timedOut) { reject(new Error(`凭据管理器操作超时（${timeoutMs / 1000} 秒）`)); return }
       // stderr 可能含异常信息，但不含 Key（Key 只在 stdin 里）；只取第一行给调用方
       if (code === 0) resolve(out)
       else reject(new Error(`凭据管理器操作失败（退出码 ${code}）：${err.split(/\r?\n/)[0] ?? ''}`))
@@ -56,6 +63,9 @@ function run(script: string, stdin: string): Promise<string> {
     child.stdin.end(stdin, 'utf8')
   })
 }
+
+/** 测试用：跑一段不带 Key 的脚本，用于验证超时。 */
+export function runForTest(script: string, timeoutMs: number): Promise<string> { return run(script, '', timeoutMs) }
 
 /** 读 Key；没有该条目（或用户名不符）返回 undefined。 */
 export async function readKey(target = TARGET, user = USER): Promise<string | undefined> {

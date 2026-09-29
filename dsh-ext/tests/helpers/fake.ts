@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,5 +17,6 @@ export async function startFake(port: number, extra: string[] = []): Promise<Fak
     try { if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) break } catch { /* 还没起来 */ }
     await new Promise((r) => setTimeout(r, 100))
   }
-  return { port, token, appdata, stop: () => child.kill() }
+  // T7 返修 P3-4：停止时删掉自己的临时目录
+  return { port, token, appdata, stop: () => { child.kill(); rmSync(appdata, { recursive: true, force: true }) } }
 }

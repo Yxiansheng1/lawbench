@@ -14,7 +14,7 @@ beforeAll(async () => {
   fake = await startFake(18807, ['--calls', calls])
   failing = await startFake(18808, ['--fail-begin'])
 })
-afterAll(() => { fake.stop(); failing.stop() })
+afterAll(() => { fake.stop(); failing.stop(); require('node:fs').rmSync(calls, { force: true }) })
 
 const mk = (f = () => fake) => new LegalAgent(new CoreClient(() => ({ port: f().port, token: f().token }), log), log)
 const agentObj = (id: string) => ({ id, session: { header: { cwd: 'D:\\案件\\张三诉李四' } } })
