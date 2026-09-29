@@ -1,0 +1,15 @@
+# 红测（变异后应失败，测完已还原） 2026-09-29 19:02:57 +0800
+
+## 变异1：日志写 Key 原文（app.py 中 prefix = ctx['key']）
+tests\test_privacy.py:59: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_privacy.py::test_log_has_only_metadata - AssertionError: as...
+1 failed, 3 passed in 30.00s
+exit=1
+
+## 变异2：排队中不检查客户端断开（queue.py 中 disconnected 恒为 False）
+tests\test_queue.py:79: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_queue.py::test_cancel_queued_and_running - assert (20 == 2)
+1 failed, 4 deselected in 4.68s
+exit=1
