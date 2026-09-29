@@ -5,3 +5,10 @@ FAILED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\
 FAILED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u5f69\u8272\u80cc\u666f.png]
 2 failed, 6 deselected in 1.61s
 exit=1
+
+# 红测 2：超时只结束转换程序本身、不结束它的子进程（taskkill 去掉 /T），测试应失败；测完已还原  2026-09-29 19:27:51 +0800
+tests\test_convert.py:173: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_convert.py::test_hung_converter_killed_with_children - Asse...
+1 failed, 17 deselected in 26.13s
+exit=1

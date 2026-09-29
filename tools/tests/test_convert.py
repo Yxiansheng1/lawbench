@@ -142,6 +142,45 @@ def test_missing_programs_chinese_message(samples, monkeypatch):
     assert not (samples["md"].parent / core.OUT_DIR_NAME / "案情摘要(9).docx").exists()
 
 
+def _alive(pid: int) -> bool:
+    r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True,
+                       encoding="mbcs", errors="replace")
+    return str(pid) in r.stdout
+
+
+def test_hung_converter_killed_with_children(samples, tmp_path, monkeypatch):
+    """转换程序卡住（例如弹出"等待打印机连接"）：到超时结束它和它启动的子进程，给中文原因，原文件不动。"""
+    import sys
+    import time
+    pidfile = tmp_path / "pids.txt"
+    script = tmp_path / "hang.py"
+    script.write_text(
+        "import os, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        f"open(r'{pidfile}', 'w').write(f'{{os.getpid()}} {{child.pid}}')\n"
+        "time.sleep(600)\n", encoding="utf-8")
+    fake = tmp_path / "soffice.cmd"
+    fake.write_text(f'@"{sys.executable}" "{script}" %*\n', encoding="mbcs")
+    monkeypatch.setattr(core, "_soffice", lambda: fake)
+    monkeypatch.setattr(core, "TIMEOUT_S", 3)
+    before = sha256(samples["docx"])
+    t0 = time.time()
+    with pytest.raises(core.ConvertError, match="转换超时"):
+        core.convert_file("word2pdf", samples["docx"])
+    assert time.time() - t0 < 30
+    pids = [int(x) for x in pidfile.read_text().split()]
+    time.sleep(0.5)
+    assert not any(_alive(p) for p in pids), "卡住的转换程序或其子进程还在"
+    check_unchanged_and_clean(samples["docx"], before)
+
+
+def test_no_print_calls_in_converter():
+    src = (core.__file__)
+    text = open(src, encoding="utf-8").read()
+    for bad in ("PrintOut", "print_to", "-p ", "--print-to-file", "--pt ", "SetDefaultPrinter"):
+        assert bad not in text
+
+
 def test_finder_order(tmp_path, monkeypatch):
     fake_client = tmp_path / "local"
     exe = fake_client / "Programs" / "lawbench" / "resources" / "libreoffice" / "program" / "soffice.exe"

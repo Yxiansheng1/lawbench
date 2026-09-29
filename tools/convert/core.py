@@ -65,15 +65,29 @@ def unique_target(src: Path, ext: str) -> Path:
     return p
 
 
+def kill_tree(pid: int) -> None:
+    """结束本次启动的进程及其子进程（soffice.exe 会再启动 soffice.bin）；只按进程号，不动别的进程。"""
+    subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, creationflags=NO_WINDOW)
+
+
 def _run(cmd: list[str], cwd: Path, stdin: bytes | None = None) -> None:
+    """运行转换程序。只用导出接口，不调用打印；卡住（如打印机弹窗）时到 TIMEOUT_S 结束整棵进程树。"""
     try:
-        r = subprocess.run(cmd, cwd=cwd, input=stdin, capture_output=True, timeout=TIMEOUT_S,
-                           creationflags=NO_WINDOW)
-    except subprocess.TimeoutExpired:
-        raise ConvertError("转换超时（120 秒），文件可能过大或已损坏。") from None
+        proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
     except OSError:
         raise ConvertError("转换程序无法启动。") from None
-    if r.returncode != 0:
+    try:
+        proc.communicate(input=stdin, timeout=TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        kill_tree(proc.pid)
+        try:
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:   # 有子进程逃出进程树、还占着输出管道：不再等
+            proc.kill()
+        raise ConvertError(f"转换超时（{TIMEOUT_S} 秒），已结束转换程序。文件可能过大或已损坏，"
+                           "或转换程序弹出了窗口（例如等待打印机连接）。") from None
+    if proc.returncode != 0:
         raise ConvertError("转换失败，文件可能已损坏或加密。")
 
 

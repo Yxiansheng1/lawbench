@@ -1,6 +1,6 @@
-﻿# cd tools; python -m pytest -q tests    2026-09-29 19:17:33 +08:00
+﻿# cd tools; python -m pytest -q tests    2026-09-29 19:31:22 +08:00
 # LibreOffice: C:\Program Files\LibreOffice\program\soffice.exe（26.8.0.3）；pandoc: %LOCALAPPDATA%\Pandoc\pandoc.exe（3.11）
-........................                                                 [100%]
+..........................                                               [100%]
 =================================== PASSES ====================================
 =========================== short test summary info ===========================
 PASSED tests/test_convert.py::test_each_conversion[doc\u2192docx]
@@ -17,6 +17,8 @@ PASSED tests/test_convert.py::test_scanned_pdf_refused
 PASSED tests/test_convert.py::test_same_name_gets_suffix
 PASSED tests/test_convert.py::test_wrong_extension_and_batch
 PASSED tests/test_convert.py::test_missing_programs_chinese_message
+PASSED tests/test_convert.py::test_hung_converter_killed_with_children
+PASSED tests/test_convert.py::test_no_print_calls_in_converter
 PASSED tests/test_convert.py::test_finder_order
 PASSED tests/test_convert.py::test_gui_builds
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\u8272\u80cc\u666f.png]
@@ -27,6 +29,6 @@ PASSED tests/test_splitter.py::test_custom_height_and_batch
 PASSED tests/test_splitter.py::test_plan_picks_longest_run_in_window
 PASSED tests/test_splitter.py::test_plan_ignores_short_runs
 PASSED tests/test_splitter.py::test_gui_builds
-24 passed in 141.51s (0:02:21)
+26 passed in 63.38s (0:01:03)
 
 exit=0
