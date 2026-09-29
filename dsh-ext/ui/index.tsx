@@ -14,6 +14,7 @@ import { TABS } from './cases.ts'
 import { setNav, type Nav } from './kit.tsx'
 import { app, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { makeIntakeHook, type IntakeHook } from './intake.ts'
+import { installCitationClick } from './citation-click.ts'
 
 export const inject = ['slots', 'remote']
 
@@ -77,6 +78,8 @@ function registerCore(ctx: Ctx): void {
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'lawbench', order: -10 }, ComposerDock))
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)
+  // 点草稿正文里的出处打开原文（T13 后续项，走 A：插件内命中测试）
+  ctx.effect(() => installCitationClick(), '律师工作台界面：出处点击')
 }
 
 /** 首页：main 页面、侧栏入口，启动时显示首页。 */

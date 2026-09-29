@@ -21,6 +21,12 @@ git -C dsh apply ..\dsh-patches\P-3-first-run-page.patch
 | P-13 | `packages/client/ui-settings-general/src/client/index.ts`（补丁 `P-13-desktop-no-open-config.patch`） | 有桌面端标记（`globalThis.dshDesktop`）时不创建设置文档控制器，设置页不注册"打开配置文件"动作（`open-document`）；Web 界面不变 | 该按钮用系统编辑器打开桌面 profile 自己的 `cordis.patch.yml`，这一层叠在我方组合包补丁之后、改了即时重载，能改模型地址、重新打开被关掉的行（T4 第二轮复核 P2-A，已实测属实） | 打补丁前后设置页截图 `docs\plan\evidence\T4\settings-before-P13.png`、`settings-after-P13.png`；实测记录 `p2a-open-config-tests.txt` |
 | P-6 | —（**不需要改源码**，T13 执行令 Q1） | 不改 `packages/api/remotes/src/client/index.ts`。界面插件（`legal-ui`）启动时自己 `ctx.remote.$mount` 一份手写的 `lawbench` 描述（`dsh-ext\ui\remote.ts`），再 `ctx.inject(['remote.lawbench', 'slots'], …)` 取子上下文调用，写法仍是 `ctx.remote.lawbench.<方法>()`。Host 端靠网关对无生成代码的远程服务的运行时回退（`packages/api/gateway/src/index.ts:743-830`，按 `typertRemote` 绑定和原型上的方法标记注册） | Spec 1.2 原写"要在官方 `api-remotes` 里加一行导入"，但那里导入的是 Typert 代码生成器的 `/remote` 产物，我方远程类是纯 JS、没有这份产物。网关的 `$mount` 对任何插件开放（`packages/api/gateway/src/client/index.ts:202-210`），只校验参数编解码为 `mode: 'strict'` 和命名空间不冲突；DSH 自己的实验插件 voice-input 也是这样挂载（`packages/experimental/client-ui-voice-input/src/client/mount.ts:60-65`）。直接在组件里读 `ctx.remote.lawbench` 会被 cordis 拒绝（"cannot get property … without inject"，实测），所以要先 `$mount` 再 `inject` | 桌面端设置页"律师工作台"调通 `setupState`（`docs\plan\evidence\T13\00-通路验证-设置页调用setupState.jpg`）；Host 方法表与界面描述一致由 `dsh-ext\tests\remote-methods.spec.ts` 守着（方法名、形参名，做过变异验证） |
 
+## 换 DSH 提交时的核对清单（我方依赖、但不在补丁里的 DSH 内部写法）
+
+| 依赖 | 在哪里用 | 怎么核对 |
+|---|---|---|
+| 对话区节点属性 `data-chat-flow-kind`，助手回答节点取值 `assistant-step`（`packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx:155`、`register-node-renderers.ts:42`）；回答里的文字是普通文字节点（`packages/client/ui-primitives/src/markdown/render.tsx:273-277`） | 点草稿正文里的出处打开原文（`dsh-ext\ui\citation-click.ts`，T13 后续项 A：插件内命中测试，不改源码） | `dsh-ext\tests\citation.spec.ts` 最后一组会先变红；另在桌面端点一次出处实测 |
+
 ## 结论记录
 
 | 事项 | 结论 | 依据 |
@@ -42,3 +48,4 @@ git -C dsh apply ..\dsh-patches\P-3-first-run-page.patch
 | T20 | 打包后内置 Skill 目录由 Host 固定为 `<安装目录>\skills`，不再读环境变量 `LAWBENCH_SKILLS_DIR`（开发期才用它；不固定的话打包后内置 Skill 不加载，且环境变量能把 Skill 根目录指到任意位置） |
 | T20 | `legal-host` 的启动命令、工作目录、服务端口范围目前由开发期环境变量 `LAWBENCH_SERVICE_CMD`、`LAWBENCH_SERVICE_CWD`、`LAWBENCH_SERVICE_PORTS`、`LAWBENCH_SERVICE_ENV` 给出；打包后固定为内置 Python 与安装目录 |
 | T13 | ~~P-6：界面插件需要 `ctx.remote.lawbench` 时再做~~ 已结：不改源码，见上表 P-6 行 |
+| T17（N38） | **模型回答里的外链图片会自动加载**：不用律师点，渲染时就向外网发请求，材料里的诱导内容可借它把东西带出去。位置：`packages/client/ui-primitives/src/markdown/render.tsx` 的图片渲染（`render.tsx:641-644` 的 `LoadedMarkdownImage`，`referrerPolicy="no-referrer"`，`http`/`https` 源直接加载）；链接的协议白名单 `sanitizeUrl`（`render.tsx:53-68`）放行 `http:`、`https:`、`mailto:`。同一个 `MarkdownText` 也用于推理摘要（`ui-chat/src/client/chat/ReasoningRow.tsx:70`）等处。线 A 按主编排 06:34 注记不拦不改，留给 T17 与源码补丁一起定（回答里的链接可点开属 N15，同归 T17） |
