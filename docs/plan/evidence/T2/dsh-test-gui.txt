@@ -1,0 +1,998 @@
+﻿corepack : $ vitest run packages/client packages/host
+At line:1 char:350
++ ... :CI='true'; corepack pnpm@11.7.0 run test:gui *> D:\lawbench-A\docs\p ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ vitest run pa...t packages/host:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+Error: renderSlot('root') before any 'root' registration (boot order)
+    at RootOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1281:11)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: renderSlot('root') before any 'root' registration (boot order)
+    at RootOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1281:11)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: entry boom
+    at component (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/scoped-slots.client.spec.tsx:389:48)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: entry boom
+    at component (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/scoped-slots.client.spec.tsx:389:48)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: entry A boom
+    at component (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/scoped-slots.client.spec.tsx:448:32)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: entry A boom
+    at component (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/scoped-slots.client.spec.tsx:448:32)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: strict session slot 'k.session' rendered without a scope binding
+    at renderOutletContent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1111:11)
+    at SlotOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1089:8)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: strict session slot 'k.session' rendered without a scope binding
+    at renderOutletContent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1111:11)
+    at SlotOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1089:8)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at performConcurrentWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:25777:74)
+Error: strict session slot 'k.session' rendered without a scope binding
+    at renderOutletContent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1111:11)
+    at SlotOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1089:8)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: strict session slot 'k.session' rendered without a scope binding
+    at renderOutletContent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1111:11)
+    at SlotOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:1089:8)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at recoverFromConcurrentError (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\reac
+t-dom\cjs\react-dom.development.js:25889:20)
+Error: inject boom
+    at inject (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/scoped-slots.client.spec.tsx:1050:29)
+    at runInject (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:179:29)
+    at cachedRootInject (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:254:13)
+    at RootEntry (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:777:20)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+Error: inject boom
+    at inject (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/scoped-slots.client.spec.tsx:1050:29)
+    at runInject (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:179:29)
+    at cachedRootInject (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:254:13)
+    at RootEntry (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:777:20)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+Error: strict session local slot 'view' from factory 'renderer.scoped-local-factory' rendered without a scope binding
+    at BoundFactoryLocalComponent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:820:15)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: strict session local slot 'view' from factory 'renderer.scoped-local-factory' rendered without a scope binding
+    at BoundFactoryLocalComponent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:820:15)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at performSyncWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom
+\cjs\react-dom.development.js:26124:20)
+    at flushSyncCallbacks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cj
+s\react-dom.development.js:12042:22)
+Error: strict session local slot 'view' from factory 'renderer.scoped-local-factory' rendered without a scope binding
+    at BoundFactoryLocalComponent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:820:15)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at performSyncWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom
+\cjs\react-dom.development.js:26124:20)
+    at flushSyncCallbacks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cj
+s\react-dom.development.js:12042:22)
+Error: strict session local slot 'view' from factory 'renderer.scoped-local-factory' rendered without a scope binding
+    at BoundFactoryLocalComponent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:820:15)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: strict session local slot 'view' from factory 'renderer.scoped-local-factory' rendered without a scope binding
+    at BoundFactoryLocalComponent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:820:15)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at recoverFromConcurrentError (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\reac
+t-dom\cjs\react-dom.development.js:25889:20)
+    at performSyncWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom
+\cjs\react-dom.development.js:26135:20)
+Error: strict session local slot 'view' from factory 'renderer.scoped-local-factory' rendered without a scope binding
+    at BoundFactoryLocalComponent (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:820:15)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at recoverFromConcurrentError (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\reac
+t-dom\cjs\react-dom.development.js:25889:20)
+    at performSyncWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom
+\cjs\react-dom.development.js:26135:20)
+Error: crash:bad
+    at FactoryBody (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:161:29)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: crash:bad
+    at FactoryBody (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:161:29)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: selected view crashed
+    at CrashingView (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:141:9)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: selected view crashed
+    at CrashingView (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:141:9)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: broken session view
+    at SessionCrashingView (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:145:37)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: broken session view
+    at SessionCrashingView (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:145:37)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: selected view crashed
+    at CrashingView (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:141:9)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: selected view crashed
+    at CrashingView (D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:141:9)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: definition unloaded during render
+    at D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:556:13
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: definition unloaded during render
+    at D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:556:13
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: crash:broken
+    at D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:582:40
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: crash:broken
+    at D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:582:40
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: broken factory
+    at D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:610:13
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: broken factory
+    at D:/lawbench-A/dsh/packages/client/ui-renderer/tests/factory-slots.client.spec.tsx:610:13
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: local slot 'unknown' is not declared by factory 'renderer.factory'
+    at FactoryOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:996:13)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: local slot 'unknown' is not declared by factory 'renderer.factory'
+    at FactoryOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:996:13)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: recursive render of factory 'renderer.recursive-factory'
+    at FactoryOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:993:34)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: recursive render of factory 'renderer.recursive-factory'
+    at FactoryOutlet (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:993:34)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: factory 'renderer.factory' occurrence received duplicate prop 'actions'
+    at assertNoPropOverlap (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:853:13)
+    at FactoryOccurrenceBody (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:959:3)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: factory 'renderer.factory' occurrence received duplicate prop 'actions'
+    at assertNoPropOverlap (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:853:13)
+    at FactoryOccurrenceBody (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:959:3)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at performSyncWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom
+\cjs\react-dom.development.js:26124:20)
+Error: factory 'renderer.factory' occurrence received duplicate prop 'actions'
+    at assertNoPropOverlap (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:853:13)
+    at FactoryOccurrenceBody (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:959:3)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at performSyncWorkOnRoot (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom
+\cjs\react-dom.development.js:26124:20)
+Error: factory 'renderer.factory' occurrence received duplicate prop 'actions'
+    at assertNoPropOverlap (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:853:13)
+    at FactoryOccurrenceBody (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:959:3)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: factory 'renderer.factory' occurrence received duplicate prop 'actions'
+    at assertNoPropOverlap (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:853:13)
+    at FactoryOccurrenceBody (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:959:3)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at recoverFromConcurrentError (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\reac
+t-dom\cjs\react-dom.development.js:25889:20)
+Error: factory 'renderer.factory' occurrence received duplicate prop 'actions'
+    at assertNoPropOverlap (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:853:13)
+    at FactoryOccurrenceBody (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:959:3)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+    at recoverFromConcurrentError (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\reac
+t-dom\cjs\react-dom.development.js:25889:20)
+Error: ui-deliverables: not a review address "dsh-resource://file/session/viewed/a.ts"
+    at ReviewTab (D:/lawbench-A/dsh/packages/client/ui-deliverables/src/client/ReviewTab.tsx:75:40)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+Error: ui-deliverables: not a review address "dsh-resource://file/session/viewed/a.ts"
+    at ReviewTab (D:/lawbench-A/dsh/packages/client/ui-deliverables/src/client/ReviewTab.tsx:75:40)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_mod
+ules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+    at HTMLUnknownElementImpl.dispatchEvent (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node
+_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:114:17)
+ ❯ |thread-safe| packages/client/ui-deliverables/tests/present-open.host.spec.ts (30 tests | 1 failed) 2185ms
+     × opens external regular files through absolute and relative paths but refuses final symlinks 79ms
+Error: scope 'session' adapter does not provide its area renderer
+    at scopeAreaProvider (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:507:11)
+    at standardKit (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:589:32)
+    at RootEntry (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:776:38)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: scope 'session' adapter does not provide its area renderer
+    at scopeAreaProvider (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:507:11)
+    at standardKit (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:589:32)
+    at RootEntry (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:776:38)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+Error: scope 'session' adapter does not provide its area renderer
+    at scopeAreaProvider (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:507:11)
+    at standardKit (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:589:32)
+    at RootEntry (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:776:38)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules
+\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@
+2.3.0\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\js
+dom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\lawbench-A\dsh\node_modules\.pnpm\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\jsdom\l
+ib\jsdom\living\events\EventTarget-impl.js:296:3)
+Error: scope 'session' adapter does not provide its area renderer
+    at scopeAreaProvider (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:507:11)
+    at standardKit (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:589:32)
+    at RootEntry (D:/lawbench-A/dsh/packages/client/ui-renderer/src/client/scoped-slots.tsx:776:38)
+    at renderWithHooks (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\r
+eact-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\rea
+ct-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react-d
+om.development.js:21626:16)
+    at beginWork$1 (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\react
+-dom.development.js:27465:14)
+    at performUnitOfWork (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs
+\react-dom.development.js:26599:12)
+    at workLoopSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\reac
+t-dom.development.js:26505:5)
+    at renderRootSync (D:\lawbench-A\dsh\node_modules\.pnpm\react-dom@18.3.1_react@18.3.1\node_modules\react-dom\cjs\re
+act-dom.development.js:26473:7)
+ ❯ |thread-safe| packages/client/connection/tests/binary-rpc.host.spec.ts (43 tests | 2 failed) 20812ms
+     × preserves gzip configuration through the HTTP bridge 9898ms
+     × preserves none configuration through the HTTP bridge 10722ms
+Warning: UnknownErrorException: Ensure that the `standardFontDataUrl` API parameter is provided.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| packages/client/connection/tests/binary-rpc.host.spec.ts > Connection binary RPC > preserves gzip 
+configuration through the HTTP bridge
+ FAIL  |thread-safe| packages/client/connection/tests/binary-rpc.host.spec.ts > Connection binary RPC > preserves none 
+configuration through the HTTP bridge
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ packages/client/connection/tests/binary-rpc.host.spec.ts:24:36
+     22|
+     23| describe('Connection binary RPC', () => {
+     24|   it.each(['gzip', 'none'] as const)('preserves %s configuration throu…
+       |                                    ^
+     25|     const ctx = new Context()
+     26|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |thread-safe| packages/client/ui-deliverables/tests/present-open.host.spec.ts > Presented workspace file native 
+open route > opens external regular files through absolute and relative paths but refuses final symlinks
+Error: EPERM: operation not permitted, symlink 'C:\Users\19705\AppData\Local\Temp\dsh-present-open-Ez1j6X\outside.txt' 
+-> 'C:\Users\19705\AppData\Local\Temp\dsh-present-open-Ez1j6X\workspace\日记模板.docx'
+ ❯ packages/client/ui-deliverables/tests/present-open.host.spec.ts:138:5
+    136|     const source = join(cwd, file.path)
+    137|     await unlink(source)
+    138|     await symlink(outside, source)
+       |     ^
+    139|     expect((await open()).status).toBe(404)
+    140|     expect(opener).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+ Test Files  2 failed | 582 passed | 3 skipped (587)
+      Tests  3 failed | 9190 passed | 6 skipped (9199)
+   Start at  18:35:34
+   Duration  180.90s (transform 360.21s, setup 135.03s, import 2180.79s, tests 721.52s, environment 1843.95s)
+
+[ELIFECYCLE] Command failed with exit code 1.
