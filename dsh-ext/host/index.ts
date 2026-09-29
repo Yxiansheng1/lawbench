@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
 import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
+import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -71,7 +72,7 @@ async function probeHealth(port: number): Promise<string | undefined> {
   } catch { return undefined }
 }
 
-const REMOTE_METHODS = '@deepseek-ai/dsh-typert-protocol/remote-methods'
+const REMOTE_METHODS_KEY = '@deepseek-ai/dsh-typert-protocol/remote-methods'
 
 /** Host 用到的凭据服务方法（由 legal-credentials 提供）。 */
 export type CredentialsLike = {
@@ -89,7 +90,7 @@ export class LawbenchRemote {
     private readonly appData: string,
     private readonly credentials: () => CredentialsLike | undefined,
   ) {
-    this.typertRemote = Object.freeze({ service: this, serviceKey: 'lawbenchRemote', namespace: 'lawbench' })
+    this.typertRemote = Object.freeze({ service: this, serviceKey: LAWBENCH_SERVICE, namespace: LAWBENCH_NAMESPACE })
   }
 
   private async api(method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown): Promise<unknown> {
@@ -202,11 +203,11 @@ export class LawbenchRemote {
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
-Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS, {
+Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS_KEY, {
   configurable: true,
   value: Object.freeze({
     version: 1,
-    methods: ['setupState', 'getSettings', 'putSettings', 'testConnection', 'trialConnection'].map((method) => Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) })),
+    methods: REMOTE_METHODS.map(({ method }) => Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) })),
   }),
 })
 
@@ -247,7 +248,7 @@ export function apply(ctx: Ctx, config: Config): void {
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))
-  ctx.provide('lawbenchRemote', new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never))
+  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never))
   ctx.effect(() => {
     void supervisor.start().catch((e: unknown) => log('error', 'service.start_failed', { error: String((e as Error)?.message ?? e) }))
     return () => supervisor.stop()

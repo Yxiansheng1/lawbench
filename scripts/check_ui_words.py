@@ -14,9 +14,11 @@ import pathlib
 import re
 import sys
 
-# 词表只放这一处（T13 待定项 Q12：主编排给出最终词表后改这里即可）
-BANNED_EN = ["token", "tokens", "context", "prompt", "LLM", "API", "agent", "preset", "session", "JSON"]
-BANNED_ZH = ["模型上下文", "上下文窗口", "提示词"]
+# 词表只放这一处（T13 执行令 0357 Q12 裁决：初稿再加 上下文、embedding、schema、payload、endpoint、runtime、workspace；
+# "Skill"和"Key"不禁用）。"上下文"已包含初稿的"模型上下文""上下文窗口"。
+BANNED_EN = ["token", "tokens", "context", "prompt", "LLM", "API", "agent", "preset", "session", "JSON",
+             "embedding", "schema", "payload", "endpoint", "runtime", "workspace"]
+BANNED_ZH = ["上下文", "提示词"]
 
 EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
 SKIP_DIRS = {"node_modules", "lib", "fixtures", "tests", "__tests__"}

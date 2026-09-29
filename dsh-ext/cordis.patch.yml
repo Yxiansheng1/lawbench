@@ -235,6 +235,10 @@
     - id: legal-credentials
       name: 'lawbench-dsh/credentials'
 
+    # 界面插件（T13）：行名必须恰好是包名，DSH 的 modules 行才把它当界面插件（exports["./client"]）
+    - id: legal-ui
+      name: 'lawbench-dsh'
+
     # 启动并看护工作台服务（Spec 1.3）；提供 lawbenchCore 服务和远程命名空间 lawbench
     # 开发期由环境变量给出启动命令等；打包后由 T20 固定为内置 Python 与安装目录
     - id: legal-host

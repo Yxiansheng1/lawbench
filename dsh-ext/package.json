@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./agent": "./lib/agent.js",
     "./host": "./lib/host.js",
     "./credentials": "./lib/credentials.js",
@@ -14,6 +16,8 @@
   "files": [
     "cordis.patch.yml",
     "persona.md",
+    "lib/index.js",
+    "lib/client.js",
     "lib/agent.js",
     "lib/host.js",
     "lib/credentials.js"
@@ -28,6 +32,14 @@
     "ajv-formats": "3.0.1"
   },
   "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    },
     "bundle": {
       "patch": "cordis.patch.yml"
     }

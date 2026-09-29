@@ -20,9 +20,29 @@ const contractsPlugin = {
   },
 }
 
+// 界面插件（T13）：DSH 界面模块格式——CommonJS 包在 window.__ModuleLoader__.load({ id, factory: (require) => … }) 里，
+// react、cordis 等从 DSH 的共享模块表 require（packages/client/web/src/seed.ts），不自带 React。
+const CLIENT_ID = 'lawbench-dsh'
+const SHARED = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/*']
 await esbuild.build({
   absWorkingDir: root,
-  entryPoints: { agent: 'agent/index.ts', host: 'host/index.ts', credentials: 'credentials/index.ts' },
+  entryPoints: { client: 'ui/index.tsx' },
+  outdir: 'lib',
+  bundle: true,
+  format: 'cjs',
+  platform: 'browser',
+  target: 'es2022',
+  jsx: 'automatic',
+  external: SHARED,
+  banner: { js: `window.__ModuleLoader__.load({\n  id: ${JSON.stringify(CLIENT_ID)},\n  factory: (require) => {\n    var module = { exports: {} };\n    var exports = module.exports;` },
+  footer: { js: '    return module.exports;\n  }\n});' },
+  plugins: [contractsPlugin],
+  logLevel: 'info',
+})
+
+await esbuild.build({
+  absWorkingDir: root,
+  entryPoints: { agent: 'agent/index.ts', host: 'host/index.ts', credentials: 'credentials/index.ts', index: 'ui/host.ts' },
   outdir: 'lib',
   bundle: true,
   format: 'esm',
