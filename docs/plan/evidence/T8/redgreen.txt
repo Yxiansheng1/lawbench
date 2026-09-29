@@ -1,0 +1,92 @@
+﻿T3 红绿验证：14 类防护
+
+[01] 材料文本路径：先把 index.json 的 rel_path 过闸门再拼
+  改坏 case/texts.py → 红：1 failed, 44 deselected in 10.11s
+      变红的用例：
+        tests/test_tools.py::test_read_tampered_index_rel_path
+  复原 → 绿：1 passed, 44 deselected in 8.17s
+
+[02] /api/task：选用的输入只能是草稿或成果
+  改坏 case/task.py → 红：1 failed, 25 deselected in 8.71s
+      变红的用例：
+        tests/test_core.py::test_task_inputs_validated
+  复原 → 绿：1 passed, 25 deselected in 8.18s
+
+[03] 选用的输入被改过报 INPUT_CHANGED
+  改坏 case/task.py → 红：1 failed, 25 deselected in 8.69s
+      变红的用例：
+        tests/test_core.py::test_context_input_changed
+  复原 → 绿：1 passed, 25 deselected in 8.30s
+
+[04] 覆盖清单只认当前版本的读取记录
+  改坏 case/task.py → 红：1 failed, 44 deselected in 1.38s
+      变红的用例：
+        tests/test_tools.py::test_coverage_ignores_old_version_reads
+  复原 → 绿：1 passed, 44 deselected in 1.05s
+
+[05] cwd 不在注册表中一律 CASE_NOT_FOUND
+  改坏 case/registry.py → 红：3 failed, 1 passed, 22 deselected in 8.43s
+      变红的用例：
+        tests/test_core.py::test_begin_unknown_cwd[C:\\\u4e0d\u5b58\u5728\u7684\u6848\u4ef6]
+        tests/test_core.py::test_begin_unknown_cwd[\u76f8\u5bf9/\u8def\u5f84]
+        tests/test_core.py::test_begin_unknown_cwd[..\\..\\]
+  复原 → 绿：4 passed, 22 deselected in 7.85s
+
+[06] 任务结束后不能再调工具
+  改坏 api/core.py → 红：1 failed, 25 deselected in 8.45s
+      变红的用例：
+        tests/test_core.py::test_progress_and_end_without_draft
+  复原 → 绿：1 passed, 25 deselected in 8.20s
+
+[07] 没存过正式草稿：进行中.md 改名为 未完成-<时间>.md
+  改坏 case/task.py → 红：1 failed, 25 deselected in 8.37s
+      变红的用例：
+        tests/test_core.py::test_progress_and_end_without_draft
+  复原 → 绿：1 passed, 25 deselected in 8.14s
+
+[08] 打开案件时把仍在执行的任务标 abnormal
+  改坏 api/ui.py → 红：1 failed, 25 deselected in 8.24s
+      变红的用例：
+        tests/test_core.py::test_reopen_marks_running_abnormal
+  复原 → 绿：1 passed, 25 deselected in 7.99s
+
+[09] L0 不超过 6000 字
+  改坏 case/context.py → 红：1 failed, 25 deselected in 8.44s
+      变红的用例：
+        tests/test_core.py::test_context_l0_capped
+  复原 → 绿：1 passed, 25 deselected in 7.99s
+
+[10] L1 按窗口的 40% 装入，放不下的只列目录
+  改坏 case/context.py → 红：1 failed, 25 deselected in 9.00s
+      变红的用例：
+        tests/test_core.py::test_context_l1_window_and_toc
+  复原 → 绿：1 passed, 25 deselected in 8.81s
+
+[11] 草稿同标题再存版本加 1，旧版本保留
+  改坏 tools/drafts.py → 红：1 failed, 44 deselected in 8.48s
+      变红的用例：
+        tests/test_tools.py::test_save_draft_versions
+  复原 → 绿：1 passed, 44 deselected in 8.16s
+
+[12] 修改清单：find 跨越超链接或域代码算范围外
+  改坏 tools/edit_list.py → 红：1 failed, 44 deselected in 8.33s
+      变红的用例：
+        tests/test_tools.py::test_edit_list_scope
+  复原 → 绿：1 passed, 44 deselected in 8.23s
+
+[13] 修改清单：原文已有修订整份范围外
+  改坏 tools/edit_list.py → 红：1 failed, 44 deselected in 8.44s
+      变红的用例：
+        tests/test_tools.py::test_edit_list_revised_and_errors
+  复原 → 绿：1 passed, 44 deselected in 8.08s
+
+[14] 检索：全角转半角、去千分位
+  改坏 tools/materials.py → 红：1 failed, 44 deselected in 8.36s
+      变红的用例：
+        tests/test_tools.py::test_search_normalization_and_cells
+  复原 → 绿：1 passed, 44 deselected in 8.47s
+
+源码与开始时逐字节一致：是
+复原后全量：456 passed, 3 skipped in 388.62s (0:06:28)
+
+结论：14/14 类防护 改坏即红、复原即绿

@@ -1,0 +1,18 @@
+﻿........................................................................ [ 15%]
+..................................ss..............s..................... [ 31%]
+........................................................................ [ 47%]
+........................................................................ [ 62%]
+........................................................................ [ 78%]
+........................................................................ [ 94%]
+...........................                                              [100%]
+============================== warnings summary ===============================
+tests\conftest.py:15
+  D:\lawbench-B\service\tests\conftest.py:15: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_gate.py:117: 本机账号没有创建符号链接的权限（开发者模式未开）
+SKIPPED [1] tests\test_gate.py:124: 本机账号没有创建符号链接的权限（开发者模式未开）
+SKIPPED [1] tests\test_gate.py:199: 本机账号没有创建符号链接的权限（开发者模式未开）
+456 passed, 3 skipped, 1 warning in 413.88s (0:06:53)
