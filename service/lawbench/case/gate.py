@@ -349,7 +349,7 @@ def delete_work_file(root: str, rel: str, op: str = "import") -> None:
 
 def _mkdirs(root: str, path: pathlib.Path, op: str) -> None:
     """逐级新建目录；每新建一级都复查不是链接、仍在 ROOT 内（防止并发替换成 junction）。"""
-    rel_parts = [p for p in pathlib.Path(_relpath(path, root, op)).parts if p != "."]
+    rel_parts = pathlib.Path(_relpath(path, root, op)).parts
     cur = root
     for p in rel_parts:
         cur = os.path.join(cur, p)

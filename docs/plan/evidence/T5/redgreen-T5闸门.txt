@@ -1,0 +1,29 @@
+﻿T3 红绿验证：3 类防护
+
+[01] T5 闸门·copy_original 从不覆盖（先查已存在 + rename 不覆盖一起去掉）
+  改坏 case/gate.py → 红：1 failed, 43 passed in 34.88s
+      变红的用例：
+        tests/test_t5_gate.py::test_copy_original_never_overwrites
+  复原 → 绿：44 passed in 35.28s
+
+[02] T5 闸门·copy_original 只能写原件区（不能写 工作区、成果、以 . 开头，不能越界）
+  改坏 case/gate.py → 红：5 failed, 39 passed in 36.07s
+      变红的用例：
+        tests/test_t5_gate.py::test_copy_original_rejects_outside_originals[\u5de5\u4f5c\u533a/\u5916\u90e8.txt]
+        tests/test_t5_gate.py::test_copy_original_rejects_outside_originals[\u6210\u679c/\u5916\u90e8.txt]
+        tests/test_t5_gate.py::test_copy_original_rejects_outside_originals[.dsh/\u5916\u90e8.txt]
+        tests/test_t5_gate.py::test_copy_original_rejects_outside_originals[C:\\\u5916\u90e8.txt]
+        tests/test_t5_gate.py::test_copy_original_rejects_outside_originals[\u8bc1\u636e/NUL.txt]
+  复原 → 绿：44 passed in 34.85s
+
+[03] T5 闸门·delete_work_file 只能删 工作区/ 下的文件
+  改坏 case/gate.py → 红：2 failed, 42 passed in 33.81s
+      变红的用例：
+        tests/test_t5_gate.py::test_delete_work_file_rejects_others[\u8bc1\u636e/\u5df2\u6709.txt]
+        tests/test_t5_gate.py::test_delete_work_file_rejects_others[\u6210\u679c/x.md]
+  复原 → 绿：44 passed in 31.88s
+
+源码与开始时逐字节一致：是
+复原后全量：332 passed, 3 skipped in 273.28s (0:04:33)
+
+结论：3/3 类防护 改坏即红、复原即绿
