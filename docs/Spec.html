@@ -681,7 +681,7 @@ li{margin:3px 0}
 <td>P-3</td>
 <td>欢迎窗口</td>
 <td><code>apps/desktop/src/welcome-window.ts</code>、<code>src/client/WelcomePage.tsx</code>、<code>welcome-backend.ts</code>、<code>main.ts</code> 中 <code>needsWelcome</code> 判断</td>
-<td>换成我方&quot;首次配置&quot;页：填 6000D 和 395 地址、个人 Key、测试连接（PRD 7.9）；判断条件改为&quot;没有配置过律所服务器&quot;</td>
+<td>换成我方&quot;首次配置&quot;页：填 6000D 和 395 的所内、所外地址（带默认值，第 15 节）、个人 Key、测试连接（PRD 7.9）；判断条件改为&quot;没有配置过律所服务器&quot;</td>
 </tr>
 <tr>
 <td>P-4</td>
@@ -870,7 +870,7 @@ li{margin:3px 0}
 <tr>
 <td>U-8</td>
 <td>设置</td>
-<td><code>settings.section</code> 插槽：服务器和 Key、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、发票购买方名称、Word 转 PDF 用哪个程序、胶囊管理（U-11）、关于（双 logo）</td>
+<td><code>settings.section</code> 插槽：服务器（所内、所外地址）和 Key、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、发票购买方名称、Word 转 PDF 用哪个程序、胶囊管理（U-11）、关于（双 logo）</td>
 </tr>
 <tr>
 <td>U-9</td>
@@ -1487,7 +1487,7 @@ li{margin:3px 0}
   lawfirm:
     displayName: 律所模型
     api: openai-completions
-    baseURL: http://&lt;6000D&gt;:8000/v1
+    baseURL: http://127.0.0.1:&lt;转发端口&gt;/v1   # 工作台服务的本机转发，由它选所内或所外地址（第 15 节）
     apiKeyEnv: LAWFIRM_KEY            # 通过 ctx.credentials 解析
     timeoutMs: 1200000
     models:                           # 三个条目只差 contextWindow，对应律师选的窗口（第 8.2 节）
@@ -1504,7 +1504,7 @@ li{margin:3px 0}
       thinkingFormat: qwen-chat-template   # pi-ai 支持的取值之一：按思考档位发送 chat_template_kwargs.enable_thinking
 </code></pre>
 配好后抓一次请求核对：关闭档是否发出 <code>enable_thinking: false</code>，低 / 中 / 高是否带上 <code>reasoning_effort</code>；带不上的，用 <code>chatTemplateKwargs</code> 补<span class="wait">〔待验证〕</span>。</li>
-<li><strong>流水线</strong>：工作台服务直接调用 <code>http://&lt;6000D&gt;:8000/v1/chat/completions</code>，流式输出，请求体沿用 wiki 测试的 <code>run_pipeline_v2.py</code>。</li>
+<li><strong>流水线</strong>：工作台服务直接调用 <code>&lt;当前选用的 6000D 地址&gt;/chat/completions</code>（地址选择见第 15 节），流式输出，请求体沿用 wiki 测试的 <code>run_pipeline_v2.py</code>。</li>
 <li>请求头：<code>Authorization: Bearer &lt;律师 Key&gt;</code>。流水线另加 <code>X-Session-Id: &lt;案件编号前 8 位&gt;-&lt;任务编号&gt;</code>，让同一任务的请求落到同一张卡，命中前缀缓存；Agent 路由在 profile 里配置的请求头是固定的；DSH 会把会话 ID 作为 <code>sessionId</code> 交给 pi-ai，它是否会变成请求头，抓请求核对<span class="wait">〔待验证〕</span>，不会就不带，由网关按默认规则分卡。</li>
 <li>温度：流水线用 0.2；Agent 用 Skill 推荐值，默认 0.3。</li>
 </ul>
@@ -2195,7 +2195,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <li>每个版本的安装包都保留，用于回退。</li>
 </ul>
 <h3 id="14-3-只连两台服务器-SEC-03">14.3 只连两台服务器（SEC-03）</h3>
-<p>所有发出网络请求的地方都要做地址白名单检查（只允许首次配置中的 6000D、395 地址和 <code>127.0.0.1</code>；律所用 EasyTier 远程接入时，这两个地址可以填虚拟网地址，第 15 节），并且<strong>不自动跟随重定向</strong>（收到 3xx 视为错误），防止跳转到白名单外的地址：</p>
+<p>所有发出网络请求的地方都要做地址白名单检查（只允许设置中 6000D、395 的所内和所外地址，以及 <code>127.0.0.1</code>，第 15 节），并且<strong>不自动跟随重定向</strong>（收到 3xx 视为错误），防止跳转到白名单外的地址：</p>
 <table>
 <thead>
 <tr>
@@ -2247,13 +2247,22 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <li>我方要做的：
 <ol>
 <li>首次配置和设置中的 6000D、395 地址可以填 EasyTier 虚拟网地址，地址白名单按设置中的实际地址生效（第 14.3 节）；&quot;测试连接&quot;对虚拟网地址同样适用。</li>
-<li>在 6000D（Linux）和 395（Windows）上按方案 V2 安装 EasyTier 并加入律所虚拟网；访问规则默认拒绝，只放行虚拟网段到 <strong>6000D 的 8000 端口和 395 的 9000 端口</strong>（方案原文只放行了模型端口，这里补上 9000）；不代理律所其他子网。</li>
+<li>在 6000D（Linux）和 395（Windows）上按方案 V2 安装 EasyTier 并加入律所虚拟网，经虚拟网只放行 <strong>6000D 的 8000 端口和 395 的 9000 端口</strong>（<code>--tcp-whitelist</code>；方案原文只放行了模型端口，这里补上 9000）。<strong>不使用子网代理（<code>-n</code>）</strong>：2026-09-29 实测经子网代理进来的访问不受白名单限制，与方案 V2 一致已去掉。所外因此访问虚拟 IP，所内访问局域网地址，客户端自动切换（下面&quot;地址选择&quot;）。</li>
 <li>两台服务器的防火墙：6000D 入站只放行虚拟网段和局域网到 8000；395 的 Windows 防火墙入站规则加上虚拟网段（第 6.1 节）。</li>
 <li>写一个检查脚本，在律所外的网络上用一台律师电脑实测：8000、9000 可达，其他端口不可达，客户端&quot;测试连接&quot;通过。</li>
 <li>各项参数填进甲方方案的部署参数台账（密钥和凭据只写存放位置，不写明文）。</li>
 </ol>
 </li>
-<li>局域网和虚拟网内都使用 HTTP（与 6000D 网关现状一致）；所外流量由 EasyTier 的端到端加密保护。</li>
+<li>局域网和虚拟网内都使用 HTTP（与 6000D 网关现状一致）；所外流量由 EasyTier 加密。</li>
+<li><strong>现状</strong>（2026-09-29 实测，详见 <code>deploy/easytier/README.md</code>）：6000D 虚拟 IP <code>10.126.126.1</code>，395 虚拟 IP <code>10.126.126.3</code>，阿里云中转节点由律所提供；所外检查全部通过（<code>docs/plan/evidence/T27/remote-check.txt</code>）。上线前还要换正式密钥并按方案加固中转节点。</li>
+</ul>
+<p><strong>地址选择（所内 / 所外自动切换）</strong>：设置中每台服务器有两个地址：所内地址（<code>llm_base_url</code>、<code>prep_base_url</code>，局域网）和所外地址（<code>llm_alt_base_url</code>、<code>prep_alt_base_url</code>，虚拟 IP），首次配置页两个都填，默认值分别为 <code>http://192.168.8.77:8000/v1</code>、<code>http://192.168.8.124:9000</code>、<code>http://10.126.126.1:8000/v1</code>、<code>http://10.126.126.3:9000</code>。</p>
+<ul>
+<li>工作台服务的统一 HTTP 客户端（<code>net.py</code>）在启动时、网络变化时（Windows 网络状态变化通知）、以及请求出现连接错误时探测：先试所内地址（6000D 请求 <code>/v1/models</code>，395 请求 <code>/health</code>，各 1.5 秒超时），不通再试所外地址；选中的结果缓存 60 秒。两者都不通时报 <code>SERVER_UNREACHABLE</code>。</li>
+<li>识别（395）和流水线（6000D）请求直接用选中的地址。</li>
+<li><strong>Agent 的模型请求</strong>由 DSH 的适配器发出，而 DSH 的地址写在组合包配置里、运行时改不了，所以改为指向工作台服务的<strong>本机转发</strong>：工作台服务另开一个只监听 <code>127.0.0.1</code> 的固定端口（默认 18765，设置里可改），把 <code>/v1/*</code> 原样转发到当前选中的 6000D 地址（流式透传，请求头里的律师 Key 原样带过去，转发本身不记录请求和回答内容，只记元数据）。这个端口不需要启动令牌（DSH 的适配器加不了动态请求头），但只接受 <code>/v1/chat/completions</code> 和 <code>/v1/models</code> 两个路径，其余返回 404；没有律师 Key 的请求 6000D 会拒绝。</li>
+<li>&quot;测试连接&quot;返回实际连通的是所内还是所外地址（契约 <code>api/connection_test</code> 的 <code>route</code>），界面显示&quot;已连接（所内）/（所外）&quot;。</li>
+<li>地址白名单（第 14.3 节）同时包含两组地址。</li>
 </ul>
 <hr />
 <h2 id="16-保密要求的实现对照">16. 保密要求的实现对照</h2>
@@ -3007,7 +3016,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <tr>
 <td>1.1</td>
 <td>2026-09-28</td>
-<td>甲方需求变更：新增工具 <code>case_calc_sentence</code>、<code>case_archive_match</code>、<code>case_save_archive_plan</code>；新增接口 <code>materials_import</code>、<code>capsules</code>、<code>capsules_reset</code>、<code>archive_build</code>、<code>invoice_run</code>、<code>retainer_driver</code>；<code>case_open</code> 增加 <code>template</code>；<code>settings</code> 增加 <code>profile</code>、<code>office</code>、<code>converter</code>；新增 <code>skill/capsules</code>、<code>skill/archive_catalog</code>，删除 <code>skill/entry</code>；frontmatter 删除 <code>entry</code>、<code>order</code>；错误码增加 5 个；<code>formats.md</code> 增加标准案件目录、日常办公文件夹、归档文件夹</td>
+<td>甲方需求变更：新增工具 <code>case_calc_sentence</code>、<code>case_archive_match</code>、<code>case_save_archive_plan</code>；新增接口 <code>materials_import</code>、<code>capsules</code>、<code>capsules_reset</code>、<code>archive_build</code>、<code>invoice_run</code>、<code>retainer_driver</code>；<code>case_open</code> 增加 <code>template</code>；<code>settings</code> 增加 <code>profile</code>、<code>office</code>、<code>converter</code>；新增 <code>skill/capsules</code>、<code>skill/archive_catalog</code>，删除 <code>skill/entry</code>；frontmatter 删除 <code>entry</code>、<code>order</code>；错误码增加 5 个；<code>formats.md</code> 增加标准案件目录、日常办公文件夹、归档文件夹；<code>settings.servers</code> 增加所外地址 <code>llm_alt_base_url</code>、<code>prep_alt_base_url</code>，<code>connection_test</code> 返回增加 <code>route</code>（2026-09-29）</td>
 </tr>
 </tbody>
 </table>

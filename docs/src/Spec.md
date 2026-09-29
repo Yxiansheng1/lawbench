@@ -297,7 +297,7 @@ lawbench/                 我方仓库
 |---|---|---|---|
 | P-1 | 自动更新 | `apps/desktop/src/update-coordinator.ts`、`update-schedule.ts`、`main.ts`（`DesktopUpdateCoordinator`、`automaticCheck`、"检查更新"菜单）；设置页版本行 `packages/client/ui-settings-general/src/client/index.ts` | 删除更新检查和菜单。打包时不写更新源（`electron-builder-config.mjs` 的 `publish: null`，不生成 `app-update.yml`） |
 | P-2 | 强制更新策略查询 | `apps/desktop/src/mandatory-update-policy.ts`；打包 `apps/desktop/scripts/electron-builder-config.mjs`（`resolveDesktopPolicyEnvironment` 调用、`extraMetadata.dshMandatoryUpdatePolicy`） | 删掉这两处；安装包里没有这个字段，运行时就不查询 |
-| P-3 | 欢迎窗口 | `apps/desktop/src/welcome-window.ts`、`src/client/WelcomePage.tsx`、`welcome-backend.ts`、`main.ts` 中 `needsWelcome` 判断 | 换成我方"首次配置"页：填 6000D 和 395 地址、个人 Key、测试连接（PRD 7.9）；判断条件改为"没有配置过律所服务器" |
+| P-3 | 欢迎窗口 | `apps/desktop/src/welcome-window.ts`、`src/client/WelcomePage.tsx`、`welcome-backend.ts`、`main.ts` 中 `needsWelcome` 判断 | 换成我方"首次配置"页：填 6000D 和 395 的所内、所外地址（带默认值，第 15 节）、个人 Key、测试连接（PRD 7.9）；判断条件改为"没有配置过律所服务器" |
 | P-4 | 品牌 | `apps/desktop/scripts/electron-builder-config.mjs`（`productName`、`appId` 来自 `DSH_DESKTOP_APP_ID`、`protocols`、图标）、`apps/desktop/resources/icon*`、`tray-windows.ico`、`src/locale.ts`（产品名文案）、`main.ts` 关于面板、`apps/desktop/installer/`（安装界面文案和图片） | 换成律所名称和 logo，"技术支持"放我方 |
 | P-5 | 聊天附件改为导入 | `packages/client/ui-conversation/src/client/input/editor/apply.ts` 中 `addFiles`；输入区的"+"按钮 | `addFiles` 改为调用我方的导入处理：取出文件的本机路径（Electron `webUtils.getPathForFile`），调 `/api/materials/import`，不写附件；粘贴的截图（没有本机路径）先存为 `工作区/临时/` 下的图片再导入到 `02案件材料/粘贴图片/`。"+"按钮去掉，由我方"导入"按钮代替（D13） |
 | P-6 | 远程命名空间 | `packages/api/remotes/src/client/index.ts` | 加一行导入我方 `lawbench` 命名空间（第 1.2 节） |
@@ -343,7 +343,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | U-5 | 案件工作区 | 左栏（材料、识别进度、wiki）和右栏（草稿、成果、自检结果）做成右侧栏标签页（`ctx.sidebarRightTabs.register` + `sidebar.right.pane.tab` 插槽，参照 `packages/client/ui-sidebar-documentpreview`）；中间的对话区沿用官方会话界面；Skill 选择、参数放在会话输入区上方 |
 | U-6 | 原文查看 | 右侧栏标签页，按出处定位（第 9.3 节） |
 | U-7 | 通知 | 识别完成、流水线完成时发系统通知，只写"识别任务已完成"或"整理任务已完成"，**不带案件名和材料名** |
-| U-8 | 设置 | `settings.section` 插槽：服务器和 Key、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、发票购买方名称、Word 转 PDF 用哪个程序、胶囊管理（U-11）、关于（双 logo） |
+| U-8 | 设置 | `settings.section` 插槽：服务器（所内、所外地址）和 Key、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、发票购买方名称、Word 转 PDF 用哪个程序、胶囊管理（U-11）、关于（双 logo） |
 | U-9 | 取消 | 沿用官方的停止按钮（断开流式请求）；同时通知工作台服务停止正在运行的流水线（第 8.4 节） |
 | U-10 | 关闭窗口 | 官方行为是隐藏到托盘、Host 继续运行，正好满足后台识别；首次关闭时的提示改为说明"识别会在后台继续" |
 | U-11 | 胶囊管理 | 首页右上角"管理胶囊"进入编辑状态：拖动胶囊排序（同组内、跨组都可以），点名字改名，点眼睛图标隐藏或显示，"新增胶囊"选择一组 Skill 或一个内置工具并起名，"恢复默认"用默认配置覆盖（先确认）。没有删除按钮，没有密码。保存时调 `PUT /api/capsules`，服务端校验 Skill 和工具存在 |
@@ -698,7 +698,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
     lawfirm:
       displayName: 律所模型
       api: openai-completions
-      baseURL: http://<6000D>:8000/v1
+      baseURL: http://127.0.0.1:<转发端口>/v1   # 工作台服务的本机转发，由它选所内或所外地址（第 15 节）
       apiKeyEnv: LAWFIRM_KEY            # 通过 ctx.credentials 解析
       timeoutMs: 1200000
       models:                           # 三个条目只差 contextWindow，对应律师选的窗口（第 8.2 节）
@@ -715,7 +715,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
         thinkingFormat: qwen-chat-template   # pi-ai 支持的取值之一：按思考档位发送 chat_template_kwargs.enable_thinking
   ```
   配好后抓一次请求核对：关闭档是否发出 `enable_thinking: false`，低 / 中 / 高是否带上 `reasoning_effort`；带不上的，用 `chatTemplateKwargs` 补〔待验证〕。
-- **流水线**：工作台服务直接调用 `http://<6000D>:8000/v1/chat/completions`，流式输出，请求体沿用 wiki 测试的 `run_pipeline_v2.py`。
+- **流水线**：工作台服务直接调用 `<当前选用的 6000D 地址>/chat/completions`（地址选择见第 15 节），流式输出，请求体沿用 wiki 测试的 `run_pipeline_v2.py`。
 - 请求头：`Authorization: Bearer <律师 Key>`。流水线另加 `X-Session-Id: <案件编号前 8 位>-<任务编号>`，让同一任务的请求落到同一张卡，命中前缀缓存；Agent 路由在 profile 里配置的请求头是固定的；DSH 会把会话 ID 作为 `sessionId` 交给 pi-ai，它是否会变成请求头，抓请求核对〔待验证〕，不会就不带，由网关按默认规则分卡。
 - 温度：流水线用 0.2；Agent 用 Skill 推荐值，默认 0.3。
 
@@ -1156,7 +1156,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 
 ### 14.3 只连两台服务器（SEC-03）
 
-所有发出网络请求的地方都要做地址白名单检查（只允许首次配置中的 6000D、395 地址和 `127.0.0.1`；律所用 EasyTier 远程接入时，这两个地址可以填虚拟网地址，第 15 节），并且**不自动跟随重定向**（收到 3xx 视为错误），防止跳转到白名单外的地址：
+所有发出网络请求的地方都要做地址白名单检查（只允许设置中 6000D、395 的所内和所外地址，以及 `127.0.0.1`，第 15 节），并且**不自动跟随重定向**（收到 3xx 视为错误），防止跳转到白名单外的地址：
 
 | 请求来源 | 怎么限制 |
 |---|---|
@@ -1181,11 +1181,19 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 - **所外访问**：按甲方《EasyTier 律所工作台远程接入方案 V2》（自建共享节点、`--secure-mode`、私有模式、按律师分发凭据、ACL 默认拒绝）。原方案中的 WireGuard 不再采用。**分工**（2026-09-28 定）：共享节点用的云服务器由律所提供；两台服务器侧的配置由我方完成（编排计划工单 T27）。
 - 我方要做的：
   1. 首次配置和设置中的 6000D、395 地址可以填 EasyTier 虚拟网地址，地址白名单按设置中的实际地址生效（第 14.3 节）；"测试连接"对虚拟网地址同样适用。
-  2. 在 6000D（Linux）和 395（Windows）上按方案 V2 安装 EasyTier 并加入律所虚拟网；访问规则默认拒绝，只放行虚拟网段到 **6000D 的 8000 端口和 395 的 9000 端口**（方案原文只放行了模型端口，这里补上 9000）；不代理律所其他子网。
+  2. 在 6000D（Linux）和 395（Windows）上按方案 V2 安装 EasyTier 并加入律所虚拟网，经虚拟网只放行 **6000D 的 8000 端口和 395 的 9000 端口**（`--tcp-whitelist`；方案原文只放行了模型端口，这里补上 9000）。**不使用子网代理（`-n`）**：2026-09-29 实测经子网代理进来的访问不受白名单限制，与方案 V2 一致已去掉。所外因此访问虚拟 IP，所内访问局域网地址，客户端自动切换（下面"地址选择"）。
   3. 两台服务器的防火墙：6000D 入站只放行虚拟网段和局域网到 8000；395 的 Windows 防火墙入站规则加上虚拟网段（第 6.1 节）。
   4. 写一个检查脚本，在律所外的网络上用一台律师电脑实测：8000、9000 可达，其他端口不可达，客户端"测试连接"通过。
   5. 各项参数填进甲方方案的部署参数台账（密钥和凭据只写存放位置，不写明文）。
-- 局域网和虚拟网内都使用 HTTP（与 6000D 网关现状一致）；所外流量由 EasyTier 的端到端加密保护。
+- 局域网和虚拟网内都使用 HTTP（与 6000D 网关现状一致）；所外流量由 EasyTier 加密。
+- **现状**（2026-09-29 实测，详见 `deploy/easytier/README.md`）：6000D 虚拟 IP `10.126.126.1`，395 虚拟 IP `10.126.126.3`，阿里云中转节点由律所提供；所外检查全部通过（`docs/plan/evidence/T27/remote-check.txt`）。上线前还要换正式密钥并按方案加固中转节点。
+
+**地址选择（所内 / 所外自动切换）**：设置中每台服务器有两个地址：所内地址（`llm_base_url`、`prep_base_url`，局域网）和所外地址（`llm_alt_base_url`、`prep_alt_base_url`，虚拟 IP），首次配置页两个都填，默认值分别为 `http://192.168.8.77:8000/v1`、`http://192.168.8.124:9000`、`http://10.126.126.1:8000/v1`、`http://10.126.126.3:9000`。
+- 工作台服务的统一 HTTP 客户端（`net.py`）在启动时、网络变化时（Windows 网络状态变化通知）、以及请求出现连接错误时探测：先试所内地址（6000D 请求 `/v1/models`，395 请求 `/health`，各 1.5 秒超时），不通再试所外地址；选中的结果缓存 60 秒。两者都不通时报 `SERVER_UNREACHABLE`。
+- 识别（395）和流水线（6000D）请求直接用选中的地址。
+- **Agent 的模型请求**由 DSH 的适配器发出，而 DSH 的地址写在组合包配置里、运行时改不了，所以改为指向工作台服务的**本机转发**：工作台服务另开一个只监听 `127.0.0.1` 的固定端口（默认 18765，设置里可改），把 `/v1/*` 原样转发到当前选中的 6000D 地址（流式透传，请求头里的律师 Key 原样带过去，转发本身不记录请求和回答内容，只记元数据）。这个端口不需要启动令牌（DSH 的适配器加不了动态请求头），但只接受 `/v1/chat/completions` 和 `/v1/models` 两个路径，其余返回 404；没有律师 Key 的请求 6000D 会拒绝。
+- "测试连接"返回实际连通的是所内还是所外地址（契约 `api/connection_test` 的 `route`），界面显示"已连接（所内）/（所外）"。
+- 地址白名单（第 14.3 节）同时包含两组地址。
 
 ---
 
@@ -1437,4 +1445,4 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | 1.0 | 2026-09-28 | 首版 |
-| 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹 |
+| 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹；`settings.servers` 增加所外地址 `llm_alt_base_url`、`prep_alt_base_url`，`connection_test` 返回增加 `route`（2026-09-29） |

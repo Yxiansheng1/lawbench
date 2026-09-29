@@ -13,17 +13,45 @@
       "properties": {
         "llm_base_url": {
           "type": "string",
-          "pattern": "^http://"
+          "pattern": "^http://",
+          "description": "6000D 所内地址（局域网）"
         },
         "prep_base_url": {
           "type": "string",
-          "pattern": "^http://"
+          "pattern": "^http://",
+          "description": "395 所内地址（局域网）"
+        },
+        "llm_alt_base_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^http://",
+              "description": "6000D 所外地址（EasyTier 虚拟 IP）；所内地址连不上时自动改用"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prep_alt_base_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^http://",
+              "description": "395 所外地址（EasyTier 虚拟 IP）"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
         "llm_base_url",
-        "prep_base_url"
+        "prep_base_url",
+        "llm_alt_base_url",
+        "prep_alt_base_url"
       ]
     },
     "defaults": {

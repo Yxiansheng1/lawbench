@@ -107,7 +107,7 @@ T11 + 律所提供云服务器 ──► T27 所外访问配置（线 C + 你，
 <tr><td>2</td><td>每张卡的任务门</td><td>该卡"验收"各条全部满足，证据文件在 <code>docs\plan\evidence\T&lt;n&gt;\</code>；产品代码经复核员按八项清单复核（事实索引第 8 节第 5 条），复核记录同目录</td></tr>
 <tr><td>3</td><td>每张卡的合流门</td><td>合并到 <code>main</code> 后，<code>service</code> 与 <code>prep395</code> 的 pytest 全量、契约自检、<code>build_skills.py</code> 三项在 <code>main</code> 上退出码均为 0，输出写入 <code>merge.txt</code>，对基线零新增失败</td></tr>
 <tr><td>4</td><td>第一阶段门（T14）</td><td>最小完整流程 8 个步骤逐步"通过"；草稿中每条出处点开定位到正确页（逐条勾选）；取消后有未完成草稿；重启后识别不重复写入；任何一步红 = 拦停回修后从该步重跑</td></tr>
-<tr><td>5</td><td>功能做全门（T16、T18）</td><td>大卷宗 wiki 的 A–E 类问题为 0；18 个 Skill 各产出草稿且无 A–E 类问题；归档、发票、委托材料按 T23、T25、T26 验收；<code>build_skills.py --strict</code> 除"责任律师待定"外无错误</td></tr>
+<tr><td>5</td><td>每个业务功能按规定要有一位律所律师负责审定规则、提供测试样本、上线前打分（"责任律师"）。</td><td>已定：暂不安排。开发阶段用我们自己造的虚构样本；需要律师审定和打分时再请律所指定，不影响开发。代价：上线前的质量打分要等律所指定人选后才能做。</td></tr>
 <tr><td>6</td><td>发车门（T20）</td><td><code>packaging\build.ps1</code> 在干净检出上退出码 0；干净 Windows 上断网安装成功；30 分钟抓包的目标地址只有 <code>192.168.8.77</code>、<code>192.168.8.124</code>、<code>127.0.0.1</code></td></tr>
 <tr><td>7</td><td>上线验收门（T22）</td><td>PRD 第 12 节 27 项（第 1–26 条和 16a）逐条"通过"，或"前提不满足"且属于第五节中甲方未办的事项；Windows 10、Windows 11 各一遍；你在报告末尾写"已亲验"</td></tr>
 </table>

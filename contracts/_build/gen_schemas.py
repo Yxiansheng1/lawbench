@@ -416,7 +416,8 @@ api = [
      {"$ref": BASE + "files/settings.schema.json"}, {"$ref": BASE + "files/settings.schema.json"}),
     ("connection_test", "POST /api/connection/test", "测试服务器连接（只发探测请求，不含内容）",
      obj({"server": enum("llm", "prep")}),
-     obj({"reachable": b(), "key_valid": nullable(b()), "latency_ms": nullable(i(minimum=0)), "message": s()})),
+     obj({"reachable": b(), "key_valid": nullable(b()), "latency_ms": nullable(i(minimum=0)),
+          "route": nullable(enum("primary", "alternate", desc="实际连通的是所内地址还是所外地址")), "message": s()})),
 ]
 for name, title, desc, req, res in api:
     endpoint(f"api/{name}.schema.json", title, desc, req, res)
@@ -507,7 +508,10 @@ ffile("cases", "<应用数据>/cases.json", "案件注册表：只有编号和�
       obj({"cases": arr(obj({"case_id": ref("case_id"), "root": s("realpath，Windows 反斜杠原样保存"),
                              "name": s(), "last_opened": ref("time")}))}))
 ffile("settings", "<应用数据>/settings.json", "设置；Key 不在这里（在 Windows 凭据管理器）",
-      obj({"servers": obj({"llm_base_url": s(pattern="^http://"), "prep_base_url": s(pattern="^http://")}),
+      obj({"servers": obj({"llm_base_url": s("6000D 所内地址（局域网）", pattern="^http://"),
+                           "prep_base_url": s("395 所内地址（局域网）", pattern="^http://"),
+                           "llm_alt_base_url": nullable(s("6000D 所外地址（EasyTier 虚拟 IP）；所内地址连不上时自动改用", pattern="^http://")),
+                           "prep_alt_base_url": nullable(s("395 所外地址（EasyTier 虚拟 IP）", pattern="^http://"))}),
            "defaults": ref("params"),
            "skill_presets": {"type": "object", "additionalProperties": ref("params")},
            "templates": obj({"文书": nullable(s()), "合同": nullable(s())}),

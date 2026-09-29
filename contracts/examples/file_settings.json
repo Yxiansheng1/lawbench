@@ -2,7 +2,9 @@
   "v": 1,
   "servers": {
     "llm_base_url": "http://192.168.8.77:8000/v1",
-    "prep_base_url": "http://192.168.8.78:9000"
+    "prep_base_url": "http://192.168.8.124:9000",
+    "llm_alt_base_url": "http://10.126.126.1:8000/v1",
+    "prep_alt_base_url": "http://10.126.126.3:9000"
   },
   "defaults": {
     "thinking": "中",
