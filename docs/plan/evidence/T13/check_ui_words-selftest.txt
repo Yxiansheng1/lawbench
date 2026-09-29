@@ -1,0 +1,21 @@
+# check_ui_words.py 自检（2026-09-30，裁决 Q12 之前的初稿词表）
+
+脚本：scripts\check_ui_words.py。词表只在脚本顶部一处（BANNED_EN、BANNED_ZH），主编排定下最终词表后改那里。
+扫描对象：dsh-ext\ui\ 下 .ts/.tsx/.js/.jsx/.mjs/.json 中律师能看到的文字——字符串字面量、JSX 文本、词条表的值；
+跳过注释、import/export 行、纯 ASCII 且无空格的短标识（CSS 类名、事件名、模块路径），跳过 node_modules、lib、fixtures、tests 目录。
+
+## 样例一（应命中）
+样例文件含：注释里的 token、块注释里的 context、import 路径里的 session、标识符 sessionId、CSS 类名，
+以及字符串"剩余 token 数"、模板字符串"Prompt 太长"、JSX 文本"上下文窗口已满，请缩小范围"、词条"本次用了 1200 个 tokens"。
+输出：
+Panel.tsx:5  「token」  …剩余 token 数…
+Panel.tsx:8  「Prompt」  …Prompt 太长…
+Panel.tsx:6  「上下文窗口」  …上下文窗口已满，请缩小范围…
+zh.json:1  「tokens」  …本次用了 1200 个 tokens…
+命中 4 处，退出码 1。注释、import 路径、sessionId、CSS 类名均未误报。
+
+## 样例二（应零命中）
+字符串"材料已导入"、JSX 文本"成果"、import './session-helpers'。输出：零命中，退出码 0。
+
+## 当前 dsh-ext\ui\
+界面插件尚未施工（等 T13 待定项 Q1、Q2、Q3 裁决），正式的 ui-words.txt 在界面代码写完后生成。
