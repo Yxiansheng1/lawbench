@@ -1,5 +1,5 @@
 界面用语检查：D:\lawbench-A\dsh-ext\ui
-词表（英文按整词、不分大小写）：token, tokens, context, prompt, LLM, API, agent, preset, session, JSON, embedding, schema, payload, endpoint, runtime, workspace；中文：上下文, 提示词
+词表（英文按整词、不分大小写，含复数）：token, context, prompt, LLM, API, agent, preset, session, JSON, embedding, schema, payload, endpoint, runtime, workspace；中文：上下文, 提示词
 
 
 零命中

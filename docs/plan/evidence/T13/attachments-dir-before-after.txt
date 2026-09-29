@@ -23,3 +23,20 @@
 拖到对话框本身、粘贴截图、输入框"+"菜单里的"添加文件"仍走 DSH 附件，要靠 P-5 源码补丁（ui-conversation 的 addFiles 先问我方导入钩子、去掉"+"按钮）。
 P-5 源码补丁本次没能落地：改 dsh\ 子模块源码的操作被本机权限设置拦下，候用户决定（见交付说明）。
 复查（案件卡片拖入之后）：附件目录文件数 0
+
+## 返修 P3-5：材料面板修复后的复查（2026-09-30，桌面端开发模式窗口，经渲染进程调试口操作）
+做法：打开虚构案件，在"材料"面板上派发 dragenter / dragover / drop，拖入两个脚本构造的文件（补充借条.pdf、还款承诺书.docx，没有本机路径）。
+结果：我方处理接住了（弹"没有可导入的文件"），输入框里没有附件（页面文字里没有"补充借条.pdf"），截图 08b。
+
+### 拖入前 dir /s /a-d %LOCALAPPDATA%\lawbench-dev\dsh-home\attachments（原始输出）
+ 驱动器 C 中的卷是 Windows-SSD
+ 卷的序列号是 E46B-7599
+找不到文件
+
+### 拖入后（原始输出）
+ 驱动器 C 中的卷是 Windows-SSD
+ 卷的序列号是 E46B-7599
+找不到文件
+
+## 拖到"文件夹不在原处"的案件卡片（返修一并做，桌面端窗口）
+派发 dragenter / dragover / drop：dragover、drop 都已阻止默认行为（defaultPrevented=true），dropEffect=none，没有弹框，页面地址没变（没有跳到 file://）。

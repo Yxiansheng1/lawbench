@@ -1,0 +1,19 @@
+﻿# T13 返修 P2-2：新检出副本里跑全部测试（2026-09-30）
+
+本机 git：core.autocrlf=true（D:/git/Git/etc/gitconfig）。两份副本都用 git clone --no-checkout 后 checkout 指定提交；dsh、dsh-ext\node_modules 以目录联接指向作者工作区（只读使用）。
+
+## c47849b（返修前）
+假数据文件带回车符：True；退出码 -1
+ ❯ tests/fixtures.spec.ts (39 tests | 31 failed) 408ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 31 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/fixtures.spec.ts > 界面假数据 > archive_build.json 符合 api/archive_build 的 response
+ FAIL  tests/fixtures.spec.ts > 界面假数据 > capsules.json 符合 api/capsules 的 response
+ FAIL  tests/fixtures.spec.ts > 界面假数据 > capsules_reset.json 符合 api/capsules_reset 的 response
+ FAIL  tests/fixtures.spec.ts > 界面假数据 > capsules.req.json 符合 api/capsules 的 request
+
+## e1b1112（加 dsh-ext\.gitattributes 之后）
+假数据文件带回车符：False；退出码 0
+ Test Files  14 passed (14)
+      Tests  157 passed | 5 skipped (162)
+   Duration  7.48s (transform 4.46s, setup 0ms, import 8.48s, tests 14.31s, environment 2ms)
+
