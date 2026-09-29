@@ -1,0 +1,12 @@
+﻿T3 红绿验证：1 类防护
+
+[01] copy_original·临时名撞上时换名重试，不覆盖别人的临时文件（去掉 O_EXCL）
+  改坏 case/gate.py → 红：1 failed, 20 deselected in 0.39s
+      变红的用例：
+        tests/test_t5_gate.py::test_copy_original_tmp_name_collision
+  复原 → 绿：1 passed, 20 deselected in 0.26s
+
+源码与开始时逐字节一致：是
+复原后全量：385 passed, 3 skipped in 361.06s (0:06:01)
+
+结论：1/1 类防护 改坏即红、复原即绿
