@@ -324,10 +324,11 @@ def copy_original(root: str, rel: str, src: str | os.PathLike, op: str = "import
     if os.path.lexists(path):
         raise FileExistsError(rel)
     _mkdirs(root, path.parent, op)
-    # 以 . 开头，扫描原件区时不会当成材料；名字要短：比目标文件名还长时，深路径下会先于目标超过 260 字符
-    tmp = path.parent / f".~lb{uuid.uuid4().hex[:8]}"
+    tmp, fd = _exclusive_tmp(path.parent)
     try:
-        shutil.copy2(src, tmp)
+        with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
+            shutil.copyfileobj(inp, out)
+        shutil.copystat(src, tmp)
         os.rename(tmp, path)  # Windows 上目标已存在时 rename 失败，不会覆盖
     finally:
         if os.path.lexists(tmp):
@@ -335,6 +336,21 @@ def copy_original(root: str, rel: str, src: str | os.PathLike, op: str = "import
     if is_link(path) or not is_within(root, os.path.realpath(path)):
         raise _deny(op, "copy_escape")
     return path
+
+
+def _exclusive_tmp(parent: pathlib.Path) -> tuple[pathlib.Path, int]:
+    """在 parent 下独占新建一个临时文件（O_EXCL）：名字撞上别人正在用的，换一个名字重试，绝不覆盖。
+
+    以 . 开头，扫描原件区时不会当成材料；名字要短（12 字符）：比目标文件名还长时，深路径下会先于目标超过 260 字符。
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    for _ in range(10):
+        tmp = parent / f".~lb{uuid.uuid4().hex[:8]}"
+        try:
+            return tmp, os.open(tmp, flags, 0o600)
+        except FileExistsError:
+            continue
+    raise FileExistsError("tmp")
 
 
 def delete_work_file(root: str, rel: str, op: str = "import") -> None:

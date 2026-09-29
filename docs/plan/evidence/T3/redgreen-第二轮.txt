@@ -1,0 +1,107 @@
+﻿T3 红绿验证：14 类防护
+
+[01] S1·_host_port 捕获 urlsplit 的 ValueError
+  改坏 net.py → 红：6 failed, 6 passed, 10 deselected in 6.88s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-llm_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-prep_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-llm_alt_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-prep_alt_base_url]
+        tests/test_t3_rework2.py::test_s1_check_does_not_depend_on_forward_port
+        tests/test_t3_rework2.py::test_s1_saved_unparseable_url_starts_with_defaults[http://[::1/v1]
+  复原 → 绿：12 passed, 10 deselected in 5.99s
+
+[02] S1·check_servers 拒绝解析不了的地址（不依赖转发端口）
+  改坏 net.py → 红：11 failed, 1 passed, 10 deselected in 5.90s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://127.0.0.1:8x/v1-llm_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://127.0.0.1:8x/v1-prep_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://127.0.0.1:8x/v1-llm_alt_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://127.0.0.1:8x/v1-prep_alt_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-llm_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-prep_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-llm_alt_base_url]
+        tests/test_t3_rework2.py::test_s1_put_unparseable_url_rejected[http://[::1/v1-prep_alt_base_url]
+        tests/test_t3_rework2.py::test_s1_check_does_not_depend_on_forward_port
+        tests/test_t3_rework2.py::test_s1_saved_unparseable_url_starts_with_defaults[http://127.0.0.1:8x/v1]
+        tests/test_t3_rework2.py::test_s1_saved_unparseable_url_starts_with_defaults[http://[::1/v1]
+  复原 → 绿：12 passed, 10 deselected in 5.97s
+
+[03] S1·转发遇到未预料的异常返回 502、日志记类名
+  改坏 net.py → 红：1 failed, 11 passed, 10 deselected in 5.86s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s1_forward_unexpected_exception_is_502_not_cancelled
+  复原 → 绿：12 passed, 10 deselected in 5.81s
+
+[04] S2·resolve_internal 的拒绝路径
+  改坏 case/gate.py → 红：5 failed, 1 passed, 16 deselected in 0.40s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s2_resolve_internal_rejects_junction
+        tests/test_t3_rework2.py::test_s2_resolve_internal_rejects_escape[\u5de5\u4f5c\u533a/../../\u6848\u5916/x.txt]
+        tests/test_t3_rework2.py::test_s2_resolve_internal_rejects_escape[../\u6848\u5916/x.txt]
+        tests/test_t3_rework2.py::test_s2_resolve_internal_rejects_escape[C:\\Windows\\win.ini]
+        tests/test_t3_rework2.py::test_s2_resolve_internal_rejects_escape[\u5de5\u4f5c\u533a/NUL]
+  复原 → 绿：6 passed, 16 deselected in 0.18s
+
+[05] S3·copy_original 复制后复查（copy_escape）
+  改坏 case/gate.py → 红：1 failed, 18 passed in 1.35s
+      变红的用例：
+        tests/test_t5_gate.py::test_copy_original_post_check_rejects_link
+  复原 → 绿：19 passed in 1.08s
+
+[06] S3·delete_work_file 第一层（第一级必须是 工作区）
+  改坏 case/gate.py → 绿（未变红！）：19 passed in 1.06s
+  复原 → 绿：19 passed in 1.17s
+
+[07] S3·delete_work_file 第二层（解析后仍在 工作区）
+  改坏 case/gate.py → 红：1 failed, 18 passed in 1.43s
+      变红的用例：
+        tests/test_t5_gate.py::test_delete_work_file_second_layer
+  复原 → 绿：19 passed in 1.20s
+
+[08] S4·标准目录位置上是文件时跳过
+  改坏 case/gate.py → 红：1 failed, 21 deselected in 1.03s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s4_template_skips_existing_file
+  复原 → 绿：1 passed, 21 deselected in 0.85s
+
+[09] S5·盘符根目录规则
+  改坏 case/gate.py → 红：1 failed, 21 deselected in 0.30s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s5_drive_root_reason
+  复原 → 绿：1 passed, 21 deselected in 0.03s
+
+[10] S7·工作台端口被占时进程非零退出
+  改坏 __main__.py → 红：1 failed, 21 deselected in 3.22s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s7_main_port_taken_exits_and_frees_forward
+  复原 → 绿：1 passed, 21 deselected in 2.71s
+
+[11] S7·转发流式逐段透传
+  改坏 net.py → 红：1 failed, 21 deselected in 3.52s
+      变红的用例：
+        tests/test_t3_rework2.py::test_s7_stream_chunks_arrive_progressively
+  复原 → 绿：1 passed, 21 deselected in 3.21s
+
+[12] T5·导入遇到设备名或点开头的文件名只跳过这一个
+  改坏 case/materials.py → 红：1 failed, 18 deselected in 0.84s
+      变红的用例：
+        tests/test_t5_gate.py::test_import_device_or_dot_name_skips_only_that_file
+  复原 → 绿：1 passed, 18 deselected in 0.75s
+
+[13] T5·深路径：材料文本超长只让该份失败
+  改坏 case/materials.py → 红：1 failed, 1 passed in 1.76s
+      变红的用例：
+        tests/test_t5_long_paths.py::test_text_path_too_long_fails_only_that_material
+  复原 → 绿：2 passed in 1.31s
+
+[14] T5·深路径：复制原件的临时名不比目标名长
+  改坏 case/gate.py → 红：1 failed, 1 passed in 1.62s
+      变红的用例：
+        tests/test_t5_long_paths.py::test_import_copy_temp_name_not_longer_than_target
+  复原 → 绿：2 passed in 1.36s
+
+源码与开始时逐字节一致：是
+复原后全量：359 passed, 3 skipped in 285.47s (0:04:45)
+
+结论：13/14 类防护 改坏即红、复原即绿

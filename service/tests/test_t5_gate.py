@@ -35,6 +35,20 @@ def test_copy_original_never_overwrites(root):
     assert not list(target.parent.glob(".~lb*"))  # 临时文件已清掉
 
 
+def test_copy_original_tmp_name_collision(root, monkeypatch):
+    """临时名撞上别人正在用的：换一个名字重试，不覆盖别人的临时文件（注记 2219 第 2 节）。"""
+    r, src, _ = root
+    parent = pathlib.Path(r) / "证据"
+    busy = parent / ".~lbaaaaaaaa"
+    busy.write_text("别的导入正在写", encoding="utf-8")
+    names = iter(["aaaaaaaa" + "0" * 24, "bbbbbbbb" + "0" * 24])
+    monkeypatch.setattr(gate.uuid, "uuid4", lambda: type("U", (), {"hex": next(names)})())
+    p = gate.copy_original(r, "证据/新.txt", src)
+    assert p.read_text(encoding="utf-8") == "新内容"
+    assert busy.read_text(encoding="utf-8") == "别的导入正在写"    # 没被覆盖，也没被删
+    assert not (parent / ".~lbbbbbbbbb").exists()
+
+
 def test_copy_original_to_case_root(root):
     """目标就在案件根目录（没有 02案件材料 时的默认位置）。"""
     r, src, _ = root

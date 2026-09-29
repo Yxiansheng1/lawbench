@@ -1,0 +1,88 @@
+﻿T3 红绿验证：13 类防护
+
+[01] S3·delete_work_file 第一层（单独测：第二层失效时第一层仍拒绝）
+  改坏 case/gate.py → 红：1 failed, 19 deselected in 0.36s
+      变红的用例：
+        tests/test_t5_gate.py::test_delete_work_file_first_layer
+  复原 → 绿：1 passed, 19 deselected in 0.11s
+
+[02] LO·配置目录在 <应用数据>\临时\lo\<8 位随机>
+  改坏 ingest/libreoffice.py → 红：1 failed, 7 deselected in 20.60s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_profile_under_appdata_and_removed
+  复原 → 绿：1 passed, 7 deselected in 20.86s
+
+[03] LO·配置目录用完删除
+  改坏 ingest/libreoffice.py → 红：1 failed, 7 deselected in 19.59s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_profile_under_appdata_and_removed
+  复原 → 绿：1 passed, 7 deselected in 21.05s
+
+[04] LO·服务启动时清理残留
+  改坏 app.py → 红：1 failed, 7 deselected in 0.78s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_startup_cleanup
+  复原 → 绿：1 passed, 7 deselected in 0.59s
+
+[05] LO·删不掉要记日志
+  改坏 ingest/libreoffice.py → 红：1 failed, 7 deselected in 0.30s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_remove_tree_failure_is_logged
+  复原 → 绿：1 passed, 7 deselected in 0.11s
+
+[06] LO·配置目录路径超过 100 字符不调用
+  改坏 ingest/libreoffice.py → 红：1 failed, 7 deselected in 13.04s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_profile_path_too_long_not_called
+  复原 → 绿：1 passed, 7 deselected in 13.16s
+
+[07] LO·0xC0000409 报转换程序异常退出
+  改坏 ingest/libreoffice.py → 红：1 failed, 7 deselected in 1.27s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_crash_exit_code_reason
+  复原 → 绿：1 passed, 7 deselected in 1.02s
+
+[08] xlsx·有外链关系不交给 LibreOffice 重算
+  改坏 case/materials.py → 红：1 failed, 7 deselected in 7.97s
+      变红的用例：
+        tests/test_t5_lo_placement.py::test_xlsx_external_not_recalculated
+  复原 → 绿：1 passed, 7 deselected in 1.11s
+
+[09] .doc·只在域指令范围内匹配
+  改坏 ingest/links.py → 红：1 failed, 2 passed, 29 deselected in 0.41s
+      变红的用例：
+        tests/test_t5_convert_safety.py::test_detector_plain_text_not_triggered[see the link http://example.invalid/page and ftp://x.example/]
+  复原 → 绿：3 passed, 29 deselected in 0.14s
+
+[10] .doc·地址要在词首（本机路径里的 \\ 不算 UNC）
+  改坏 ingest/links.py → 红：1 failed, 12 passed, 19 deselected in 0.64s
+      变红的用例：
+        tests/test_t5_convert_safety.py::test_detector_field_forms[10]
+  复原 → 绿：13 passed, 19 deselected in 0.39s
+
+[11] .doc·链接类域名（开关在前也拦）
+  改坏 ingest/links.py → 红：5 failed, 8 passed, 19 deselected in 0.62s
+      变红的用例：
+        tests/test_t5_convert_safety.py::test_detector_field_forms[5]
+        tests/test_t5_convert_safety.py::test_detector_field_forms[6]
+        tests/test_t5_convert_safety.py::test_detector_field_forms[7]
+        tests/test_t5_convert_safety.py::test_detector_field_forms[8]
+        tests/test_t5_convert_safety.py::test_detector_field_forms[9]
+  复原 → 绿：13 passed, 19 deselected in 0.41s
+
+[12] .doc·Data 流单字节地址
+  改坏 ingest/links.py → 红：1 failed, 31 deselected in 14.95s
+      变红的用例：
+        tests/test_t5_convert_safety.py::test_detector_data_stream_alone
+  复原 → 绿：1 passed, 31 deselected in 14.46s
+
+[13] .doc·Data 流里的元数据命名空间不算
+  改坏 ingest/links.py → 红：1 failed, 4 passed, 27 deselected in 0.29s
+      变红的用例：
+        tests/test_t5_convert_safety.py::test_data_bytes[<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">-False]
+  复原 → 绿：5 passed, 27 deselected in 0.07s
+
+源码与开始时逐字节一致：是
+复原后全量：384 passed, 3 skipped in 350.54s (0:05:50)
+
+结论：13/13 类防护 改坏即红、复原即绿
