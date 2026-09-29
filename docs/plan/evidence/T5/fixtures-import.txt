@@ -1,0 +1,41 @@
+criminal-01: 复制 4，跳过 0，新增 4，失败 0
+  M0001 现场勘验图文 [pdf] parsed 1page 需识别页=[] 图文混排页=[1]
+  M0002 讯问笔录 [pdf] needs_ocr 3page 需识别页=[1, 2, 3] 图文混排页=[]
+  M0003 起诉意见书 [pdf] parsed 5page 需识别页=[] 图文混排页=[]
+  M0004 转账截图 [image] needs_ocr 1page 需识别页=[1] 图文混排页=[]
+civil-01: 复制 5，跳过 0，新增 5，失败 0
+  M0001 借条 [docx] parsed 11para 需识别页=[] 图文混排页=[] 注=含修订，已按修订后文本
+  M0002 情况说明 [txt] parsed 11line 需识别页=[] 图文混排页=[]
+  M0003 案情摘要 [md] parsed 13line 需识别页=[] 图文混排页=[]
+  M0004 还款记录 [csv] parsed 7line 需识别页=[] 图文混排页=[]
+  M0005 银行流水 [xlsx] parsed 2cell 需识别页=[] 图文混排页=[]
+contract-01: 复制 2，跳过 0，新增 2，失败 0
+  M0001 采购合同-含未处理修订 [docx] parsed 47para 需识别页=[] 图文混排页=[] 注=含修订，已按修订后文本
+  M0002 采购合同 [docx] parsed 47para 需识别页=[] 图文混排页=[]
+attack-01: 复制 4，跳过 0，新增 3，失败 0
+  M0001 AGENTS [md] parsed 9line 需识别页=[] 图文混排页=[]
+  M0002 案情材料 [txt] parsed 5line 需识别页=[] 图文混排页=[]
+  M0003 补充说明 [txt] parsed 7line 需识别页=[] 图文混排页=[]
+broken: 复制 3，跳过 0，新增 3，失败 3
+  M0001 broken/加密.docx [docx] failed 0para 需识别页=[] 图文混排页=[] 原因=文件已加密，请提供未加密版本
+  M0002 broken/加密.pdf [pdf] failed 0page 需识别页=[] 图文混排页=[] 原因=文件已加密，请提供未加密版本
+  M0003 截断 [pdf] failed 0page 需识别页=[] 图文混排页=[] 原因=文件无法打开，可能已损坏
+closed-01: 复制 10，跳过 0，新增 9，失败 0
+  M0001 委托代理合同 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0002 律师费发票 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0003 授权委托书 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0004 民事起诉状 [docx] parsed 13para 需识别页=[] 图文混排页=[]
+  M0005 对账单 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0006 微信图片_20260301 [image] needs_ocr 1page 需识别页=[1] 图文混排页=[]
+  M0007 聊天记录 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0008 送货单 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0009 民事调解书 [pdf] parsed 2page 需识别页=[] 图文混排页=[]
+tender-01: 复制 2，跳过 0，新增 2，失败 0
+  M0001 招标文件 [docx] parsed 31para 需识别页=[] 图文混排页=[]
+  M0002 补充通知 [docx] parsed 11para 需识别页=[] 图文混排页=[]
+invoices-01: 复制 6，跳过 0，新增 5，失败 0
+  M0001 发票01-办公用品 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0002 发票02-差旅住宿 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0003 发票03-交通 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0004 发票04-办公用品-重复 [pdf] parsed 1page 需识别页=[] 图文混排页=[]
+  M0005 发票05-购买方不符 [pdf] parsed 1page 需识别页=[] 图文混排页=[]

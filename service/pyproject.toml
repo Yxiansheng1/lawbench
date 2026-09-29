@@ -15,6 +15,11 @@ dependencies = [
   "referencing",
   "pyyaml",
   "keyring",
+  "pypdfium2",
+  "lxml",
+  "openpyxl",
+  "Pillow",
+  "olefile",
 ]
 
 [project.optional-dependencies]

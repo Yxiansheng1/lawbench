@@ -14,7 +14,9 @@ from __future__ import annotations
 import os
 import pathlib
 import re
+import shutil
 import stat
+import uuid
 
 from .. import logs
 from ..contracts import atomic_write_bytes
@@ -265,9 +267,40 @@ def mkdir_original(root: str, rel: str, op: str = "case_template") -> bool:
     return True
 
 
+def copy_original(root: str, rel: str, src: str | os.PathLike, op: str = "import") -> pathlib.Path:
+    """原件区新建文件（仅 /api/materials/import）：复制，从不覆盖。目标已存在抛 FileExistsError。"""
+    parts = check_ai_rel(rel, op)
+    path = _resolve(root, parts, op)
+    if os.path.lexists(path):
+        raise FileExistsError(rel)
+    _mkdirs(root, path.parent, op)
+    tmp = path.parent / f".~lb-{uuid.uuid4().hex}.tmp"  # 以 . 开头，扫描原件区时不会当成材料
+    try:
+        shutil.copy2(src, tmp)
+        os.rename(tmp, path)  # Windows 上目标已存在时 rename 失败，不会覆盖
+    finally:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+    if is_link(path) or not is_within(root, os.path.realpath(path)):
+        raise _deny(op, "copy_escape")
+    return path
+
+
+def delete_work_file(root: str, rel: str, op: str = "import") -> None:
+    """删除 工作区/ 下的临时文件（导入粘贴的截图、委托材料窗口的下载后用）。原件区不提供删除。"""
+    parts = _split_rel(rel, op)
+    if parts[0] != WORK:
+        raise _deny(op, "delete_outside_work")
+    path = _resolve(root, parts, op)
+    if _real_top(root, path) != WORK.casefold():
+        raise _deny(op, "delete_outside_work")
+    if os.path.isfile(path):
+        os.unlink(path)
+
+
 def _mkdirs(root: str, path: pathlib.Path, op: str) -> None:
     """逐级新建目录；每新建一级都复查不是链接、仍在 ROOT 内（防止并发替换成 junction）。"""
-    rel_parts = pathlib.Path(os.path.relpath(path, root)).parts
+    rel_parts = [p for p in pathlib.Path(os.path.relpath(path, root)).parts if p != "."]
     cur = root
     for p in rel_parts:
         cur = os.path.join(cur, p)

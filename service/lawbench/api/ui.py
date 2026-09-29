@@ -2,7 +2,7 @@
 
 每个接口：按契约 $defs/request 校验请求（不合格 INVALID_ARGUMENT）→ 执行 → 包成 {ok, value}；
 开发和测试环境再按 $defs/response 校验返回（Spec 20.11）。本卡实现 case_open、case_recent、settings、
-capsules、capsules_reset、connection_test。
+capsules、capsules_reset、connection_test；T5 加 materials_scan、materials_list、materials_import。
 """
 from __future__ import annotations
 
@@ -77,6 +77,15 @@ def routes(st) -> list[Route]:
     def capsules_reset(d: dict) -> dict:
         return st.capsules.reset()
 
+    def materials_scan(d: dict) -> dict:
+        return st.materials.scan(d["case_id"])
+
+    def materials_list(d: dict) -> dict:
+        return st.materials.list(d["case_id"])
+
+    def materials_import(d: dict) -> dict:
+        return st.materials.import_(d["case_id"], d["paths"], d["target"], d["unzip"])
+
     def connection_test(d: dict) -> dict:
         return probe_connection(st, d["server"])
 
@@ -89,6 +98,9 @@ def routes(st) -> list[Route]:
         Route("/api/capsules", E("capsules", capsules_get, query=True, no_input=True), methods=["GET"]),
         Route("/api/capsules", E("capsules", capsules_put), methods=["PUT"]),
         Route("/api/capsules/reset", E("capsules_reset", capsules_reset), methods=["POST"]),
+        Route("/api/materials/scan", E("materials_scan", materials_scan), methods=["POST"]),
+        Route("/api/materials", E("materials_list", materials_list, query=True), methods=["GET"]),
+        Route("/api/materials/import", E("materials_import", materials_import), methods=["POST"]),
         Route("/api/connection/test", E("connection_test", connection_test), methods=["POST"]),
     ]
 

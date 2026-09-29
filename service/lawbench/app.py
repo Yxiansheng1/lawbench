@@ -14,6 +14,7 @@ from starlette.routing import Route
 from . import contracts, logs
 from .api import ui
 from .capsules import CapsuleStore
+from .case.materials import Materials
 from .case.registry import CaseRegistry
 from .config import Config
 from .errors import ApiError, fail_body
@@ -42,6 +43,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st = types.SimpleNamespace()
     st.config = config
     st.cases = CaseRegistry(config.appdata, config.contracts_dir / "case_db.sql")
+    st.materials = Materials(st.cases)
     st.settings = SettingsStore(config.appdata)
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
     st.net = Net(st.settings.get()["servers"], transport=transport)
