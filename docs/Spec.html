@@ -1407,7 +1407,7 @@ li{margin:3px 0}
 <li>请求体：单页 PNG 或 JPEG 的原始字节，长边不超过 2480 像素，大小不超过 10MB（第 6.2 节）</li>
 <li>返回 200：<pre><code class="language-json">{&quot;markdown&quot;: &quot;…&quot;, &quot;unclear&quot;: 2, &quot;elapsed_ms&quot;: 5400, &quot;backend&quot;: &quot;&lt;后端名&gt;&quot;, &quot;image_png_base64&quot;: null}
 </code></pre>
-<code>image_png_base64</code> 只在 <code>return_image=true</code> 时有值，是去水印后的工作副本，<strong>只用于验收去水印效果</strong>；客户端正常运行时不请求、不保存。</li>
+<code>image_png_base64</code> 只在 <code>return_image=true</code> 时有值，是预处理后送去识别的那张工作副本，<strong>只用于验收</strong>；客户端正常运行时不请求、不保存。第一版去水印未启用（第 6.7 节），所以它是纠偏后的图；没有纠偏时就是原图。</li>
 <li>识别不清的标注规则：后端能给出置信度的，低于阈值的字替换为 <code>■</code>、整行低于阈值的替换为 <code>[看不清]</code>；视觉大模型一类不给置信度的，在提示词中要求这样标注<span class="wait">〔待 G-5，用样本校准〕</span>。</li>
 <li>错误：<code>400</code> 图片格式或尺寸不对；<code>401</code> Key 无效；<code>413</code> 文件过大；<code>503</code> 排队已满（响应头带 <code>Retry-After</code>）或无法验证 Key；<code>504</code> 识别超时（单页 120 秒）。错误体为 <code>{&quot;error&quot;: {&quot;code&quot;, &quot;message&quot;}}</code>（第 20.6 节）。</li>
 </ul>
@@ -1441,6 +1441,15 @@ li{margin:3px 0}
 <li>只处理这次请求中的图片副本；律师电脑上的原件不变，引用仍指向原件页码。</li>
 <li>规则保守：只去除浅灰色、低饱和度、大面积重复的斜向文字或图案。<strong>红色和蓝色像素（印章、签名、批注笔迹）一律不动。</strong></li>
 <li>用带印章、签名、手写批注的样本验收（PRD 验收第 16a 项）；效果不稳定时，默认关闭去水印，由律师按需勾选。</li>
+<li><strong>第一版去水印未启用</strong>（2026-09-29，T6 三轮复核后按止损线定；候 owner 清单 N14）：
+<ul>
+<li>原因：页上既有水印又有浅灰手写批注时，按&quot;浅灰、低饱和&quot;的像素统计分不开两者，批注会被一起抹掉，识别结果里悄悄少字。扫描页正文的抗锯齿边缘本身就是浅灰像素，量级与几行手写相当。测量数据在 <code>docs/plan/evidence/T6/p2a-measure.txt</code>。</li>
+<li>395 服务：<code>dewatermark=true</code> 照常接受（契约不变），图片原样送识别；算法代码保留但不被调用，由写死的开关常量控制，没有环境变量或配置项能打开。</li>
+<li>客户端（T12、T13）：识别任务的&quot;去水印&quot;选项不显示；<code>ocr_jobs</code> 表里&quot;是否去水印&quot;一律记否；提交识别时不带 <code>dewatermark</code> 参数。</li>
+<li>验收第 16a 项：按&quot;去水印未启用，原件、印章、签名、批注不变&quot;验。</li>
+<li>以后要做，方向是认出水印的文字内容或版式再去除，不是再调像素阈值。</li>
+</ul>
+</li>
 </ul>
 <hr />
 <h2 id="7-识别任务-客户端-ocr-queue-py">7. 识别任务（客户端，<code>ocr/queue.py</code>）</h2>
