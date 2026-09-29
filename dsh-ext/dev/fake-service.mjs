@@ -30,7 +30,7 @@ const BAD_RESPONSE = flag('--bad-response')
 const FIXTURES = flag('--fixtures')
 const CASE_ROOT = arg('--case-root', null)
 // T13 第二次返修：任务单按线 B 的语义模拟——/api/task 每次给新编号；/api/tasks 只列已开始执行的；
-// --consume-after-ms N：模拟"一条消息"在任务单写入 N 毫秒后取走该会话最新的一张（created_at 精确到秒）。不给就不取走
+// --consume-after-ms N：模拟"选了胶囊后发一条消息"——该会话最新的一张是胶囊任务单、且写入满 N 毫秒时取走它（created_at 精确到秒）。不给就不取走
 const CONSUME_AFTER = Number(arg('--consume-after-ms', '0')) || 0
 const created = []
 const taskIdNow = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomBytes(2).toString('hex')}` }
@@ -41,7 +41,8 @@ function consumeDue() {
     if (!pending.length) continue
     const maxSec = Math.max(...pending.map((c) => Math.floor(c.at / 1000)))
     const latest = pending.filter((c) => Math.floor(c.at / 1000) === maxSec).at(-1)
-    if (Date.now() - latest.at >= CONSUME_AFTER) latest.started = true
+    // 只模拟"选了胶囊之后发了一条"：最新的那张是自由对话单时不取（界面截图用，免得自由对话单也被不停取走）
+    if (latest.skill != null && Date.now() - latest.at >= CONSUME_AFTER) latest.started = true
   }
 }
 const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
