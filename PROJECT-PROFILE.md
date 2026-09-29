@@ -122,7 +122,17 @@ skill 包里提到的几个钩子脚本没有随包提供，本项目**暂不安
 
 | 会话 | 第一句话 |
 |---|---|
-| 主编排（`D:\lawbench`，Fable） | `读 CLAUDE.md、PROJECT-PROFILE.md 和 docs\plan 下的三件套，执行 T0。T0 完成后按 /coordination-worktree 给三条线落执行令，再 /moniter-on 挂上信箱监控。` |
-| 线 A / B / C（各自目录，Opus 5.5） | `读 CLAUDE.md 和 PROJECT-PROFILE.md。你是线 A（B / C 换字母）。先 /moniter-on 挂上信箱监控，然后执行 D:\lawbench-coord 里给你的最新执行令。` |
+| 主编排（`D:\lawbench`，Fable） | `读 CLAUDE.md、PROJECT-PROFILE.md 和 docs\plan 下的三件套，读 D:\lawbench-coord\lawbench-lane-registry.json，答出在哪张卡、哪一门、缺什么。` |
+| 线 A / B / C（各自目录，Opus 5.5） | `读 CLAUDE.md 和 PROJECT-PROFILE.md。你是线 A（B / C 换字母）。执行 D:\lawbench-coord 里给你的最新执行令。` |
+| 某条线交活了，对主编排说 | `线 B 交回 T5 了`（主编排去读它的交回件） |
+| 主编排发了新执行令或返修令，对那条线说 | `有你的新执行令`（那条线去读 `D:\lawbench-coord` 里给它的最新一份） |
 | 用户要离开较久时，对主编排说 | `/keep-pushing` |
 | 回来后对主编排说 | `我回来了，/compass` |
+
+## 12. 运行方式（2026-09-29 用户定，覆盖第 3 节的心跳和探活、skill 里"上线先挂监控"的要求）
+
+- **用户在场时**：各会话不挂 Monitor、不跑巡检循环、不写心跳、不探活。传话由用户来：哪条线交活了，用户告诉主编排；主编排发了令，用户告诉那条线。
+- **信箱件照常写**：执行令、回执、进度、交回、注记、原话件都照第 3 节落进 `D:\lawbench-coord\`。这是留证据，不能省。
+- **只有用户说 `/keep-pushing`** 时才按 skill 架监控（moniter-on v4 的周期扫描）；用户回来后停掉。
+- compact、resume、新会话之后不自动重架监控。
+- 原话件：`D:\lawbench-coord\OWNER-简化运行方式-20260929-1936.md`。
