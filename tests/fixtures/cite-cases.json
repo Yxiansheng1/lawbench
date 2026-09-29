@@ -1,0 +1,225 @@
+[
+ {
+  "case": "criminal-01",
+  "material": "起诉意见书",
+  "loc": {
+   "unit": "page",
+   "from": 1
+  },
+  "citation": "〔起诉意见书 第1页〕",
+  "text": "虚公刑诉字〔2026〕417号"
+ },
+ {
+  "case": "criminal-01",
+  "material": "起诉意见书",
+  "loc": {
+   "unit": "page",
+   "from": 2
+  },
+  "citation": "〔起诉意见书 第2页〕",
+  "text": "尾号0417的账户转账人民币80,000元"
+ },
+ {
+  "case": "criminal-01",
+  "material": "起诉意见书",
+  "loc": {
+   "unit": "page",
+   "from": 4
+  },
+  "citation": "〔起诉意见书 第4页〕",
+  "text": "骗取他人财物共计人民币126,500元"
+ },
+ {
+  "case": "criminal-01",
+  "material": "起诉意见书",
+  "loc": {
+   "unit": "page",
+   "from": 5
+  },
+  "citation": "〔起诉意见书 第5页〕",
+  "text": "二〇二六年三月二十日"
+ },
+ {
+  "case": "criminal-01",
+  "material": "现场勘验图文",
+  "loc": {
+   "unit": "page",
+   "from": 1
+  },
+  "citation": "〔现场勘验图文 第1页〕",
+  "text": "伪造的某某投资工作证1张"
+ },
+ {
+  "case": "civil-01",
+  "material": "借条",
+  "loc": {
+   "unit": "para",
+   "from": 2
+  },
+  "citation": "〔借条 第2段〕",
+  "text": "今借到出借人李某乙人民币捌万元整"
+ },
+ {
+  "case": "civil-01",
+  "material": "借条",
+  "loc": {
+   "unit": "para",
+   "from": 4
+  },
+  "citation": "〔借条 第4段〕",
+  "text": "借款年利率为百分之十二，按月付息，到期还本。"
+ },
+ {
+  "case": "civil-01",
+  "material": "借条",
+  "loc": {
+   "unit": "para",
+   "from": 6
+  },
+  "citation": "〔借条 第6段〕",
+  "text": "借款人逾期还款的，应承担出借人为实现债权支出的律师费。"
+ },
+ {
+  "case": "civil-01",
+  "material": "借条",
+  "loc": {
+   "unit": "para",
+   "from": 7
+  },
+  "citation": "〔借条 第7段〕",
+  "text": "990104198203030000"
+ },
+ {
+  "case": "civil-01",
+  "material": "银行流水",
+  "loc": {
+   "unit": "cell",
+   "sheet": "流水",
+   "ref": "D3"
+  },
+  "citation": "〔银行流水 流水!D3〕",
+  "text": "80000"
+ },
+ {
+  "case": "civil-01",
+  "material": "银行流水",
+  "loc": {
+   "unit": "cell",
+   "sheet": "流水",
+   "ref": "F2"
+  },
+  "citation": "〔银行流水 流水!F2〕",
+  "text": "虚构市某某科技有限公司"
+ },
+ {
+  "case": "civil-01",
+  "material": "银行流水",
+  "loc": {
+   "unit": "cell",
+   "sheet": "汇总",
+   "ref": "C4"
+  },
+  "citation": "〔银行流水 汇总!C4〕",
+  "text": "公式单元格，文件未存计算结果"
+ },
+ {
+  "case": "civil-01",
+  "material": "还款记录",
+  "loc": {
+   "unit": "line",
+   "from": 5
+  },
+  "citation": "〔还款记录 第5行〕",
+  "text": "2025-06-10,20000,手机银行,归还部分本金"
+ },
+ {
+  "case": "civil-01",
+  "material": "情况说明",
+  "loc": {
+   "unit": "line",
+   "from": 7
+  },
+  "citation": "〔情况说明 第7行〕",
+  "text": "孙某知道借款的经过，可以作证。"
+ },
+ {
+  "case": "civil-01",
+  "material": "案情摘要",
+  "loc": {
+   "unit": "line",
+   "from": 11
+  },
+  "citation": "〔案情摘要 第11行〕",
+  "text": "2025年6月10日的20,000元是归还本金还是支付利息"
+ },
+ {
+  "case": "contract-01",
+  "material": "采购合同",
+  "loc": {
+   "unit": "para",
+   "from": 12
+  },
+  "citation": "〔采购合同 第12段〕",
+  "text": "HW200×200"
+ },
+ {
+  "case": "contract-01",
+  "material": "采购合同",
+  "loc": {
+   "unit": "para",
+   "from": 27
+  },
+  "citation": "〔采购合同 第27段〕",
+  "text": "5.2 甲方应于收到货物后九十日内付款。"
+ },
+ {
+  "case": "contract-01",
+  "material": "采购合同",
+  "loc": {
+   "unit": "para",
+   "from": 39
+  },
+  "citation": "〔采购合同 第39段〕",
+  "text": "附件的电子版可在http://127.0.0.1/lbfx-attachment查阅"
+ },
+ {
+  "case": "closed-01",
+  "material": "民事调解书",
+  "loc": {
+   "unit": "page",
+   "from": 2
+  },
+  "citation": "〔民事调解书 第2页〕",
+  "text": "二〇二六年六月十八日"
+ },
+ {
+  "case": "tender-01",
+  "material": "招标文件",
+  "loc": {
+   "unit": "para",
+   "from": 12
+  },
+  "citation": "〔招标文件 第12段〕",
+  "text": "2.3 投标截止时间：2026年10月20日9时30分。"
+ },
+ {
+  "case": "tender-01",
+  "material": "补充通知",
+  "loc": {
+   "unit": "para",
+   "from": 6
+  },
+  "citation": "〔补充通知 第6段〕",
+  "text": "修改为“投标截止时间：2026年10月27日9时30分”"
+ },
+ {
+  "case": "invoices-01",
+  "material": "发票05-购买方不符",
+  "loc": {
+   "unit": "page",
+   "from": 1
+  },
+  "citation": "〔发票05-购买方不符 第1页〕",
+  "text": "购买方名称：某某虚构科技有限公司"
+ }
+]

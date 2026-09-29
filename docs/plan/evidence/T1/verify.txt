@@ -1,0 +1,24 @@
+# 在仓库 tests\fixtures\ 重新生成并核对 2026-09-29 18:44:47 +0800
+[生成] criminal-01
+[生成] civil-01
+[生成] contract-01
+[提示] 未能生成 外部文件链接.txt：创建文件符号链接需要管理员权限或 Windows 开发者模式。已跳过，其余样本不受影响。（mklink 输出：你没有足够的权限执行此操作。）
+[生成] attack-01  链接：{'外部文件链接.txt': '已跳过（权限不足）', '外部目录链接': '已生成'}
+[生成] broken
+[生成] closed-01
+[生成] tender-01
+[生成] invoices-01
+[完成] 8 个样本案件，共 1.15 MB，输出目录 D:\lawbench-C\tests\fixtures
+exit=0
+1. README 所列文件
+  [跳过] attack-01/外部文件链接.txt（链接未生成，见 make_all 输出）
+2. 特征字符串
+3. search-cases.json
+4. cite-cases.json
+5. sentence-cases.json
+6. 样本特征
+7. 大小
+  8 个样本目录共 1.15 MB
+
+通过 230 项，失败 0 项。
+exit=0

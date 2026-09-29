@@ -1,0 +1,21 @@
+# 红测：删掉一份材料、改坏一份 csv 后 verify 应失败 2026-09-29 18:44:44 +0800
+1. README 所列文件
+  [失败] civil-01/案情摘要.md 缺失
+  [跳过] attack-01/外部文件链接.txt（链接未生成，见 make_all 输出）
+2. 特征字符串
+  [失败] civil-01/还款记录.csv 不含特征字符串 LBFX-CIVL01-K8M2
+  [失败] civil-01/案情摘要.md 读取失败：[Errno 2] No such file or directory: '<临时目录>\\civil-01\\案情摘要.md'
+3. search-cases.json
+  [失败] search #17：'80000' 不在 还款记录 {'unit': 'line', 'from': 2}
+  [失败] search #21：找不到材料 civil-01/案情摘要
+4. cite-cases.json
+  [失败] cite #13：'2025-06-10,20000,手机银行,归还部分本金' 不在 还款记录 {'unit': 'line', 'from': 5}
+  [失败] cite #15：找不到材料 civil-01/案情摘要
+5. sentence-cases.json
+6. 样本特征
+  [失败] 还款记录.csv 应为 gb18030 编码（不是 utf-8）
+7. 大小
+  8 个样本目录共 1.15 MB
+
+通过 222 项，失败 8 项。
+exit=1

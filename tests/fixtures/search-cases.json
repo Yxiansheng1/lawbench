@@ -1,0 +1,248 @@
+[
+ {
+  "case": "criminal-01",
+  "query": "吴某",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 1
+  },
+  "kind": "两字姓名"
+ },
+ {
+  "case": "criminal-01",
+  "query": "郑某",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 2
+  },
+  "kind": "两字姓名"
+ },
+ {
+  "case": "criminal-01",
+  "query": "王某",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 3
+  },
+  "kind": "两字姓名"
+ },
+ {
+  "case": "civil-01",
+  "query": "孙某",
+  "expect_material": "情况说明",
+  "expect_loc": {
+   "unit": "line",
+   "from": 3
+  },
+  "kind": "两字姓名"
+ },
+ {
+  "case": "contract-01",
+  "query": "冯某",
+  "expect_material": "采购合同",
+  "expect_loc": {
+   "unit": "para",
+   "from": 5
+  },
+  "kind": "两字姓名"
+ },
+ {
+  "case": "closed-01",
+  "query": "孔某",
+  "expect_material": "民事调解书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 2
+  },
+  "kind": "两字姓名"
+ },
+ {
+  "case": "criminal-01",
+  "query": "某某投资",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 3
+  },
+  "kind": "简称"
+ },
+ {
+  "case": "contract-01",
+  "query": "青禾建材",
+  "expect_material": "采购合同",
+  "expect_loc": {
+   "unit": "para",
+   "from": 16
+  },
+  "kind": "简称"
+ },
+ {
+  "case": "contract-01",
+  "query": "某某钢构",
+  "expect_material": "采购合同",
+  "expect_loc": {
+   "unit": "para",
+   "from": 6
+  },
+  "kind": "简称"
+ },
+ {
+  "case": "civil-01",
+  "query": "2025年3月10日",
+  "expect_material": "借条",
+  "expect_loc": {
+   "unit": "para",
+   "from": 3
+  },
+  "kind": "日期"
+ },
+ {
+  "case": "civil-01",
+  "query": "2025-03-10",
+  "expect_material": "银行流水",
+  "expect_loc": {
+   "unit": "cell",
+   "sheet": "流水",
+   "ref": "A3"
+  },
+  "kind": "日期"
+ },
+ {
+  "case": "civil-01",
+  "query": "2025.3.10",
+  "expect_material": "情况说明",
+  "expect_loc": {
+   "unit": "line",
+   "from": 4
+  },
+  "kind": "日期"
+ },
+ {
+  "case": "criminal-01",
+  "query": "2025-03-10",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 2
+  },
+  "kind": "日期",
+  "found_as": "2025年3月10日"
+ },
+ {
+  "case": "civil-01",
+  "query": "2025.3.10",
+  "expect_material": "借条",
+  "expect_loc": {
+   "unit": "para",
+   "from": 3
+  },
+  "kind": "日期",
+  "found_as": "2025年3月10日"
+ },
+ {
+  "case": "tender-01",
+  "query": "2026年10月27日",
+  "expect_material": "补充通知",
+  "expect_loc": {
+   "unit": "para",
+   "from": 6
+  },
+  "kind": "日期"
+ },
+ {
+  "case": "civil-01",
+  "query": "8万",
+  "expect_material": "情况说明",
+  "expect_loc": {
+   "unit": "line",
+   "from": 4
+  },
+  "kind": "金额"
+ },
+ {
+  "case": "civil-01",
+  "query": "80000",
+  "expect_material": "还款记录",
+  "expect_loc": {
+   "unit": "line",
+   "from": 2
+  },
+  "kind": "金额"
+ },
+ {
+  "case": "civil-01",
+  "query": "80,000",
+  "expect_material": "银行流水",
+  "expect_loc": {
+   "unit": "cell",
+   "sheet": "流水",
+   "ref": "G3"
+  },
+  "kind": "金额"
+ },
+ {
+  "case": "criminal-01",
+  "query": "8万",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 2
+  },
+  "kind": "金额",
+  "found_as": "80,000"
+ },
+ {
+  "case": "civil-01",
+  "query": "80000",
+  "expect_material": "借条",
+  "expect_loc": {
+   "unit": "para",
+   "from": 2
+  },
+  "kind": "金额",
+  "found_as": "80,000"
+ },
+ {
+  "case": "civil-01",
+  "query": "（2026）虚0103民初2046号",
+  "expect_material": "案情摘要",
+  "expect_loc": {
+   "unit": "line",
+   "from": 3
+  },
+  "kind": "案号"
+ },
+ {
+  "case": "criminal-01",
+  "query": "虚公刑诉字〔2026〕417号",
+  "expect_material": "起诉意见书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 1
+  },
+  "kind": "案号"
+ },
+ {
+  "case": "closed-01",
+  "query": "（2026）虚0105民初3321号",
+  "expect_material": "民事调解书",
+  "expect_loc": {
+   "unit": "page",
+   "from": 1
+  },
+  "kind": "案号"
+ },
+ {
+  "case": "tender-01",
+  "query": "XG-ZB-2026-0931",
+  "expect_material": "补充通知",
+  "expect_loc": {
+   "unit": "para",
+   "from": 3
+  },
+  "kind": "案号"
+ }
+]

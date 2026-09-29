@@ -1,0 +1,10 @@
+python-docx>=1.2
+openpyxl>=3.1
+reportlab>=4.0
+Pillow>=10
+pypdf>=5
+pypdfium2>=4
+msoffcrypto-tool>=5.4
+lxml>=5
+jsonschema>=4.20
+referencing>=0.35
