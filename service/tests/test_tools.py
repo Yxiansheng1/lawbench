@@ -238,6 +238,23 @@ def test_save_draft_coverage_matches_reads(env, tid):
     assert cov["total"] == len(CASE_FILES)
 
 
+def test_coverage_ignores_old_version_reads(tmp_path_factory):
+    """读完之后原件变了（重扫后 sha256 不同）：旧版本的读取记录不算，覆盖清单里这份材料回到"未读"。"""
+    from t8_helpers import FIXTURES
+    e = Env(tmp_path_factory.mktemp("t8ver"), {"说明.txt": FIXTURES / "civil-01" / "情况说明.txt"})
+    try:
+        t = e.begin()["task_id"]
+        e.tool_ok(t, "case_read_material", {"name": "说明"})
+        assert e.tool_ok(t, "case_save_draft", {"title": "a", "content": "x"})["coverage"]["fully_read"] == ["说明"]
+        f = e.root / "说明.txt"
+        f.write_text(f.read_text(encoding="utf-8") + "新增一行\n", encoding="utf-8")
+        ok(e.client.post("/api/materials/scan", json={"case_id": e.case_id}), "api/materials_scan.schema.json")
+        cov = e.tool_ok(t, "case_save_draft", {"title": "a", "content": "y"})["coverage"]
+        assert cov["fully_read"] == [] and cov["not_read"] == ["说明"]
+    finally:
+        e.close()
+
+
 @pytest.mark.parametrize("title,code", [("NUL.txt", "OUT_OF_CASE"), ("aux.备注", "OUT_OF_CASE"),  # 设备名：闸门拒绝
                                         ("  ", "INVALID_ARGUMENT"), ("x" * 61, "INVALID_ARGUMENT")])
 def test_save_draft_bad_titles(env, tid, title, code):
