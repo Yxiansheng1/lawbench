@@ -50,6 +50,17 @@ await esbuild.build({
   target: 'node22',
   sourcemap: false,
   legalComments: 'none',
+  // 打进来的 CommonJS 依赖（如 yaml）会 require('process') 等内置模块；纯 ESM 里没有 require，给一个
+  banner: { js: "import { createRequire as __lbCreateRequire } from 'node:module'; const require = __lbCreateRequire(import.meta.url);" },
   plugins: [contractsPlugin],
   logLevel: 'info',
 })
+
+// 构建后在纯 ESM 进程里逐个导入（不能用 node -e：那是 CommonJS，有全局 require，会掩盖上面这类问题）
+for (const name of ['agent', 'host', 'credentials', 'index']) {
+  const url = pathToFileURL(join(root, 'lib', `${name}.js`)).href
+  const { spawnSync } = await import('node:child_process')
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(url)})`], { encoding: 'utf8' })
+  if (r.status !== 0) throw new Error(`lib/${name}.js 在纯 ESM 下导入失败：${(r.stderr || '').split(/\r?\n/).slice(0, 3).join(' ')}`)
+}
+console.log('lib/*.js 纯 ESM 导入检查通过')

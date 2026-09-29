@@ -9,8 +9,14 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "typeRoots": ["../dsh/node_modules/@types"],
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "react": ["../dsh/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["../dsh/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/jsx-runtime.d.ts"]
+    }
   },
-  "include": ["shared/**/*.ts", "agent/**/*.ts", "host/**/*.ts", "credentials/**/*.ts", "tests/**/*.ts"]
+  "include": ["shared/**/*.ts", "agent/**/*.ts", "host/**/*.ts", "credentials/**/*.ts", "ui/**/*.ts", "ui/**/*.tsx", "tests/**/*.ts"]
 }

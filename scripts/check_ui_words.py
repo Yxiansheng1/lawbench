@@ -48,6 +48,8 @@ def visible_texts(src: str, suffix: str):
     clean = _strip(src)
     for m in _STRING.finditer(clean):
         body = m.group("body")
+        if m.group("q") == "`":
+            body = re.sub(r"\$\{[^}]*\}", " ", body)  # 模板字符串里 ${…} 是代码，不是界面文字
         # 像模块路径、CSS 类名、事件名这类只有 ASCII 且不含空格的短标识不算律师可见文字
         if re.fullmatch(r"[\w./:@#\-]*", body) and not re.search(r"[一-鿿]", body):
             continue

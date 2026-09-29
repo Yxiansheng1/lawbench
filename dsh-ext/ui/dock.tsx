@@ -1,0 +1,115 @@
+// 会话输入区上方（DSH 插槽 conversation.input.dock）：当前胶囊和 Skill 选择、必问问题、参数、选用的前序成果（PRD 7.9）。
+// 选定后写任务单 /api/task（Spec 9.2：界面事先为该会话写待执行的任务单，Agent 插件在该会话下一次请求时使用）。
+// entry 填胶囊 id（T13 执行令 Q5）；自由对话不写任务单（插件按"自由对话"默认值新建）。运行状态和停止沿用 DSH 对话区自带的。
+import { useEffect, useMemo, useState } from 'react'
+import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
+import { errorText } from './format.ts'
+import { Badge, Button, C, S } from './kit.tsx'
+import { app, call, lb, setSelection, type CaseRef, type Params, type Selection, type SkillInfo } from './state.ts'
+import { useStore } from './store.ts'
+import { useSessionCase, type SessionProps } from './session-case.tsx'
+
+const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
+const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
+const WRITE_DELAY_MS = 500
+
+let capsCache: Promise<Capsules | undefined> | undefined
+let skillsCache: Promise<SkillInfo[]> | undefined
+const loadCaps = () => (capsCache ??= call<Capsules>('getCapsules').then((r) => (r.ok ? r.value : undefined)))
+const loadSkills = () => (skillsCache ??= lb().listSkills().then((r) => r.value.skills, () => []))
+/** 胶囊改动后首页调用，让输入区重新读。 */
+export const forgetDockCache = (): void => { capsCache = undefined }
+
+export function ComposerDock(p: SessionProps) {
+  const { caseRef } = useSessionCase(p)
+  if (!caseRef) return null
+  return <Dock caseRef={caseRef} sessionId={p.sessionId} />
+}
+
+function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
+  const [caps, setCaps] = useState<Capsules | undefined>()
+  const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => { void loadCaps().then(setCaps); void loadSkills().then(setSkills) }, [])
+  const sel: Selection = useStore(app, (s) => s.selections[caseRef.case_id]) ?? { capsuleId: null, skill: null, params: null, inputs: [] }
+  const defaults = useStore(app, (s) => s.defaults)
+  const presets = useStore(app, (s) => s.presets)
+
+  const capsules = useMemo(() => (caps ? visible(caps).flatMap((g) => g.items.filter((x): x is SkillCapsule => x.kind === 'skill').map((x) => ({ ...x, group: g.name }))) : []), [caps])
+  const capsule = capsules.find((c) => c.id === sel.capsuleId)
+  const agentSkills = skills.filter((s) => s.mode === 'agent')
+  const choices = capsule ? [...new Set([...capsule.skills, ...(caps?.shared ?? [])])].filter((n) => agentSkills.some((s) => s.name === n)) : []
+  const skill = agentSkills.find((s) => s.name === sel.skill)
+  const params: Params = sel.params ?? (skill ? presets[skill.name] ?? skill.params : defaults) ?? { thinking: '中', window: '128K', max_tokens: 16384 }
+
+  // 选择一变就写任务单（防抖）；自由对话且没选前序成果时不写
+  const key = JSON.stringify([sel.capsuleId, sel.skill, params, sel.inputs])
+  useEffect(() => {
+    if (sel.capsuleId === null && sel.inputs.length === 0) { setStatus(null); return }
+    const t = setTimeout(() => {
+      void call<{ task_id: string }>('taskCreate', {
+        case_id: caseRef.case_id, session_id: sessionId, entry: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params,
+      }).then((r) => setStatus(r.ok ? { ok: true, text: '已就绪：发出下一条消息时按这里的选择运行' } : { ok: false, text: errorText(r.error) }))
+    }, WRITE_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickCapsule = (id: string) => {
+    const c = capsules.find((x) => x.id === id)
+    setSelection(caseRef.case_id, { capsuleId: c?.id ?? null, skill: c?.skills[0] ?? null, params: null })
+  }
+  const setParam = <K extends keyof Params>(k: K, v: Params[K]) => setSelection(caseRef.case_id, { params: { ...params, [k]: v } })
+
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', margin: '0 0 6px', fontSize: 13, color: C.text, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ ...S.row, flexWrap: 'wrap' }}>
+        <label style={S.row}>胶囊
+          <select style={S.input} value={sel.capsuleId ?? ''} onChange={(e) => pickCapsule(e.target.value)} aria-label="胶囊">
+            <option value="">自由对话</option>
+            {capsules.map((c) => <option key={c.id} value={c.id}>{c.group} · {c.name}</option>)}
+          </select>
+        </label>
+        {capsule ? (
+          <label style={S.row}>Skill
+            <select style={S.input} value={sel.skill ?? ''} onChange={(e) => setSelection(caseRef.case_id, { skill: e.target.value || null, params: null })} aria-label="Skill">
+              {choices.map((n) => <option key={n} value={n}>{agentSkills.find((s) => s.name === n)?.title ?? n}</option>)}
+            </select>
+          </label>
+        ) : null}
+        <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? '收起参数' : '参数'}</Button>
+        {sel.inputs.map((path) => (
+          <span key={path} style={{ ...S.row, gap: 4, border: `1px solid ${C.border}`, borderRadius: 999, padding: '0 6px', fontSize: 12 }}>
+            选用：{path.split('/').pop()}
+            <button type="button" aria-label="不再选用" onClick={() => setSelection(caseRef.case_id, { inputs: sel.inputs.filter((x) => x !== path) })}
+              style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', padding: 0 }}>×</button>
+          </span>
+        ))}
+        {status ? <span style={{ fontSize: 12, color: status.ok ? C.ok : C.err }}>{status.text}</span> : null}
+      </div>
+      {open ? (
+        <div style={{ ...S.row, flexWrap: 'wrap' }}>
+          <label style={S.row}>思考
+            <select style={S.input} value={params.thinking} onChange={(e) => setParam('thinking', e.target.value as Params['thinking'])}>{THINKING.map((x) => <option key={x}>{x}</option>)}</select>
+          </label>
+          <label style={S.row}>窗口
+            <select style={S.input} value={params.window} onChange={(e) => setParam('window', e.target.value as Params['window'])}>{WINDOWS.map((x) => <option key={x}>{x}</option>)}</select>
+          </label>
+          <label style={S.row}>最长输出
+            <input type="number" min={256} max={262144} step={1024} style={{ ...S.input, width: 100 }} value={params.max_tokens}
+              onChange={(e) => { const n = Number(e.target.value); if (n >= 256 && n <= 262144) setParam('max_tokens', n) }} />
+          </label>
+          <Button size="sm" variant="ghost" onClick={() => setSelection(caseRef.case_id, { params: null })}>恢复默认</Button>
+        </div>
+      ) : null}
+      {skill && skill.questions.length ? (
+        <details>
+          <summary style={{ cursor: 'pointer', color: C.sub, fontSize: 12 }}>开始前会先问你 {skill.questions.length} 个问题（必问问题）</summary>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12, color: C.sub }}>
+            {skill.questions.map((q) => <li key={q.key}>{q.question}{q.fromMaterials ? <> <Badge tone="faint">能从材料里找的会先填好请你确认</Badge></> : null}</li>)}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  )
+}

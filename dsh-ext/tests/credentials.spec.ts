@@ -104,3 +104,35 @@ describe('凭据服务（Q2 裁决）', () => {
     await expect(new LawbenchCredentials(memStore().store).set(KEY_REF, '')).rejects.toThrow()
   })
 })
+
+describe('凭据变化事件（T7 第一轮 P3-7，T13 带上）', () => {
+  it('写入、删除 Key 后发 credentials/reference-updated；写入报错也发（可能已写成）', async () => {
+    const { store } = memStore()
+    const events: string[] = []
+    const c = new LawbenchCredentials(store, Date.now, () => {}, (e, s) => { events.push(`${e}:${s}`) })
+    await c.set(KEY_REF, 'fake-key-0001')
+    await c.unset(KEY_REF)
+    expect(events).toEqual(['credentials/reference-updated:LAWFIRM_KEY', 'credentials/reference-updated:LAWFIRM_KEY'])
+    const failing = new LawbenchCredentials({ ...store, write: async () => { throw new Error('超时') } }, Date.now, () => {}, (e) => { events.push(e) })
+    await expect(failing.set(KEY_REF, 'fake-key-0002')).rejects.toThrow()
+    expect(events).toHaveLength(3)
+  })
+
+  it('其他名字被拒绝时不发；授权记录变化发 record-updated；监听方出错不影响写入', async () => {
+    const { store, s } = memStore()
+    const events: string[] = []
+    const c = new LawbenchCredentials(store, Date.now, () => {}, (e, sub) => { events.push(`${e}:${sub}`); throw new Error('监听方坏了') })
+    await expect(c.set('OTHER', 'x')).rejects.toThrow()
+    expect(events).toEqual([])
+    await c.set(KEY_REF, 'fake-key-0003')
+    expect(s.value).toBe('fake-key-0003')
+    await c.modifyRecord('client-connection/browser-session', async () => ({ kind: 'secret' }))
+    await c.deleteRecord('client-connection/browser-session')
+    await c.deleteRecord('client-connection/browser-session') // 已不存在：不发
+    expect(events).toEqual([
+      'credentials/reference-updated:LAWFIRM_KEY',
+      'credentials/record-updated:client-connection/browser-session',
+      'credentials/record-updated:client-connection/browser-session',
+    ])
+  })
+})

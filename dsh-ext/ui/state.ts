@@ -1,0 +1,109 @@
+// 界面插件的共享状态：已登记的案件、会话 → 案件的对应、每个案件当前选的胶囊 / Skill / 参数 / 前序成果、弹框队列。
+// 案件 = DSH 的工作区（Spec 1.2）：会话的工作目录就是案件文件夹。界面不接受、也不保存案件文件内容。
+import type { ApiResult } from '../host/index.ts'
+import { createStore } from './store.ts'
+
+export interface CaseRef { case_id: string; name: string; root: string; exists?: boolean }
+
+export interface Params { thinking: '关闭' | '低' | '中' | '高'; window: '32K' | '64K' | '128K'; max_tokens: number; temperature?: number }
+
+/** 会话输入区上方的选择（写任务单 /api/task 用）。capsuleId 为 null 表示自由对话。 */
+export interface Selection { capsuleId: string | null; skill: string | null; params: Params | null; inputs: string[] }
+
+export type Dialog =
+  | { kind: 'confirm'; title: string; text: string; ok: string; resolve: (yes: boolean) => void }
+  | { kind: 'notice'; title: string; text: string; lines?: string[] }
+  | { kind: 'import'; caseRef: CaseRef; paths: string[]; from: string }
+  | { kind: 'casePick'; then?: (c: CaseRef) => void }
+  | { kind: 'placeholder'; title: string; text: string }
+
+export interface AppState {
+  cases: CaseRef[]
+  selections: Record<string, Selection>
+  dialogs: Dialog[]
+  /** 设置里的默认参数（settings.json 的 defaults、skill_presets）；未读到时为 null。 */
+  defaults: Params | null
+  presets: Record<string, Params>
+  /** DSH 当前显示的会话的工作目录（apply 里按 uiSession、sessions 更新）；没有会话为 null。 */
+  currentRoot: string | null
+}
+
+export const app = createStore<AppState>({ cases: [], selections: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null })
+
+/** 当前会话对应的已登记案件。 */
+export const currentCase = (s: AppState): CaseRef | undefined =>
+  s.currentRoot ? s.cases.find((c) => samePath(c.root, s.currentRoot!)) : undefined
+
+/** 路径比较：不分大小写、正反斜杠一样、去掉末尾斜杠（Windows）。 */
+export const samePath = (a: string, b: string): boolean => norm(a) === norm(b)
+const norm = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+
+export const caseForRoot = (root: string | undefined): CaseRef | undefined =>
+  root ? app.get().cases.find((c) => samePath(c.root, root)) : undefined
+
+export function rememberCase(c: CaseRef): void {
+  app.set((s) => ({ ...s, cases: [c, ...s.cases.filter((x) => x.case_id !== c.case_id && !samePath(x.root, c.root))] }))
+}
+
+export function setSelection(caseId: string, patch: Partial<Selection>): void {
+  app.set((s) => {
+    const cur = s.selections[caseId] ?? { capsuleId: null, skill: null, params: null, inputs: [] }
+    return { ...s, selections: { ...s.selections, [caseId]: { ...cur, ...patch } } }
+  })
+}
+
+export function pushDialog(d: Dialog): void { app.set((s) => ({ ...s, dialogs: [...s.dialogs, d] })) }
+export function popDialog(d: Dialog): void { app.set((s) => ({ ...s, dialogs: s.dialogs.filter((x) => x !== d) })) }
+
+/** 弹确认框，律师点确定返回 true。所有发往服务器的操作都先经这里（工单第 3 步）。 */
+export function confirm(title: string, text: string, ok = '确定'): Promise<boolean> {
+  return new Promise((resolve) => pushDialog({ kind: 'confirm', title, text, ok, resolve }))
+}
+
+export function notice(title: string, text: string, lines?: string[]): void { pushDialog({ kind: 'notice', title, text, lines }) }
+
+/** 界面调用 Host 的方法表（ctx.remote.lawbench），在 apply 里填入。 */
+export type LawbenchApi = Record<string, (arg?: unknown) => Promise<ApiResult>> & {
+  setupState(): Promise<{ configured: boolean; hasSettings: boolean; hasKey: boolean; service: string }>
+  getSettings(): Promise<Record<string, unknown>>
+  putSettings(settings: unknown): Promise<unknown>
+  listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }>
+}
+
+export interface SkillInfo {
+  name: string; title: string; description: string; mode: 'agent' | 'pipeline'; kind: string
+  params: Params; inputs: string[]; questions: { key: string; question: string; fromMaterials: boolean }[]
+}
+
+let api: LawbenchApi | undefined
+
+/**
+ * DSH 网关的客户端把每次远程调用的返回再包一层 { ok, value }（失败为 { ok: false, error }，
+ * packages/api/gateway/src/client/index.ts 的 invoke）。这里剥掉这一层：成功返回 Host 方法的原返回值，失败抛出。
+ */
+export function unwrapRemote(remote: Record<string, (...a: unknown[]) => Promise<unknown>>): LawbenchApi {
+  return new Proxy({}, {
+    get: (_t, method: string) => async (...args: unknown[]) => {
+      const fn = remote[method]
+      if (typeof fn !== 'function') throw new Error('工作台服务还没接上，请稍后重试')
+      const r = (await fn.apply(remote, args)) as { ok: boolean; value?: unknown; error?: { message?: string } }
+      if (!r || r.ok !== true) throw new Error(r?.error?.message || '工作台服务未启动，请稍后重试')
+      return r.value
+    },
+  }) as LawbenchApi
+}
+
+export const setApi = (a: LawbenchApi | undefined): void => { api = a }
+export function lb(): LawbenchApi {
+  if (!api) throw new Error('工作台服务还没接上，请稍后重试')
+  return api
+}
+
+/** 调 /api 方法；失败返回 { ok: false }，界面按错误码显示（Q6）。Host 不可达也折成同样的形状。 */
+export async function call<T = unknown>(method: string, request?: unknown): Promise<{ ok: true; value: T } | { ok: false; error: { code: string; message: string } }> {
+  try {
+    return (await lb()[method]!(request)) as { ok: true; value: T }
+  } catch (e) {
+    return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: (e as Error)?.message || '工作台服务未启动，请稍后重试' } }
+  }
+}

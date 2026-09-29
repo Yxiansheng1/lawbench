@@ -26,5 +26,10 @@ zh.json:1  「tokens」  …本次用了 1200 个 tokens…
 ## 样例二（应零命中）
 字符串"材料已导入""选择 Skill""律所 Key 已保存"、JSX 文本"成果"、import './session-helpers'。输出：零命中，退出码 0。
 
+## 补充（界面施工中发现的误报，已修）
+模板字符串里的 ${…} 是代码（如 `${SERVER_WORD.llm}`），原先会误报 llm。改为先去掉 ${…} 再查。
+回测：样例一加一行 `${count} token 已用完，${SERVER.llm} 不可用` → 命中 11 处（多出的一处是字面的 token），${SERVER.llm} 不再误报；样例二仍零命中。
+另：cordis effect 的调试标签（只在开发日志里出现）改成中文，不再含 session、workspace 等词。
+
 ## 当前 dsh-ext\ui\
 界面插件施工中；正式的 ui-words.txt 在界面代码写完后生成。
