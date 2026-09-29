@@ -1,4 +1,5 @@
-# 在仓库 tests\fixtures\ 重新生成并核对 2026-09-29 18:44:47 +0800
+# 在仓库 tests\fixtures\ 重新生成并核对 2026-09-29 18:48:03 +0800
+> python tests\fixtures\_gen\make_all.py
 [生成] criminal-01
 [生成] civil-01
 [生成] contract-01
@@ -10,6 +11,7 @@
 [生成] invoices-01
 [完成] 8 个样本案件，共 1.15 MB，输出目录 D:\lawbench-C\tests\fixtures
 exit=0
+> python tests\fixtures\_gen\verify.py
 1. README 所列文件
   [跳过] attack-01/外部文件链接.txt（链接未生成，见 make_all 输出）
 2. 特征字符串

@@ -13,6 +13,7 @@ import argparse
 import os
 import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -78,6 +79,10 @@ def main() -> int:
         r = m.build(out)
         extra = f"  链接：{r}" if isinstance(r, dict) else ""
         print(f"[生成] {m.CASE}{extra}")
+    for c in CASES:
+        for p in (out / c).rglob("*.*x"):
+            if p.suffix in (".docx", ".xlsx") and not p.is_symlink() and zipfile.is_zipfile(p):
+                C.freeze_zip(p)
     total = sum(tree_size(out / c) for c in CASES)
     print(f"[完成] 8 个样本案件，共 {total / 1024 / 1024:.2f} MB，输出目录 {out}")
     return 0

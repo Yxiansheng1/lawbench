@@ -395,5 +395,13 @@ def docx_all_text(docx_path: Path) -> str:
     return "\n".join(parts)
 
 
-def clone(x):
-    return copy.deepcopy(x)
+def freeze_zip(path: Path) -> None:
+    """把 docx / xlsx 包内各条目的时间戳固定下来，重新生成时字节不变（git 不出现无意义的改动）。"""
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        items = [(i.filename, z.read(i.filename)) for i in z.infolist()]
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in items:
+            info = zipfile.ZipInfo(name, date_time=FIXED_TIME.timetuple()[:6])
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, data)
