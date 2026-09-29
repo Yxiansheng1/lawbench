@@ -10,7 +10,7 @@ PRD 第 12 节"上线必过"全部 27 项（第 1–26 条和 16a）逐条对应
 
 | 项 | 内容（PRD 12） | SEC | 脚本 | 人工操作单 | 其他工单的自动测试 |
 |---|---|---|---|---|---|
-| 1 | 抓包只见律所两台服务器 | 03、10 | `sec\net_watch.ps1` | `manual\抓包.md` | — |
+| 1 | 抓包只见律所两台服务器 | 03、10 | `sec\net_watch.ps1`（看不到 UDP，只作辅助） | `manual\抓包.md`（全量抓包，判定依据） | — |
 | 2 | 案件 A 读不到案件 B 和其他文件（含 `../`、链接、junction） | 05 | `sec\case_isolation.py` | `manual\案件隔离.md` | T3 路径闸门测试 |
 | 3 | 植入越权指令无效；案件内配置、指令文件、Skill 不被加载 | 07 | `sec\injection_check.py` | `manual\越权植入.md` | T7、T17 |
 | 4 | 原件哈希不变 | 08 | `sec\hash_originals.py`（验收前 snapshot、验收后 compare） | — | T5、T23 |
@@ -44,7 +44,7 @@ PRD 第 12 节"上线必过"全部 27 项（第 1–26 条和 16a）逐条对应
 
 | 脚本 | 做什么 | 前提 |
 |---|---|---|
-| `sec\find_leaks.py` / `find_leaks.ps1` | 案件目录外按字节搜索特征字符串（UTF-8、UTF-16LE），不跟随链接 | 无；搜索范围缺省为用户目录、AppData、临时目录、`$DSH_HOME`。T17 的 `scripts\find_leaks.ps1` 合并后改调它 |
+| `sec\find_leaks.py` / `find_leaks.ps1` | 案件目录外按字节搜索特征字符串（UTF-8、UTF-16LE），不跟随链接；不排除任何目录。按顶层目录分批，每批打印一行进度（文件数、命中数、耗时）、结果单独落证据文件；中断后用同样参数再运行即从没扫完的批继续（`--fresh` / `-Fresh` 从头） | 无；搜索范围缺省为用户目录、AppData、临时目录、`$DSH_HOME`。T17 的 `scripts\find_leaks.ps1` 合并后改调它 |
 | `sec\hash_originals.py` | 原件区 sha256 快照与比对 | 案件目录 |
 | `sec\case_isolation.py` | 以案件 A 的 task_id 调 `/core/tool`，用 `../`、绝对路径、链接、联接、案件 B 材料名等越权参数读 | 工作台服务（T3）；`LB_URL`、`LB_TOKEN`、`LB_TASK_A` |
 | `sec\injection_check.py` | 在 attack-01 副本的工作区里找读系统文件、加载 evil、外发的痕迹 | 已按操作单做过对话 |
@@ -54,5 +54,5 @@ PRD 第 12 节"上线必过"全部 27 项（第 1–26 条和 16a）逐条对应
 | `sec\dewatermark_395.py` | 真实 395 去水印前后红章、蓝色批注像素数不变，原件不变 | 395 已部署（T11）；`.env.local` 的测试 Key |
 | `sec\cloud_sync.py` | OneDrive、"坚果云""百度网盘"目录下的案件被拒绝，普通目录能打开 | 工作台服务（T3） |
 | `sec\dsh_locations.py` | Spec 3.3：附件目录为空、会话不在 `$DSH_HOME`、凭据文件无 Key、无溢出文件 | 客户端装好并走过一遍（T17 之后） |
-| `sec\net_watch.ps1` | 运行期间相关进程的 TCP 远端地址与白名单比对，另列新增 DNS 解析 | 客户端在运行 |
+| `sec\net_watch.ps1` | 运行期间相关进程的 TCP 远端地址与白名单比对，另列新增 DNS 解析。**看不到 UDP 流量和不经本机 DNS 缓存的解析，不能单独判第 1 项**，必须配合 `manual\抓包.md` 的全量抓包 | 客户端在运行 |
 | `sec\engine_net_inventory.py` | 引擎里的联网代码与已知清单（`engine_net_known.json`）比对；核对发票调用代码不引用它们 | 发票调用代码（T25）存在时才能给出"通过" |

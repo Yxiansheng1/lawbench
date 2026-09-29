@@ -6,6 +6,11 @@ python acceptance\\sec\\find_leaks.py --feature LBFX-CRIM01-7Q3Z --case-dir D:\\
   --root      搜索范围（可多次）；缺省为 %USERPROFILE%、%APPDATA%、%LOCALAPPDATA%、%TEMP%、%DSH_HOME%
   --exclude   额外排除的目录（如测试样本所在的仓库、本工具的证据目录）
   --max-mb    跳过超过此大小的文件（缺省 256），跳过的文件逐个列出
+  --fresh     不续跑，从头搜
+
+按顶层目录分批：每扫完一批打印一行（文件数、命中数、耗时），结果单独写进证据目录下
+find_leaks-<参数摘要>\批NNNN.txt，进度记在同目录的 进度.json。中断后用同样的参数再运行，
+自动从没扫完的那一批继续。不排除任何目录（桌面端的缓存正是正文副本可能落脚的地方）。
 
 按字节搜索 UTF-8 和 UTF-16LE 两种编码（特征字符串是 ASCII，GBK 同 UTF-8）；压缩文件（docx、zip）
 里的内容搜不到，所以验收看的是"解压后的正文副本有没有落到案件外"。不跟随链接和联接。
@@ -13,6 +18,8 @@ python acceptance\\sec\\find_leaks.py --feature LBFX-CRIM01-7Q3Z --case-dir D:\\
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import mmap
 import os
 import sys
@@ -45,62 +52,122 @@ def is_link(p: Path) -> bool:
         return True
 
 
-def scan(roots, excludes, patterns, max_bytes, report):
-    hits, skipped_big, denied, files = [], [], 0, 0
-    ex = [e.resolve() for e in excludes]
+def scan_one(p: Path, patterns, max_bytes, acc) -> None:
+    try:
+        size = p.stat().st_size
+        if is_link(p) or size == 0:
+            return
+        if size > max_bytes:
+            acc["big"].append([str(p), size])
+            return
+        acc["files"] += 1
+        with open(p, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
+            for label, pat in patterns:
+                if m.find(pat) != -1:
+                    acc["hits"].append([str(p), label])
+    except (OSError, ValueError):
+        acc["denied"] += 1
 
-    def excluded(p: Path) -> bool:
-        return any(p == e or e in p.parents for e in ex)
 
+def batches(roots, excluded) -> list[tuple[str, Path, bool]]:
+    """按顶层目录分批：每个根目录下的顶层文件算一批，每个顶层子目录各算一批。返回 (批名, 路径, 是否递归)。"""
+    out = []
     for root in roots:
-        for dirpath, dirnames, filenames in os.walk(root, onerror=lambda e: None, followlinks=False):
+        if excluded(root):
+            continue
+        out.append((f"{root}（顶层文件）", root, False))
+        try:
+            subs = sorted(e for e in root.iterdir() if e.is_dir() and not is_link(e) and not excluded(e))
+        except OSError:
+            subs = []
+        out += [(str(d), d, True) for d in subs]
+    return out
+
+
+def scan_batch(path: Path, recursive: bool, excluded, patterns, max_bytes) -> dict:
+    acc = {"files": 0, "hits": [], "big": [], "denied": 0}
+    t0 = time.time()
+    if not recursive:
+        try:
+            for e in path.iterdir():
+                if e.is_file():
+                    scan_one(e, patterns, max_bytes, acc)
+        except OSError:
+            acc["denied"] += 1
+    else:
+        for dirpath, dirnames, filenames in os.walk(path, onerror=lambda e: None, followlinks=False):
             d = Path(dirpath)
             dirnames[:] = [n for n in dirnames if not is_link(d / n) and not excluded(d / n)]
-            if excluded(d):
-                continue
             for n in filenames:
-                p = d / n
-                try:
-                    size = p.stat().st_size
-                    if is_link(p) or size == 0:
-                        continue
-                    if size > max_bytes:
-                        skipped_big.append((p, size))
-                        continue
-                    files += 1
-                    with open(p, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
-                        for label, pat in patterns:
-                            if m.find(pat) != -1:
-                                hits.append((p, label))
-                except (OSError, ValueError):
-                    denied += 1
-    return hits, skipped_big, denied, files
+                scan_one(d / n, patterns, max_bytes, acc)
+    acc["secs"] = round(time.time() - t0, 1)
+    return acc
+
+
+def run_key(feats, roots, excludes, max_mb) -> str:
+    raw = json.dumps([feats, [str(p) for p in roots], sorted(str(p) for p in excludes), max_mb], ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="案件目录外全盘搜索特征字符串")
+    ap = argparse.ArgumentParser(description="案件目录外全盘搜索特征字符串（按顶层目录分批，可中断续跑）")
     ap.add_argument("--feature", action="append")
     ap.add_argument("--case-dir", action="append", default=[], type=Path)
     ap.add_argument("--root", action="append", type=Path)
     ap.add_argument("--exclude", action="append", default=[], type=Path)
     ap.add_argument("--max-mb", type=int, default=256)
+    ap.add_argument("--fresh", action="store_true", help="不续跑，丢掉上次的进度从头搜")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     r = Report("find_leaks", "SEC-01、SEC-11；上线必过第 5、21 项", a.out)
     feats = a.feature or list(FEATURES.values())
-    roots = a.root or default_roots()
+    roots = [p.resolve() for p in (a.root or default_roots())]
     if not roots:
         r.finish(UNMET, "没有可搜索的目录")
     patterns = []
     for f in feats:
         patterns += [(f"{f}（UTF-8）", f.encode("utf-8")), (f"{f}（UTF-16）", f.encode("utf-16-le"))]
     excludes = list(a.case_dir) + list(a.exclude)
+    ex = [e.resolve() for e in excludes]
+
+    def excluded(p: Path) -> bool:
+        return any(p == e or e in p.parents for e in ex)
+
     r.log(f"特征字符串：{', '.join(feats)}")
     r.log("搜索范围：" + "；".join(str(p) for p in roots))
     r.log("排除（案件目录与指定目录）：" + ("；".join(str(p) for p in excludes) or "无"))
-    t0 = time.time()
-    hits, big, denied, files = scan(roots, excludes, patterns, a.max_mb * 1024 * 1024, r)
-    r.log(f"已搜索 {files} 个文件，用时 {time.time() - t0:.0f} 秒；无权限或读取失败 {denied} 个；超过 {a.max_mb}MB 跳过 {len(big)} 个")
+
+    key = run_key(feats, roots, excludes, a.max_mb)
+    batch_dir = r.out_dir / f"find_leaks-{key}"
+    state_file = batch_dir / "进度.json"
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    state = {"done": {}}
+    if state_file.exists() and not a.fresh:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        r.log(f"续跑：上次已完成 {len(state['done'])} 批（进度文件 {state_file}）")
+    plan = batches(roots, excluded)
+    r.log(f"共 {len(plan)} 批；每批结果单独写进 {batch_dir}")
+    t_all = time.time()
+    for i, (name, path, recursive) in enumerate(plan, 1):
+        if name in state["done"]:
+            continue
+        acc = scan_batch(path, recursive, excluded, patterns, a.max_mb * 1024 * 1024)
+        state["done"][name] = acc
+        lines = [f"批 {i}：{name}", f"文件 {acc['files']} 个，命中 {len(acc['hits'])} 处，"
+                 f"无权限或读取失败 {acc['denied']} 个，超大跳过 {len(acc['big'])} 个，用时 {acc['secs']} 秒"]
+        lines += [f"  命中：{p}　←　{label}" for p, label in acc["hits"]]
+        lines += [f"  跳过（{s // 1024 // 1024}MB）：{p}" for p, s in acc["big"]]
+        (batch_dir / f"批{i:04d}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        print(f"[{i}/{len(plan)}] {name}：文件 {acc['files']} 个，命中 {len(acc['hits'])}，用时 {acc['secs']} 秒",
+              flush=True)
+    done = state["done"]
+    files = sum(v["files"] for v in done.values())
+    denied = sum(v["denied"] for v in done.values())
+    big = [b for v in done.values() for b in v["big"]]
+    hits = [h for v in done.values() for h in v["hits"]]
+    r.log(f"已搜索 {files} 个文件（本次用时 {time.time() - t_all:.0f} 秒）；无权限或读取失败 {denied} 个；"
+          f"超过 {a.max_mb}MB 跳过 {len(big)} 个")
     for p, s in big:
         r.log(f"  跳过（{s // 1024 // 1024}MB）：{p}")
     if hits:

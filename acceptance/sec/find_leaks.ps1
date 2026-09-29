@@ -13,6 +13,7 @@ param(
   [string[]]$Root,
   [string[]]$Exclude,
   [int]$MaxMB = 256,
+  [switch]$Fresh,
   [string]$Python = ""
 )
 $ErrorActionPreference = "Stop"
@@ -26,5 +27,6 @@ foreach ($f in $Feature) { $argv += @("--feature", $f) }
 foreach ($c in $CaseDir) { $argv += @("--case-dir", $c) }
 foreach ($r in $Root) { $argv += @("--root", $r) }
 foreach ($e in $Exclude) { $argv += @("--exclude", $e) }
+if ($Fresh) { $argv += "--fresh" }
 & $Python @argv
 exit $LASTEXITCODE

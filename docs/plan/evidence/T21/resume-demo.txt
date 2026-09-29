@@ -1,0 +1,29 @@
+# find_leaks 分批续跑演示  2026-09-29 21:02:15 +0800
+## 第一次：搜 leakA（案件目录 closed-01 已登记；外部\ 下有一份泄露副本）
+特征字符串：LBFX-CLSD01-P6V3
+搜索范围：<scratch>\leakA
+排除（案件目录与指定目录）：<scratch>\leakA\closed-01
+共 2 批；每批结果单独写进 <scratch>\acc2\find_leaks-9839364bfb4fc3ec
+[1/2] <scratch>\leakA（顶层文件）：文件 0 个，命中 0，用时 0.0 秒
+[2/2] <scratch>\leakA\外部：文件 1 个，命中 1，用时 0.0 秒
+已搜索 1 个文件（本次用时 0 秒）；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+案件目录外命中 1 处：
+  <scratch>\leakA\外部\泄露副本.md　←　LBFX-CLSD01-P6V3（UTF-16）
+
+结论：不通过（案件目录外有 1 处命中）
+证据文件：<scratch>\acc2\find_leaks-20260929-210216.txt
+
+## 模拟中断：从进度文件里删掉'外部'这一批，再用同样的参数运行 → 只重扫这一批
+已删掉： 外部
+特征字符串：LBFX-CLSD01-P6V3
+搜索范围：<scratch>\leakA
+排除（案件目录与指定目录）：<scratch>\leakA\closed-01
+续跑：上次已完成 1 批（进度文件 <scratch>\acc2\find_leaks-9839364bfb4fc3ec\进度.json）
+共 2 批；每批结果单独写进 <scratch>\acc2\find_leaks-9839364bfb4fc3ec
+[2/2] <scratch>\leakA\外部：文件 1 个，命中 1，用时 0.0 秒
+已搜索 1 个文件（本次用时 0 秒）；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+案件目录外命中 1 处：
+  <scratch>\leakA\外部\泄露副本.md　←　LBFX-CLSD01-P6V3（UTF-16）
+
+结论：不通过（案件目录外有 1 处命中）
+证据文件：<scratch>\acc2\find_leaks-20260929-210216.txt
