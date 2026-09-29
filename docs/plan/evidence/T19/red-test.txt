@@ -1,0 +1,7 @@
+# 红测：把空白行判据的 98% 改成 50%（切分线会落到气泡行上），测试应失败；测完已还原  2026-09-29 19:20:07 +0800
+tests\test_splitter.py:39: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\u8272\u80cc\u666f.png]
+FAILED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u5f69\u8272\u80cc\u666f.png]
+2 failed, 6 deselected in 1.61s
+exit=1
