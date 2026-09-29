@@ -27,3 +27,23 @@ service、prep395 尚未合并进 main（T3、T6 返修中），不适用。
 退出码=0
 
 结论：契约自检、build_skills、样本核对退出码均为 0；pytest 不适用；对基线零新增失败。
+
+---
+
+T21 小修合流记录（主编排，2026-09-29 21:50 +08:00，无人值守窗内）
+
+内容：全盘搜索按顶层目录分批、进度输出、中断续跑；续跑只对没跑完的那一次有效；README 写明 net_watch 看不到 UDP。
+合并方式：git cherry-pick a9d176c 1e0acfd 2d3cbde（line-C 上 T6、T19 仍在复核，不能整条合并）
+合并前 main：ec7b070
+合并后 main：aea325a43dcecad0c780eb14f05fefe3a20fa4ef
+拣入后与 line-C（2d3cbde）逐文件比对 acceptance 和 T21 证据：无差异
+
+主编排亲核（临时目录，代码取自 2d3cbde 的克隆）：
+  1. 无泄露全扫 → 通过，退出码 0
+  2. 在 d1 里新放一个副本，不带 --fresh 再跑 → 不通过，命中 1 处，退出码 1（上一版这一步错报通过）
+  3. 去掉副本再跑 → 通过，退出码 0
+  进度文件在跑完后 completed=true；误提交的空文件 resume-demo.txt.tmp 已不在。
+
+契约自检：[对] case-archiving/catalogs/民事行政卷.json　退出码=0
+build_skills --check：结果：✔ 通过　退出码=0
+pytest 全量：service、prep395 尚未合并进 main，不适用。
