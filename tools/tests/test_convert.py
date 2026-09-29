@@ -1,6 +1,7 @@
 """格式互转（Spec 13.2）：每种转换一个样本成功、原文件 sha256 不变；找不到程序时给中文提示。"""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import zipfile
@@ -34,12 +35,9 @@ def samples(tmp_path_factory):
         out[k] = d / p.name
         shutil.copyfile(p, out[k])
     if SOFFICE:
-        legacy = tmp_path_factory.mktemp("legacy")
-        profile = (legacy / "profile").as_uri()
         for src, fmt in ((out["docx"], "doc"), (out["xlsx"], "xls")):
-            subprocess.run([str(SOFFICE), "--headless", "--norestore", f"-env:UserInstallation={profile}",
-                            "--convert-to", fmt, "--outdir", str(d), str(src)], check=True, timeout=180,
-                           capture_output=True)
+            work = tmp_path_factory.mktemp("legacy")     # 用产品自己的调用（配置目录在短路径下）
+            shutil.copyfile(core._libreoffice(src, fmt, work), d / f"{src.stem}.{fmt}")
         out["doc"] = d / "借条.doc"
         out["xls"] = d / "银行流水.xls"
         # WPS 文字的 .wps 与 .doc 同为 OLE 复合文档，LibreOffice 按内容识别；这里用 .doc 改扩展名代替
@@ -60,13 +58,16 @@ def check_unchanged_and_clean(src, before):
 
 
 @pytest.fixture(autouse=True)
-def isolated_temp(tmp_path, monkeypatch):
-    """每个测试用自己的系统临时目录，才能断言"没有留下 lawbench-convert-*"。"""
+def isolated_temp(monkeypatch):
+    """每个测试用自己的系统临时目录，才能断言"没有留下 lawbench-convert-*"。
+    建在真实 %TEMP% 下的短路径里（与正式环境一致），不放在可能很深的 tmp_path 里。"""
     import tempfile
-    t = tmp_path / "systemp"
-    t.mkdir()
+    real = tempfile.gettempdir()
+    t = Path(tempfile.mkdtemp(prefix="lbt-", dir=real))
     monkeypatch.setattr(tempfile, "tempdir", str(t))
-    return t
+    yield t
+    monkeypatch.setattr(tempfile, "tempdir", real)
+    shutil.rmtree(core.LONG_PREFIX + str(t) if os.name == "nt" else t, ignore_errors=True)
 
 
 CASES = [
@@ -196,7 +197,8 @@ def test_no_print_calls_in_converter():
         assert bad not in text
 
 
-def test_finder_order(tmp_path, monkeypatch):
+def test_finder_order(isolated_temp, monkeypatch):
+    tmp_path = isolated_temp
     fake_client = tmp_path / "local"
     exe = fake_client / "Programs" / "lawbench" / "resources" / "libreoffice" / "program" / "soffice.exe"
     exe.parent.mkdir(parents=True)
@@ -417,9 +419,10 @@ def test_failure_and_timeout_leave_no_workdir(samples, tmp_path, monkeypatch):
     check_unchanged_and_clean(samples["docx"], sha256(samples["docx"]))
 
 
-def test_cleanup_stale_only_old_own_dirs(isolated_temp, tmp_path):
+def test_cleanup_stale_only_old_own_dirs(isolated_temp, tmp_path, monkeypatch):
     import os
     import time
+    monkeypatch.setattr(core, "profile_root", lambda: tmp_path / "lo")
     old = isolated_temp / (core.TEMP_PREFIX + "old")
     old.mkdir()
     (old / "src.docx").write_bytes(b"x")
@@ -479,3 +482,117 @@ def test_gui_notes_and_close_guard(monkeypatch):
     assert shown and root.winfo_exists()        # 转换中不关窗
     app.busy = False
     app.on_close()
+
+
+# ---------------------------------------------------------------- 第二轮返修：域指令范围、权限与损坏、LibreOffice 短路径
+
+
+def _rewrite_stream(path, name, old: bytes, new: bytes):
+    """按原长度改写 OLE 流里的字节（照复核员的做法）。"""
+    import olefile
+    assert len(old) == len(new)
+    with olefile.OleFileIO(str(path), write_mode=True) as ole:
+        data = ole.openstream(name).read()
+        assert old in data, (name, old)
+        ole.write_stream(name, data.replace(old, new))
+
+
+def _linked_doc_variants(tmp_path, port):
+    """底子：LibreOffice 生成的带 INCLUDEPICTURE 外链的 .doc。返回 (开关在前且 Data 无地址, 域代码原样且 Data 无地址)。"""
+    url = f"http://127.0.0.1:{port}/docx.png"
+    dx = tmp_path / "外链图片.docx"
+    _docx_with_external_image(dx, url)
+    base = _as_doc(dx, tmp_path)
+    garble = (url.encode("ascii"), ("x" + url[1:]).encode("ascii"))      # Data 流里的单字节地址改掉
+    v1 = tmp_path / "开关在前.doc"
+    shutil.copyfile(base, v1)
+    old = f' INCLUDEPICTURE  "{url}" \\d'.encode("utf-16-le")
+    new = f' INCLUDEPICTURE \\d "{url}" '.encode("utf-16-le")
+    _rewrite_stream(v1, "WordDocument", old, new)
+    _rewrite_stream(v1, "Data", *garble)
+    v2 = tmp_path / "只靠域代码.doc"
+    shutil.copyfile(base, v2)
+    _rewrite_stream(v2, "Data", *garble)
+    return v1, v2
+
+
+@need_lo
+def test_field_check_catches_switch_first_and_no_data_address(tmp_path, listener, monkeypatch):
+    """①开关在前、Data 流无地址；②域代码原样、Data 流无地址：都被拒，没有起 soffice，监听 0 次请求。"""
+    port, hits = listener
+    v1, v2 = _linked_doc_variants(tmp_path, port)
+    called = []
+    monkeypatch.setattr(core, "_libreoffice", lambda *a: called.append(a) or (_ for _ in ()).throw(AssertionError))
+    for src in (v1, v2):
+        with pytest.raises(core.ConvertError, match="外部地址"):
+            core.convert_file("doc2docx", src)
+    assert called == [] and hits == []
+
+
+@need_lo
+def test_plain_english_link_text_not_rejected(tmp_path, listener):
+    """③英文正文 "Please see the link http://…"、"import https://…" 不在域指令里，照常转换，监听 0 次。"""
+    from docx import Document
+    port, hits = listener
+    dx = tmp_path / "英文正文.docx"
+    d = Document()
+    d.add_paragraph(f"Please see the link http://127.0.0.1:{port}/page for details.")
+    d.add_paragraph(f"To import https://127.0.0.1:{port}/data use the tool.")
+    d.save(dx)
+    doc = _as_doc(dx, tmp_path)
+    out = core.convert_file("doc2docx", doc)
+    assert out.is_file() and hits == []
+
+
+def test_readonly_source_dir_reason(samples, tmp_path):
+    ro = tmp_path / "只读目录"
+    ro.mkdir()
+    src = ro / "转账截图.jpg"
+    shutil.copyfile(samples["jpg"], src)
+    subprocess.run(["icacls", str(ro), "/deny", "*S-1-1-0:(AD)"], check=True, capture_output=True)  # 不许建子文件夹
+    try:
+        res = core.convert_many("img2pdf", [src])
+    finally:
+        subprocess.run(["icacls", str(ro), "/remove:d", "*S-1-1-0"], capture_output=True)
+    assert "没有写入权限" in res[0][1]
+
+
+@need_lo
+def test_corrupt_doc_structure_reason(tmp_path):
+    from docx import Document
+    dx = tmp_path / "a.docx"
+    Document().save(dx)
+    doc = _as_doc(dx, tmp_path)
+    bad = tmp_path / "结构损坏.doc"
+    raw = doc.read_bytes()
+    bad.write_bytes(raw[:1536] + b"\xff" * 512)          # OLE 头还在，后面的扇区坏了
+    res = core.convert_many("doc2docx", [bad])
+    assert "文件已损坏，无法检查" in res[0][1]
+
+
+def test_profile_path_too_long_refused(samples, tmp_path, monkeypatch):
+    deep = tmp_path / ("很长的目录名" * 20)
+    monkeypatch.setattr(core, "profile_root", lambda: deep)
+    called = []
+    monkeypatch.setattr(core, "_run", lambda *a, **k: called.append(a))
+    with pytest.raises(core.ConvertError, match="路径太长"):
+        core.convert_file("word2pdf", samples["docx"])
+    assert called == []
+
+
+def test_soffice_crash_code_message(samples, tmp_path, monkeypatch):
+    fake = tmp_path / "soffice.cmd"
+    fake.write_text("@exit /b -1073740791\n", encoding="mbcs")                 # 0xC0000409
+    monkeypatch.setattr(core, "_soffice", lambda: fake)
+    with pytest.raises(core.ConvertError, match="转换程序异常退出"):
+        core.convert_file("word2pdf", samples["docx"])
+
+
+@need_lo
+def test_profile_dir_short_and_removed(samples):
+    """配置目录在 %LOCALAPPDATA%/lawbench/lo/ 下（路径短），用完删除。"""
+    root = core.profile_root()
+    before = set(root.iterdir()) if root.is_dir() else set()
+    core.convert_file("word2pdf", samples["docx"])
+    assert len(str(root)) + 9 <= core.MAX_PROFILE_PATH
+    assert set(root.iterdir()) == before                      # 用完删除

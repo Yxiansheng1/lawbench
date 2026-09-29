@@ -1,5 +1,5 @@
-# cd tools; python -m pytest -q tests（T19 返修二后）    2026-09-29 21:30:27 +0800
-.......................................                                  [100%]
+# cd tools; python -m pytest -q tests（T19 第二轮返修后）    2026-09-29 23:00:59 +0800
+............................s.................                           [100%]
 =================================== PASSES ====================================
 _________________ test_batch_errors_are_chinese_and_isolated __________________
 ---------------------------- Captured stderr call -----------------------------
@@ -34,7 +34,13 @@ PASSED tests/test_convert.py::test_unexpected_exception_becomes_chinese_reason
 PASSED tests/test_convert.py::test_failure_and_timeout_leave_no_workdir
 PASSED tests/test_convert.py::test_cleanup_stale_only_old_own_dirs
 PASSED tests/test_convert.py::test_mixed_pdf_reports_scan_pages
-PASSED tests/test_convert.py::test_gui_notes_and_close_guard
+PASSED tests/test_convert.py::test_field_check_catches_switch_first_and_no_data_address
+PASSED tests/test_convert.py::test_plain_english_link_text_not_rejected
+PASSED tests/test_convert.py::test_readonly_source_dir_reason
+PASSED tests/test_convert.py::test_corrupt_doc_structure_reason
+PASSED tests/test_convert.py::test_profile_path_too_long_refused
+PASSED tests/test_convert.py::test_soffice_crash_code_message
+PASSED tests/test_convert.py::test_profile_dir_short_and_removed
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\u8272\u80cc\u666f.png]
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u5f69\u8272\u80cc\u666f.png]
 PASSED tests/test_splitter.py::test_no_blank_overlaps_and_warns
@@ -45,5 +51,19 @@ PASSED tests/test_splitter.py::test_plan_ignores_short_runs
 PASSED tests/test_splitter.py::test_rerun_does_not_overwrite
 PASSED tests/test_splitter.py::test_batch_errors_are_chinese_and_isolated
 PASSED tests/test_splitter.py::test_gui_builds
-39 passed in 123.19s (0:02:03)
+SKIPPED [1] tests\test_convert.py:471: 没有图形界面环境
+45 passed, 1 skipped in 175.67s (0:02:55)
 exit=0
+
+# 两个界面测试单独复跑（上面那次 Tk 偶发起不来窗口而跳过）  2026-09-29 23:04:08 +0800
+PASSED tests/test_convert.py::test_gui_builds
+PASSED tests/test_convert.py::test_disguised_rtf_doc_with_remote_image_rejected
+PASSED tests/test_splitter.py::test_gui_builds
+SKIPPED [1] tests\test_convert.py:471: 没有图形界面环境
+3 passed, 1 skipped, 42 deselected in 1.77s
+exit=0
+
+# test_gui_notes_and_close_guard 单独运行  2026-09-29 23:04:40 +0800
+PASSED tests/test_convert.py::test_gui_notes_and_close_guard
+1 passed, 35 deselected in 0.85s
+说明：同一进程里接在另一个 Tk 测试之后偶发起不来窗口（TclError → 跳过），单独运行通过；属于测试环境里 Tk 的问题，不是被测代码。

@@ -11,4 +11,6 @@
 
 转换时先把原文件复制到临时目录，LibreOffice 的配置目录也放在这个临时目录里，转换完一起删除（不在系统里留下"最近打开的文件"）。
 
+**依赖**：Pillow、numpy、pypdfium2、pypdf、python-docx、openpyxl、olefile（BSD 许可，用于转换前检查 .doc / .wps 里的外部链接）；外部程序 LibreOffice、pandoc。
+
 **测试**：`cd tools; python -m pytest -q tests`（需要 LibreOffice 和 pandoc；没有时相关用例跳过）。切分样本 `splitter\samples\` 的 3 张虚构聊天截图由 `make_samples.py` 生成。

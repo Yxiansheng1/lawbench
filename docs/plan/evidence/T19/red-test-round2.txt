@@ -1,0 +1,12 @@
+# T19 第二轮返修红测（测完已还原）  2026-09-29 22:42:02 +0800
+
+## (a) 换回返修前的 extlinks.py（正则只允许域名与网址间夹一个开关）→ 开关在前的样本应漏过、测试失败
+FAILED tests/test_convert.py::test_field_check_catches_switch_first_and_no_data_address
+FAILED tests/test_convert.py::test_plain_english_link_text_not_rejected - con...
+2 failed, 34 deselected in 19.02s
+exit=1
+
+## (b) 关掉域指令检查（link_instruction 恒为 False）→ ①② 都应漏过、测试失败
+FAILED tests/test_convert.py::test_field_check_catches_switch_first_and_no_data_address
+1 failed, 35 deselected in 10.38s
+exit=1

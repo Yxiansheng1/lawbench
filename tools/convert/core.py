@@ -39,6 +39,8 @@ STALE_S = 600
 INTERNAL = "处理失败（程序内部错误），其余文件不受影响。"
 # 交给 LibreOffice 之前先查外链的旧格式（Spec 14.3：查到就拒绝转换）
 CHECK_LINKS = (".doc", ".wps")
+MAX_PROFILE_PATH = 100          # LibreOffice 配置目录路径超过约 140 字符时 soffice 直接崩溃（实测），留足余量
+CRASH_CODES = (0xC0000409, 0xC0000409 - 2**32)   # STATUS_STACK_BUFFER_OVERRUN（无符号 / 有符号两种写法）
 LO_REGISTRY = (
     '<?xml version="1.0" encoding="UTF-8"?>\n'
     '<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" '
@@ -91,12 +93,18 @@ KINDS = [
 BY_KEY = {k.key: k for k in KINDS}
 
 
+def lp(p: Path) -> str:
+    """律师的文件夹可能很深：文件读写一律用 Windows 长路径前缀，避开 260 字符的限制。"""
+    s = str(Path(p).resolve())
+    return LONG_PREFIX + s if os.name == "nt" and not s.startswith(LONG_PREFIX) else s
+
+
 def unique_target(src: Path, ext: str) -> Path:
     out_dir = src.parent / OUT_DIR_NAME
-    out_dir.mkdir(exist_ok=True)
+    os.makedirs(lp(out_dir), exist_ok=True)
     p = out_dir / f"{src.stem}{ext}"
     n = 2
-    while p.exists():
+    while os.path.exists(lp(p)):
         p = out_dir / f"{src.stem}({n}){ext}"
         n += 1
     return p
@@ -124,6 +132,8 @@ def _run(cmd: list[str], cwd: Path, stdin: bytes | None = None) -> None:
             proc.kill()
         raise ConvertError(f"转换超时（{TIMEOUT_S} 秒），已结束转换程序。文件可能过大或已损坏，"
                            "或转换程序弹出了窗口（例如等待打印机连接）。") from None
+    if proc.returncode in CRASH_CODES:
+        raise ConvertError("转换程序异常退出，没有转出结果。")
     if proc.returncode != 0:
         raise ConvertError("转换失败，文件可能已损坏或加密。")
 
@@ -142,19 +152,33 @@ def _pandoc() -> Path:
     return p
 
 
+def profile_root() -> Path:
+    """LibreOffice 配置目录的上级：%LOCALAPPDATA%\\lawbench\\lo\\。路径太长时 soffice 会直接崩溃，所以不放在临时目录里。"""
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    return Path(base) / "lawbench" / "lo"
+
+
 def _libreoffice(copy: Path, fmt: str, work: Path) -> Path:
-    user = work / "lo_profile" / "user"
-    user.mkdir(parents=True)
-    (user / "registrymodifications.xcu").write_text(LO_REGISTRY, encoding="utf-8")   # 不取外部链接的图片
-    profile = (work / "lo_profile").as_uri()
-    outdir = work / "out"
-    outdir.mkdir()
-    _run([str(_soffice()), "--headless", "--norestore", f"-env:UserInstallation={profile}",
-          "--convert-to", fmt, "--outdir", str(outdir), str(copy)], cwd=work)
-    produced = outdir / f"{copy.stem}.{fmt.split(':')[0]}"
-    if not produced.is_file():
-        raise ConvertError("转换失败，文件可能已损坏或加密。")
-    return produced
+    """配置目录每次新建在短路径 profile_root()\\<8 位随机>\\，用完删除；副本和结果仍在 work（临时目录）里。"""
+    root = profile_root()
+    if len(str(root)) + 9 > MAX_PROFILE_PATH:            # 先查长度再建目录（太长时连目录都建不出来）
+        raise ConvertError("软件的数据目录路径太长，转换程序无法运行；请把 Windows 用户数据目录放在较短的路径下。")
+    root.mkdir(parents=True, exist_ok=True)
+    prof = Path(tempfile.mkdtemp(prefix="", dir=root))
+    try:
+        user = prof / "user"
+        user.mkdir(parents=True)
+        (user / "registrymodifications.xcu").write_text(LO_REGISTRY, encoding="utf-8")   # 不取外部链接的图片
+        outdir = work / "out"
+        outdir.mkdir()
+        _run([str(_soffice()), "--headless", "--norestore", f"-env:UserInstallation={prof.as_uri()}",
+              "--convert-to", fmt, "--outdir", str(outdir), str(copy)], cwd=work)
+        produced = outdir / f"{copy.stem}.{fmt.split(':')[0]}"
+        if not produced.is_file():
+            raise ConvertError("转换失败，文件可能已损坏或加密。")
+        return produced
+    finally:
+        _remove_workdir(prof)
 
 
 def pdf_paragraphs(pdf: Path) -> tuple[list[str], list[int]]:
@@ -203,13 +227,23 @@ def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
         raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.inputs)}）。")
     if not src.is_file():
         raise ConvertError(f"{src.name} 不存在或无法读取。")
-    if src.suffix.lower() in CHECK_LINKS and extlinks.has_external_links(src):
-        raise ConvertError(f"{src.name}：{extlinks.REASON}。")   # 不交给 LibreOffice（它会去取外链图片）
-    target = unique_target(src, k.output)
+    if src.suffix.lower() in CHECK_LINKS:
+        try:
+            linked = extlinks.has_external_links(src)
+        except PermissionError:
+            raise ConvertError(f"{src.name}：没有读取权限。") from None
+        except Exception:  # noqa: BLE001  olefile 对结构损坏的文件会抛各种异常
+            raise ConvertError(f"{src.name}：文件已损坏，无法检查。") from None
+        if linked:
+            raise ConvertError(f"{src.name}：{extlinks.REASON}。")   # 不交给 LibreOffice（它会去取外链图片）
+    try:
+        target = unique_target(src, k.output)
+    except PermissionError:
+        raise ConvertError(f"{src.name}：没有写入权限，无法在原文件旁建立\u201c{OUT_DIR_NAME}\u201d文件夹。") from None
     work = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
     try:
         copy = work / f"src{src.suffix.lower()}"     # 副本用 ASCII 名，避免转换程序处理中文路径出问题
-        shutil.copyfile(src, copy)
+        shutil.copyfile(lp(src), copy)
         if kind == "doc2docx":
             out = _libreoffice(copy, "docx", work)
         elif kind == "xls2xlsx":
@@ -235,12 +269,12 @@ def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
             _image_to_pdf(copy, out)
         else:
             raise ConvertError("未知的转换类型。")
-        shutil.move(str(out), target)
+        shutil.move(str(out), lp(target))
         return target, notes
     finally:
         _remove_workdir(work)
         try:
-            target.parent.rmdir()                     # 失败时不留空的"转换结果"文件夹
+            os.rmdir(lp(target.parent))               # 失败时不留空的"转换结果"文件夹
         except OSError:
             pass
 
@@ -275,11 +309,15 @@ def _image_to_pdf(src: Path, out: Path) -> None:
 
 
 def cleanup_stale(max_age_s: float = STALE_S) -> int:
-    """启动时清理：系统临时目录顶层、本工具前缀、超过 10 分钟的目录（上次转换中途被强行关掉留下的）。
+    """启动时清理：系统临时目录顶层本工具前缀的目录、LibreOffice 配置目录的上级下的目录，超过 10 分钟的
+    （上次转换中途被强行关掉留下的）。
     不跟随链接和联接，不碰别的文件。"""
     n = 0
     now = time.time()
-    for p in Path(tempfile.gettempdir()).glob(TEMP_PREFIX + "*"):
+    cands = list(Path(tempfile.gettempdir()).glob(TEMP_PREFIX + "*"))
+    if profile_root().is_dir():
+        cands += list(profile_root().iterdir())       # 上次被强行关掉时留下的 LibreOffice 配置目录
+    for p in cands:
         try:
             if p.is_symlink() or os.path.isjunction(p) or not p.is_dir():
                 continue
