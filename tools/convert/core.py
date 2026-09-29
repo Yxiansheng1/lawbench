@@ -24,8 +24,9 @@ from pathlib import Path
 from typing import Callable
 
 try:
-    from . import finder
+    from . import extlinks, finder
 except ImportError:          # 直接运行或打包后的入口
+    import extlinks  # type: ignore
     import finder  # type: ignore
 
 OUT_DIR_NAME = "转换结果"
@@ -36,6 +37,8 @@ IMAGES_NOTE = "Markdown 与 Word 互转不保留图片。"
 TEMP_PREFIX = "lawbench-convert-"
 STALE_S = 600
 INTERNAL = "处理失败（程序内部错误），其余文件不受影响。"
+# 交给 LibreOffice 之前先查外链的旧格式（Spec 14.3：查到就拒绝转换）
+CHECK_LINKS = (".doc", ".wps")
 LO_REGISTRY = (
     '<?xml version="1.0" encoding="UTF-8"?>\n'
     '<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" '
@@ -200,6 +203,8 @@ def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
         raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.inputs)}）。")
     if not src.is_file():
         raise ConvertError(f"{src.name} 不存在或无法读取。")
+    if src.suffix.lower() in CHECK_LINKS and extlinks.has_external_links(src):
+        raise ConvertError(f"{src.name}：{extlinks.REASON}。")   # 不交给 LibreOffice（它会去取外链图片）
     target = unique_target(src, k.output)
     work = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
     try:

@@ -1,0 +1,7 @@
+# T19 返修二红测：关掉转换前的外链检查（CHECK_LINKS = ()）→ .doc 外链测试应失败；测完已还原  2026-09-29 21:29:48 +0800
+E           Failed: DID NOT RAISE ConvertError
+E           Failed: DID NOT RAISE ConvertError
+FAILED tests/test_convert.py::test_doc_with_external_image_rejected_without_fetch
+FAILED tests/test_convert.py::test_disguised_rtf_doc_with_remote_image_rejected
+2 failed, 27 deselected in 29.05s
+exit=1

@@ -300,14 +300,70 @@ def test_conversions_do_not_fetch_remote_resources(tmp_path, listener):
 
 
 @need_lo
-@pytest.mark.xfail(strict=True, reason="已知：LibreOffice 导入 .doc 时仍会取外链图片，配置项挡不住；已报主编排")
-def test_doc_with_external_image_does_not_fetch(tmp_path, listener):
+def test_doc_with_external_image_rejected_without_fetch(tmp_path, listener):
+    """带外链图片的 .doc：查到外链就拒绝转换（Spec 14.3），不交给 LibreOffice，监听收到 0 次请求，原文件不变。"""
     port, hits = listener
     dx = tmp_path / "外链图片.docx"
     _docx_with_external_image(dx, f"http://127.0.0.1:{port}/docx.png")
     doc = _as_doc(dx, tmp_path)
     assert hits == []                     # 另存 .doc 这一步本身不联网
-    core.convert_file("doc2docx", doc)
+    before = sha256(doc)
+    wps = tmp_path / "外链图片.wps"
+    shutil.copyfile(doc, wps)
+    for kind, src in (("doc2docx", doc), ("word2pdf", doc), ("doc2docx", wps)):
+        with pytest.raises(core.ConvertError, match="外部地址"):
+            core.convert_file(kind, src)
+    assert hits == [], f"转换时访问了网络：{hits}"
+    assert sha256(doc) == before
+    assert not (tmp_path / core.OUT_DIR_NAME).exists()
+
+
+@need_lo
+def test_doc_with_hyperlink_and_plain_url_still_converts(tmp_path, listener):
+    """正文里的普通网址文字和超链接不触发拒绝，照常转换，也不联网。"""
+    from docx import Document
+    port, hits = listener
+    dx = tmp_path / "超链接.docx"
+    shutil.copyfile(FIXTURES / "contract-01" / "采购合同.docx", dx)       # 第 39 段有超链接
+    d = Document(dx)
+    d.add_paragraph(f"参考网址：http://127.0.0.1:{port}/page（纯文字）")
+    d.save(dx)
+    doc = _as_doc(dx, tmp_path)
+    out = core.convert_file("doc2docx", doc)
+    assert out.is_file()
+    assert hits == [], f"转换时访问了网络：{hits}"
+
+
+def test_disguised_rtf_doc_with_remote_image_rejected(tmp_path):
+    """扩展名是 .doc、内容其实是 RTF / HTML 的文件：出现外部地址就拒绝（宁可误拒）。"""
+    rtf = tmp_path / "伪装.doc"
+    rtf.write_bytes(b'{\\rtf1 {\\field{\\*\\fldinst INCLUDEPICTURE "http://127.0.0.1:9/x.png" \\\\d}}}')
+    html = tmp_path / "网页.doc"
+    html.write_text('<html><body><img src="https://example.invalid/a.png"></body></html>', encoding="utf-8")
+    for f in (rtf, html):
+        with pytest.raises(core.ConvertError, match="外部地址"):
+            core.convert_file("doc2docx", f)
+
+
+@need_lo
+def test_xls_external_references_do_not_fetch(tmp_path, listener):
+    """.xls 里的外部工作簿引用、WEBSERVICE、HYPERLINK：转换时不发请求（Calc 链接不更新）。"""
+    from openpyxl import Workbook
+    port, hits = listener
+    wb = Workbook()
+    ws = wb.active
+    ws["A1"] = f"='http://127.0.0.1:{port}/[ext.xlsx]Sheet1'!A1"
+    ws["A2"] = f'=WEBSERVICE("http://127.0.0.1:{port}/ws")'
+    ws["A3"] = f'=HYPERLINK("http://127.0.0.1:{port}/hl","链接")'
+    ws["A4"] = "虚构数据"
+    x = tmp_path / "外部引用.xlsx"
+    wb.save(x)
+    work = tmp_path / "mkxls"
+    work.mkdir()
+    xls = tmp_path / "外部引用.xls"
+    shutil.copyfile(core._libreoffice(x, "xls", work), xls)
+    out = core.convert_file("xls2xlsx", xls)
+    assert out.is_file()
     assert hits == [], f"转换时访问了网络：{hits}"
 
 

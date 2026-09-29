@@ -1,5 +1,5 @@
-# cd tools; python -m pytest -q tests（T19 返修后）    2026-09-29 20:59:04 +0800
-...................x................                                     [100%]
+# cd tools; python -m pytest -q tests（T19 返修二后）    2026-09-29 21:30:27 +0800
+.......................................                                  [100%]
 =================================== PASSES ====================================
 _________________ test_batch_errors_are_chinese_and_isolated __________________
 ---------------------------- Captured stderr call -----------------------------
@@ -25,6 +25,10 @@ PASSED tests/test_convert.py::test_no_print_calls_in_converter
 PASSED tests/test_convert.py::test_finder_order
 PASSED tests/test_convert.py::test_gui_builds
 PASSED tests/test_convert.py::test_conversions_do_not_fetch_remote_resources
+PASSED tests/test_convert.py::test_doc_with_external_image_rejected_without_fetch
+PASSED tests/test_convert.py::test_doc_with_hyperlink_and_plain_url_still_converts
+PASSED tests/test_convert.py::test_disguised_rtf_doc_with_remote_image_rejected
+PASSED tests/test_convert.py::test_xls_external_references_do_not_fetch
 PASSED tests/test_convert.py::test_batch_survives_unexpected_errors
 PASSED tests/test_convert.py::test_unexpected_exception_becomes_chinese_reason
 PASSED tests/test_convert.py::test_failure_and_timeout_leave_no_workdir
@@ -41,6 +45,5 @@ PASSED tests/test_splitter.py::test_plan_ignores_short_runs
 PASSED tests/test_splitter.py::test_rerun_does_not_overwrite
 PASSED tests/test_splitter.py::test_batch_errors_are_chinese_and_isolated
 PASSED tests/test_splitter.py::test_gui_builds
-XFAIL tests/test_convert.py::test_doc_with_external_image_does_not_fetch - 已知：LibreOffice 导入 .doc 时仍会取外链图片，配置项挡不住；已报主编排
-35 passed, 1 xfailed in 94.83s (0:01:34)
+39 passed in 123.19s (0:02:03)
 exit=0
