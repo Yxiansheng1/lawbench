@@ -1,0 +1,92 @@
+T1 合流记录（主编排，2026-09-29 18:55 +08:00）
+
+合并方式：快进合并（git merge --ff-only），line-C 的 3 个 T1 提交原样进入 main，无合并提交
+合并前 main：5232cf8e428d7440c95c7f59811edbed22843b55
+合并后 main：b64c01ffe25f4809f8fa1b005a10b90c1f4517f6
+
+== 1. pytest 全量 ==
+不适用：合并后的 main 上还没有 service\ 和 prep395\（T3、T6 未合并），没有可跑的 pytest。
+service 目录存在=False；prep395 目录存在=False
+
+== 2. 契约自检：python contracts\check_examples.py --skills skills ==
+样例 51 个，不符合预期 0 个
+[对] capsules.default.json
+[对] bid-drafting
+[对] case-archiving
+[对] case-reading-notes
+[对] case-wiki-build
+[对] contract-draft
+[对] contract-review
+[对] criminal-applications
+[对] criminal-evidence-review
+[对] criminal-reading-notes
+[对] cross-exam-opinion
+[对] defense-opinion
+[对] doc-revise
+[对] general-drafting
+[对] legal-workflow
+[对] litigation-docs
+[对] pre-issue-check
+[对] sentence-calc
+[对] tender-review
+[对] case-archiving/catalogs/其他非诉卷.json
+[对] case-archiving/catalogs/刑事卷.json
+[对] case-archiving/catalogs/常法卷.json
+[对] case-archiving/catalogs/民事行政卷.json
+退出码=0
+
+== 3. python skills\_scripts\build_skills.py --root skills --check ==
+Skill 根目录：D:\lawbench\skills
+胶囊 14 个，Skill 18 个
+
+共用规则：全部一致
+
+⚠ 警告 36 条：
+  - [contract-review] owner（责任律师）未指定
+  - [contract-review] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [pre-issue-check] owner（责任律师）未指定
+  - [pre-issue-check] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [doc-revise] owner（责任律师）未指定
+  - [doc-revise] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [contract-draft] owner（责任律师）未指定
+  - [contract-draft] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [litigation-docs] owner（责任律师）未指定
+  - [litigation-docs] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [criminal-reading-notes] owner（责任律师）未指定
+  - [criminal-reading-notes] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [criminal-evidence-review] owner（责任律师）未指定
+  - [criminal-evidence-review] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [sentence-calc] owner（责任律师）未指定
+  - [sentence-calc] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [criminal-applications] owner（责任律师）未指定
+  - [criminal-applications] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [defense-opinion] owner（责任律师）未指定
+  - [defense-opinion] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [cross-exam-opinion] owner（责任律师）未指定
+  - [cross-exam-opinion] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [general-drafting] owner（责任律师）未指定
+  - [general-drafting] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [tender-review] owner（责任律师）未指定
+  - [tender-review] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [bid-drafting] owner（责任律师）未指定
+  - [bid-drafting] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [case-archiving] owner（责任律师）未指定
+  - [case-archiving] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [case-reading-notes] owner（责任律师）未指定
+  - [case-reading-notes] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [case-wiki-build] owner（责任律师）未指定
+  - [case-wiki-build] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+  - [legal-workflow] owner（责任律师）未指定
+  - [legal-workflow] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+
+结果：✔ 通过
+退出码=0
+
+== 4. T1 样本核对（合并后的 main 上，用线 C 的 .venv 解释器）==
+7. 大小
+  8 个样本目录共 1.15 MB
+
+通过 229 项，失败 0 项。
+退出码=0
+
+结论：契约自检、build_skills 退出码均为 0；pytest 不适用；对基线零新增失败。
