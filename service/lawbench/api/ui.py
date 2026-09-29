@@ -23,8 +23,9 @@ KEY_TIMEOUT = 10.0
 
 
 def _endpoint(app_state, name: str, fn: Callable[[dict], dict], *, query: bool = False,
-              no_input: bool = False):
-    schema = f"api/{name}.schema.json"
+              no_input: bool = False, family: str = "api"):
+    """family：契约目录（api 或 core）；日志的模块名也用它。"""
+    schema = f"{family}/{name}.schema.json"
 
     async def handler(request: Request) -> JSONResponse:
         t0 = time.monotonic()
@@ -47,7 +48,7 @@ def _endpoint(app_state, name: str, fn: Callable[[dict], dict], *, query: bool =
         if app_state.config.validate_responses:
             contracts.validate(schema, "#/$defs/response", body)
         case_id = value.get("case_id") if isinstance(value, dict) else None
-        logs.event("api", name, case_id=case_id, duration_ms=(time.monotonic() - t0) * 1000)
+        logs.event(family, name, case_id=case_id, duration_ms=(time.monotonic() - t0) * 1000)
         return JSONResponse(body)
 
     return handler
@@ -57,7 +58,15 @@ def routes(st) -> list[Route]:
     """st：app.state（带 config、cases、settings、capsules、net、key_getter）。"""
 
     def case_open(d: dict) -> dict:
-        return st.cases.open(d["path"], d.get("template"))
+        value = st.cases.open(d["path"], d.get("template"))
+        st.tasks.mark_abnormal(value["case_id"])  # 上次硬退出时仍在执行的任务标"异常中断"（Spec 9.2）
+        return value
+
+    def task_create(d: dict) -> dict:
+        return st.tasks.create(d)
+
+    def tasks_list(d: dict) -> dict:
+        return st.tasks.list(d["case_id"])
 
     def case_recent(d: dict) -> dict:
         return {"cases": st.cases.recent()}
@@ -103,6 +112,8 @@ def routes(st) -> list[Route]:
         Route("/api/materials", E("materials_list", materials_list, query=True), methods=["GET"]),
         Route("/api/materials/import", E("materials_import", materials_import), methods=["POST"]),
         Route("/api/connection/test", E("connection_test", connection_test), methods=["POST"]),
+        Route("/api/task", E("task_create", task_create), methods=["POST"]),
+        Route("/api/tasks", E("tasks_list", tasks_list, query=True), methods=["GET"]),
     ]
 
 

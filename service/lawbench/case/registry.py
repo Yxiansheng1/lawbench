@@ -93,6 +93,20 @@ class CaseRegistry:
                     return c["root"]
         raise ApiError("CASE_NOT_FOUND", "unknown_case_id")
 
+    def find_by_root(self, cwd: str) -> tuple[str, str]:
+        """会话头的 cwd → (case_id, 注册表里的 root)。cwd 不在注册表中一律 CASE_NOT_FOUND（Spec 4.3）。"""
+        if not isinstance(cwd, str) or not cwd or "\x00" in cwd:
+            raise ApiError("CASE_NOT_FOUND", "bad_cwd")
+        try:
+            real = os.path.normcase(os.path.realpath(gate.strip_long_prefix(cwd)))
+        except (OSError, ValueError):
+            raise ApiError("CASE_NOT_FOUND", "bad_cwd")
+        with self._lock:
+            for c in self._load()["cases"]:
+                if os.path.normcase(c["root"]) == real:
+                    return c["case_id"], c["root"]
+        raise ApiError("CASE_NOT_FOUND", "cwd_not_registered")
+
     def recent(self) -> list[dict]:
         with self._lock:
             cases = list(self._load()["cases"])

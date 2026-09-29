@@ -13,11 +13,12 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from . import contracts, logs
-from .api import ui
+from .api import core, ui
 from .capsules import CapsuleStore
 from .case.materials import Materials
 from .ingest import libreoffice
 from .case.registry import CaseRegistry
+from .case.task import TaskStore
 from .config import Config
 from .errors import ApiError, fail_body
 from .net import Net
@@ -49,6 +50,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     libreoffice.cleanup_base(lo_base)  # 清掉上次留下的 LibreOffice 配置目录（里面有"最近打开的文件"记录，SEC-11）
     st.materials = Materials(st.cases, lo_base=lo_base)
     st.settings = SettingsStore(config.appdata)
+    st.tasks = TaskStore(st.cases, st.settings, st.materials)
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
     try:
         servers = st.settings.get()["servers"]
@@ -70,7 +72,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     async def health(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "contract_version": contracts.version()})
 
-    app = Starlette(routes=[Route("/health", health, methods=["GET"]), *ui.routes(st)])
+    app = Starlette(routes=[Route("/health", health, methods=["GET"]), *ui.routes(st), *core.routes(st)])
     app.state.lb = st
     token = config.token.encode("utf-8")
 

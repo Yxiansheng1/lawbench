@@ -348,6 +348,12 @@ class Materials:
                 lines.append("")
         gate.write_bytes(root, STATUS_REL, "\n".join(lines).encode("utf-8"), op="materials_status")
 
+    def index(self, case_id: str) -> dict:
+        """材料索引（只读，给工具和覆盖清单用）。"""
+        root = self.cases.root_of(case_id)
+        with self._lock(case_id):
+            return self._load_index(root, case_id)
+
     # ---------- 列表 ----------
 
     def list(self, case_id: str) -> dict:
@@ -376,6 +382,8 @@ class Materials:
         finally:
             con.close()
         return {mid for mid, ver in rows if mid in cur and cur[mid] != ver}
+
+    stale_ocr = _stale_ocr  # 工具 case_list_materials 也用
 
     # ---------- 导入（Spec 5.1） ----------
 
