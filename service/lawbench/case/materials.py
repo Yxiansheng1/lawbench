@@ -470,7 +470,12 @@ class Materials:
         n = 1
         while True:
             cand = dest_rel if n == 1 else f"{stem}({n}){ext}"
-            existing = gate.resolve_read(root, cand, op="import")
+            try:
+                existing = gate.resolve_read(root, cand, op="import")
+            except ApiError:
+                # 文件名是设备名（con.txt）或以 . 开头（.env）等闸门不收的名字：只跳过这一个，不中止整次导入
+                skipped.append({"path": label, "reason": "无法读取"})
+                return
             if os.path.lexists(existing):
                 if os.path.isfile(existing) and not gate.is_link(existing) and sha256_file(existing) == digest:
                     skipped.append({"path": label, "reason": "同名同内容已存在"})

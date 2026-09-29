@@ -67,6 +67,50 @@ def test_copy_original_through_junction_rejected(root):
     assert list(outside.iterdir()) == []
 
 
+@pytest.mark.skipif(not IS_WIN, reason="junction")
+def test_copy_original_post_check_rejects_link(root, monkeypatch):
+    """复制完成后复查：目标在改名那一刻被换成了链接（模拟并发替换），要拒绝（copy_escape）。"""
+    r, src, tmp = root
+    outside = tmp / "案外3"
+    outside.mkdir()
+    real_rename = gate.os.rename
+
+    def swap(a, b):
+        os_ = gate.os
+        os_.unlink(a)
+        make_junction(pathlib.Path(b), outside)
+
+    monkeypatch.setattr(gate.os, "rename", swap)
+    with pytest.raises(ApiError) as ei:
+        gate.copy_original(r, "证据/被换.txt", src)
+    monkeypatch.setattr(gate.os, "rename", real_rename)
+    assert ei.value.code == "OUT_OF_CASE" and ei.value.reason == "copy_escape"
+
+
+def test_import_device_or_dot_name_skips_only_that_file(make_client, cases_dir, tmp_path):
+    """源文件名是设备名或以 . 开头：只跳过这一个，其余照常复制（返修令 2145 第 5 节）。"""
+    folder = tmp_path / "补充"
+    folder.mkdir()
+    (folder / "con.txt").write_text("x", encoding="utf-8")      # 文件夹里的设备名
+    (folder / "正常.txt").write_text("x", encoding="utf-8")
+    env = tmp_path / ".env"                                     # 放到案件根目录时第一级以 . 开头
+    env.write_text("x", encoding="utf-8")
+    nul = tmp_path / "NUL.txt"
+    nul.write_text("x", encoding="utf-8")
+    ok_file = tmp_path / "说明.txt"
+    ok_file.write_text("x", encoding="utf-8")
+    c = make_client()
+    root = cases_dir / "设备名"
+    root.mkdir()  # 没有 02案件材料：目标是案件根目录
+    cid = c.post("/api/case/open", json={"path": str(root)}).json()["value"]["case_id"]
+    r = c.post("/api/materials/import", json={"case_id": cid, "paths": [str(folder), str(env), str(nul), str(ok_file)],
+                                               "target": None, "unzip": False}).json()
+    assert r["ok"] is True, r
+    assert sorted(x["to"] for x in r["value"]["copied"]) == sorted(["补充/正常.txt", "说明.txt"])
+    assert sorted(x["path"] for x in r["value"]["skipped"]) == sorted([str(folder / "con.txt"), str(env), str(nul)])
+    assert all(x["reason"] == "无法读取" for x in r["value"]["skipped"])
+
+
 # ---------- delete_work_file：只能删 工作区/ 下的文件 ----------
 
 def test_delete_work_file_ok(root):
@@ -85,6 +129,17 @@ def test_delete_work_file_rejects_others(root, rel):
     assert ei.value.code == "OUT_OF_CASE"
     assert (pathlib.Path(r) / "证据" / "已有.txt").read_text(encoding="utf-8") == "原件"
     assert src.exists()
+
+
+def test_delete_work_file_second_layer(root, monkeypatch):
+    """第一级写着 工作区、解析后却落在别处（别名等）：第二层（解析后的真实第一级）拒绝。"""
+    r, _, _ = root
+    victim = pathlib.Path(r) / "证据" / "已有.txt"
+    monkeypatch.setattr(gate, "_resolve", lambda root_, parts, op: victim)
+    with pytest.raises(ApiError) as ei:
+        gate.delete_work_file(r, "工作区/别名/已有.txt")
+    assert ei.value.code == "OUT_OF_CASE"
+    assert victim.exists()
 
 
 @pytest.mark.skipif(not IS_WIN, reason="junction")
