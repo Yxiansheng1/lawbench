@@ -708,7 +708,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
           name: 律所模型（32K）
           contextWindow: 32768
           input: [text]                 # 图片走 395，不给 Agent 发图
-          reasoningEfforts: {off: null, low: low, medium: medium, high: high}
+          reasoningEfforts: {off: null, low: low, medium: medium, high: xhigh}   # 6000D 不接受 high，见第 8.2 节
         # - 64K、128K 两个条目写法相同，contextWindow 分别为 65536、131072
       compat:
         supportsStore: false
@@ -732,9 +732,11 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 | 界面 | Agent（DSH） | 流水线（请求体） |
 |---|---|---|
 | 思考：关闭 | `reasoningEffort: off` | `chat_template_kwargs: {"enable_thinking": false}` |
-| 思考：低 / 中 / 高 | `reasoningEffort: low / medium / high`（Agent 插件在 `agent/request` 中按任务单设置） | `chat_template_kwargs: {"enable_thinking": true, "reasoning_effort": "low" / "medium" / "high"}` |
+| 思考：低 / 中 / 高 | `reasoningEffort: low / medium / high`（Agent 插件在 `agent/request` 中按任务单设置）；路由配置把 `high` 映射为发给网关的 `xhigh` | `chat_template_kwargs: {"enable_thinking": true, "reasoning_effort": "low" / "medium" / "xhigh"}` |
 | 窗口 32K / 64K / 128K | 插件在 `agent/request` 中按任务单选择对应窗口的模型条目（`LlmCallConfig.model`）；控制 L1 长度；DSH 按该条目的 `contextWindow` 压缩历史（见下） | 客户端按窗口控制"输入 token + max_tokens" |
 | 最大生成量 | `maxTokens`（插件设置） | `max_tokens` |
+
+**"高"档发 `xhigh`**（2026-09-29 实测，T4 发现、主编排复测）：6000D 对 `reasoning_effort: "high"` 返回 400（`Unexpected reasoning effort high. Supported types are xhigh (default), medium, and low.`），放在请求体顶层或 `chat_template_kwargs` 里都一样；`xhigh`、`medium`、`low` 和关闭思考都返回 200。界面、任务单、契约里仍叫"高"（`high`），只在发给 6000D 的那一步换成 `xhigh`：Agent 由路由配置的 `reasoningEfforts` 映射，流水线（T16）和 395 的 Key 校验、抽取（T6）在拼请求体时映射。网关把 `xhigh` 标为默认值，不带 `reasoning_effort` 时可能等同最高档，G-7 比较三档差异时要每档都显式带上。
 
 思考三档是否有实际差异〔待 G-7〕；没有差异就合并为"开"。服务器上限是 262144。
 

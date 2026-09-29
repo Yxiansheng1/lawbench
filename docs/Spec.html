@@ -1497,7 +1497,7 @@ li{margin:3px 0}
         name: 律所模型（32K）
         contextWindow: 32768
         input: [text]                 # 图片走 395，不给 Agent 发图
-        reasoningEfforts: {off: null, low: low, medium: medium, high: high}
+        reasoningEfforts: {off: null, low: low, medium: medium, high: xhigh}   # 6000D 不接受 high，见第 8.2 节
       # - 64K、128K 两个条目写法相同，contextWindow 分别为 65536、131072
     compat:
       supportsStore: false
@@ -1534,8 +1534,8 @@ li{margin:3px 0}
 </tr>
 <tr>
 <td>思考：低 / 中 / 高</td>
-<td><code>reasoningEffort: low / medium / high</code>（Agent 插件在 <code>agent/request</code> 中按任务单设置）</td>
-<td><code>chat_template_kwargs: {&quot;enable_thinking&quot;: true, &quot;reasoning_effort&quot;: &quot;low&quot; / &quot;medium&quot; / &quot;high&quot;}</code></td>
+<td><code>reasoningEffort: low / medium / high</code>（Agent 插件在 <code>agent/request</code> 中按任务单设置）；路由配置把 <code>high</code> 映射为发给网关的 <code>xhigh</code></td>
+<td><code>chat_template_kwargs: {&quot;enable_thinking&quot;: true, &quot;reasoning_effort&quot;: &quot;low&quot; / &quot;medium&quot; / &quot;xhigh&quot;}</code></td>
 </tr>
 <tr>
 <td>窗口 32K / 64K / 128K</td>
@@ -1549,6 +1549,7 @@ li{margin:3px 0}
 </tr>
 </tbody>
 </table>
+<p><strong>&quot;高&quot;档发 <code>xhigh</code></strong>（2026-09-29 实测，T4 发现、主编排复测）：6000D 对 <code>reasoning_effort: &quot;high&quot;</code> 返回 400（<code>Unexpected reasoning effort high. Supported types are xhigh (default), medium, and low.</code>），放在请求体顶层或 <code>chat_template_kwargs</code> 里都一样；<code>xhigh</code>、<code>medium</code>、<code>low</code> 和关闭思考都返回 200。界面、任务单、契约里仍叫&quot;高&quot;（<code>high</code>），只在发给 6000D 的那一步换成 <code>xhigh</code>：Agent 由路由配置的 <code>reasoningEfforts</code> 映射，流水线（T16）和 395 的 Key 校验、抽取（T6）在拼请求体时映射。网关把 <code>xhigh</code> 标为默认值，不带 <code>reasoning_effort</code> 时可能等同最高档，G-7 比较三档差异时要每档都显式带上。</p>
 <p>思考三档是否有实际差异<span class="wait">〔待 G-7〕</span>；没有差异就合并为&quot;开&quot;。服务器上限是 262144。</p>
 <ul>
 <li><strong>流水线</strong>：token 数用内置的 tokenizer.json 计算（<code>llm/tokens.py</code>），按整条请求计：系统提示 + 本步输入 + <code>max_tokens</code>，超过窗口就先切小再发。</li>
