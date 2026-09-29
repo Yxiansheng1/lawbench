@@ -67,7 +67,10 @@ def parse(path: pathlib.Path, recalc: Callable[[pathlib.Path], pathlib.Path] | N
         max_row, max_col = ws.max_row, ws.max_column
         rows: list[tuple[int, list[str]]] = []
         for r in range(1, max_row + 1):
-            cells = [_fmt(wv.cell(row=r, column=c).value) for c in range(1, max_col + 1)]
+            # 没有缓存值又没有重算（没有 LibreOffice，或文档有外链、不交给 LibreOffice）：只写公式
+            cells = [_fmt(wv.cell(row=r, column=c).value)
+                     or (_fmt(ws.cell(row=r, column=c).value) if ws.cell(row=r, column=c).data_type == "f" else "")
+                     for c in range(1, max_col + 1)]
             if any(cells):
                 rows.append((r, cells))
             for c in range(1, max_col + 1):

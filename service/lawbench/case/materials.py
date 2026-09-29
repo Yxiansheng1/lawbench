@@ -117,7 +117,8 @@ def render(name: str, entry: dict, parsed: Parsed) -> str:
 
 
 class Materials:
-    def __init__(self, cases: CaseRegistry):
+    def __init__(self, cases: CaseRegistry, lo_base: pathlib.Path | None = None):
+        self.lo_base = lo_base  # LibreOffice 配置目录的上级：<应用数据>/临时/lo（Spec 5.2）
         self.cases = cases
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
@@ -193,17 +194,25 @@ class Materials:
                     raise ParseError("external_link")  # 不交给 LibreOffice（Spec 14.3 ②a）
                 return docx.parse(s.convert(path, "docx"), note=CONVERTED_NOTE[mtype])
             if mtype == "xlsx":
-                return xlsx.parse(path, recalc=lambda p: s.convert(p, "xlsx"))
+                return xlsx.parse(path, recalc=self._recalc(path, s))
             if mtype == "xls":
                 if detect.is_ole(path) and detect.ole_encrypted(path):
                     raise ParseError("encrypted")
-                return xlsx.parse(s.convert(path, "xlsx"), recalc=lambda p: s.convert(p, "xlsx"),
-                                  note=CONVERTED_NOTE["xls"])
+                converted = s.convert(path, "xlsx")
+                return xlsx.parse(converted, recalc=self._recalc(converted, s), note=CONVERTED_NOTE["xls"])
             if mtype in ("csv", "md", "txt"):
                 return text.parse(path)
             if mtype == "image":
                 return image.parse(path)
         raise ParseError("corrupt")
+
+    @staticmethod
+    def _recalc(path: pathlib.Path, s):
+        """有外链图片或对象的 xlsx 不交给 LibreOffice 重算（Calc 导入时会去取，设置拦不住；Spec 14.3 ②b）：
+        返回 None，没有缓存值的单元格只写公式。"""
+        if links.xlsx_has_external_rels(path):
+            return None
+        return lambda p: s.convert(p, "xlsx")
 
     # ---------- 扫描 ----------
 
@@ -223,7 +232,7 @@ class Materials:
         index = self._load_index(root, case_id)
         by_key = {_key(m["rel_path"]): m for m in index["materials"]}
         found = self.walk(root)
-        conv = Converter(gate.resolve_internal(root, TEMP_REL))
+        conv = Converter(gate.resolve_internal(root, TEMP_REL), lo_base=self.lo_base)
         added = changed = removed = failed = 0
         parsed_now: dict[str, Parsed | None] = {}
         now = now_iso()

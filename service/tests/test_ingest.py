@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 import pytest
 
@@ -136,7 +137,8 @@ def imported(tmp_path_factory, fixtures_before):
     saved = gate._registry_onedrive_folders
     gate._registry_onedrive_folders = lambda: []
     env_saved = {v: os.environ.pop(v, None) for v in gate.SYNC_ENV_VARS}
-    app = create_app(Config(token="k" * 32, appdata=base / "appdata"), key_getter=lambda: None)
+    appdata = pathlib.Path(tempfile.mkdtemp(prefix="lbad-"))  # 短路径，同 conftest 的 appdata 夹具
+    app = create_app(Config(token="k" * 32, appdata=appdata), key_getter=lambda: None)
     client = TestClient(app, raise_server_exceptions=False)
     client.headers["Authorization"] = "Bearer " + "k" * 32
     out = {}

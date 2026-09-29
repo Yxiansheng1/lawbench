@@ -16,6 +16,7 @@ from . import contracts, logs
 from .api import ui
 from .capsules import CapsuleStore
 from .case.materials import Materials
+from .ingest import libreoffice
 from .case.registry import CaseRegistry
 from .config import Config
 from .errors import ApiError, fail_body
@@ -44,7 +45,9 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st = types.SimpleNamespace()
     st.config = config
     st.cases = CaseRegistry(config.appdata, config.contracts_dir / "case_db.sql")
-    st.materials = Materials(st.cases)
+    lo_base = config.appdata / "临时" / "lo"
+    libreoffice.cleanup_base(lo_base)  # 清掉上次留下的 LibreOffice 配置目录（里面有"最近打开的文件"记录，SEC-11）
+    st.materials = Materials(st.cases, lo_base=lo_base)
     st.settings = SettingsStore(config.appdata)
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
     try:

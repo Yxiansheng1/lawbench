@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -88,9 +89,33 @@ def doc_samples(tmp_path_factory):
         for n in ("linked", "plain"):
             out[n] = base / f"{n}.doc"
             out[n].write_bytes(s.convert(base / f"{n}.docx", "doc").read_bytes())
+    out["switch_first"] = base / "switch_first.doc"
+    _make_switch_first(out["linked"], out["switch_first"])
     lis.count = 0
     yield out, lis
     lis.__exit__(None, None, None)
+
+
+def _make_switch_first(src: pathlib.Path, dst: pathlib.Path) -> None:
+    """只靠域指令检查才能拦住的样本（注记 2218 第 3 节）：以 LibreOffice 生成的 .doc 为底，
+    按原长度把域指令改成"开关在前"，并把 Data 流里单字节存放的地址前缀改掉。"""
+    import olefile
+    shutil.copy(src, dst)
+    with olefile.OleFileIO(str(dst), write_mode=True) as ole:
+        wd = ole.openstream("WordDocument").read()
+        head = ' INCLUDEPICTURE  "'.encode("utf-16-le")
+        tail = '" \\d'.encode("utf-16-le")
+        start = wd.find(head)
+        assert start >= 0, "LibreOffice 生成的 .doc 里没找到 INCLUDEPICTURE 域"
+        end = wd.find(tail, start) + len(tail)
+        old = wd[start:end].decode("utf-16-le")                  # ' INCLUDEPICTURE  "http://…/pic.png" \d'
+        url = re.search(r'"[^"]+"', old).group(0)
+        new = f" INCLUDEPICTURE \\d {url} "                         # 开关写在网址前面，长度不变
+        assert len(new) == len(old)
+        ole.write_stream("WordDocument", wd[:start] + new.encode("utf-16-le") + wd[end:])
+        data = ole.openstream("Data").read()
+        assert b"http://" in data
+        ole.write_stream("Data", data.replace(b"http://", b"zzzz://"))
 
 
 def test_detector(doc_samples):
@@ -99,25 +124,64 @@ def test_detector(doc_samples):
     assert links.has_external_picture(docs["plain"]) is False
 
 
-@pytest.mark.parametrize("field,expect", [
-    ('INCLUDEPICTURE "http://127.0.0.1:1/a.png" \\d', True),
-    ('INCLUDEPICTURE  \\d "https://x.example/a.png"', True),
-    ('INCLUDEPICTURE "\\\\\\\\server\\\\share\\\\a.png"', True),
-    ('includepicture "HTTP://X/A.PNG"', True),
-    ('INCLUDEPICTURE "C:\\\\图片\\\\a.png"', False),
-    ("正文里写了网址 http://example.invalid/ 和 \\\\server\\share", False),
-    ('HYPERLINK "https://example.invalid/"', False),
+def test_detector_switch_first_needs_field_check(doc_samples, monkeypatch):
+    """开关在前、Data 流地址被改掉的样本：域指令检查拦得住；去掉域指令检查就拦不住（证明样本只靠这一条）。"""
+    docs, _ = doc_samples
+    assert links.has_external_picture(docs["switch_first"]) is True
+    assert links._data_stream_has_url(docs["switch_first"]) is False
+    monkeypatch.setattr(links, "_field_has_link", lambda text: False)
+    assert links.has_external_picture(docs["switch_first"]) is False
+
+
+def test_detector_data_stream_alone(doc_samples, monkeypatch):
+    """Data 流里单字节存放的地址前缀，单独也能拦住。"""
+    docs, _ = doc_samples
+    monkeypatch.setattr(links, "_field_has_link", lambda text: False)
+    assert links.has_external_picture(docs["linked"]) is True
+
+
+# (域指令内容, 是否算外链)。域指令 = 0x13 与 0x14 / 0x15 之间的文字（注记 2218 第 3 节）
+FIELD_CASES = [
+    (' INCLUDEPICTURE "http://127.0.0.1:1/a.png" \\d ', True),
+    (' INCLUDEPICTURE \\d "https://x.example/a.png" ', True),
+    (' INCLUDEPICTURE \\* MERGEFORMAT \\d "http://x.example/a.png" ', True),   # 开关写在网址前面
+    (' INCLUDEPICTURE "\\\\server\\share\\a.png" ', True),                      # UNC
+    (' includepicture "HTTP://X/A.PNG" ', True),
+    (' INCLUDETEXT "http://x.example/t.docx" ', True),
+    (' LINK Excel.Sheet.12 "ftp://x.example/b.xlsx" "Sheet1!R1C1" \\a ', True),
+    (' IMPORT "file://x.example/p.wmf" ', True),
+    (' DDEAUTO Excel "http://x.example/b.xlsx" ', True),
+    (' DDE Excel "\\\\server\\b.xlsx" ', True),
+    (' INCLUDEPICTURE "C:\\\\图片\\\\a.png" ', False),                          # 本机路径
+    (' HYPERLINK "https://example.invalid/" ', False),                         # 超链接不是链接类域
+    (' PAGE \\* MERGEFORMAT ', False),
+]
+
+
+def _field_doc(path: pathlib.Path, instr: str, enc: str, pad: int = 64) -> None:
+    body = ("正文 see the link http://example.invalid/ 开头" + "\x13" + instr + "\x14结果\x15" + "结尾").encode(enc)
+    path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * pad + body)
+
+
+@pytest.mark.parametrize("instr,expect", FIELD_CASES, ids=range(len(FIELD_CASES)))
+def test_detector_field_forms(tmp_path, instr, expect):
+    for enc in ("utf-16-le", "gb18030"):
+        for pad in (64, 65):  # UTF-16 文字落在偶数、奇数字节偏移上
+            p = tmp_path / f"x-{enc}-{pad}.doc"
+            _field_doc(p, instr, enc, pad)
+            assert links.has_external_picture(p) is expect, (instr, enc, pad)
+
+
+@pytest.mark.parametrize("text", [
+    "正文里写了网址 http://example.invalid/ 和 \\\\server\\share",
+    "see the link http://example.invalid/page and ftp://x.example/",
+    "INCLUDEPICTURE http://x.example/a.png 这几个字写在正文里，不在域指令里",
 ])
-def test_detector_field_forms(tmp_path, field, expect):
-    for enc in ("utf-16-le", "latin-1"):
-        if enc == "latin-1" and not field.isascii():
-            continue
-        p = tmp_path / f"x-{enc}.doc"
-        p.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64 + b"\x13" + field.encode(enc) + b"\x14\x00")
-        assert links.has_external_picture(p) is expect, (field, enc)
-    p = tmp_path / "odd.doc"  # UTF-16 文字落在奇数字节偏移上
-    p.write_bytes(b"\x00" * 65 + field.encode("utf-16-le"))
-    assert links.has_external_picture(p) is expect
+def test_detector_plain_text_not_triggered(tmp_path, text):
+    for enc in ("utf-16-le", "gb18030"):
+        p = tmp_path / f"plain-{enc}.doc"
+        p.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64 + text.encode(enc))
+        assert links.has_external_picture(p) is False, (text, enc)
 
 
 def test_linked_doc_rejected_no_request(make_client, cases_dir, doc_samples):

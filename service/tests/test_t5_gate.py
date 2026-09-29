@@ -131,6 +131,17 @@ def test_delete_work_file_rejects_others(root, rel):
     assert src.exists()
 
 
+def test_delete_work_file_first_layer(root, monkeypatch):
+    """只看第一层：让第二层（解析后的真实第一级）失效，第一级不是 工作区 的路径仍要被拒绝。"""
+    r, _, _ = root
+    victim = pathlib.Path(r) / "证据" / "已有.txt"
+    monkeypatch.setattr(gate, "_real_top", lambda root_, path, op="internal": gate.WORK.casefold())
+    with pytest.raises(ApiError) as ei:
+        gate.delete_work_file(r, "证据/已有.txt")
+    assert ei.value.code == "OUT_OF_CASE"
+    assert victim.exists()
+
+
 def test_delete_work_file_second_layer(root, monkeypatch):
     """第一级写着 工作区、解析后却落在别处（别名等）：第二层（解析后的真实第一级）拒绝。"""
     r, _, _ = root

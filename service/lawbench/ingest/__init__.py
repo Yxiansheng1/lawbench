@@ -22,6 +22,9 @@ REASONS = {
     "convert_failed": "无法转换该文件，请在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
     # 本机没开 Windows 长路径支持时，材料文本的路径（案件路径 + 工作区\材料\文本\ + 原件相对路径 + .md）超过 260 字符
     "path_too_long": "文件所在的文件夹层级太深、路径太长，无法处理；请把案件文件夹移到路径较短的位置（如 D:\\案件\\）后重新打开",
+    # 注记 致B-ORCH-注记-LibreOffice三件事-20260929-2218 第 1 节
+    "appdata_too_long": "软件的数据目录路径太长，无法转换；请联系技术支持",
+    "converter_crashed": "转换程序异常退出，没有完成转换；请重试，多次出现请在 Word 或 WPS 中另存为 docx / xlsx 后放入案件文件夹",
     # Spec 14.3 ②a；措辞按注记 致B-ORCH-注记-doc外链图片要拒绝-20260929-2106
     "external_link": "文档里有指向外部地址的图片，为避免联网没有解析；请在 Word 或 WPS 里断开链接（或另存为 docx）后再导入",
 }

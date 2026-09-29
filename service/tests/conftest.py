@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
 import socket
+import tempfile
 import sys
 import threading
 import time
@@ -35,10 +37,13 @@ def _no_real_sync_folders(monkeypatch):
 
 
 @pytest.fixture
-def appdata(tmp_path) -> pathlib.Path:
-    p = tmp_path / "appdata"
-    p.mkdir()
-    return p
+def appdata() -> pathlib.Path:
+    """应用数据目录放在系统临时目录下的短路径里（真实环境是 %APPDATA%\\lawbench，也很短）：
+    测试在很深的 --basetemp 下跑时，LibreOffice 配置目录（<应用数据>\\临时\\lo\\…）仍不超过 100 字符。"""
+    p = pathlib.Path(tempfile.mkdtemp(prefix="lbad-"))
+    yield p
+    logs.close()
+    shutil.rmtree(p, ignore_errors=True)
 
 
 @pytest.fixture
