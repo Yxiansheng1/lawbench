@@ -1,0 +1,15 @@
+# T19 第三轮返修红测（测完已还原）  2026-09-29 23:51:02 +0800
+
+## P2-1：换回原来的拼法（\ 开头也直接加 \?\ 前缀）→ 网络共享与 long_form 测试应失败
+FAILED tests/test_convert.py::test_long_form_shapes - AssertionError: assert ...
+FAILED tests/test_convert.py::test_convert_from_network_share[jpg\u2192pdf]
+FAILED tests/test_convert.py::test_convert_from_network_share[md\u2192docx]
+FAILED tests/test_convert.py::test_convert_from_network_share[docx\u2192pdf]
+FAILED tests/test_convert.py::test_convert_from_network_share[doc\u2192docx]
+5 failed, 37 deselected in 19.65s
+exit=1
+
+## NOTE-1：删不掉时不写提示 → 提示测试应失败
+FAILED tests/test_convert.py::test_profile_left_behind_is_reported - Assertio...
+1 failed, 41 deselected in 26.93s
+exit=1

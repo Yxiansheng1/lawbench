@@ -208,6 +208,7 @@ def test_finder_order(isolated_temp, monkeypatch):
     pan.write_bytes(b"")
     monkeypatch.setenv("LOCALAPPDATA", str(fake_client))
     monkeypatch.delenv("LAWBENCH_SOFFICE", raising=False)
+    monkeypatch.delenv("LAWBENCH_PANDOC", raising=False)
     assert finder.find_soffice() == exe                 # 客户端内置优先于系统安装
     assert finder.find_pandoc() == pan
     override = tmp_path / "my-soffice.exe"
@@ -589,10 +590,68 @@ def test_soffice_crash_code_message(samples, tmp_path, monkeypatch):
 
 
 @need_lo
-def test_profile_dir_short_and_removed(samples):
-    """配置目录在 %LOCALAPPDATA%/lawbench/lo/ 下（路径短），用完删除。"""
+def test_profile_dir_short_and_removed(samples, isolated_temp, monkeypatch):
+    """配置目录在 <用户数据目录>/lawbench/lo/ 下（路径短），用完删除。用户数据目录指到测试目录，不写真实的 %LOCALAPPDATA%。"""
+    monkeypatch.setenv("LOCALAPPDATA", str(isolated_temp / "appdata"))
     root = core.profile_root()
-    before = set(root.iterdir()) if root.is_dir() else set()
+    assert root == isolated_temp / "appdata" / "lawbench" / "lo"
     core.convert_file("word2pdf", samples["docx"])
     assert len(str(root)) + 9 <= core.MAX_PROFILE_PATH
-    assert set(root.iterdir()) == before                      # 用完删除
+    assert list(root.iterdir()) == []                          # 用完删除
+
+
+# ---------------------------------------------------------------- 第三轮返修：网络共享路径、删不掉要报、隔离
+
+
+def test_long_form_shapes():
+    B = chr(92)
+    assert core.long_form("C:" + B + "a" + B + "b.doc") == B * 2 + "?" + B + "C:" + B + "a" + B + "b.doc"
+    unc = B * 2 + "srv" + B + "share" + B + "x.doc"
+    assert core.long_form(unc) == B * 2 + "?" + B + "UNC" + B + "srv" + B + "share" + B + "x.doc"
+    done = B * 2 + "?" + B + "UNC" + B + "srv" + B + "share"
+    assert core.long_form(done) == done                          # 已带前缀的不重复加
+    # 映射成盘符的网络驱动器被 resolve() 还原后的样子（推断，本机不做映射）
+    mapped = B * 2 + "fileserver" + B + "cases" + B + "张某甲案" + B + "借条.doc"
+    assert core.long_form(mapped).startswith(B * 2 + "?" + B + "UNC" + B + "fileserver" + B)
+
+
+def _unc_of(p: Path) -> Path:
+    """本机路径 C:\\x → \\\\127.0.0.1\\c$\\x（管理共享）。"""
+    B = chr(92)
+    s = str(p.resolve())
+    return Path(B * 2 + "127.0.0.1" + B + s[0].lower() + "$" + s[2:])
+
+
+@pytest.mark.parametrize("kind,sample", [
+    pytest.param("img2pdf", "jpg", id="jpg→pdf"),
+    pytest.param("md2docx", "md", marks=need_pandoc, id="md→docx"),
+    pytest.param("word2pdf", "docx", marks=need_lo, id="docx→pdf"),
+    pytest.param("doc2docx", "doc", marks=need_lo, id="doc→docx"),
+])
+def test_convert_from_network_share(samples, isolated_temp, kind, sample):
+    """源文件在网络共享路径（\\\\127.0.0.1\\c$\\…）上：转换成功，结果写在原文件旁，原文件不变。"""
+    d = isolated_temp / "share"
+    d.mkdir()
+    local = d / samples[sample].name
+    shutil.copyfile(samples[sample], local)
+    unc = _unc_of(local)
+    if not os.path.exists(str(unc)):
+        pytest.skip("本机管理共享不可访问")
+    before = sha256(local)
+    res = core.convert_many(kind, [unc])
+    src, out, _ = res[0]
+    assert isinstance(out, Path), out
+    assert (d / core.OUT_DIR_NAME / out.name).is_file()
+    assert sha256(local) == before
+
+
+def test_profile_left_behind_is_reported(samples, isolated_temp, monkeypatch):
+    """LibreOffice 配置目录重试后仍删不掉：本次转换照常成功，结果里带一条提示（Spec 5.2：不能静默）。"""
+    if finder.find_soffice() is None:
+        pytest.skip("本机没有 LibreOffice")
+    monkeypatch.setenv("LOCALAPPDATA", str(isolated_temp / "appdata"))
+    real = core._remove_workdir
+    monkeypatch.setattr(core, "_remove_workdir", lambda w: False if w.parent == core.profile_root() else real(w))
+    res = core.convert_many("word2pdf", [samples["docx"]])
+    _, out, notes = res[0]
+    assert isinstance(out, Path) and core.PROFILE_LEFT in notes

@@ -93,10 +93,20 @@ KINDS = [
 BY_KEY = {k.key: k for k in KINDS}
 
 
+def long_form(s: str) -> str:
+    """给一个绝对路径加 Windows 长路径前缀：
+    盘符路径 C:\\a → \\\\?\\C:\\a；网络共享 \\\\服务器\\共享\\a → \\\\?\\UNC\\服务器\\共享\\a；已带前缀的不重复加。"""
+    if os.name != "nt" or s.startswith(LONG_PREFIX):
+        return s
+    if s.startswith("\\\\"):
+        return LONG_PREFIX + "UNC\\" + s[2:]
+    return LONG_PREFIX + s
+
+
 def lp(p: Path) -> str:
-    """律师的文件夹可能很深：文件读写一律用 Windows 长路径前缀，避开 260 字符的限制。"""
-    s = str(Path(p).resolve())
-    return LONG_PREFIX + s if os.name == "nt" and not s.startswith(LONG_PREFIX) else s
+    """律师的文件夹可能很深：文件读写一律用长路径前缀，避开 260 字符的限制。
+    映射成盘符的网络驱动器，resolve() 可能把它还原成 \\\\服务器\\共享\\… 形式，同样走 UNC 分支（推断，见交付说明）。"""
+    return long_form(str(Path(p).resolve()))
 
 
 def unique_target(src: Path, ext: str) -> Path:
@@ -158,7 +168,10 @@ def profile_root() -> Path:
     return Path(base) / "lawbench" / "lo"
 
 
-def _libreoffice(copy: Path, fmt: str, work: Path) -> Path:
+PROFILE_LEFT = "转换程序的临时目录没能删除，下次启动时会再清理"
+
+
+def _libreoffice(copy: Path, fmt: str, work: Path, notes: list[str] | None = None) -> Path:
     """配置目录每次新建在短路径 profile_root()\\<8 位随机>\\，用完删除；副本和结果仍在 work（临时目录）里。"""
     root = profile_root()
     if len(str(root)) + 9 > MAX_PROFILE_PATH:            # 先查长度再建目录（太长时连目录都建不出来）
@@ -178,7 +191,8 @@ def _libreoffice(copy: Path, fmt: str, work: Path) -> Path:
             raise ConvertError("转换失败，文件可能已损坏或加密。")
         return produced
     finally:
-        _remove_workdir(prof)
+        if not _remove_workdir(prof) and notes is not None:     # Spec 5.2：删不掉要报出来，不能静默
+            notes.append(PROFILE_LEFT)
 
 
 def pdf_paragraphs(pdf: Path) -> tuple[list[str], list[int]]:
@@ -245,11 +259,11 @@ def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
         copy = work / f"src{src.suffix.lower()}"     # 副本用 ASCII 名，避免转换程序处理中文路径出问题
         shutil.copyfile(lp(src), copy)
         if kind == "doc2docx":
-            out = _libreoffice(copy, "docx", work)
+            out = _libreoffice(copy, "docx", work, notes)
         elif kind == "xls2xlsx":
-            out = _libreoffice(copy, "xlsx", work)
+            out = _libreoffice(copy, "xlsx", work, notes)
         elif kind == "word2pdf":
-            out = _libreoffice(copy, "pdf", work)
+            out = _libreoffice(copy, "pdf", work, notes)
         elif kind == "pdf2docx":
             paras, scans = pdf_paragraphs(copy)
             notes += [f"第 {n} 页是扫描页，没有转出文字" for n in scans]
@@ -282,15 +296,16 @@ def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
 LONG_PREFIX = "\\\\?\\"      # Windows 扩展长度路径前缀 \\?\
 
 
-def _remove_workdir(work: Path) -> None:
-    """删工作目录。LibreOffice 的配置目录层级很深，临时目录路径稍长就超过 Windows 260 字符上限，
+def _remove_workdir(work: Path) -> bool:
+    """删工作目录，删掉了返回 True。LibreOffice 的配置目录层级很深，临时目录路径稍长就超过 Windows 260 字符上限，
     所以用长路径前缀删；LibreOffice 退出后短时间内还可能占着文件，最多重试 10 秒。"""
-    target = LONG_PREFIX + str(work.resolve()) if os.name == "nt" else str(work)
+    target = lp(work)
     for _ in range(40):
         shutil.rmtree(target, ignore_errors=True)
-        if not work.exists():
-            return
+        if not os.path.exists(target):
+            return True
         time.sleep(0.25)
+    return False
 
 
 def _image_to_pdf(src: Path, out: Path) -> None:
