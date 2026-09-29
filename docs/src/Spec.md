@@ -271,7 +271,7 @@ lawbench/                 我方仓库
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config: {providerName: lawbench-skills, includeDefaultRoots: false, watch: false,
-                     customSkillDirs: [<内置目录>, <管理员下发目录>]}      # 第 10.1 节
+                     customSkillDirs: [<管理员下发目录>, <内置目录>]}      # 第 10.1 节；DSH 同名先到先得，管理员目录排前面
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user
@@ -316,6 +316,7 @@ lawbench/                 我方仓库
 | P-11 | 委托材料窗口 | `apps/desktop/src/main.ts` | 增加一个 IPC 通道 `lawbench:open-retainer`：新建 `BrowserWindow` 加载 `<安装目录>/engines/retainer/启动.html`，`partition: 'persist:retainer'`（与主窗口的存储隔开），`nodeIntegration: false`、`contextIsolation: true`、禁止 `window.open` 和跳转到其他地址。**这个分区是独立的 session，P-9 不会自动作用到它**：对 `session.fromPartition('persist:retainer')` 同样设置 `webRequest` 白名单（只放行 `file://` 和 `127.0.0.1:17801`）并关闭拼写检查。预加载脚本在网页脚本运行前删除 `window.showDirectoryPicker`，让网页改用下载保存；`will-download` 把下载一律存到当前案件的 `工作区/临时/委托材料/<时间>/`（第 13.5 节）。关闭窗口时通知工作台服务停止证件识别驱动 |
 | P-10 | 组合包进入桌面端 | `packages/boot/app-boot/src/profile.ts`（`PROFILE_TEMPLATES.web`）；`@deepseek-ai/dsh` 的依赖列表 | 加上 `lawbench-dsh`（第 14.1 节） |
 | P-12 | 桌面端自带的 Office 组合 | `apps/desktop-host/src/index.ts` | 去掉 `desktop-office` 的挂载（Office Skill 和 `load_workspace_dependencies` 工具）。桌面端 Host 在补丁行之外直接挂载它，配置补丁关不掉；不去掉模型会多出白名单外的工具（2026-09-29 T4 抓包发现） |
+| P-13 | 设置页的"打开配置文件"按钮 | `packages/client/ui-settings-general/src/client/index.ts` | 桌面端不注册 `open-document` 动作。这个按钮会用系统文本编辑器打开 profile 自己的 `cordis.patch.yml`，它叠在我方补丁之后、改了即时生效，律师可以借它改模型地址、重新打开已关掉的插件（2026-09-29 T4 第二轮复核发现）。设置接口的远程写入由 P-7 地址白名单兜底 |
 | P-03a | 欢迎窗口读账号状态（临时） | `apps/desktop/src/welcome-backend.ts` | 账号服务调用失败按"未登录"处理，否则关掉账号相关行后进不了工作区。P-3 落地时整体替换、删掉本条 |
 
 完成后用抓包核对（第 14.3 节）。
@@ -889,7 +890,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 1. `<安装目录>/skills/`：随安装包内置，只读。
 2. `%ProgramData%\<产品名>\skills\`：管理员下发。普通用户账号不可写（由安装程序设置权限）。
 
-实现：`dsh-skill-filesystem` 设 `includeDefaultRoots: false`，`customSkillDirs` 只列这两个目录（第 3.1 节）。这样**不会**扫描 `<案件>/.dsh/skills`、`<案件>/.agents/skills` 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。
+实现：`dsh-skill-filesystem` 设 `includeDefaultRoots: false`，`customSkillDirs` 只列这两个目录（第 3.1 节）。注意 DSH 对同名 Skill 是先到先得，所以数组里**管理员下发目录写在前面**，才能实现"管理员下发的覆盖内置的"（2026-09-29 T4 复核核实）。这样**不会**扫描 `<案件>/.dsh/skills`、`<案件>/.agents/skills` 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。
 
 Skill 中的 `scripts/` 只由工作台服务从以上位置导入执行，AI 不能执行。
 

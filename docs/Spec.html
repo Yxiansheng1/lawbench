@@ -657,7 +657,7 @@ li{margin:3px 0}
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config: {providerName: lawbench-skills, includeDefaultRoots: false, watch: false,
-                     customSkillDirs: [&lt;内置目录&gt;, &lt;管理员下发目录&gt;]}      # 第 10.1 节
+                     customSkillDirs: [&lt;管理员下发目录&gt;, &lt;内置目录&gt;]}      # 第 10.1 节；DSH 同名先到先得，管理员目录排前面
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user
@@ -769,6 +769,12 @@ li{margin:3px 0}
 <td>桌面端自带的 Office 组合</td>
 <td><code>apps/desktop-host/src/index.ts</code></td>
 <td>去掉 <code>desktop-office</code> 的挂载（Office Skill 和 <code>load_workspace_dependencies</code> 工具）。桌面端 Host 在补丁行之外直接挂载它，配置补丁关不掉；不去掉模型会多出白名单外的工具（2026-09-29 T4 抓包发现）</td>
+</tr>
+<tr>
+<td>P-13</td>
+<td>设置页的&quot;打开配置文件&quot;按钮</td>
+<td><code>packages/client/ui-settings-general/src/client/index.ts</code></td>
+<td>桌面端不注册 <code>open-document</code> 动作。这个按钮会用系统文本编辑器打开 profile 自己的 <code>cordis.patch.yml</code>，它叠在我方补丁之后、改了即时生效，律师可以借它改模型地址、重新打开已关掉的插件（2026-09-29 T4 第二轮复核发现）。设置接口的远程写入由 P-7 地址白名单兜底</td>
 </tr>
 <tr>
 <td>P-03a</td>
@@ -1803,7 +1809,7 @@ li{margin:3px 0}
 <li><code>&lt;安装目录&gt;/skills/</code>：随安装包内置，只读。</li>
 <li><code>%ProgramData%\&lt;产品名&gt;\skills\</code>：管理员下发。普通用户账号不可写（由安装程序设置权限）。</li>
 </ol>
-<p>实现：<code>dsh-skill-filesystem</code> 设 <code>includeDefaultRoots: false</code>，<code>customSkillDirs</code> 只列这两个目录（第 3.1 节）。这样<strong>不会</strong>扫描 <code>&lt;案件&gt;/.dsh/skills</code>、<code>&lt;案件&gt;/.agents/skills</code> 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。</p>
+<p>实现：<code>dsh-skill-filesystem</code> 设 <code>includeDefaultRoots: false</code>，<code>customSkillDirs</code> 只列这两个目录（第 3.1 节）。注意 DSH 对同名 Skill 是先到先得，所以数组里<strong>管理员下发目录写在前面</strong>，才能实现&quot;管理员下发的覆盖内置的&quot;（2026-09-29 T4 复核核实）。这样<strong>不会</strong>扫描 <code>&lt;案件&gt;/.dsh/skills</code>、<code>&lt;案件&gt;/.agents/skills</code> 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。</p>
 <p>Skill 中的 <code>scripts/</code> 只由工作台服务从以上位置导入执行，AI 不能执行。</p>
 <p><strong>DSH 对 Skill 的要求</strong>：<code>SKILL.md</code> 头部必须有 DSH 识别的 <code>name</code>（英文短名，即目录名）和 <code>description</code>（触发说明）；下面的扩展字段 DSH 不读，由工作台服务读取。</p>
 <h3 id="10-2-目录结构">10.2 目录结构</h3>
