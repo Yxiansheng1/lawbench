@@ -1179,7 +1179,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | 工作台服务（Python） | 统一的 httpx 客户端，发送前检查目标主机；`follow_redirects=False` |
 | DSH Desktop Host（Node 进程，含 pi-ai 模型适配器） | DSH 已有一个全局的 undici dispatcher（官方 `packages/util/http-proxy/src/install.ts`，Host 启动时安装，所有 `fetch` 都经过它），在其中加地址白名单：目标不在白名单就直接拒绝连接，重定向同样检查（第 3.2 节 P-7）。另外包装 `http` / `https` 的 `request`，覆盖不走 `fetch` 的代码。`webRequest` 管不到这个进程，不能依赖它 |
 | Electron 渲染进程（界面） | `session.webRequest` 拦截白名单以外的请求；界面只加载本地资源 |
-| 其他子进程（LibreOffice、pandoc、Word / WPS 转换） | 本身不联网；启动时不传任何网络参数 |
+| 其他子进程（LibreOffice、pandoc、Word / WPS 转换） | **会按文档里的链接去取图，必须关掉**（2026-09-29 T19 复核实测）：pandoc 处理 Markdown 里的远程图片、LibreOffice 处理 docx 里以外部链接引用的图片时，会向链接指向的地址发请求；对方提交的文档里埋一个链接，律师一转换或一导入就把本机地址和打开时间发了出去。做法：①pandoc 每次调用都带 `--sandbox`（同时也不读 `file://` 和相对路径的本机图片）；②LibreOffice 每次用的独立用户配置目录里，启动前写入 `user\registrymodifications.xcu`，把 `/org.openoffice.Office.Common/Security/Scripting` 下的 `BlockUntrustedRefererLinks` 设为 `true`；③Word / WPS 自动化打开文档时不更新链接（`Documents.Open` 的 `UpdateLinks` 相关设置关掉，T23 实测确认）。适用于所有调用这三类程序的地方：材料导入（第 5.2 节）、导出（第 12.1 节）、Word 转 PDF（第 12.3 节）、小工具（第 13.2 节）。每处都要有测试：文档里放一个指向 `127.0.0.1` 本机监听的图片链接，转换后监听收到 0 个请求 |
 | 发票引擎子进程 | 引擎里有联网代码（IMAP、正文链接下载），工作台只开放第 13.3 节的白名单动作，参数由服务端拼装、不接受界面传入的任意参数；验收时抓包覆盖全部发票动作 |
 | 证件识别驱动 | 只监听 `127.0.0.1:17801`，模型随包，不联网 |
 | 委托材料窗口 | 网页自带内容安全策略只允许 `127.0.0.1:17801`（T0 在 Windows 上核对 `启动.html`）；窗口的独立 session 另设白名单并关闭拼写检查（P-11） |
