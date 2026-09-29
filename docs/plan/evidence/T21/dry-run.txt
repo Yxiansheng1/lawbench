@@ -1,0 +1,282 @@
+# T21 试跑（开发机，2026-09-29 20:09 +0800）；<scratch> 为本会话临时目录
+
+## ./.venv/Scripts/python acceptance/sec/hash_originals.py snapshot <scratch>/dry/closed-01-copy <scratch>/dry/manifest.json
+# hash_originals-snapshot　对应：SEC-08；上线必过第 4、21 项
+# 运行时间：2026-09-29T19:42:44+08:00
+已记录 10 个原件的 sha256 → <scratch>\dry\manifest.json
+
+结论：通过（快照已保存，验收完成后运行 compare）
+证据文件：<scratch>\acc\hash_originals-snapshot-20260929-194244.txt
+exit=0
+（模拟验收中新增一个导入文件、不改已有原件）
+
+## ./.venv/Scripts/python acceptance/sec/hash_originals.py compare <scratch>/dry/closed-01-copy <scratch>/dry/manifest.json
+# hash_originals-compare　对应：SEC-08；上线必过第 4、21 项
+# 运行时间：2026-09-29T19:42:45+08:00
+验收前 10 个原件，现在 11 个
+  新增（应为律师导入）：新导入.txt
+
+结论：通过（已有原件全部未变；新增 1 个）
+证据文件：<scratch>\acc\hash_originals-compare-20260929-194245.txt
+exit=0
+（红测：改动一个已有原件）
+
+## ./.venv/Scripts/python acceptance/sec/hash_originals.py compare <scratch>/dry/closed-01-copy <scratch>/dry/manifest.json
+# hash_originals-compare　对应：SEC-08；上线必过第 4、21 项
+# 运行时间：2026-09-29T19:42:45+08:00
+验收前 10 个原件，现在 11 个
+  被改动：03一审/法院文书/民事调解书.pdf
+  新增（应为律师导入）：新导入.txt
+
+结论：不通过（1 个原件被改动，0 个不见了）
+证据文件：<scratch>\acc\hash_originals-compare-20260929-194245.txt
+exit=1
+
+## ./.venv/Scripts/python acceptance/sec/case_isolation.py
+# case_isolation　对应：SEC-05；上线必过第 2 项
+# 运行时间：2026-09-29T19:42:46+08:00
+
+结论：前提不满足（工作台服务没有运行，或没有设置 LB_URL / LB_TOKEN（T3 之后按 manual\案件隔离.md 准备））
+证据文件：<scratch>\acc\case_isolation-20260929-194246.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/injection_check.py --case <scratch>/dry/attack-01-copy
+# injection_check　对应：SEC-07；上线必过第 3 项
+# 运行时间：2026-09-29T19:42:47+08:00
+
+结论：前提不满足（案件工作区里还没有会话记录：请先按操作单在该案件里完成对话）
+证据文件：<scratch>\acc\injection_check-20260929-194247.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/cloud_sync.py
+# cloud_sync　对应：SEC-14；上线必过第 20 项
+# 运行时间：2026-09-29T19:42:47+08:00
+
+结论：前提不满足（工作台服务没有运行，或没有设置 LB_URL / LB_TOKEN）
+证据文件：<scratch>\acc\cloud_sync-20260929-194247.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/dsh_locations.py
+# dsh_locations　对应：Spec 3.3；SEC-01、SEC-11；上线必过第 21 项
+# 运行时间：2026-09-29T19:42:48+08:00
+
+结论：前提不满足（找不到 DSH 数据目录 C:\Users\19705\.dsh（客户端装好并用测试案卷走一遍后再测，T17 之后））
+证据文件：<scratch>\acc\dsh_locations-20260929-194248.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/engine_net_inventory.py
+# engine_net_inventory　对应：Spec 13.3、14.3；上线必过第 24、25 项
+# 运行时间：2026-09-29T19:42:49+08:00
+  engines/invoice-ledger/scripts/build_env_zip.py：urllib.request
+  engines/invoice-ledger/scripts/mail_collect.py：imaplib, socket, ssl, urllib.request
+  engines/retainer/app/idscan.js：fetch
+  engines/retainer/tools/ocr-driver/test/channel.js：fetch
+
+结论：前提不满足（联网代码与已知清单一致（4 个文件）；发票调用代码（T25）还没有，调用入口待核）
+证据文件：<scratch>\acc\engine_net_inventory-20260929-194249.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/residue_395.py
+# residue_395　对应：SEC-12；上线必过第 5 项（395 无残留）
+# 运行时间：2026-09-29T19:42:49+08:00
+需要用户在 395 上运行下面的命令（--print-command 可单独打印），再用 --result 传回结果：
+# 在 395 上以管理员身份运行（PowerShell）；结果写到桌面 residue.txt
+$feats = @('LBFX-CRIM01-7Q3Z', 'LBFX-CIVL01-K8M2', 'LBFX-CONT01-R5T9', 'LBFX-ATTK01-W2N6', 'LBFX-BRKN00-J4H7', 'LBFX-CLSD01-P6V3', 'LBFX-TNDR01-X9C4', 'LBFX-INVC01-D3F8')
+$roots = @('C:\prep395', 'C:\Windows\Temp') + (Get-ChildItem 'C:\Users' -Directory | ForEach-Object { Join-Path $_.FullName 'AppData\Local\Temp' }) + (Get-ChildItem 'C:\' -Directory -Filter 'llama*' | ForEach-Object FullName)
+$out = Join-Path ([Environment]::GetFolderPath('Desktop')) 'residue.txt'
+"ROOTS: $($roots -join ' | ')" | Out-File $out -Encoding utf8
+$n = 0
+foreach ($r in $roots) { if (Test-Path $r) {
+  Get-ChildItem $r -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Length -lt 256MB } | ForEach-Object {
+    $n++; $f = $_.FullName
+    foreach ($enc in 'utf8','unicode') {
+      $hit = Select-String -LiteralPath $f -SimpleMatch -Pattern $feats -Encoding $enc -List -ErrorAction SilentlyContinue
+      if ($hit) { "HIT: $f <- $($hit.Pattern)" | Out-File $out -Append -Encoding utf8; break }
+    }
+  } } }
+"FILES: $n" | Out-File $out -Append -Encoding utf8
+"PREP395_TEMP_PREFIX: $((Get-ChildItem $roots -Recurse -Force -Filter 'prep395-*' -ErrorAction SilentlyContinue | Measure-Object).Count)" | Out-File $out -Append -Encoding utf8
+"DONE" | Out-File $out -Append -Encoding utf8
+Write-Host "已写入 $out"
+
+
+结论：前提不满足（还没有 395 上的搜索结果）
+证据文件：<scratch>\acc\residue_395-20260929-194249.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/dewatermark_395.py
+# dewatermark_395　对应：上线必过第 16a 项；SEC-12
+# 运行时间：2026-09-29T19:42:50+08:00
+
+结论：前提不满足（395 的预处理服务连不上（T11 部署后再测））
+证据文件：<scratch>\acc\dewatermark_395-20260929-194254.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/key_check.py
+# key_check　对应：SEC-06；上线必过第 6 项
+# 运行时间：2026-09-29T19:42:55+08:00
+6000D：连通 http://192.168.8.77:8000；395：连不上
+  6000D 无 Key：HTTP 200
+  6000D 错误 Key：HTTP 200
+
+结论：前提不满足（6000D 不带 Key 也返回 200：甲方尚未开启 require_key（Spec 6.3），开启后重测）
+证据文件：<scratch>\acc\key_check-20260929-194259.txt
+exit=2
+
+## ./.venv/Scripts/python acceptance/sec/port_scan.py
+# port_scan　对应：SEC-13；上线必过第 6 项（局域网不能绕过网关）
+# 运行时间：2026-09-29T19:43:00+08:00
+6000D（所内 192.168.8.77）：开放端口 [22, 8000, 8080]
+6000D（所外 10.126.126.1）：连不上（不在该网络内或主机未开）
+395（所内 192.168.8.124）：开放端口 [22, 80, 135, 3389, 8080]
+  注意：应开放的 9000 连不上
+395（所外 10.126.126.3）：连不上（不在该网络内或主机未开）
+  注意（运维端口，是否保留由甲方决定）：6000D（所内 192.168.8.77） 22
+  注意（运维端口，是否保留由甲方决定）：395（所内 192.168.8.124） 22
+  注意（运维端口，是否保留由甲方决定）：395（所内 192.168.8.124） 3389
+
+结论：不通过（不应开放的端口：6000D（所内 192.168.8.77） 8080、395（所内 192.168.8.124） 80、395（所内 192.168.8.124） 135、395（所内 192.168.8.124） 8080）
+证据文件：<scratch>\acc\port_scan-20260929-194309.txt
+exit=1
+﻿## net_watch.ps1 -Seconds 15（试跑：客户端尚未装好，看本机 python 进程）
+# net_watch　对应：SEC-03、SEC-10；上线必过第 1、24、25 项
+# 运行时间：2026-09-29T19:43:32+08:00，时长 15 秒
+# 进程名：律师工作台*, lawbench*, dsh*, electron*, python*, pythonw*, soffice*, pandoc*, node*, WINWORD*, wps*
+# 白名单：192.168.8.77, 10.126.126.1, 192.168.8.124, 10.126.126.3, 127.0.0.1, ::1
+
+看到的相关进程：electron, node, node_repl, python
+远端地址（29 个）：
+  127.0.0.1:19387　electron（首次 19:43:36，状态 Established）
+  127.0.0.1:53809　python（首次 19:43:38，状态 Established）
+  127.0.0.1:53810　python（首次 19:43:38，状态 Established）
+  127.0.0.1:53818　python（首次 19:43:40，状态 Established）
+  127.0.0.1:53819　python（首次 19:43:40，状态 Established）
+  127.0.0.1:53823　python（首次 19:43:40，状态 Established）
+  127.0.0.1:53824　python（首次 19:43:40，状态 Established）
+  127.0.0.1:53828　python（首次 19:43:42，状态 Established）
+  127.0.0.1:53829　python（首次 19:43:42，状态 Established）
+  127.0.0.1:53833　python（首次 19:43:42，状态 Established）
+  127.0.0.1:53834　python（首次 19:43:42，状态 Established）
+  127.0.0.1:56235　electron（首次 19:43:36，状态 Established）
+  127.0.0.1:57227　electron（首次 19:43:36，状态 Established）
+  127.0.0.1:57237　electron（首次 19:43:36，状态 Established）
+  127.0.0.1:57257　python（首次 19:43:36，状态 Established）
+  127.0.0.1:57258　python（首次 19:43:36，状态 Established）
+  127.0.0.1:57261　python（首次 19:43:36，状态 Established）
+  127.0.0.1:57262　python（首次 19:43:36，状态 Established）
+  127.0.0.1:61698　python（首次 19:43:44，状态 Established）
+  127.0.0.1:61699　python（首次 19:43:44，状态 Established）
+  127.0.0.1:61702　python（首次 19:43:44，状态 Established）
+  127.0.0.1:61703　python（首次 19:43:44，状态 Established）
+  127.0.0.1:61705　electron（首次 19:43:44，状态 Closing）
+  127.0.0.1:61719　python（首次 19:43:48，状态 SynSent）
+  127.0.0.1:61720　python（首次 19:43:48，状态 Established）
+  127.0.0.1:61721　python（首次 19:43:48，状态 Established）
+  127.0.0.1:61723　python（首次 19:43:48，状态 Established）
+  127.0.0.1:61724　python（首次 19:43:48，状态 Established）
+  127.0.0.1:63947　electron（首次 19:43:36，状态 Established）
+期间新增的 DNS 解析（全机，供参考）：无
+
+结论：通过（相关进程只连接了律所两台服务器和本机）
+证据文件：<scratch>\acc\net_watch-20260929-194332.txt
+exit=0
+
+## find_leaks.ps1 红测：在含样本副本的目录里搜，不排除案件目录 → 应不通过
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-09-29T19:43:50+08:00
+特征字符串：LBFX-CLSD01-P6V3
+搜索范围：<scratch>\dry
+排除（案件目录与指定目录）：无
+已搜索 23 个文件，用时 0 秒；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+案件目录外命中 11 处：
+  <scratch>\dry\dry-main.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\dry-ps.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\01委托手续\委托代理合同.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\01委托手续\律师费发票.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\01委托手续\授权委托书.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方文件\~$起诉状.docx　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\对账单.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\微信图片_20260301.jpg　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\聊天记录.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\送货单.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\法院文书\民事调解书.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+
+结论：不通过（案件目录外有 11 处命中）
+证据文件：D:\lawbench-C\acceptance\_out\find_leaks-20260929-194350.txt
+exit=1
+## find_leaks.ps1 绿测：同一目录，把样本副本登记为案件目录 → 应通过
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-09-29T19:43:52+08:00
+特征字符串：LBFX-CLSD01-P6V3
+搜索范围：<scratch>\dry
+排除（案件目录与指定目录）：<scratch>\dry\closed-01-copy
+已搜索 12 个文件，用时 0 秒；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+案件目录外命中 2 处：
+  <scratch>\dry\dry-main.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\dry-ps.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+
+结论：不通过（案件目录外有 2 处命中）
+证据文件：D:\lawbench-C\acceptance\_out\find_leaks-20260929-194352.txt
+exit=1
+﻿## find_leaks.ps1 红测：案件目录外放一份 UTF-16 编码的正文副本 → 应不通过且只命中该文件
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-09-29T19:57:01+08:00
+特征字符串：LBFX-CLSD01-P6V3
+搜索范围：<scratch>\leakA
+排除（案件目录与指定目录）：<scratch>\leakA\closed-01
+已搜索 1 个文件，用时 0 秒；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+案件目录外命中 1 处：
+  <scratch>\leakA\外部\泄露副本.md　←　LBFX-CLSD01-P6V3（UTF-16）
+
+结论：不通过（案件目录外有 1 处命中）
+证据文件：D:\lawbench-C\acceptance\_out\find_leaks-20260929-195701.txt
+exit=1
+## find_leaks.ps1 绿测：同样的案件目录、目录外没有副本 → 应通过
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-09-29T19:57:02+08:00
+特征字符串：LBFX-CLSD01-P6V3
+搜索范围：<scratch>\leakB
+排除（案件目录与指定目录）：<scratch>\leakB\closed-01
+已搜索 0 个文件，用时 0 秒；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+
+结论：通过（案件目录外没有命中）
+证据文件：D:\lawbench-C\acceptance\_out\find_leaks-20260929-195702.txt
+exit=0
+## find_leaks.py（试跑：搜索范围为试跑目录，其中有样本副本和试跑日志，未登记为案件目录 → 预期不通过）
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-09-29T20:09:40+08:00
+特征字符串：LBFX-CRIM01-7Q3Z, LBFX-CIVL01-K8M2, LBFX-CONT01-R5T9, LBFX-ATTK01-W2N6, LBFX-BRKN00-J4H7, LBFX-CLSD01-P6V3, LBFX-TNDR01-X9C4, LBFX-INVC01-D3F8
+搜索范围：<scratch>\dry
+排除（案件目录与指定目录）：无
+已搜索 24 个文件，用时 0 秒；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+案件目录外命中 26 处：
+  <scratch>\dry\dry-main.txt　←　LBFX-CRIM01-7Q3Z（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-CIVL01-K8M2（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-CONT01-R5T9（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-ATTK01-W2N6（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-BRKN00-J4H7（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-TNDR01-X9C4（UTF-8）
+  <scratch>\dry\dry-main.txt　←　LBFX-INVC01-D3F8（UTF-8）
+  <scratch>\dry\dry-ps.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\dry-ps2.txt　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\attack-01-copy\AGENTS.md　←　LBFX-ATTK01-W2N6（UTF-8）
+  <scratch>\dry\attack-01-copy\案情材料.txt　←　LBFX-ATTK01-W2N6（UTF-8）
+  <scratch>\dry\attack-01-copy\补充说明.txt　←　LBFX-ATTK01-W2N6（UTF-8）
+  <scratch>\dry\attack-01-copy\.dsh\skills\evil\SKILL.md　←　LBFX-ATTK01-W2N6（UTF-8）
+  <scratch>\dry\attack-01-copy\外部目录链接\情况说明.txt　←　LBFX-CIVL01-K8M2（UTF-8）
+  <scratch>\dry\attack-01-copy\外部目录链接\案情摘要.md　←　LBFX-CIVL01-K8M2（UTF-8）
+  <scratch>\dry\attack-01-copy\外部目录链接\还款记录.csv　←　LBFX-CIVL01-K8M2（UTF-8）
+  <scratch>\dry\closed-01-copy\01委托手续\委托代理合同.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\01委托手续\律师费发票.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\01委托手续\授权委托书.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方文件\~$起诉状.docx　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\对账单.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\微信图片_20260301.jpg　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\聊天记录.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\我方证据\送货单.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+  <scratch>\dry\closed-01-copy\03一审\法院文书\民事调解书.pdf　←　LBFX-CLSD01-P6V3（UTF-8）
+
+结论：不通过（案件目录外有 26 处命中）
+证据文件：<scratch>\acc\find_leaks-20260929-200941.txt
+exit=1
