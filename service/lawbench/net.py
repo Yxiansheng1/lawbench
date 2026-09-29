@@ -26,6 +26,8 @@ CACHE_SECONDS = 60
 CONNECT_TIMEOUT = 10.0
 REQUEST_TIMEOUT = 1200.0
 
+SERVER_KEYS = ("llm_base_url", "prep_base_url", "llm_alt_base_url", "prep_alt_base_url")
+
 KINDS = {
     "llm": ("llm_base_url", "llm_alt_base_url", "/models"),
     "prep": ("prep_base_url", "prep_alt_base_url", "/health"),
@@ -37,10 +39,11 @@ FORWARD_RESP_HEADERS = {"content-type", "x-queue-wait-ms", "cache-control"}
 
 
 def _host_port(url: str) -> tuple[str, int] | None:
-    u = urlsplit(url)
-    if u.scheme != "http" or not u.hostname:
-        return None
+    """解析不了（如 http://[::1/v1）或端口不是数字（如 http://127.0.0.1:8x/v1）一律返回 None。"""
     try:
+        u = urlsplit(url)
+        if u.scheme != "http" or not u.hostname:
+            return None
         port = u.port or 80
     except ValueError:
         return None
@@ -53,7 +56,7 @@ class Allowlist:
 
     def update(self, servers: dict) -> None:
         targets = set()
-        for key in ("llm_base_url", "prep_base_url", "llm_alt_base_url", "prep_alt_base_url"):
+        for key in SERVER_KEYS:
             url = servers.get(key)
             hp = _host_port(url) if url else None
             if hp:
@@ -98,7 +101,11 @@ class Net:
             event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
 
     def check_servers(self, servers: dict) -> None:
-        """6000D 地址不能是本机转发端口自己（否则会自己探测自己）：INVALID_ARGUMENT。"""
+        """设置里的服务器地址：非空的必须能解析出主机和端口；6000D 地址不能是本机转发端口自己
+        （否则会自己探测自己）。不合格报 INVALID_ARGUMENT。"""
+        for key in SERVER_KEYS:
+            if servers.get(key) and _host_port(servers[key]) is None:
+                raise ApiError("INVALID_ARGUMENT", "server_url_invalid")
         if not self.forward_port:
             return
         for key in ("llm_base_url", "llm_alt_base_url"):
@@ -232,7 +239,8 @@ def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None):
 
     async def _forward(op: str, scope, headers: dict, receive, send) -> None:
         t0 = time.monotonic()
-        outcome = {"status": "fail", "error": "CANCELLED"}
+        # 初始值是 INTERNAL：任何没被下面明确处理的结局都不会被误记成"客户端取消"
+        outcome = {"status": "fail", "error": "INTERNAL"}
 
         def log() -> None:
             logs.event("forward", op, status=outcome["status"], error=outcome["error"],
@@ -246,6 +254,7 @@ def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None):
         while True:
             msg = await receive()
             if msg["type"] == "http.disconnect":
+                outcome["error"] = "CANCELLED"  # 请求体还没读完客户端就断开了
                 log()
                 return
             body += msg.get("body", b"")
@@ -259,6 +268,12 @@ def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None):
 
         async def work(cancel_scope: anyio.CancelScope) -> None:
             resp = None
+            started = False  # 已经向客户端发出响应头：之后出错就不能再回 502 了
+
+            async def fail_502(code: str) -> None:
+                if not started:
+                    await _send_simple(send, 502, _error_body(code))
+
             try:
                 for attempt in (0, 1):
                     try:
@@ -276,6 +291,7 @@ def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None):
                 out = [(k.encode("latin-1"), v.encode("latin-1")) for k, v in resp.headers.items()
                        if k.lower() in FORWARD_RESP_HEADERS]
                 await send({"type": "http.response.start", "status": resp.status_code, "headers": out})
+                started = True
                 try:
                     async for chunk in resp.aiter_raw():
                         await send({"type": "http.response.body", "body": chunk, "more_body": True})
@@ -287,10 +303,13 @@ def forward_app(net: Net, transport: httpx.AsyncBaseTransport | None = None):
                 await send({"type": "http.response.body", "body": b"", "more_body": False})
             except ApiError as e:
                 finish("fail", e.code)
-                await _send_simple(send, 502, _error_body(e.code))
+                await fail_502(e.code)
             except httpx.HTTPError as e:
                 finish("fail", type(e).__name__)
-                await _send_simple(send, 502, _error_body("SERVER_UNREACHABLE"))
+                await fail_502("SERVER_UNREACHABLE")
+            except Exception as e:  # noqa: BLE001 未预料的异常（如 httpx.InvalidURL，它不是 HTTPError 的子类）
+                finish("fail", type(e).__name__)
+                await fail_502("INTERNAL")
             finally:
                 if resp is not None:
                     with anyio.CancelScope(shield=True):

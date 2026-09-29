@@ -301,13 +301,14 @@ def mkdir_work(root: str, rel: str, op: str = "write") -> pathlib.Path:
 def mkdir_original(root: str, rel: str, op: str = "case_template") -> bool:
     """原件区补建空文件夹（仅 /api/case/open 的 template）。返回是否新建。
 
-    已存在的一级（含链接、junction）一律跳过、不报错、不往里写：某一级已是链接时，它下面的各级也不建。
+    已存在的一级（含链接、junction、同名文件）一律跳过、不报错、不往里写：某一级已是链接或文件时，
+    它下面的各级也不建。
     """
     parts = check_ai_rel(rel, op)
     cur = root
     for p in parts:
         cur = os.path.join(cur, p)
-        if is_link(cur):
+        if is_link(cur) or (os.path.lexists(cur) and not os.path.isdir(cur)):
             return False
     path = _resolve(root, parts, op)
     if os.path.lexists(path):
