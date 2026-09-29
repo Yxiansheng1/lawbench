@@ -40,7 +40,7 @@ class WriteAudit:
             writing = (isinstance(mode, str) and any(c in mode for c in "wax+")) or                 (isinstance(flags, int) and flags & self.WRITE_FLAGS)
             if writing and isinstance(path, (str, bytes, os.PathLike)):
                 p = os.fsdecode(path).lower()
-                if not any(p.startswith(a) for a in self.allow):
+                if not any(p == a or p.startswith(a + os.sep) for a in self.allow):
                     self.events.append(f"open {p} {mode} {flags}")
 
 

@@ -34,7 +34,7 @@ from .logs import AccessLog
 from .queue import ClientGone, QueueFull, Slots, Timeout, run_cancellable
 
 OCR_QUERY = ("dewatermark", "deskew", "return_image")
-LOC_OK = re.compile(r"^第[0-9]+[页段行]$")
+LOC_OK = re.compile(r"第[0-9]+[页段行]")   # 用 fullmatch，不放过行尾换行
 CLIENT_GONE = 499   # 只写进日志：客户端已断开，没有响应可发
 
 MESSAGES = {
@@ -390,7 +390,7 @@ def _clean_fields(out, fields: list[str]) -> list[dict]:
     res = []
     for it in out:
         f, v, loc = it.get("field"), it.get("value"), it.get("loc")
-        if f in fields and isinstance(v, str) and v and isinstance(loc, str) and LOC_OK.match(loc):
+        if f in fields and isinstance(v, str) and v and isinstance(loc, str) and LOC_OK.fullmatch(loc):
             res.append({"field": f, "value": v, "loc": loc})
     return res
 

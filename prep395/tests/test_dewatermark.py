@@ -5,6 +5,7 @@ import base64
 import io
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from conftest import auth, scan_pages, to_bytes
@@ -120,3 +121,51 @@ def test_api_dewatermark_off_by_default(client):
     assert np.array_equal(np.asarray(im0.convert("RGB")), np.asarray(page3))
     assert gray_var(im1, WM_BOX) < gray_var(im0, WM_BOX) * 0.3
     assert red_count(im1) == red_count(page3)
+
+
+def _page_with(lines, base, fill, kind="song", size=30, x=120, y0=140, step=52):
+    import sys
+    from PIL import ImageDraw
+    from conftest import FIXTURES
+    sys.path.insert(0, str(FIXTURES / "_gen"))
+    import common as G
+    img = base.copy()
+    d = ImageDraw.Draw(img)
+    f = G.pil_font(size, kind)
+    for k, t in enumerate(lines):
+        d.text((x, y0 + step * k), t, font=f, fill=fill)
+    return img
+
+
+def _gen():
+    import sys
+    from conftest import FIXTURES
+    sys.path.insert(0, str(FIXTURES / "_gen"))
+    import common as G
+    import case_criminal01 as K
+    return G, K
+
+
+def test_gray_text_page_with_watermark_left_alone():
+    """浅灰（约 170）横排正文页叠加水印：非水印的浅灰像素逐像素不变（整页原样返回）。"""
+    G, _ = _gen()
+    base = Image.new("RGB", G.PAGE_PX, (246, 244, 238))
+    text = _page_with(["浅灰色正文测试文字，横排排列，每一行内容都是虚构的。"] * 29, base, (170, 170, 170))
+    img = G.add_watermark(text, "仅供办案使用")
+    gray_text = np.asarray(text).max(axis=2) < 200           # 正文笔画所在像素
+    out, n = dewatermark(img)
+    assert np.array_equal(np.asarray(out)[gray_text], np.asarray(img)[gray_text])
+    assert n == 0
+
+
+@pytest.mark.xfail(strict=True, reason="T6 第二轮返修 P2-A：扫描页上的浅灰手写与水印区分不稳，见 p2a-measure.txt，交主编排止损决定")
+def test_scan_with_watermark_and_pencil_notes_left_alone():
+    """扫描页叠加水印再加几行灰度约 160 的手写：手写像素逐像素不变。"""
+    G, K = _gen()
+    base = G.add_watermark(G.render_page(K.XUNWEN[0], seed=100), "仅供办案使用")
+    notes = _page_with(["铅笔批注：此处需核对转账时间", "与银行流水第三页对照", "询问笔录前后不一致"],
+                       Image.new("RGB", G.PAGE_PX, (255, 255, 255)), (160, 160, 160), "kai", 40, 150, 1250, 70)
+    hand = np.asarray(notes).max(axis=2) < 200
+    img = Image.fromarray(np.where(hand[..., None], np.asarray(notes), np.asarray(base)).astype(np.uint8))
+    out, _ = dewatermark(img)
+    assert np.array_equal(np.asarray(out)[hand], np.asarray(img)[hand])

@@ -1,0 +1,14 @@
+# T6 第二轮返修红测（变异后应失败，测完已还原）  2026-09-29 20:37:02 +0800
+
+## P3-A：请求期间写到 <log_dir>-x\ 再删 → 不落盘测试应失败
+=========================== short test summary info ===========================
+FAILED tests/test_privacy.py::test_fifty_images_leave_no_files - AssertionErr...
+1 failed, 3 deselected in 35.41s
+exit=1
+
+## NOTE 3：换回 ^…$ 加 match → 行尾换行的 loc 被放过，测试应失败
+FAILED tests/test_api_contract.py::test_loc_with_trailing_newline_dropped - A...
+1 failed, 37 deselected in 1.34s
+exit=1
+
+## P2-A：扫描页+水印+浅灰手写用例在当前代码上失败（标为 strict xfail，见 p2a-measure.txt）

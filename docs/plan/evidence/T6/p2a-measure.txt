@@ -1,0 +1,15 @@
+# T6 第二轮返修 P2-A 可行性测量  2026-09-29 20:35 +0800
+# 候选像素 = 浅灰低饱和、非红蓝的像素；scan=criminal-01 讯问笔录三页（只有水印）；graytext=灰度170横排正文页；hand+wm=扫描页+水印+三行灰度160楷体手写
+# out=最佳斜向角度投影中'带外'像素占比；blocks=14x10 分块候选密度 最大/中位、第三大/中位
+scan 1 {'area': np.float64(0.057), 'best': -30, 'diag': 1.874, 'axis': [0.576, 0.113], 'out': np.float64(0.212), 'is_diag': True}
+scan 2 {'area': np.float64(0.057), 'best': -30, 'diag': 1.968, 'axis': [0.661, 0.124], 'out': np.float64(0.176), 'is_diag': True}
+scan 3 {'area': np.float64(0.052), 'best': -30, 'diag': 2.38, 'axis': [0.354, 0.123], 'out': np.float64(0.19), 'is_diag': True}
+graytext+wm {'area': np.float64(0.106), 'best': -30, 'diag': 0.73, 'axis': [0.615, 0.637], 'out': np.float64(0.396), 'is_diag': False}
+graytext    {'area': np.float64(0.069), 'best': -60, 'diag': 0.879, 'axis': [1.266, 1.342], 'out': np.float64(0.275), 'is_diag': False}
+hand+wm     {'area': np.float64(0.06), 'best': -30, 'diag': 2.315, 'axis': [0.442, 0.147], 'out': np.float64(0.268), 'is_diag': True}
+--- blocks max/median, 3rd/median
+scan 1 (np.float64(4.82), np.float64(3.78))
+scan 2 (np.float64(5.63), np.float64(5.31))
+scan 3 (np.float64(7.41), np.float64(5.92))
+hand+wm (np.float64(5.3), np.float64(3.79))
+graytext+wm (np.float64(2.53), np.float64(2.34))

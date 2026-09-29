@@ -246,3 +246,15 @@ def test_non_ascii_key_is_invalid_without_calling_6000d(client, gateway):
     r = client.post("/v1/ocr/page", content=png_bytes(), headers=hdr)
     expect_error(r, 401, "KEY_INVALID")
     assert len(gateway.app.state.calls) == n0
+
+
+def test_loc_with_trailing_newline_dropped(settings):
+    from fastapi.testclient import TestClient
+
+    class Trailing(FakeBackend):
+        async def extract_fields(self, text, fields):
+            return [{"field": "金额", "value": "1.00", "loc": "第3页\n"}, {"field": "金额", "value": "2.00", "loc": "第4页"}]
+
+    with TestClient(create_app(settings, Trailing())) as c:
+        r = c.post("/v1/extract", json={"task": "fields", "text": "x", "fields": ["金额"]}, headers=auth())
+    assert r.json()["result"] == [{"field": "金额", "value": "2.00", "loc": "第4页"}]
