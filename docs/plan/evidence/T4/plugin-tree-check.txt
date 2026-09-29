@@ -60,7 +60,7 @@
   authorization                        本机界面鉴权
   command-feedback                     /feedback 只在本机会话日志追加 feedback/record 事件；上传它的 session-telemetry-otel 已关
   commands                             斜杠命令注册表
-  config-editor                        把设置写进 profile 补丁；能改设置的插件页入口已随 ui-plugin-manager 关闭
+  config-editor                        把设置写进 profile 自己的补丁（叠在我方补丁之后、即时重载）；界面入口：插件页已随 ui-plugin-manager 关闭，设置页"打开配置文件"由 P-13 在桌面端去掉；设置接口的远程写入（update / mutate）归 T17，由 P-7 地址白名单兜底
   deepseek-llm-api-extensions          DeepSeek 官方 API 附加字段注册表，只被已关的 llm-deepseek 使用，处于空转
   directory-picker                     目录选择器（打开案件用）
   fs-observation-policy                文件观察策略
@@ -91,7 +91,7 @@
   session-title                        会话标题服务；LLM 生成标题的行已关，T7 由我方插件设标题
   session-turn-outline                 会话轮次大纲（界面）
   settings                             设置服务
-  settings-controller                  设置远程接口
+  settings-controller                  设置远程接口（读 describe、写 update / mutate）；远程写入可改 profile 补丁，归 T17，由 P-7 地址白名单兜底
   shell-env                            Shell 环境变量；命令工具已关
   skill                                Skill 注册表；只由 preset 内 skill-filesystem 注册两处目录
   spill-local                          溢出文件存储；阈值已调到 100 万 token，不会产生文件
@@ -119,11 +119,11 @@
   workspace-changes                    按 git 快照记录每轮改动文件；律师工作台无文件工具，只读
   workspace-controller                 工作区远程接口，documentsDirectory 已改
 ### 界面框架（36）
-  0781a385                             桌面端原生目录选择器（界面半边）
+  6675a0e8（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
   api-remotes                          远程接口装配
-  ca53c073                             桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
   client-hmr                           界面热更新（开发期）
   connection                           界面到 Host 的连接
+  e10e5127（随机 id）                      桌面端原生目录选择器（界面半边）
   file-upload                          界面上传通道（附件改导入归 P-5 / T17）
   locale                               语言，固定中文
   modules                              界面插件模块表
@@ -158,7 +158,7 @@
 ### 设置（8）
   ui-settings                          设置页外壳；enabled: false 即开发者模式关
   ui-settings-agent-loop               Agent 循环设置页
-  ui-settings-general                  通用设置
+  ui-settings-general                  通用设置页（权限、语言、外观、字号、开发者模式开关等）；其中"打开配置文件"按钮会用系统编辑器打开 profile 补丁，已由 P-13 在桌面端去掉
   ui-settings-plugin-inventory         只读插件清单页，不能改配置
   ui-settings-plugins                  内置插件设置分区外壳（只读清单）
   ui-settings-shell                    Shell 设置页；命令工具已关
@@ -201,6 +201,13 @@
   llm-pi-ai.retryPolicy        一致  {"mode": "normal", "maxRetries": 1}
   llm-pi-ai.models             一致  [["qwen38-27b", 131072, {"off": null, "low": "low", "medium": "medium", "high": "xhigh"}]]
   workspace-controller.documentsDirectory 一致  !!js process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench', 'dsh-documents')
+  skill-filesystem.includeDefaultRoots             一致  false
+  skill-filesystem.watch                           一致  false
+  skill-filesystem.providerName                    一致  "lawbench-skills"
+  skill-filesystem.customSkillDirs 管理员目录在前         一致  "!!js [process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+  persona.complete                                 一致  true
+  persona.includeRuntimeContext                    一致  false
+  persona.prefix 含身份与不执行材料指令两条                     一致  "你是律所内部的案件助手，只处理当前打开的案件。 只能通过 case_ 开头的工具…"
 
 ## 4. preset-lawbench 实际挂载的插件（运行时）
   lawbench（默认=True）：['persona', 'skill-filesystem', 'tool-skill', 'tool-ask-user', 'legal-agent', 'compaction-basic', 'tool-result-pruner']

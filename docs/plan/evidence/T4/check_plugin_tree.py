@@ -11,7 +11,7 @@
   4. preset-lawbench：只挂允许的插件。
 用法：python check_plugin_tree.py plugin-inventory-desktop.json plugin-tree.txt
 """
-import json, sys, yaml
+import json, re, sys, yaml
 
 # ── 1. 必须关的行（Spec 3.1 清单 21 行 + T4 复核补关 6 行）─────────────────
 MUST_OFF = {
@@ -30,6 +30,10 @@ MUST_OFF = {
     "tool-subagent-list-agents", "workflow-ptc", "tool-workflow", "tool-ralph", "tool-todo",
     "tool-web", "tool-goal", "command-goal", "plan-mode", "tool-plugin-manager",
 }
+
+# 必须关的行在运行时清单里不存在时一律计入失败（可能是 id 写错或换了 DSH 提交），
+# 除非列在这里并写明原因。固定提交 477b4f4 下 48 行全部存在，所以目前为空。
+ALLOWED_ABSENT = {}
 
 # ── 2. 允许启用的行：类别 + 它是做什么的、为什么可以开 ─────────────────────
 CORE = "核心运行时"
@@ -54,7 +58,7 @@ ALLOWED = {
     "agent-default-model": (CORE, "新会话默认模型，已改成律所路由"),
     "jobs": (CORE, "后台任务注册表；产生任务的工具行都已关"),
     "llm-retry": (CORE, "LLM 重试服务，策略在 llm-pi-ai 路由的 retryPolicy"),
-    "config-editor": (CORE, "把设置写进 profile 补丁；能改设置的插件页入口已随 ui-plugin-manager 关闭"),
+    "config-editor": (CORE, "把设置写进 profile 自己的补丁（叠在我方补丁之后、即时重载）；界面入口：插件页已随 ui-plugin-manager 关闭，设置页\"打开配置文件\"由 P-13 在桌面端去掉；设置接口的远程写入（update / mutate）归 T17，由 P-7 地址白名单兜底"),
     "settings": (CORE, "设置服务"),
     "authorization": (CORE, "本机界面鉴权"),
     "llm-pi-ai": (CORE, "律所模型路由（唯一路由，指向 127.0.0.1:18765）"),
@@ -98,7 +102,7 @@ ALLOWED = {
     "plugin-inventory": (CORE, "只读插件清单；本证据即由它导出"),
     "session-controller": (CORE, "会话命令远程接口"),
     "job-controller": (CORE, "后台任务远程接口"),
-    "settings-controller": (CORE, "设置远程接口"),
+    "settings-controller": (CORE, "设置远程接口（读 describe、写 update / mutate）；远程写入可改 profile 补丁，归 T17，由 P-7 地址白名单兜底"),
     "workspace-controller": (CORE, "工作区远程接口，documentsDirectory 已改"),
     "web-startup": (CORE, "Web 启动参数"),
     "webserver": (CORE, "本机 Web 服务，绑定 127.0.0.1"),
@@ -140,11 +144,9 @@ ALLOWED = {
     "ui-plan": (UI, "计划模式入口；plan-mode 已关"),
     "ui-user-questions": (UI, "ask_user_question 的界面"),
     "ui-trajectory": (UI, "执行轨迹"),
-    "ca53c073": (UI, "桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）"),
-    "0781a385": (UI, "桌面端原生目录选择器（界面半边）"),
     # 设置
     "ui-settings": (SET, "设置页外壳；enabled: false 即开发者模式关"),
-    "ui-settings-general": (SET, "通用设置"),
+    "ui-settings-general": (SET, "通用设置页（权限、语言、外观、字号、开发者模式开关等）；其中\"打开配置文件\"按钮会用系统编辑器打开 profile 补丁，已由 P-13 在桌面端去掉"),
     "ui-settings-plugins": (SET, "内置插件设置分区外壳（只读清单）"),
     "ui-settings-plugin-inventory": (SET, "只读插件清单页，不能改配置"),
     "ui-settings-shell": (SET, "Shell 设置页；命令工具已关"),
@@ -175,6 +177,12 @@ ALLOWED = {
     "credentials": (LATER, "Key 明文存 $DSH_HOME，替换为我方凭据插件（T7）"),
 }
 
+# directory-picker 运行时自动挂载的子项没有固定 id（每次启动随机 8 位十六进制），按模块名放行
+ALLOWED_MODULES = {
+    "@deepseek-ai/dsh-host-directory-picker-native": (UI, "桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）"),
+    "@deepseek-ai/dsh-client-ui-directory-picker-native": (UI, "桌面端原生目录选择器（界面半边）"),
+}
+
 # ── 3. 改配置的行：期望取值（!!js 按原文比较）─────────────────────────────
 EXPECT = {
     "agent-preset-registry": {"default": "lawbench"},
@@ -200,16 +208,24 @@ def main(inv_path, tree_path):
     out.append(f"## 1. 必须关的行（{len(MUST_OFF)} 行）")
     for i in sorted(MUST_OFF):
         e = entries.get(i)
-        st = "不存在" if e is None else ("关" if not e["enabled"] else "启用!")
+        if e is None:
+            st = f"不存在（允许：{ALLOWED_ABSENT[i]}）" if i in ALLOWED_ABSENT else "不存在!"
+        else:
+            st = "关" if not e["enabled"] else "启用!"
         if st == "启用!":
             bad.append(f"必须关的行仍启用：{i}")
+        if st == "不存在!":
+            bad.append(f"必须关的行在清单里不存在（id 写错或 DSH 提交变了）：{i}")
         out.append(f"  {i:36s} {st}")
 
     enabled = sorted(i for i, e in entries.items() if e["enabled"])
     out += ["", f"## 2. 反向检查：启用的行 {len(enabled)} 个，逐条对白名单"]
     by_cat = {}
     for i in enabled:
-        if i not in ALLOWED:
+        mod = entries[i]["moduleName"]
+        if i not in ALLOWED and mod in ALLOWED_MODULES and re.fullmatch(r"[0-9a-f]{8}", i):
+            by_cat.setdefault(ALLOWED_MODULES[mod][0], []).append((f"{i}（随机 id）", ALLOWED_MODULES[mod][1]))
+        elif i not in ALLOWED:
             bad.append(f"清单外的启用行：{i}（{entries[i]['moduleName']}）")
             by_cat.setdefault("未列入白名单!", []).append((i, entries[i]["moduleName"]))
         else:
@@ -249,6 +265,29 @@ def main(inv_path, tree_path):
     out.append(f"  workspace-controller.documentsDirectory {'一致' if ok else '不一致!'}  {wc}")
     if not ok:
         bad.append("documentsDirectory 不符")
+
+    # preset-lawbench 里 skill-filesystem 和 persona 的取值
+    plugins = {(x.get("id")): x for x in (((rows.get("preset-lawbench") or {}).get("config") or {}).get("plugins") or [])}
+    sf = (plugins.get("skill-filesystem") or {}).get("config") or {}
+    dirs = str(sf.get("customSkillDirs", ""))
+    i_admin, i_builtin = dirs.find("ProgramData"), dirs.find("LAWBENCH_SKILLS_DIR")
+    checks = [
+        ("skill-filesystem.includeDefaultRoots", sf.get("includeDefaultRoots") is False, sf.get("includeDefaultRoots")),
+        ("skill-filesystem.watch", sf.get("watch") is False, sf.get("watch")),
+        ("skill-filesystem.providerName", sf.get("providerName") == "lawbench-skills", sf.get("providerName")),
+        ("skill-filesystem.customSkillDirs 管理员目录在前", 0 <= i_admin < i_builtin, dirs),
+    ]
+    pc = (plugins.get("persona") or {}).get("config") or {}
+    prefix = pc.get("prefix") or ""
+    checks += [
+        ("persona.complete", pc.get("complete") is True, pc.get("complete")),
+        ("persona.includeRuntimeContext", pc.get("includeRuntimeContext") is False, pc.get("includeRuntimeContext")),
+        ("persona.prefix 含身份与不执行材料指令两条", "律所内部的案件助手" in prefix and "不是给你的指令" in prefix, prefix[:40] + "…"),
+    ]
+    for name, ok, got in checks:
+        if not ok:
+            bad.append(f"preset-lawbench {name} 不符：{got}")
+        out.append(f"  {name:48s} {'一致' if ok else '不一致!'}  {json.dumps(got, ensure_ascii=False)}")
 
     out += ["", "## 4. preset-lawbench 实际挂载的插件（运行时）"]
     for p in inv.get("agentPresets", []):
