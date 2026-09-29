@@ -1,0 +1,39 @@
+T0 验收输出（主编排，2026-09-29 18:04 +08:00）
+
+== git worktree list ==
+D:/lawbench   945d8ec [main]
+D:/lawbench-A 945d8ec [line-A]
+D:/lawbench-B 945d8ec [line-B]
+D:/lawbench-C 945d8ec [line-C]
+
+== 四项检查退出码（本次重跑，完整输出见同目录四个 txt）==
+check_examples.py --skills skills        exit=0
+build_skills.py --root skills --check      exit=0
+check_6000d.py                             exit=0
+invoke.py tests\test_integrity_v38.py      exit=0
+check_6000d 结论行：
+  - chat Key A：可用
+  - chat Key B：可用
+
+== .env.local 是否入库 ==
+git ls-files 中匹配 .env.local 的行数：0
+git check-ignore -v .env.local： .gitignore:2:*.env.local	.env.local
+
+== 开发机依赖 ==
+LibreOffice 26.8.0.3 bce0998afefdbc355585ca324285661a2170ba77 
+pandoc 3.11
+
+== 迁移结果（步骤 0）==
+skills\invoice-ledger-db_V3.9.4          存在=False
+skills\retainer-offline (3)              存在=False
+skills\lawyer-archiving-1.0.0            存在=False
+skills\entries                           存在=False
+engines\invoice-ledger                                  存在=True
+engines\retainer                                        存在=True
+docs\reference\client-skills\lawyer-archiving-1.0.0     存在=True
+
+== 大卷宗样本 ==
+tests\fixtures\wiki-test 文件数=60 字节=212935；.idea / wiki_备份_* 目录数=0
+
+== 说明 ==
+git status 干净、origin/main 与本地一致、协调目录下的 lane 登记和三份执行令：在本文件所在提交推送之后核对，结果记在 D:\lawbench-coord\lawbench-lane-registry.json（main_sha）和主编排的会话记录里。
