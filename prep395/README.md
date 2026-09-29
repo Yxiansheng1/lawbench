@@ -63,7 +63,7 @@ $plain = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServi
 ## 保密要点（Spec 6.2、6.6）
 
 - 不用 multipart，`request.stream()` 读进内存；先按 `Content-Length` 拒绝超过 10MB 的请求，没有 `Content-Length` 时边读边数。
-- 图片在内存中解码、纠偏、去水印、编码为 PNG，以 base64 经本机 HTTP 发给 llama-server；不写临时文件。
+- 图片在内存中解码、纠偏、编码为 PNG，以 base64 经本机 HTTP 发给 llama-server；不写临时文件。
 - 启动时删除系统临时目录顶层、`<HOME>\tmp\` 顶层以 `prep395-` 开头的普通文件（本服务不产生这类文件，是进程被强杀时的兜底）；不删目录、不碰链接和联接、不递归；日志只记删除个数。
 - 访问日志字段固定为 `ts, key, api, pages, bytes, elapsed_ms, status, err`；`key` 为 SHA-256 前 8 位，`err` 为错误码或异常类名。uvicorn 自带访问日志关闭。
 - 客户端断开：排队中的出队；推理中的取消对 llama-server 的请求（连接断开，llama-server 停止生成）。日志里记为 `status: 499`。
