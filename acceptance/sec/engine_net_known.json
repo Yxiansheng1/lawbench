@@ -1,0 +1,20 @@
+{
+ "说明": "律所引擎自带的联网代码；工作台只开放 Spec 13.3 的白名单动作，这些文件没有调用入口",
+ "files": {
+  "engines/invoice-ledger/scripts/build_env_zip.py": [
+   "urllib.request"
+  ],
+  "engines/invoice-ledger/scripts/mail_collect.py": [
+   "imaplib",
+   "socket",
+   "ssl",
+   "urllib.request"
+  ],
+  "engines/retainer/app/idscan.js": [
+   "fetch"
+  ],
+  "engines/retainer/tools/ocr-driver/test/channel.js": [
+   "fetch"
+  ]
+ }
+}
