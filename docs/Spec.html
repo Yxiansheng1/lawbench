@@ -1000,7 +1000,7 @@ li{margin:3px 0}
 <p><strong>案件注册表</strong>：工作台服务在应用数据目录维护 <code>cases.json</code>（<code>case_id → 案件目录</code>，只有路径，没有内容），&quot;最近案件&quot;也从这里读。</p>
 </li>
 <li>
-<p><code>case.db</code> 带 <code>schema_version</code>，升级前自动备份为 <code>case.db.bak-&lt;版本&gt;</code>。</p>
+<p><code>case.db</code> 带 <code>schema_version</code>，升级前自动备份为 <code>case.db.bak-&lt;版本&gt;</code>。第一版只有版本 <code>1</code>，不做升级：遇到版本不符的 <code>case.db</code> 拒绝打开（<code>INVALID_ARGUMENT</code>），文件不做任何改动（2026-09-29 T3 返修）；以后真要改表结构时，再连同测试一起加升级和备份。</p>
 </li>
 <li>
 <p><strong>会话和任务分开编号</strong>：会话是 DSH 的一段对话（<code>&lt;会话ID&gt;</code>），任务是一次执行。律师在一个会话里每发起一次请求就是一个新任务，<code>任务ID</code> 形如 <code>T-&lt;时间&gt;-&lt;4位随机&gt;</code>；流水线任务形如 <code>P-&lt;时间&gt;-&lt;4位随机&gt;</code>。任务单记录所属会话。这样同一会话的多次执行不会互相覆盖任务单、读取记录和结果清单。</p>
