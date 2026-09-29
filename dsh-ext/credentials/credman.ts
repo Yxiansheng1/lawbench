@@ -56,9 +56,10 @@ function run(script: string, stdin: string, timeoutMs = TIMEOUT_MS): Promise<str
     child.on('close', (code) => {
       clearTimeout(timer)
       if (timedOut) { reject(new Error(`凭据管理器操作超时（${timeoutMs / 1000} 秒）`)); return }
-      // stderr 可能含异常信息，但不含 Key（Key 只在 stdin 里）；只取第一行给调用方
+      // 错误信息只带退出码，不带标准错误的内容（T7 第三轮 N1：可能含本机路径等诊断信息，会经首次配置页显示给律师）
+      void err
       if (code === 0) resolve(out)
-      else reject(new Error(`凭据管理器操作失败（退出码 ${code}）：${err.split(/\r?\n/)[0] ?? ''}`))
+      else reject(new Error(`凭据管理器操作失败（退出码 ${code}）`))
     })
     child.stdin.end(stdin, 'utf8')
   })

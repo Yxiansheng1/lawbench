@@ -172,6 +172,29 @@ describe('看护：策略（模拟进程）', () => {
     expect(s.state).toBe('stopped')
   })
 
+  it('旧代次的启动失败不覆盖新一代的状态（T7 第三轮 P3-2）', async () => {
+    let calls = 0
+    let failFirst!: () => void
+    const deps = {
+      spawn(): ChildHandle { return { pid: 1, exited: new Promise<number | null>(() => {}), kill: () => {} } },
+      probe: async () => '1.1',
+      // 第一次挑端口挂起，放行后抛错；第二次立即成功
+      pickPort: async () => { calls++; if (calls === 1) { await new Promise<void>((r) => { failFirst = r }); throw new Error('旧的一次挑端口失败') } return 18500 },
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      log: () => {},
+    }
+    const s = new Supervisor(deps)
+    const first = s.start()
+    await new Promise((r) => setTimeout(r, 10))
+    await s.start()               // 第二代启动成功
+    expect(s.state).toBe('running')
+    failFirst()                   // 第一代此时才失败
+    await first
+    expect(s.state).toBe('running')
+    s.stop()
+  })
+
   it('挑端口期间 stop()：不再拉起进程（T7 返修 P3-2）', async () => {
     const spawned: number[] = []
     let release!: (p: number) => void

@@ -30,11 +30,15 @@ export class LawbenchCredentials {
     private readonly log: Logger = () => {},
   ) {}
 
+  /** 写入计数（T7 第三轮 P2-2）：读取期间发生过写入的，这次读到的值不进缓存。 */
+  private writes = 0
+
   private async current(): Promise<string | undefined> {
     const t = this.now()
     if (this.cache && t - this.cache.at < CACHE_MS) return this.cache.value
+    const writesBefore = this.writes
     const value = await this.store.read()
-    this.cache = { value, at: t }
+    if (this.writes === writesBefore) this.cache = { value, at: t }
     return value
   }
 
@@ -54,14 +58,16 @@ export class LawbenchCredentials {
     if (ref !== KEY_REF) throw new Error(`只能设置 ${KEY_REF}`)
     if (typeof value !== 'string' || value.length === 0) throw new Error('Key 不能为空')
     // 写之前先作废缓存：写入超时时可能已经写成功，之后的读取必须回到凭据管理器核对（T7 第二次返修）
+    this.writes++
     this.cache = undefined
-    try { await this.store.write(value) } finally { this.cache = undefined }
+    try { await this.store.write(value) } finally { this.writes++; this.cache = undefined }
   }
 
   async unset(ref: string): Promise<void> {
     if (ref !== KEY_REF) return
+    this.writes++
     this.cache = undefined
-    try { await this.store.remove() } finally { this.cache = undefined }
+    try { await this.store.remove() } finally { this.writes++; this.cache = undefined }
   }
 
   // ── 授权记录 ─────────────────────────────────────────────────────────────

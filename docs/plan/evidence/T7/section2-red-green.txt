@@ -1,0 +1,69 @@
+# T7 第三轮第 2 节（P2-2 凭据缓存写入计数、P3-2 launch 失败比对代次）红测
+# 红：去掉写入计数判断、去掉代次比对后跑；绿：恢复后再跑
+
+## 红
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+ ❯ tests/credentials.spec.ts (9 tests | 1 failed) 37ms
+     × 读取期间发生写入：这次读到的旧值不进缓存（T7 第三轮 P2-2） 26ms
+ ❯ tests/supervisor.spec.ts (11 tests | 1 failed) 6319ms
+     × 旧代次的启动失败不覆盖新一代的状态（T7 第三轮 P3-2） 23ms
+node : 
+At line:1 char:939
++ ... $u); $red = node scripts/test.mjs tests/credentials.spec.ts tests/sup ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/credentials.spec.ts > 凭据服务（Q2 裁决） > 读取期间发生写入：这次读到的旧值不进缓存（T7 第三轮 P2-2）
+AssertionError: expected 'old' to be 'new' // Object.is equality
+
+Expected: "new"
+Received: "old"
+
+ ❯ tests/credentials.spec.ts:100:47
+     98|     release()
+     99|     expect((await reading)?.value).toBe('old') // 这次返回的是读时的值
+    100|     expect((await c.resolve(KEY_REF))?.value).toBe('new') // 但没进缓存：下一次…
+       |                                               ^
+    101|   })
+    102|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/supervisor.spec.ts > 看护：策略（模拟进程） > 旧代次的启动失败不覆盖新一代的状态（T7 第三轮 P3-2）
+AssertionError: expected 'failed' to be 'running' // Object.is equality
+
+Expected: "running"
+Received: "failed"
+
+ ❯ tests/supervisor.spec.ts:194:21
+    192|     failFirst()                   // 第一代此时才失败
+    193|     await first
+    194|     expect(s.state).toBe('running')
+       |                     ^
+    195|     s.stop()
+    196|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 18 passed (20)
+   Start at  03:32:57
+   Duration  6.82s (transform 133ms, setup 0ms, import 274ms, tests 6.36s, environment 0ms)
+
+
+## 绿
+
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+
+ Test Files  2 passed (2)
+      Tests  20 passed (20)
+   Start at  03:33:05
+   Duration  6.67s (transform 113ms, setup 0ms, import 256ms, tests 6.23s, environment 0ms)
+

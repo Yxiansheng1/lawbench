@@ -82,6 +82,24 @@ describe('凭据服务（Q2 裁决）', () => {
     expect(JSON.stringify(logs)).not.toContain('secret-value')
   })
 
+  it('读取期间发生写入：这次读到的旧值不进缓存（T7 第三轮 P2-2）', async () => {
+    let value: string | undefined = 'old'
+    let release!: () => void
+    let slow = true
+    const store = {
+      read: async () => { const v = value; if (slow) { slow = false; await new Promise<void>((r) => { release = r }) } return v },
+      write: async (v: string) => { value = v },
+      remove: async () => { value = undefined },
+    }
+    const c = new LawbenchCredentials(store)
+    const reading = c.resolve(KEY_REF)        // 读到 'old' 后挂起
+    await new Promise((r) => setTimeout(r, 5))
+    await c.set(KEY_REF, 'new')               // 读取期间写入
+    release()
+    expect((await reading)?.value).toBe('old') // 这次返回的是读时的值
+    expect((await c.resolve(KEY_REF))?.value).toBe('new') // 但没进缓存：下一次回到存储，读到新值
+  })
+
   it('空 Key 拒绝', async () => {
     await expect(new LawbenchCredentials(memStore().store).set(KEY_REF, '')).rejects.toThrow()
   })
