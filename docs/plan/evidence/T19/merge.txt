@@ -1,0 +1,11 @@
+# T19 合流记录
+
+- 合并时刻：2026-09-30 13:12 (+08:00)
+- 合并提交：6d82e18（main），来源 line-C aad8c1（复核 PASS，eview-REVIEW-第五轮.md）
+- 随带：T11 进行中的提交（prep395\deploy\*、evidence\T11\模型候选.md、gpu-memory.txt），未复核，T11 完工时一并复核
+- 合流门：
+  - contracts\check_examples.py --skills skills：退出码 0
+  - skills\_scripts\build_skills.py --root skills --check：通过
+  - 	ools\tests：55 passed、8 skipped（LOCALAPPDATA 指到临时目录，pandoc 查找不到而跳过；复核员用真实 LOCALAPPDATA 跑过 63 passed），退出码 0
+  - prep395\tests：第一次 82 passed、1 failed（	est_queue.py::test_cancel_queued_and_running，当时机器上有三名复核员在跑全量；单跑 3/3 通过），全量重跑 83 passed，退出码 0
+- 解释器：D:\lawbench-C\.venv（prep395 需 PYTHONPATH=D:\lawbench\prep395，否则该 venv 以可编辑方式装的是 D:\lawbench-C 的副本）
