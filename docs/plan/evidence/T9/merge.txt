@@ -1,0 +1,9 @@
+﻿# T9 合流记录
+
+- 合并时刻：2026-09-30 20:57 (+08:00)
+- 合并提交：e241cf8（main），来源 line-B `2398428`（T9 第二轮 PASS，`review-REVIEW-第二轮.md`；含 T8 两条小项、T3 测试改读契约版本）
+- 合流门（`D:\lawbench-B\service\.venv`，`PYTHONPATH=D:\lawbench\service`，数据目录指临时目录）：
+  - `contracts\check_examples.py --skills skills`：退出码 0
+  - `skills\_scripts\build_skills.py --root skills --check`：通过
+  - `service\tests` 全量：**772 passed、6 skipped**，582 秒，退出码 0（第一次运行被外部中断，重跑）
+- 遗留小项（随 T10 做）：`_literal` 首尾空格；OperationalError 转参数错误的口径收窄；pop 层断言；locked/busy 用例；`\|` 还原；Cf 类格式字符
