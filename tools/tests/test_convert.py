@@ -58,10 +58,11 @@ def check_unchanged_and_clean(src, before):
 
 
 @pytest.fixture(autouse=True)
-def isolated_temp(monkeypatch):
+def isolated_temp(monkeypatch, tmp_path_factory):
     """每个测试用自己的系统临时目录，才能断言"没有留下 lawbench-convert-*"。
     建在真实 %TEMP% 下的短路径里（与正式环境一致），不放在可能很深的 tmp_path 里。"""
     import tempfile
+    tmp_path_factory.getbasetemp()      # 先让 pytest 定下自己的临时根目录，免得它建到下面这个会被删掉的目录里
     real = tempfile.gettempdir()
     t = Path(tempfile.mkdtemp(prefix="lbt-", dir=real))
     monkeypatch.setattr(tempfile, "tempdir", str(t))
@@ -590,8 +591,9 @@ def test_soffice_crash_code_message(samples, tmp_path, monkeypatch):
 
 
 @need_lo
-def test_profile_dir_short_and_removed(samples, isolated_temp, monkeypatch):
+def test_profile_dir_short_and_removed(samples, isolated_temp, monkeypatch, short_profile_root):
     """配置目录在 <用户数据目录>/lawbench/lo/ 下（路径短），用完删除。用户数据目录指到测试目录，不写真实的 %LOCALAPPDATA%。"""
+    monkeypatch.setattr(core, "profile_root", short_profile_root)      # 用产品里真正的 profile_root()
     monkeypatch.setenv("LOCALAPPDATA", str(isolated_temp / "appdata"))
     root = core.profile_root()
     assert root == isolated_temp / "appdata" / "lawbench" / "lo"
@@ -655,3 +657,63 @@ def test_profile_left_behind_is_reported(samples, isolated_temp, monkeypatch):
     res = core.convert_many("word2pdf", [samples["docx"]])
     _, out, notes = res[0]
     assert isinstance(out, Path) and core.PROFILE_LEFT in notes
+
+
+# ---------------------------------------------------------------- 第四轮返修 F1：提示在各条路径上都不丢
+
+
+def _left_behind(monkeypatch):
+    real = core._remove_workdir
+    monkeypatch.setattr(core, "_remove_workdir", lambda w: False if w.parent == core.profile_root() else real(w))
+
+
+@need_lo
+def test_left_behind_notice_survives_convert_error(samples, tmp_path, monkeypatch):
+    """转换失败（ConvertError）+ 配置目录删不掉：失败原因里带上提示。"""
+    _left_behind(monkeypatch)
+    bad = tmp_path / "坏.docx"
+    bad.write_bytes(b"PK\x03\x04 not really a docx")
+    res = core.convert_many("word2pdf", [bad])
+    _, r, _ = res[0]
+    assert isinstance(r, str) and core.PROFILE_LEFT in r
+    with pytest.raises(core.ConvertError, match="临时目录没能删除"):
+        core.convert_file("word2pdf", bad)
+
+
+def test_left_behind_notice_survives_timeout(samples, tmp_path, monkeypatch):
+    """超时 + 配置目录删不掉：失败原因里带上提示。"""
+    import sys
+    _left_behind(monkeypatch)
+    fake = tmp_path / "soffice.cmd"
+    fake.write_text(f'@"{sys.executable}" -c "import time; time.sleep(60)" %*\n', encoding="mbcs")
+    monkeypatch.setattr(core, "_soffice", lambda: fake)
+    monkeypatch.setattr(core, "TIMEOUT_S", 2)
+    res = core.convert_many("word2pdf", [samples["docx"]])
+    _, r, _ = res[0]
+    assert "转换超时" in r and core.PROFILE_LEFT in r
+
+
+def test_left_behind_notice_survives_other_exception(samples, monkeypatch):
+    """LibreOffice 之后出现意外异常 + 配置目录删不掉：内部错误的原因里带上提示，不带堆栈。"""
+    _left_behind(monkeypatch)
+    monkeypatch.setattr(core, "_soffice", lambda: Path(__file__))   # 让 _run 之前的准备照常
+    monkeypatch.setattr(core, "_run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("内部细节 xyz")))
+    res = core.convert_many("word2pdf", [samples["docx"]])
+    _, r, _ = res[0]
+    assert r.startswith(core.INTERNAL[:10]) and core.PROFILE_LEFT in r and "xyz" not in r
+
+
+@need_lo
+def test_left_behind_notice_on_success_stays_in_notes(samples, monkeypatch):
+    """转换成功 + 删不掉：结果照常，提示在提示列表里。"""
+    _left_behind(monkeypatch)
+    res = core.convert_many("word2pdf", [samples["docx"]])
+    _, out, notes = res[0]
+    assert isinstance(out, Path) and core.PROFILE_LEFT in notes
+
+
+def test_no_test_writes_real_profile_root(short_profile_root):
+    """F3：测试期间 profile_root() 不指向真实的 %LOCALAPPDATA%\\lawbench\\lo。"""
+    import os
+    real = Path(os.environ.get("LOCALAPPDATA", "")) / "lawbench" / "lo"
+    assert core.profile_root() != real and core.profile_root().parent.name.startswith("lbp-")

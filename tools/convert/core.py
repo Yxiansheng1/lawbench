@@ -232,11 +232,28 @@ def convert_file(kind: str, src: Path) -> Path:
     return convert_file_ex(kind, src)[0]
 
 
+def with_notes(reason: str, notes: list[str]) -> str:
+    """失败原因后面带上本次转换途中产生的提示（例如临时目录没删掉），不让它随失败一起丢掉。"""
+    return f"{reason}（另：{'；'.join(notes)}）" if notes else reason
+
+
 def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
-    """返回 (结果路径, 给用户的提示)。"""
-    k = BY_KEY[kind]
+    """返回 (结果路径, 给用户的提示)。转换失败时，已产生的提示并入 ConvertError 的原因；
+    其他异常把提示挂在异常的 lb_notes 上，由 convert_many 并入原因（Spec 5.2：删不掉要报出来，不能静默）。"""
     notes: list[str] = []
-    src = Path(src)
+    try:
+        return _convert_file(kind, Path(src), notes)
+    except ConvertError as e:
+        if notes:
+            raise ConvertError(with_notes(str(e), notes)) from None
+        raise
+    except Exception as e:
+        e.lb_notes = notes
+        raise
+
+
+def _convert_file(kind: str, src: Path, notes: list[str]) -> tuple[Path, list[str]]:
+    k = BY_KEY[kind]
     if src.suffix.lower() not in k.inputs:
         raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.inputs)}）。")
     if not src.is_file():
@@ -353,9 +370,9 @@ def convert_many(kind: str, files: list[Path], progress: Callable[[int, int], No
         try:
             r, notes = convert_file_ex(kind, Path(f))
         except ConvertError as e:
-            r = str(e)
-        except Exception:  # noqa: BLE001  不把堆栈给用户看
-            r = INTERNAL
+            r = str(e)                                   # 提示已并入原因
+        except Exception as e:  # noqa: BLE001  不把堆栈给用户看
+            r = with_notes(INTERNAL, getattr(e, "lb_notes", []))
         out.append((Path(f), r, notes))
         if progress:
             progress(i, len(files))

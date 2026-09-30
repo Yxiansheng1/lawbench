@@ -1,0 +1,6 @@
+# T19 第四轮返修红测：去掉失败时并入提示的逻辑（相当于返修前）→ 三条失败路径的测试应失败；测完已还原  2026-09-30 10:33:22 +0800
+FAILED tests/test_convert.py::test_left_behind_notice_survives_convert_error
+FAILED tests/test_convert.py::test_left_behind_notice_survives_timeout - Asse...
+FAILED tests/test_convert.py::test_left_behind_notice_survives_other_exception
+3 failed, 1 passed, 43 deselected in 28.34s
+exit=1
