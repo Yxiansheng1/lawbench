@@ -2041,6 +2041,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <p><strong>在本机生成</strong>（工作台服务）。甲方提纲原本放在 395，改动原因：修订版生成不需要模型，是纯程序处理；在本机做，合同不必发往服务器，也少一个依赖 395 的环节。<code>redline.py</code> 是独立的库，将来需要放到 395（例如客户门户）时，包一层接口即可。</p>
 <p><strong>验收</strong>：G-10 的样本在 Word 和 WPS 中都能显示修订，并能逐条接受或拒绝。</p>
 <h3 id="12-3-Word-转-PDF-office-convert-py">12.3 Word 转 PDF（<code>office/convert.py</code>）</h3>
+<p><strong>2026-09-30 用户定（候 owner 清单 N24）</strong>：第一版的格式互转小工具<strong>不转换旧版 <code>.doc</code> / <code>.wps</code></strong>（按文件头判断），提示律师用 Word 或 WPS 另存为 docx 再来；原因是对旧版二进制文档的外链检查无法独立验证（见 14.3 ②a 和 T19 复核记录）。工作台服务导入旧版文档的做法不变（14.3 ②a：查到外链就拒绝，N17）。</p>
 <p>归档需要把 docx、doc、wps 转成 PDF，而且结案报告要求一页排版准确。律所电脑装有 Word 或 WPS，优先调用它们；按设置 <code>converter</code> 选择，默认 <code>auto</code> 依次尝试：</p>
 <table>
 <thead>

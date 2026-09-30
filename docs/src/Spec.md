@@ -1052,6 +1052,8 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 
 ### 12.3 Word 转 PDF（`office/convert.py`）
 
+**2026-09-30 用户定（候 owner 清单 N24）**：第一版的格式互转小工具**不转换旧版 `.doc` / `.wps`**（按文件头判断），提示律师用 Word 或 WPS 另存为 docx 再来；原因是对旧版二进制文档的外链检查无法独立验证（见 14.3 ②a 和 T19 复核记录）。工作台服务导入旧版文档的做法不变（14.3 ②a：查到外链就拒绝，N17）。
+
 归档需要把 docx、doc、wps 转成 PDF，而且结案报告要求一页排版准确。律所电脑装有 Word 或 WPS，优先调用它们；按设置 `converter` 选择，默认 `auto` 依次尝试：
 
 | 顺序 | 程序 | 调用方式 |
