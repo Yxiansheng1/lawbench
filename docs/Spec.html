@@ -2287,6 +2287,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <li>每个版本的安装包都保留，用于回退。</li>
 </ul>
 <h3 id="14-3-只连两台服务器-SEC-03">14.3 只连两台服务器（SEC-03）</h3>
+<p><strong>2026-09-30 用户定（候 owner 清单 N19）</strong>：工作台服务导入旧版 <code>.doc</code> / <code>.wps</code> 维持 ②a&quot;查到外链就拒绝&quot;；对二进制文档做模式匹配可能漏判的两种写法（碎片表拆分、图形属性引用外链）记为<strong>已知残留风险</strong>，不在第一版补；上线前由用户决定要不要在律师电脑的系统防火墙里禁止转换程序（LibreOffice、pandoc）联网（T22）。</p>
 <p>所有发出网络请求的地方都要做地址白名单检查（只允许设置中 6000D、395 的所内和所外地址，以及 <code>127.0.0.1</code>，第 15 节），并且<strong>不自动跟随重定向</strong>（收到 3xx 视为错误），防止跳转到白名单外的地址：</p>
 <table>
 <thead>
