@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import pathlib
 import random
 import socket
 import time
@@ -16,9 +18,9 @@ LAN, VPN = "127.0.0.1", "127.0.0.2"                      # 用两个本机回环
 
 
 def free_port() -> int:
-    """18xxx 段随机取一个两个地址上都空闲的端口。"""
+    """19000–19099 段随机取一个两个地址上都空闲的端口。"""
     for _ in range(200):
-        p = random.randint(18000, 18999)
+        p = random.randint(19000, 19099)              # prep395 专用段，避免撞并行复核员（T11 小项 8）
         try:
             for a in (LAN, VPN):
                 s = socket.socket()
@@ -70,7 +72,7 @@ def test_port_in_use_not_retried():
     try:
         t = time.monotonic()
         with pytest.raises(OSError) as e:
-            m.bind_first(LAN, p, retry=30)                     # 若重试会等 30 秒
+            m.bind_first(LAN, p, retry=30, attempts=2)         # 若重试会等 30 秒；attempts 有限，退化时变红而不卡死
         assert m.in_use(e.value) and time.monotonic() - t < 5
     finally:
         hold.close()
@@ -156,3 +158,47 @@ def test_failed_setup_after_bind_releases_port(monkeypatch):
         m.bind_one(LAN, p)
     monkeypatch.undo()
     assert e.value is not None and can_bind(LAN, p)            # e 还持有出错帧，漏关的口此时仍被占着
+
+
+HELPER = r'''
+import ctypes, os, signal, subprocess, sys, time
+ctypes.windll.kernel32.SetConsoleCtrlHandler(None, False)   # 取消从测试环境继承来的"忽略 Ctrl+C"（WinSW 的控制台没有这个）
+env = dict(os.environ, PREP395_HOST="192.0.2.123", PREP395_PORT=sys.argv[1])
+p = subprocess.Popen([sys.executable, "-m", "prep395"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+time.sleep(4)                                             # 让它进入所内地址的重试
+alive_before = p.poll() is None
+t = time.monotonic()
+try:
+    os.kill(0, signal.CTRL_C_EVENT)                       # 发给本控制台（助手自己的新控制台）里的全部进程，含助手自己
+    time.sleep(1)
+except KeyboardInterrupt:
+    pass
+while True:
+    try:
+        p.wait(timeout=20)
+        print(f"{alive_before} {time.monotonic() - t:.1f} {p.returncode}")
+        break
+    except KeyboardInterrupt:
+        continue
+    except subprocess.TimeoutExpired:
+        p.kill()
+        print(f"{alive_before} TIMEOUT -")
+        break
+'''
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows 服务停止用的是控制台 Ctrl+C")
+def test_ctrl_c_stops_while_retrying_lan_address(env, tmp_path):
+    """所内地址绑不上、正在重试时收到 Ctrl+C（WinSW 停服务）：几秒内退出（T11 小项 P3-A，原来 40 秒仍在重试）。"""
+    import subprocess
+    import sys
+    helper = tmp_path / "helper.py"
+    helper.write_text(HELPER, encoding="utf-8")
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 0                                    # 新控制台不显示窗口
+    r = subprocess.run([sys.executable, str(helper), str(free_port())], capture_output=True, text=True, timeout=60,
+                       creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=si, env=os.environ.copy(),
+                       cwd=str(pathlib.Path(__file__).resolve().parents[1]))
+    alive, secs, _code = r.stdout.split()
+    assert alive == "True" and secs != "TIMEOUT" and float(secs) < 5

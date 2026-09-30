@@ -135,7 +135,7 @@ Step "Firewall"
 & (Join-Path $PSScriptRoot "firewall.ps1")
 
 Step "Hibernation off"
-powercfg /h off
+powercfg /h off; Assert-Exit "powercfg /h off"
 
 Step "Start services"
 foreach ($id in @("prep395-ocr", "prep395-llm9b", "prep395")) { Start-Service $id }

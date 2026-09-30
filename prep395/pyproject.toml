@@ -9,7 +9,7 @@ description = "395 预处理服务：单页识别与 9B 抽取（lawbench Spec �
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110",
-    "uvicorn>=0.29",
+    "uvicorn>=0.54,<0.55",   # __main__ 用了内部接口 Server._serve，升级前要核对
     "httpx>=0.27",
     "Pillow>=10",
     "numpy>=1.26",

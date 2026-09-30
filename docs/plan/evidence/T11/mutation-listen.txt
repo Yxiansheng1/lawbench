@@ -6,3 +6,9 @@
 说明：原 bind_all（一次绑多个地址、失败时关已绑的）已改成"所内先绑、所外后台重试"，旧测试针对的循环不存在了；
 新的对应风险是"绑上后后续步骤失败时漏关端口"与"所外端口被占时整个服务退出并释放所内端口"，分别由
 test_failed_setup_after_bind_releases_port、test_second_port_in_use_exits_and_releases_first 覆盖，端口取 18xxx 段随机空闲口。
+
+# T11 小项 P3-A：所内地址重试时能被 Ctrl+C（WinSW 停服务）停下（2026-09-30）
+用例：tests/test_listen.py::test_ctrl_c_stops_while_retrying_lan_address（助手在独立隐藏控制台里起 prep395，所内地址设为不存在的 192.0.2.123，4 秒后发 Ctrl+C）
+修复后（bind_first 挪到 asyncio.run 之前）：1 passed，约 4.7 秒（进程收到 Ctrl+C 后 5 秒内退出）
+还原为旧写法（在事件循环内同步 bind_first）：1 failed（20 秒内没退出，TIMEOUT），约 25 秒
+说明：本测试环境继承了"忽略 Ctrl+C"，助手先 SetConsoleCtrlHandler(NULL, FALSE) 取消，WinSW 的服务控制台不带这个继承。

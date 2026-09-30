@@ -106,9 +106,12 @@ async def _stop_with(main: uvicorn.Server, extra: uvicorn.Server) -> None:
     extra.should_exit = True
 
 
-async def serve(addrs: list[str], p: int) -> None:
+async def serve(addrs: list[str], p: int, first=None) -> None:
+    """first：已绑好的所内套接字。main() 在事件循环外先绑（重试用的 time.sleep 不能卡住事件循环，
+    否则 Ctrl+C / 服务停止只取消任务、取消不到阻塞的重试，停不下来——T11 小项 P3-A）；测试可省略。"""
     app = create_app(Settings.from_env())
-    first = bind_first(addrs[0], p)
+    if first is None:
+        first = bind_first(addrs[0], p)
     main = uvicorn.Server(uvicorn_config(app, host=addrs[0]))
     failed: list[BaseException] = []
 
@@ -131,7 +134,11 @@ async def serve(addrs: list[str], p: int) -> None:
 
 def main() -> None:
     try:
-        asyncio.run(serve(hosts(), port()))
+        addrs, p = hosts(), port()
+        first = bind_first(addrs[0], p)                  # 在事件循环之外：重试期间 Ctrl+C 直接生效
+        asyncio.run(serve(addrs, p, first))
+    except KeyboardInterrupt:                             # 重试期间收到停止（Ctrl+C）：正常退出
+        sys.exit(0)
     except OSError as e:
         print(f"prep395: 无法监听（{e.__class__.__name__}，{'端口被占用' if in_use(e) else '地址不可用'}）",
               file=sys.stderr, flush=True)
