@@ -1,0 +1,49 @@
+## 窗口打开处理改回交给系统浏览器
+文件：apps/desktop/src/main.ts；跑：apps/desktop/tests/main-startup.spec.ts
+结果：1 failed | 105 passed (106)
+- |thread-safe| apps/desktop/tests/main-startup.spec.ts > desktop main startup > lawbench P-17: refuses new windows and foreign navigation without opening anything externally
+
+## will-navigate 不再阻止
+文件：apps/desktop/src/main.ts；跑：apps/desktop/tests/main-startup.spec.ts
+结果：1 failed | 105 passed (106)
+- |thread-safe| apps/desktop/tests/main-startup.spec.ts > desktop main startup > lawbench P-17: refuses new windows and foreign navigation without opening anything externally
+
+## 链接照旧渲染成 <a>
+文件：packages/client/ui-primitives/src/markdown/render.tsx；跑：packages/client/ui-primitives/tests
+结果：16 failed | 1303 passed (1319)
+- |thread-safe| packages/client/ui-primitives/tests/markdown-compact.client.spec.tsx > compact MarkdownText > retains the body variant semantics for headings, lists, quotes, links, code, tables, and math
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: footnotes
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: links-and-autolinks
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: reference-links-and-images
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: table-with-alignment
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: footnotes
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: links-and-autolinks
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: reference-links-and-images
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: table-with-alignment
+- |thread-safe| packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx > Markdown file links > lawbench P-17: external links render as text and local links stay inert without an opener
+- |thread-safe| packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx > Markdown file links > routes file links through the provider; HTTP(S) links never reach it (lawbench P-17)
+- |thread-safe| packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx > incremental parsing is actually in effect > shows the documented streaming fingerprint: a definition frozen earlier no longer resolves a new reference, and settling heals it
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > lawbench P-17: external links carry no site mark or globe (they are text, not anchors)
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > lawbench P-17: never hands a link to the delegate; plain and modified clicks, settled and streaming
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > neutralizes raw HTML, unsafe or relative links, and unsupported images
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > renders CommonMark and GFM elements as semantic DOM
+
+## 不补网址文字
+文件：packages/client/ui-primitives/src/markdown/render.tsx；跑：packages/client/ui-primitives/tests
+结果：16 failed | 1303 passed (1319)
+- |thread-safe| packages/client/ui-primitives/tests/markdown-compact.client.spec.tsx > compact MarkdownText > retains the body variant semantics for headings, lists, quotes, links, code, tables, and math
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: footnotes
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: links-and-autolinks
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: reference-links-and-images
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > settled: table-with-alignment
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: footnotes
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: links-and-autolinks
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: reference-links-and-images
+- |thread-safe| packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx > MarkdownText DOM parity fixtures > streaming: table-with-alignment
+- |thread-safe| packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx > Markdown file links > lawbench P-17: external links render as text and local links stay inert without an opener
+- |thread-safe| packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx > Markdown file links > routes file links through the provider; HTTP(S) links never reach it (lawbench P-17)
+- |thread-safe| packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx > incremental parsing is actually in effect > shows the documented streaming fingerprint: a definition frozen earlier no longer resolves a new reference, and settling heals it
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > lawbench P-17: external links carry no site mark or globe (they are text, not anchors)
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > lawbench P-17: never hands a link to the delegate; plain and modified clicks, settled and streaming
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > neutralizes raw HTML, unsafe or relative links, and unsupported images
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > renders CommonMark and GFM elements as semantic DOM

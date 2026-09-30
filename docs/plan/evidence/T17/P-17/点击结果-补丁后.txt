@@ -1,0 +1,52 @@
+﻿{
+  "log": [
+    {
+      "word": "/md-link",
+      "tag": "P",
+      "url": "dsh-app://app/"
+    },
+    {
+      "word": "/bare-url",
+      "tag": "P",
+      "url": "dsh-app://app/"
+    },
+    {
+      "word": "/angle",
+      "tag": "P",
+      "url": "dsh-app://app/"
+    },
+    {
+      "word": "/inline-code",
+      "tag": "CODE",
+      "url": "dsh-app://app/"
+    },
+    {
+      "word": "mailto:someone",
+      "tag": "P",
+      "url": "dsh-app://app/"
+    },
+    {
+      "word": "someone@example.invalid）",
+      "tag": "P",
+      "url": "dsh-app://app/"
+    },
+    {
+      "word": "/ref-link",
+      "tag": "P",
+      "url": "dsh-app://app/"
+    }
+  ],
+  "forced": {
+    "windowOpen": "null",
+    "mailOpen": "null",
+    "injected": "clicked",
+    "navigate": "assigned",
+    "urlAfter": "dsh-app://app/",
+    "targets": [
+      "page dsh-app://app/",
+      "page devtools://devtools/bundled/devtools_app.html?remoteBase=https://chrome-devtools-frontend.appspot.com/serve_file/@a89f07748bfaff4dd56256dc0ae612647145327f/&can_dock=&toolbarColor=rgba(223,223,223,1)&textColor=rgba(0,0,0,1)&experiments=true",
+      "worker ",
+      "worker "
+    ]
+  }
+}

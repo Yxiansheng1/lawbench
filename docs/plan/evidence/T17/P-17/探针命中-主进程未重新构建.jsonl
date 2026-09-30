@@ -1,0 +1,7 @@
+{"time":"2026-09-30T05:44:55.999Z","method":"GET","url":"/selfcheck"}
+{"time":"2026-09-30T05:49:00.668Z","method":"GET","url":"/forced-window-open"}
+{"time":"2026-09-30T05:49:00.981Z","method":"GET","url":"/favicon.ico"}
+{"time":"2026-09-30T05:49:02.559Z","method":"GET","url":"/forced-anchor"}
+{"time":"2026-09-30T05:49:02.790Z","method":"GET","url":"/favicon.ico"}
+{"time":"2026-09-30T05:49:04.076Z","method":"GET","url":"/forced-navigate"}
+{"time":"2026-09-30T05:49:04.385Z","method":"GET","url":"/favicon.ico"}
