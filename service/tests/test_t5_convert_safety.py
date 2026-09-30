@@ -240,7 +240,7 @@ def test_xls_no_request(make_client, cases_dir):
         mats = open_scan(make_client(), root)
         assert lis.count == 0
     m = mats["流水"]
-    assert m["status"] == "parsed" and m["note"] is None     # 没经过转换
+    assert m["status"] == "parsed" and m["note"] == "有外部链接，未重算公式"   # 没经过转换；契约 1.2 N21
     text = (root / m["text_path"]).read_text(encoding="utf-8")
     assert "| 2 |  | =B1*2 |" in text                         # 没有缓存值：只写公式，没有交给 LibreOffice 重算
 
