@@ -7,6 +7,8 @@
   每次检索前再按需核对补一次作兜底——
   材料的原件 sha256、材料文本的修改时间和大小，与本进程记下的对不上，就只重建这一份；材料不在了删掉它的单元。
   本进程第一次检索某个案件时整案重建一次（case.db 里没有记"材料文本版本"的地方，加字段是改契约）。
+  重建中途出错（磁盘满、锁超时、材料文本正被扫描删掉）：库回滚，本进程记下的状态也作废，下一次整案重建（T9 返修 P2-1）。
+- 检索表不在（被人删了）：按契约 case_db.sql 补建（全是 IF NOT EXISTS），整案重建（T9 返修 NOTE 6）。
 - 失败的材料（没有材料文本）不进索引。
 
 查询
@@ -21,16 +23,16 @@
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 import time
-import unicodedata
 
-from .. import logs
+from .. import contracts, logs
 from ..case import gate, texts
 from ..errors import ApiError
 from . import expand
-from .normalize import normalize_with_map
+from .normalize import normalize, normalize_with_map
 
 SNIPPET = 40
 LINES_PER_UNIT = 50
@@ -41,6 +43,8 @@ _guard = threading.Lock()
 _locks: dict[str, threading.Lock] = {}
 # 本进程记下的索引状态：root → {material_id: (sha256, 文本修改时间, 文本大小)}
 _state: dict[str, dict[str, tuple]] = {}
+# 单元格行里的列分隔：T5 把单元格内容里的 | 写成 \|（T9 返修 P3-1）
+_CELL_SEP = re.compile(r"(?<!\\)\|")
 
 
 def _lock(root: str) -> threading.Lock:
@@ -104,10 +108,15 @@ def _connect(root: str) -> sqlite3.Connection:
     if not db.is_file():
         raise ApiError("CASE_NOT_FOUND", "case_db_missing")
     con = sqlite3.connect(str(db), timeout=10)
-    has = con.execute("SELECT 1 FROM sqlite_master WHERE name = 'search_fts'").fetchone()
-    if not has:
+    try:
+        has = con.execute("SELECT 1 FROM sqlite_master WHERE name = 'search_fts'").fetchone()
+        if not has:
+            # 检索表不在：按契约补建（全是 IF NOT EXISTS），本进程状态作废、整案重建（T9 返修 NOTE 6）
+            con.executescript((contracts._dir / "case_db.sql").read_text(encoding="utf-8"))
+            _state.pop(root, None)
+    except BaseException:
         con.close()
-        raise ApiError("INTERNAL", "search_tables_missing")
+        raise
     return con
 
 
@@ -139,8 +148,10 @@ def _add_material(con: sqlite3.Connection, root: str, m: dict) -> None:
 
 
 def refresh(root: str, index: dict, con: sqlite3.Connection) -> int:
-    """让检索表跟上材料文本。返回重建了几份材料。调用方持该案件的锁。"""
-    state = _state.get(root)
+    """让检索表跟上材料文本。返回重建了几份材料。调用方持该案件的锁。
+
+    在本进程状态的副本上改，库提交成功后才换上；中途出错库回滚，状态作废，下一次整案重建（T9 返修 P2-1）。"""
+    old = _state.get(root)
     wanted: dict[str, tuple] = {}
     by_id: dict[str, dict] = {}
     for m in index["materials"]:
@@ -150,27 +161,31 @@ def refresh(root: str, index: dict, con: sqlite3.Connection) -> int:
         if stamp is not None:
             wanted[m["material_id"]] = stamp
             by_id[m["material_id"]] = m
+    state = {} if old is None else dict(old)
     n = 0
-    with con:
-        if state is None:  # 本进程第一次：整案重建
-            con.execute("INSERT INTO search_fts(search_fts) VALUES ('delete-all')")
-            con.execute("DELETE FROM search_units")
-            state = {}
-            for mid in wanted:
-                _add_material(con, root, by_id[mid])
-                state[mid] = wanted[mid]
-                n += 1
-        else:
-            for mid in list(state):
-                if mid not in wanted:
-                    _delete_material(con, mid)
-                    del state[mid]
-            for mid, stamp in wanted.items():
-                if state.get(mid) != stamp:
-                    _delete_material(con, mid)
+    try:
+        with con:
+            if old is None:  # 本进程第一次：整案重建
+                con.execute("INSERT INTO search_fts(search_fts) VALUES ('delete-all')")
+                con.execute("DELETE FROM search_units")
+                for mid in wanted:
                     _add_material(con, root, by_id[mid])
-                    state[mid] = stamp
+                    state[mid] = wanted[mid]
                     n += 1
+            else:
+                for mid in list(state):
+                    if mid not in wanted:
+                        _delete_material(con, mid)
+                        del state[mid]
+                for mid, stamp in wanted.items():
+                    if state.get(mid) != stamp:
+                        _delete_material(con, mid)
+                        _add_material(con, root, by_id[mid])
+                        state[mid] = stamp
+                        n += 1
+    except BaseException:
+        _state.pop(root, None)
+        raise
     _state[root] = state
     return n
 
@@ -201,8 +216,13 @@ def _fts_phrase(q: str) -> str:
 def _candidates(con: sqlite3.Connection, q: str) -> list[tuple]:
     cols = "u.rowid, u.material_id, u.unit, u.loc_from, u.loc_to, u.sheet, u.is_ocr, u.text"
     if len(q) >= 3:
-        return con.execute(f"SELECT {cols} FROM search_fts f JOIN search_units u ON u.rowid = f.rowid "
-                           "WHERE search_fts MATCH ?", (_fts_phrase(q),)).fetchall()
+        try:
+            return con.execute(f"SELECT {cols} FROM search_fts f JOIN search_units u ON u.rowid = f.rowid "
+                               "WHERE search_fts MATCH ?", (_fts_phrase(q),)).fetchall()
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e) or "busy" in str(e):
+                raise
+            raise ApiError("INVALID_ARGUMENT", "bad_query") from None   # FTS5 不接受的查询串（T9 返修 P3-3）
     return con.execute(f"SELECT {cols} FROM search_units u WHERE instr(lower(u.text_norm), ?) > 0",
                        (q.lower(),)).fetchall()
 
@@ -227,8 +247,8 @@ def _positions(norm: str, q: str, bounded: bool) -> list[int]:
         out.append(k)
 
 
-def _locate(row: tuple, name: str, text: str, where: list[int], k: int) -> tuple[str, tuple]:
-    """命中在单元文本里的位置 → (出处文本, 排序键)。"""
+def _locate(row: tuple, name: str, text: str, where: list[int], k: int) -> tuple[str, tuple] | None:
+    """命中在单元文本里的位置 → (出处文本, 排序键)；落在 Excel 的行号列、分隔符上的返回 None（不算命中）。"""
     _, _, unit, loc_from, _, sheet, _, _ = row
     orig = where[k]
     if unit in ("page", "para"):
@@ -240,22 +260,26 @@ def _locate(row: tuple, name: str, text: str, where: list[int], k: int) -> tuple
     line = text.split("\n")[line_idx]
     line_start = sum(len(x) + 1 for x in text.split("\n")[:line_idx])
     pos = orig - line_start
-    cells = line.split("|")
+    cells = _CELL_SEP.split(line)
     # "| 行号 | A | B |" → cells[0] 为空，cells[1] 是行号，cells[2] 起是 A、B……
+    # 单元格里的 | 已写成 \|，不当分隔（P3-1）；命中落在行号列不算（P3-2：搜"12"不能命中每行的行号）
     acc = 0
-    col = 1
+    col = None
     for ci, c in enumerate(cells):
-        if acc <= pos < acc + len(c) + 1:
-            col = max(1, ci - 1)
+        if acc <= pos < acc + len(c):
+            col = ci - 1
             break
         acc += len(c) + 1
+    if col is None or col < 1:
+        return None
     row_no = int(cells[1].strip()) if len(cells) > 1 and cells[1].strip().isdigit() else loc_from
     return f"〔{name} {sheet}!{_col_letter(col)}{row_no}〕", (row_no, col)
 
 
 def _literal(s: str) -> str:
-    """只做全角转半角、统一空白、不分大小写（不去千分位逗号）：判断命中处的原文与查询是不是逐字同一种写法。"""
-    return " ".join(unicodedata.normalize("NFKC", s).split()).lower()
+    """只做全角转半角、统一空白（含汉字间的空白去掉）、去控制字符、不分大小写，不去千分位逗号：
+    判断命中处的原文与查询是不是逐字同一种写法。"""
+    return normalize(s, thousands=False).lower()
 
 
 def search(root: str, case_id: str, index: dict, query: str, max_hits: int = 20) -> dict:
@@ -280,7 +304,10 @@ def search(root: str, case_id: str, index: dict, query: str, max_hits: int = 20)
                     text = row[7]
                     norm, where = normalize_with_map(text)
                     for k in _positions(norm, q, bounded):
-                        citation, key = _locate(row, names[mid], text, where, k)
+                        loc = _locate(row, names[mid], text, where, k)
+                        if loc is None:
+                            continue
+                        citation, key = loc
                         a = where[k]
                         b = where[k + len(q) - 1] + 1
                         # 归一化后相同、原文写法不同（80,000 与 80000）：算扩展匹配，完全匹配要原文逐字是同一种写法

@@ -20,7 +20,7 @@ from lawbench.config import REPO_ROOT, Config
 from lawbench.search import expand, fts
 from lawbench.search.normalize import normalize, normalize_with_map
 
-from t8_helpers import ok, validator
+from t8_helpers import fail, ok, validator
 
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 CASES = ("civil-01", "criminal-01", "contract-01", "closed-01", "tender-01")
@@ -157,7 +157,7 @@ def test_max_hits_and_truncated(world):
 def test_normalize_rules():
     assert normalize("ＡＢＣ１２３，") == "ABC123,"                     # 全角转半角
     assert normalize("80,000.00 元") == "80000.00 元"                    # 去千分位
-    assert normalize("甲　\t\n 乙") == "甲 乙"                        # 统一空白
+    assert normalize("A　\t\n B") == "A B"                            # 统一空白（汉字之间的见 P3-4 用例）
     text = "金额：８０,０００元"
     norm, where = normalize_with_map(text)
     assert norm == "金额:80000元"
@@ -339,3 +339,133 @@ def test_case_search_tool_uses_t9(small):
     v = ok(client.post("/core/tool", json={"task_id": tid, "tool": "case_search", "args": {"query": "80000"}}),
            "core/tool.schema.json")
     assert ("〔说明 第3行〕", "expanded") in {(h["citation"], h["match"]) for h in v["hits"]}   # 扩展：T8 临时实现没有
+
+
+# ---------- T9 返修（执行令 1721） ----------
+
+def open_case(make_client, cases_dir, name: str, files: dict):
+    client = make_client()
+    root = cases_dir / name
+    root.mkdir()
+    for fn, content in files.items():
+        if isinstance(content, str):
+            (root / fn).write_text(content, encoding="utf-8")
+        else:
+            content(root / fn)
+    cid = ok(client.post("/api/case/open", json={"path": str(root)}), "api/case_open.schema.json")["case_id"]
+    ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
+    return client, root, cid
+
+
+def test_refresh_failure_midway_heals(make_client, cases_dir, monkeypatch):
+    """P2-1：重建做到第 2 份材料出错，库回滚；本进程状态也要作废，下一次检索整案重建，不停在旧内容上。"""
+    client, root, cid = open_case(make_client, cases_dir, "中途出错", {"a.txt": "阿尔法旧词\n", "b.txt": "贝塔旧词\n"})
+    real_root = client.app.state.lb.cases.root_of(cid)
+    assert q(client, cid, "阿尔法旧词")["total"] == 1
+    real_add = fts._add_material
+
+    def disk_full_on_second(calls):
+        def f(con, r, m):
+            calls.append(m["material_id"])
+            if len(calls) == 2:
+                raise sqlite3.OperationalError("database or disk is full")
+            return real_add(con, r, m)
+        return f
+
+    def check(old, new):
+        for word, n in ((f"阿尔法{new}", 1), (f"阿尔法{old}", 0), (f"贝塔{new}", 1), (f"贝塔{old}", 0)):
+            assert q(client, cid, word)["total"] == n, word
+
+    # 扫描时建索引中途出错：扫描照常成功，之后检索自愈
+    (root / "a.txt").write_text("阿尔法新词\n", encoding="utf-8")
+    (root / "b.txt").write_text("贝塔新词\n", encoding="utf-8")
+    calls: list = []
+    monkeypatch.setattr(fts, "_add_material", disk_full_on_second(calls))
+    ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
+    assert calls == ["M0001", "M0002"]
+    monkeypatch.undo()
+    check("旧词", "新词")
+
+    # 检索前的按需重建中途出错：这次检索报错，下一次检索自愈
+    index = client.app.state.lb.materials.index(cid)
+    for fn, word in (("a.txt", "阿尔法"), ("b.txt", "贝塔")):
+        p = gate.resolve_internal(real_root, fts.texts.text_rel(next(m for m in index["materials"]
+                                                                     if m["rel_path"] == fn)), op="test")
+        p.write_text(p.read_text(encoding="utf-8").replace(f"{word}新词", f"{word}三词"), encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(fts, "_add_material", disk_full_on_second(calls))
+    with pytest.raises(sqlite3.OperationalError):
+        fts.search(real_root, cid, index, "阿尔法三词")
+    assert calls == ["M0001", "M0002"]
+    monkeypatch.undo()
+    check("新词", "三词")
+
+
+def _xlsx_with_pipes(path):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "表一"
+    for r in range(1, 14):
+        ws.cell(row=r, column=1, value=f"第{'甲乙丙丁戊己庚辛壬癸子丑寅'[r - 1]}行")
+    ws["A2"] = "甲|乙|丙"
+    ws["B2"] = "目标词汇"
+    ws["C5"] = 12
+    wb.save(path)
+
+
+def test_cell_citation_with_escaped_pipe_and_row_numbers(make_client, cases_dir):
+    """P3-1：前面单元格里的 |（T5 写成 \\|）不当列分隔；P3-2：命中落在行号列不算。"""
+    client, _, cid = open_case(make_client, cases_dir, "竖线", {"t.xlsx": _xlsx_with_pipes})
+    assert [h["citation"] for h in q(client, cid, "目标词汇")["hits"]] == ["〔t 表一!B2〕"]
+    assert [h["citation"] for h in q(client, cid, "乙")["hits"]] == ["〔t 表一!A2〕"]       # 按原样切会算到 B2
+    assert [h["citation"] for h in q(client, cid, "12")["hits"]] == ["〔t 表一!C5〕"]   # 第 12 行的行号不算
+    assert q(client, cid, "13")["total"] == 0
+
+
+def test_control_chars_and_bad_fts_query(make_client, cases_dir, monkeypatch):
+    """P3-3：查询里的 NUL 等控制字符归一化时去掉；FTS5 不接受的查询串报参数错误，不是 500。"""
+    client, _, cid = open_case(make_client, cases_dir, "控制字符", {"a.txt": "借款合同\n"})
+    assert [h["citation"] for h in q(client, cid, "\x00借款合同")["hits"]] == ["〔a 第1行〕"]
+    fail(client.get("/api/search", params={"case_id": cid, "q": "\x00"}), "INVALID_ARGUMENT")
+    monkeypatch.setattr(fts, "_fts_phrase", lambda s: '"' + s)          # 引号不闭合：sqlite 报 unterminated string
+    fail(client.get("/api/search", params={"case_id": cid, "q": "借款合同"}), "INVALID_ARGUMENT")
+
+
+def test_whitespace_between_hanzi_dropped():
+    """P3-4（主编排定规则）：两个汉字（中文标点）之间的空白去掉，位置映射照样保留；拉丁字母、数字之间的空白保留。"""
+    assert normalize("下图\n为书桌位置示意") == "下图为书桌位置示意"
+    assert normalize("甲　乙") == "甲乙"                                  # 全角空格
+    assert normalize("甲，\n乙") == "甲,乙"                               # 全角逗号按原文算中文标点
+    assert normalize("ABC\nDEF") == "ABC DEF"
+    assert normalize("第 3 页") == "第 3 页"                              # 汉字与数字之间保留
+    assert normalize("借款 8 万元") == "借款 8 万元"
+    text = "下图\n为书桌"
+    norm, where = normalize_with_map(text)
+    k = norm.find("图为")
+    assert text[where[k]:where[k + 1] + 1] == "图\n为"                    # 位置能换回原文
+
+
+def test_hard_line_break_in_page(world):
+    """P3-4：criminal-01 现场勘验图文第 1 页原文"下图\\n为书桌位置示意"。"""
+    v = search(world, "criminal-01", "下图为书桌位置")
+    assert [(h["citation"], h["match"]) for h in v["hits"]] == [("〔现场勘验图文 第1页〕", "exact")]
+    assert "下图\n为书桌位置" in v["hits"][0]["snippet"]                 # 片段是原文
+
+
+def test_double_quote_inside_phrase(make_client, cases_dir):
+    """NOTE 4：短语里的双引号要转义，否则 FTS5 语法出错。"""
+    client, _, cid = open_case(make_client, cases_dir, "引号", {"a.txt": '他说"你好世界"就走了\n'})
+    assert [h["citation"] for h in q(client, cid, '说"你好')["hits"]] == ["〔a 第1行〕"]
+    assert [h["citation"] for h in q(client, cid, '界"就')["hits"]] == ["〔a 第1行〕"]
+
+
+def test_search_tables_recreated(small):
+    """NOTE 6：search_fts 表被删了，检索时按契约补建、整案重建，不一直报 INTERNAL。"""
+    client, root, cid = small
+    assert q(client, cid, "借款")["total"] > 0
+    con = sqlite3.connect(root / "工作区" / "case.db")
+    con.execute("DROP TABLE search_fts")
+    con.commit()
+    con.close()
+    assert [h["citation"] for h in q(client, cid, "XG-ZB")["hits"]] == ["〔说明 第4行〕"]

@@ -9,6 +9,8 @@ import time
 import httpx
 import pytest
 
+from lawbench.config import REPO_ROOT
+
 from conftest import TOKEN, closed_port
 
 SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,7 +41,8 @@ def test_entrypoint(tmp_path, via_env):
     proc = subprocess.Popen(args, cwd=SERVICE_DIR, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
         r = _wait(f"http://127.0.0.1:{port}/health", proc)
-        assert r.json() == {"status": "ok", "contract_version": "1.2"}
+        want = (REPO_ROOT / "contracts" / "VERSION").read_text(encoding="utf-8").strip()   # 不写死版本号（契约 1.3 起）
+        assert r.json() == {"status": "ok", "contract_version": want}
         assert httpx.get(f"http://127.0.0.1:{port}/api/case/recent", trust_env=False).status_code == 401
         r = httpx.get(f"http://127.0.0.1:{port}/api/case/recent", trust_env=False,
                       headers={"Authorization": f"Bearer {TOKEN}"})

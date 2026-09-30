@@ -17,7 +17,7 @@ R = "tests/test_search.py"
 rg.TITLE = "T9 红绿验证"
 rg.MUTATIONS = [
     ("1–2 字的查询在 text_norm 上 instr 扫描（改成也走 FTS）", "search/fts.py", [
-        ("    if len(q) >= 3:\n        return con.execute(", "    if True:\n        return con.execute("),
+        ("    if len(q) >= 3:\n        try:", "    if True:\n        try:"),
     ], f"{R} -k g9"),
     ("日期扩展", "search/expand.py", [("    for v in _dates(q) + _amounts(q):", "    for v in _amounts(q):")],
      f"{R} -k g9"),
@@ -46,7 +46,7 @@ rg.MUTATIONS = [
         ("                        snippet = text[max(0, a - SNIPPET):b + SNIPPET]",
          "                        snippet = norm[max(0, k - SNIPPET):k + len(q) + SNIPPET]"),
     ], f"{R} -k snippet_from_original"),
-    ("单元格出处的列", "search/fts.py", [("            col = max(1, ci - 1)", "            col = 1")],
+    ("单元格出处的列", "search/fts.py", [("            col = ci - 1", "            col = 1")],
      f"{R} -k g9"),
     ("行出处取块内第几行", "search/fts.py", [("        no = loc_from + line_idx", "        no = loc_from")],
      f"{R} -k g9"),
@@ -70,6 +70,36 @@ rg.MUTATIONS = [
     ("英文字母不分大小写", "search/fts.py", [
         ("    if len(low) == len(norm) and len(ql) == len(q):\n        norm, q = low, ql\n", ""),
     ], f"{R} -k case_insensitive"),
+    # ---- 返修（执行令 1721） ----
+    ("P2-1·重建中途出错：在状态副本上改、出错作废状态（两层都去掉）", "search/fts.py", [
+        ("    state = {} if old is None else dict(old)", "    state = {} if old is None else old"),
+        ("        _state.pop(root, None)\n        raise\n    _state[root] = state", "        raise\n    _state[root] = state"),
+    ], f"{R} -k refresh_failure_midway_heals"),
+    ("P3-1·单元格里的 \\| 不当列分隔", "search/fts.py", [
+        ("    cells = _CELL_SEP.split(line)", '    cells = line.split("|")'),
+    ], f"{R} -k escaped_pipe"),
+    ("P3-2·命中落在行号列不算", "search/fts.py", [
+        ("    if col is None or col < 1:", "    if col is None:"),
+    ], f"{R} -k escaped_pipe"),
+    ("P3-3·归一化去掉控制字符", "search/normalize.py", [
+        ("                continue                           # 控制字符", "                pass"),
+    ], f"{R} -k control_chars"),
+    ("P3-3·FTS5 不接受的查询串转参数错误", "search/fts.py", [
+        ('            raise ApiError("INVALID_ARGUMENT", "bad_query") from None', "            raise"),
+    ], f"{R} -k control_chars"),
+    ("P3-4·两个汉字之间的空白去掉", "search/normalize.py", [
+        ("    if len(keep) < len(out_c):", "    if False:"),
+    ], f"{R} -k 'hanzi or hard_line_break'"),
+    ("P3-4·完全匹配的判定也按同一规则（跨行命中算完全匹配）", "search/fts.py", [
+        ("    return normalize(s, thousands=False).lower()", '    return " ".join(s.split()).lower()'),
+    ], f"{R} -k hard_line_break"),
+    ("NOTE 4·短语里的双引号转义", "search/fts.py", [
+        ("""    return '"' + q.replace('"', '""') + '"'""", """    return '"' + q + '"'"""),
+    ], f"{R} -k double_quote"),
+    ("NOTE 6·检索表不在时按契约补建", "search/fts.py", [
+        ('            con.executescript((contracts._dir / "case_db.sql").read_text(encoding="utf-8"))',
+         '            raise ApiError("INTERNAL", "search_tables_missing")'),
+    ], f"{R} -k tables_recreated"),
 ]
 
 _run = rg.run
