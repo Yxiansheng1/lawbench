@@ -1,0 +1,101 @@
+{
+  "说明": "T7 桌面端对假服务：会话中发给模型的请求（本机抓包代理只记录这些字段，不记消息内容和 Key）。服务为本机假服务，模型经抓包代理转到 6000D。",
+  "工具名集合": [
+    "ask_user_question",
+    "case_archive_match",
+    "case_calc_sentence",
+    "case_list_materials",
+    "case_read_input",
+    "case_read_material",
+    "case_read_wiki",
+    "case_save_archive_plan",
+    "case_save_draft",
+    "case_save_edit_list",
+    "case_search",
+    "case_suggest_wiki",
+    "skill"
+  ],
+  "请求": [
+    {
+      "ts": "2026-09-29T23:16:53",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_archive_match",
+        "case_calc_sentence",
+        "case_list_materials",
+        "case_read_input",
+        "case_read_material",
+        "case_read_wiki",
+        "case_save_archive_plan",
+        "case_save_draft",
+        "case_save_edit_list",
+        "case_search",
+        "case_suggest_wiki",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "low"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 16384,
+      "stream": true
+    },
+    {
+      "ts": "2026-09-29T23:16:55",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_archive_match",
+        "case_calc_sentence",
+        "case_list_materials",
+        "case_read_input",
+        "case_read_material",
+        "case_read_wiki",
+        "case_save_archive_plan",
+        "case_save_draft",
+        "case_save_edit_list",
+        "case_search",
+        "case_suggest_wiki",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "low"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 16384,
+      "stream": true
+    },
+    {
+      "ts": "2026-09-29T23:39:42",
+      "model": "qwen38-27b",
+      "tools": [
+        "ask_user_question",
+        "case_archive_match",
+        "case_calc_sentence",
+        "case_list_materials",
+        "case_read_input",
+        "case_read_material",
+        "case_read_wiki",
+        "case_save_archive_plan",
+        "case_save_draft",
+        "case_save_edit_list",
+        "case_search",
+        "case_suggest_wiki",
+        "skill"
+      ],
+      "chat_template_kwargs": {
+        "enable_thinking": true,
+        "reasoning_effort": "low"
+      },
+      "reasoning_effort": null,
+      "enable_thinking": null,
+      "max_tokens": 16384,
+      "stream": true
+    }
+  ]
+}

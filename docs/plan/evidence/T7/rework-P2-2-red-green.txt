@@ -1,0 +1,195 @@
+# T7 返修 P2-2 红测（DSH apps/desktop 测试，已应用 P-10/P-12/P-13/P-3）
+# 红：临时去掉 welcome-window.ts 的发送方检查、让 welcome-backend.ts 把远端错误原文交给页面；绿：恢复后再跑
+
+## 红
+node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:1379
++ ... '1'; $red = node node_modules\vitest\vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+ ❯ |thread-safe| apps/desktop/tests/welcome-window.spec.ts (10 tests | 2 failed) 30ms
+     × accepts actions only from its own top frame, validates input, and removes handlers on close 11ms
+     × replaces handlers before the previous native window emits closed 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/welcome-window.spec.ts > desktop first-run window (lawbench P-3) > accepts acti
+ons only from its own top frame, validates input, and removes handlers on close
+AssertionError: promise resolved "{ ok: true, value: { …(2) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "ok": true,
++   "value": {
++     "hasKey": false,
++     "servers": {
++       "llm_alt_base_url": null,
++       "llm_base_url": "http://192.168.8.77:8000/v1",
++       "prep_alt_base_url": null,
++       "prep_base_url": "http://192.168.8.124:9000",
++     },
++   },
+  }
+
+ ❯ apps/desktop/tests/welcome-window.spec.ts:132:37
+    130|
+    131|     const setup = electron.handlers.get(WELCOME_IPC.getSetup)!
+    132|     await expect(setup(foreignFrame)).rejects.toThrow('unowned frame')
+       |                                     ^
+    133|     expect(getSetup).not.toHaveBeenCalled()
+    134|     expect(await setup(own)).toEqual({ ok: true, value: { servers, has…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/welcome-window.spec.ts > desktop first-run window (lawbench P-3) > replaces han
+dlers before the previous native window emits closed
+AssertionError: promise resolved "{ ok: true, value: { …(2) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "ok": true,
++   "value": {
++     "hasKey": false,
++     "servers": {
++       "llm_alt_base_url": null,
++       "llm_base_url": "http://192.168.8.77:8000/v1",
++       "prep_alt_base_url": null,
++       "prep_base_url": "http://192.168.8.124:9000",
++     },
++   },
+  }
+
+ ❯ apps/desktop/tests/welcome-window.spec.ts:183:49
+    181|     await openWelcomeWindow(resolveDesktopLocale('en'), { ...operation…
+    182|     const currentHandler = electron.handlers.get(WELCOME_IPC.getSetup)!
+    183|     await expect(previousHandler(previousSender)).rejects.toThrow('uno…
+       |                                                 ^
+    184|     await expect(currentHandler(previousSender)).rejects.toThrow('unow…
+    185|     previous.once.mock.calls[0]![1]()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 15 passed (17)
+   Start at  01:55:12
+   Duration  1.32s (transform 829ms, setup 1.58s, import 255ms, tests 80ms, environment 0ms)
+
+
+## 绿
+node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:1609
++ ... ); $green = node node_modules\vitest\vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  01:55:15
+   Duration  1.34s (transform 806ms, setup 1.64s, import 257ms, tests 67ms, environment 0ms)
+
+
+
+# 第二个变异：welcome-backend.ts 把远端错误原文交给页面（上面那次锚点没对上、未生效，这里单独做）
+## 红
+node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:937
++ ... 1'; $red2 = node node_modules\vitest\vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+ ❯ |thread-safe| apps/desktop/tests/lawbench-first-run.spec.ts (7 tests | 1 failed) 52ms
+     × 诊断信息不外泄：远端错误信息不是中文提示时换成通用文案，不把原文交给页面 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/lawbench-first-run.spec.ts > connectDesktopWelcome（T7 返修 P2-2） > 诊断信息不外泄：远端错误信息
+不是中文提示时换成通用文案，不把原文交给页面
+AssertionError: expected { ok: false, …(1) } to deeply equal { Object (ok, message) }
+
+- Expected
++ Received
+
+  {
+-   "message": "工作台服务未启动，请稍后重试",
++   "message": "TypeError at C:\\Users\\x\\secret-path.js:12 token=abc",
+    "ok": false,
+  }
+
+ ❯ apps/desktop/tests/lawbench-first-run.spec.ts:27:15
+     25|     })))
+     26|     const r = await backend.getSetup()
+     27|     expect(r).toEqual({ ok: false, message: '工作台服务未启动，请稍后重试' })
+       |               ^
+     28|     expect(JSON.stringify(r)).not.toContain('secret-path')
+     29|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  01:55:32
+   Duration  1.35s (transform 402ms, setup 830ms, import 93ms, tests 52ms, environment 0ms)
+
+
+## 绿
+node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:1089
++ ... ; $green2 = node node_modules\vitest\vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  01:55:36
+   Duration  1.25s (transform 392ms, setup 799ms, import 88ms, tests 39ms, environment 0ms)
+
+
