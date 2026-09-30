@@ -151,6 +151,9 @@ MUTATIONS = [
 ]
 
 
+TITLE = "T3 红绿验证"  # 别的卡复用本脚本时改掉它（T8 返修 P3-4：T8 的输出原来标题写成了 T3）
+
+
 def run(sel: str) -> tuple[int, str]:
     p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:warnings", "-p", "no:cacheprovider",
                         *shlex.split(sel)], cwd=SERVICE, capture_output=True, text=True, encoding="utf-8",
@@ -166,7 +169,7 @@ def run(sel: str) -> tuple[int, str]:
 def main() -> int:
     originals = {p: p.read_bytes() for p in PKG.rglob("*.py")}
     bad = 0
-    print(f"T3 红绿验证：{len(MUTATIONS)} 类防护\n")
+    print(f"{TITLE}：{len(MUTATIONS)} 类防护\n")
     try:
         for i, (label, rel, reps, sel) in enumerate(MUTATIONS, 1):
             f = PKG / rel

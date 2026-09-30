@@ -123,3 +123,14 @@ def test_s1_probe_catches_invalid_url(make_client, url):
     assert out["reachable"] is False
     r = c.post("/api/connection/test", json={"server": "llm"})
     assert r.status_code == 200 and r.json()["ok"] is True and r.json()["value"]["reachable"] is False
+
+
+def test_s1_parsers_must_agree_alone(monkeypatch):
+    """单独测"两个解析器的主机要一致"这一层：把主机名规则放宽到什么都收，xn-- 主机名（httpx 解出非 ASCII、
+    urlsplit 仍是 ASCII）照样被拒。"""
+    import re
+
+    from lawbench import net
+    monkeypatch.setattr(net, "_HOST_LABELS", re.compile(r".*"))
+    assert server_url_ok("http://xn--fsq.com:8000/v1") is False
+    assert server_url_ok("http://gpu-6000d.lan:8000/v1") is True
