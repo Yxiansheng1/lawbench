@@ -1,0 +1,78 @@
+﻿# T25 调研：直接跑发票引擎一期（不经服务），抓对外连接
+# 时间 2026-09-30 15:49:39；宿主 Python：仓库 .venv；工作目录：%TEMP%\lbt25-a2f9720b（临时，用完删除）
+# 环境变量只传：INVOICE_BUYER、LOCALAPPDATA、PYTHONUTF8、SYSTEMROOT、TEMP、TMP、USERPROFILE（LOCALAPPDATA、TEMP 指向临时目录）
+# 连接抓取：每 100 毫秒对本次启动的引擎进程树（含子进程）做 Get-NetTCPConnection，记录所有非本机回环地址的连接
+
+## env_check
+命令：invoke.py env_check.py --deep --ocr
+退出码：1；进程数（含子进程）：4；对外连接：0
+输出前 12 行：
+  | [ENV] 校验并展开到外部缓存 ...
+  | 期望指纹：c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189
+  | 缓存：\\?\<临时>\LocalAppData\invoice-ledger-db\runtimes\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-94bc0fe778674c28aca68df5b3770f6c
+  | [问题] 解释器或依赖自检失败：67b63a2bc61ae279b7189\gen-94bc0fe778674c28aca68df5b3770f6c\Lib\site-packages\openpyxl\reader\excel.py", line 39, in <module>
+  |     from .workbook import WorkbookParser
+  |   File "<临时>\LocalAppData\invoice-ledger-db\runtimes\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-94bc0fe778674c28aca68df5b3770f6c\Lib\site-packages\openpyxl\reader\workbook.py", line 15, in <module>
+  |     from openpyxl.workbook.external_link.external import read_external_link
+  | ModuleNotFoundError: No module named 'openpyxl.workbook.external_link.external'
+
+## history
+命令：invoke.py workflow.py history --ledger <临时>\发票台账 --out <临时>\发票台账\_任务\2026-09\历史未报清单.json
+退出码：0；进程数（含子进程）：3；对外连接：0
+输出前 12 行：
+  | 历史候选清单：<临时>\发票台账\_任务\2026-09\历史未报清单.json
+
+## plan（local，历史不纳入）
+命令：invoke.py workflow.py plan --job <临时>\发票台账\_任务\2026-09 --period 2026-09 --channel local --history exclude
+退出码：0；进程数（含子进程）：3；对外连接：0
+输出前 12 行：
+  | {
+  |   "period": "2026-09",
+  |   "channel": "local",
+  |   "mail_start": null,
+  |   "mail_end_exclusive": null,
+  |   "history": "exclude",
+  |   "history_numbers": []
+  | }
+
+## run（导入并生成贴票包）
+命令：invoke.py workflow.py run --job <临时>\发票台账\_任务\2026-09 --batch T25调研 --ledger <临时>\发票台账 --src <临时>\导入
+退出码：2；进程数（含子进程）：5；对外连接：0
+输出前 12 行：
+  | {
+  |   "total_objects": 8,
+  |   "statuses": {
+  |     "已下载": 7,
+  |     "已展开": 1
+  |   },
+  |   "count_discrepancies": [],
+  |   "processing_complete": false,
+  |   "mailbox_scope_complete": false,
+  |   "new_recorded_amount": "0",
+  |   "historical_unpaid_amount": "0",
+  |   "eligible_unpaid_amount": "0",
+
+## report
+命令：invoke.py invoice_db.py report --ledger <临时>\发票台账
+退出码：0；进程数（含子进程）：3；对外连接：0
+输出前 12 行：
+  | [INFO] 主台账为空
+
+## check_schema
+命令：invoke.py invoice_db.py check-schema --ledger <临时>\发票台账
+退出码：1；进程数（含子进程）：3；对外连接：0
+输出前 12 行：
+  | [FATAL] ModuleNotFoundError: No module named 'openpyxl.workbook.external_link.external'
+  | Traceback (most recent call last):
+  |   File "D:\lawbench-C\engines\invoice-ledger\scripts\invoice_db.py", line 1875, in dispatch
+  |     return cmd_check_schema(args)
+  |            ^^^^^^^^^^^^^^^^^^^^^^
+  |   File "D:\lawbench-C\engines\invoice-ledger\scripts\invoice_db.py", line 1238, in cmd_check_schema
+  |     import openpyxl
+  |   File "<临时>\LocalAppData\invoice-ledger-db\runtimes\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-94bc0fe778674c28aca68df5b3770f6c\Lib\site-packages\openpyxl\__init__.py", line 8, in <module>
+  |     from openpyxl.reader.excel import load_workbook as open
+  |   File "<临时>\LocalAppData\invoice-ledger-db\runtimes\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-94bc0fe778674c28aca68df5b3770f6c\Lib\site-packages\openpyxl\reader\excel.py", line 39, in <module>
+  |     from .workbook import WorkbookParser
+  |   File "<临时>\LocalAppData\invoice-ledger-db\runtimes\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-94bc0fe778674c28aca68df5b3770f6c\Lib\site-packages\openpyxl\reader\workbook.py", line 15, in <module>
+
+结论：全部步骤对外连接合计 0 条。
