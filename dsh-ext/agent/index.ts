@@ -46,7 +46,11 @@ export class LegalAgent {
   readonly tasks = new Map<string, TaskState>()
 
   /** @param noteBlocked - 拒绝整轮时记下错误码，界面经 Host 的 turnNotice 取走（DSH 的 reject 带不了消息）。 */
-  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string) => void = () => {}) {}
+  /**
+   * @param noteBlocked - 拒绝整轮时记下错误码，界面经 Host 的 turnNotice 取走（DSH 的 reject 带不了消息）。
+   * @param clearBlocked - 这一轮顺利开始时清掉该会话没被取走的旧记录（复核 P3-C ①）。
+   */
+  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}) {}
 
   /** agent/pre-step。step 1 取任务和上下文；每步检查模型调用预算。 */
   async preStep(agent: AgentLike, step: number, decision: PreStepDecision): Promise<PreStepDecision> {
@@ -73,6 +77,7 @@ export class LegalAgent {
         this.tasks.delete(agent.id)
         return { kind: 'reject' }
       }
+      this.clearBlocked(agent.id)
       const { l0, l1 } = ctxRes.value
       const sections = [{ name: '案件卡片（L0）', text: l0.text }, { name: '任务输入（L1）', text: l1.text }]
       if (l1.toc.length) {
@@ -156,7 +161,7 @@ export class LegalAgent {
 type Ctx = {
   on(event: string, fn: (...a: never[]) => unknown, opts?: { prepend?: boolean }): void
   tools: { register(def: unknown): () => void }
-  lawbenchCore: { endpoint(): Endpoint | undefined; noteTurnBlocked?(sessionId: string, code: string): void }
+  lawbenchCore: { endpoint(): Endpoint | undefined; noteTurnBlocked?(sessionId: string, code: string): void; clearTurnBlocked?(sessionId: string): void }
   effect(fn: () => () => void, label?: string): void
   logger?(name: string): { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void }
 }
@@ -164,7 +169,9 @@ type Ctx = {
 export function apply(ctx: Ctx, config: Config = {}): void {
   const log: Logger = makeLogger('agent', config.appData ?? defaultAppData(), ctx.logger?.('lawbench-agent'))
   const core = new CoreClient(() => ctx.lawbenchCore.endpoint(), log, config.validateContracts ?? true)
-  const agent = new LegalAgent(core, log, (sessionId, code) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code))
+  const agent = new LegalAgent(core, log,
+    (sessionId, code) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code),
+    (sessionId) => ctx.lawbenchCore.clearTurnBlocked?.(sessionId))
 
   for (const tool of TOOL_NAMES) {
     ctx.effect(() => ctx.tools.register({

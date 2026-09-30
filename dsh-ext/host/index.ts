@@ -394,6 +394,8 @@ export function apply(ctx: Ctx, config: Config): void {
     endpoint: () => supervisor.endpoint(),
     /** Agent 插件拒绝整轮时记下原因，界面经 turnNotice 取走。 */
     noteTurnBlocked: (sessionId: string, code: string) => notices.note(sessionId, code),
+    /** 这一轮顺利开始：清掉该会话没被取走的旧记录。 */
+    clearTurnBlocked: (sessionId: string) => notices.clear(sessionId),
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))

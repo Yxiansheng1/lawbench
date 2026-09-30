@@ -112,6 +112,13 @@ describe('Q11：取任务失败', () => {
     expect(noted).toEqual([['s-7', 'INPUT_CHANGED'], ['s-8', 'CASE_NOT_FOUND']])
     expect(events).toContain('agent.context_failed')
   })
+  it('取任务、取上下文都成功时清掉该会话没被取走的旧记录（返修 P3-C ①）；被拦下时不清', async () => {
+    const cleared: string[] = []
+    const mkAgent = (f: () => Fake) => new LegalAgent(new CoreClient(() => ({ port: f().port, token: f().token }), log), log, () => {}, (id) => { cleared.push(id) })
+    await mkAgent(() => fake).preStep(agentObj('s-9'), 1, enter())
+    await mkAgent(() => changed).preStep(agentObj('s-10'), 1, enter())
+    expect(cleared).toEqual(['s-9'])
+  })
   it('服务没起来时拒绝整轮', async () => {
     const a = new LegalAgent(new CoreClient(() => undefined, log), log)
     expect(await a.preStep(agentObj('s-6'), 1, enter())).toEqual({ kind: 'reject' })

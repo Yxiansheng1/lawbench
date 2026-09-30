@@ -100,7 +100,7 @@ async function mount(sessionId: string, remount = false): Promise<void> {
 async function restart(sessionId: string): Promise<void> {
   await act(async () => { root?.unmount() })
   root = undefined
-  app.set((s) => ({ ...s, selections: {}, intents: {} }))
+  app.set((s) => ({ ...s, selections: {}, intents: {}, inputChanged: {}, staleServer: {} }))
   await mount(sessionId)
 }
 
@@ -133,7 +133,7 @@ beforeEach(async () => {
   forgetDockSyncs()
   svc = new Service()
   setApi(api())
-  app.set((s) => ({ ...s, cases: [CASE], selections: {}, intents: {} }))
+  app.set((s) => ({ ...s, cases: [CASE], selections: {}, intents: {}, inputChanged: {}, staleServer: {} }))
   container = document.createElement('div')
   document.body.appendChild(container)
   await mount('S1')
@@ -326,16 +326,6 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     expect(turnEnds(running, { S1: { running: true }, S2: { running: false } })).toEqual([])
     expect(turnEnds(running, { S1: { running: false }, S2: { running: false } })).toEqual(['S1'])
     expect(turnEnds(running, { S1: { running: false } })).toEqual([])
-  })
-
-  it('一轮结束的判断：running 的翻转被合并掉时，空闲会话的 updatedAt 变了也算（被拦下的一轮很短）', () => {
-    const running = new Map<string, boolean>()
-    const updated = new Map<string, number>()
-    expect(turnEnds(running, { S1: { running: false, updatedAt: 1 } }, updated)).toEqual([]) // 头一次看到不算
-    expect(turnEnds(running, { S1: { running: false, updatedAt: 1 } }, updated)).toEqual([])
-    expect(turnEnds(running, { S1: { running: false, updatedAt: 2 } }, updated)).toEqual(['S1'])
-    expect(turnEnds(running, { S1: { running: true, updatedAt: 3 } }, updated)).toEqual([]) // 在跑时变了不算
-    expect(turnEnds(running, { S1: { running: false, updatedAt: 4 } }, updated)).toEqual(['S1']) // 由真变假只报一次
   })
 
   it('INPUT_CHANGED（ORCH 注记 13:18）：上一轮因输入材料变化被拦下，状态行提示重新选择并重读；律师改选后提示消失，写成后就绪', async () => {

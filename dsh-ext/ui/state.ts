@@ -28,6 +28,13 @@ export interface AppState {
   selections: Record<string, Selection>
   /** 按案件 id：首页点胶囊、成果区"选用"留下的改动，由该案件当前会话的输入区读回服务的选择后取走一次。 */
   intents: Record<string, Intent>
+  /**
+   * 按会话 id：上一轮因输入材料变化被拦下（/core/context 报 INPUT_CHANGED），状态行提示重新选择，律师改动选择后消失。
+   * 放在 store 里，不放输入区组件里：换会话、插槽重挂都不丢（T13 INPUT_CHANGED 返修 P3-C ③）。
+   */
+  inputChanged: Record<string, true>
+  /** 按会话 id：服务那份选择的输入快照已过期，下一次写入不能因"和服务那份一样"而省掉，写成才清（返修 P3-B）。 */
+  staleServer: Record<string, true>
   dialogs: Dialog[]
   /** 设置里的默认参数（settings.json 的 defaults、skill_presets）；未读到时为 null。 */
   defaults: Params | null
@@ -36,7 +43,7 @@ export interface AppState {
   currentRoot: string | null
 }
 
-export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null })
+export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null })
 
 /** 当前会话对应的已登记案件。 */
 export const currentCase = (s: AppState): CaseRef | undefined =>
@@ -91,6 +98,23 @@ export function takeIntent(caseId: string): Intent | undefined {
   if (!it) return undefined
   app.set((s) => { const { [caseId]: _taken, ...rest } = s.intents; return { ...s, intents: rest } })
   return it
+}
+
+/** 收到 INPUT_CHANGED：该会话提示重新选择，服务那份记为需重写。 */
+export function markInputChanged(sessionId: string): void {
+  app.set((s) => ({ ...s, inputChanged: { ...s.inputChanged, [sessionId]: true }, staleServer: { ...s.staleServer, [sessionId]: true } }))
+}
+
+const without = (m: Record<string, true>, k: string): Record<string, true> => { const { [k]: _gone, ...rest } = m; return rest }
+
+/** 律师改动了选择：提示消失（服务那份仍记为需重写，直到写成）。 */
+export function clearInputChanged(sessionId: string): void {
+  if (app.get().inputChanged[sessionId]) app.set((s) => ({ ...s, inputChanged: without(s.inputChanged, sessionId) }))
+}
+
+/** 写成了：服务那份重新有了当前的输入快照。 */
+export function clearStaleServer(sessionId: string): void {
+  if (app.get().staleServer[sessionId]) app.set((s) => ({ ...s, staleServer: without(s.staleServer, sessionId) }))
 }
 
 export function pushDialog(d: Dialog): void { app.set((s) => ({ ...s, dialogs: [...s.dialogs, d] })) }

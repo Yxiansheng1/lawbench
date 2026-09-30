@@ -14,6 +14,11 @@ export class TurnNotices {
     if (this.codes.size > MAX) this.codes.delete(this.codes.keys().next().value!)
   }
 
+  /** 某会话这一轮顺利开始（取任务、取上下文都成功）：清掉之前没被取走的记录，免得之后误报。 */
+  clear(sessionId: string): void {
+    this.codes.delete(sessionId)
+  }
+
   /** 取走某会话记下的错误码；没有返回 null。 */
   take(sessionId: string): string | null {
     const code = this.codes.get(sessionId) ?? null
