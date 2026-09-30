@@ -53,10 +53,9 @@ class ConvertApp:
 
     def _update_note(self) -> None:
         key = self.current().key
-        legacy = "" if core.LEGACY_WORD_ENABLED else core.LEGACY_WORD_REASON + "。"
         self.note["text"] = {"pdf2docx": core.PDF_TO_WORD_NOTE, "md2docx": core.IMAGES_NOTE,
-                             "docx2md": core.IMAGES_NOTE, "doc2docx": legacy,
-                             "word2pdf": legacy and "Word → PDF 只接受 docx；" + legacy}.get(key, "")
+                             "docx2md": core.IMAGES_NOTE, "doc2docx": core.LEGACY_WORD_REASON,
+                             "word2pdf": core.LEGACY_WORD_REASON}.get(key, "")
 
     def on_close(self) -> None:
         if self.busy:

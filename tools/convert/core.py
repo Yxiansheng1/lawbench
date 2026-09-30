@@ -24,9 +24,8 @@ from pathlib import Path
 from typing import Callable
 
 try:
-    from . import extlinks, finder
+    from . import finder
 except ImportError:          # 直接运行或打包后的入口
-    import extlinks  # type: ignore
     import finder  # type: ignore
 
 OUT_DIR_NAME = "转换结果"
@@ -38,12 +37,29 @@ TEMP_PREFIX = "lawbench-convert-"
 STALE_S = 600
 INTERNAL = "处理失败（程序内部错误），其余文件不受影响。"
 # 交给 LibreOffice 之前先查外链的旧格式（Spec 14.3：查到就拒绝转换）
-CHECK_LINKS = (".doc", ".wps")
-# 本版小工具不转换 .doc、.wps（用户 2026-09-30 拍板 N24 ②）：外链检查没有经过独立验证，而且可能误拒正常文档。
-# 只能改这里，不做成环境变量或配置项。extlinks.py 留档，开关为真时才调用。
-LEGACY_WORD_ENABLED = False
-LEGACY_WORD_REASON = ("小工具暂不转换 .doc、.wps（为避免文档里的外部链接联网）；"
-                      "请在 Word 或 WPS 里另存为 docx 后再转换")
+# 第一版小工具不转换旧版 Word / WPS 文件（用户 2026-09-30 拍板 N24 ②；主编排 1137 令）。
+# 按文件头判断：OLE 复合文档（旧版 .doc / .wps 的格式）一律不交给转换程序；改了扩展名的 docx 照常按 docx 处理。
+# .xls（也是 OLE）走 xls → xlsx，不受影响。extlinks.py 留档，小工具不再调用。
+LEGACY_WORD_REASON = "暂不支持旧版 Word / WPS 文件。请用 Word 或 WPS 打开后另存为 .docx，再来转换。"
+WORD_KINDS = ("doc2docx", "word2pdf", "docx2md")
+
+
+def is_zip(path: Path) -> bool:
+    """文件头是 zip（docx 的容器格式）。"""
+    try:
+        with open(lp(path), "rb") as f:
+            return f.read(4) == b"PK"
+    except OSError:
+        return False
+
+
+def is_ole(path: Path) -> bool:
+    """文件头是 OLE 复合文档（旧版 .doc / .wps / .xls 的容器格式）。"""
+    try:
+        with open(lp(path), "rb") as f:
+            return f.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    except OSError:
+        return False
 MAX_PROFILE_PATH = 100          # LibreOffice 配置目录路径超过约 140 字符时 soffice 直接崩溃（实测），留足余量
 CRASH_CODES = (0xC0000409, 0xC0000409 - 2**32)   # STATUS_STACK_BUFFER_OVERRUN（无符号 / 有符号两种写法）
 LO_REGISTRY = (
@@ -263,17 +279,10 @@ def _convert_file(kind: str, src: Path, notes: list[str]) -> tuple[Path, list[st
         raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.inputs)}）。")
     if not src.is_file():
         raise ConvertError(f"{src.name} 不存在或无法读取。")
-    if src.suffix.lower() in CHECK_LINKS and not LEGACY_WORD_ENABLED:
-        raise ConvertError(f"{src.name}：{LEGACY_WORD_REASON}。")      # 不检查、不交给 LibreOffice
-    if src.suffix.lower() in CHECK_LINKS:
-        try:
-            linked = extlinks.has_external_links(src)
-        except PermissionError:
-            raise ConvertError(f"{src.name}：没有读取权限。") from None
-        except Exception:  # noqa: BLE001  olefile 对结构损坏的文件会抛各种异常
-            raise ConvertError(f"{src.name}：文件已损坏，无法检查。") from None
-        if linked:
-            raise ConvertError(f"{src.name}：{extlinks.REASON}。")   # 不交给 LibreOffice（它会去取外链图片）
+    if kind in WORD_KINDS and not is_zip(src):
+        # 旧版 .doc / .wps（OLE 文件头），以及改了扩展名的 RTF、网页等：都不交给转换程序（它们可能按链接联网取图）。
+        # 改了扩展名的 docx 文件头是 zip，照常按 docx 处理。
+        raise ConvertError(f"{src.name}：{LEGACY_WORD_REASON}")
     try:
         target = unique_target(src, k.output)
     except PermissionError:
