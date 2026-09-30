@@ -1,0 +1,278 @@
+diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
+index 942444d3b7..bbcd3c4d6b 100644
+--- a/packages/client/ui-conversation/src/client/apply.ts
++++ b/packages/client/ui-conversation/src/client/apply.ts
+@@ -56,6 +56,26 @@ export const inject = [
+   'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'configForms',
+ ]
+ 
++/**
++ * lawbench P-5: a hook that takes files dropped, pasted, or picked into a
++ * Session's composer before they become attachments or reference chips.
++ * Returns `null` when it took the files, a message to show when it refused
++ * them, or `undefined` to leave them to the default attachment path.
++ */
++export type ConversationFileIntakeHook = (
++  sessionId: SessionId, files: readonly File[], directories: ReadonlySet<File>,
++) => string | null | undefined
++
++/** lawbench P-5: registry of file-intake hooks (`conversationFileIntake`). */
++export interface ConversationFileIntake {
++  /**
++   * Register one hook; the first hook returning a non-`undefined` result wins.
++   * @param hook - intake hook.
++   * @returns disposer removing the hook.
++   */
++  register(hook: ConversationFileIntakeHook): () => void
++}
++
+ /** Conversation runtime configuration. */
+ export interface Config {
+   /** Maximum generic-file uploads allowed to run concurrently in browser Workers. */
+@@ -155,6 +175,14 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+   const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
+   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
+   const uiConversation = new UiConversation(ctx, sessions)
++  // lawbench P-5: files for the composer go to a registered intake hook first.
++  const intakeHooks = new Set<ConversationFileIntakeHook>()
++  ctx.provide('conversationFileIntake', {
++    register(hook) {
++      intakeHooks.add(hook)
++      return () => { intakeHooks.delete(hook) }
++    },
++  } satisfies ConversationFileIntake)
+ 
+   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
+   const t = ctx.locale.bind(NS)
+@@ -458,6 +486,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+         keyboard: shell,
+         addFiles: (files, directories = new Set()) => {
+           if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
++          for (const hook of intakeHooks) {
++            const taken = hook(sessionId, files, directories)
++            if (taken !== undefined) return taken
++          }
+           if (shell.snapshot.phase === 'adjudicating' || shell.snapshot.phase === 'submitting') {
+             return t('attachment.dropBlocked')
+           }
+diff --git a/packages/client/ui-conversation/src/client/index.ts b/packages/client/ui-conversation/src/client/index.ts
+index e5825f8c70..b1cce316d0 100644
+--- a/packages/client/ui-conversation/src/client/index.ts
++++ b/packages/client/ui-conversation/src/client/index.ts
+@@ -84,5 +84,7 @@ declare module '@deepseek-ai/cordis' {
+     conversation: import('./service.ts').IConversation
+     /** Target-neutral Conversation registries and per-Session assembly. */
+     uiConversation: import('./conversation/assembly.ts').UiConversation
++    /** lawbench P-5: file-intake hooks consulted before files become attachments or references. */
++    conversationFileIntake: import('./apply.ts').ConversationFileIntake
+   }
+ }
+diff --git a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
+index f004aba1e9..26742653f6 100644
+--- a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
++++ b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
+@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
+ import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react'
+ import clsx from 'clsx'
+ import {
+-  IconPlusOutlineMedium, IconWarningOutlineRegular, Toast, Tooltip,
++  IconWarningOutlineRegular, Toast, Tooltip,
+ } from '@deepseek-ai/dsh-client-ui-primitives'
+ // Type-only: the `plan` projection key merge (the TodoDock posture — the
+ // composer reads a host-computed value; the domain owns the key).
+@@ -45,7 +45,7 @@ export type InputBarProps = ComposerBarProps
+ export const InputBar = memo(function InputBar({
+   useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
+   retryFileUpload,
+-  toggleCommandMenu, stop, t,
++  stop, t,
+   renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
+   useProjection, sessionId, variant, disabled: inert = false, blocked,
+   workspacePickerOpen = false, onRequestWorkspace,
+@@ -271,16 +271,6 @@ export const InputBar = memo(function InputBar({
+     keepDraftFocus(e, editor)
+   }
+ 
+-  const onToggleCommandMenu = (): void => {
+-    if (keyboard === undefined) return
+-    // The menu is a combobox over the editor, so the keyboard has to be there
+-    // before the launcher opens it: activating the button from the keyboard
+-    // leaves focus on the button, and restoring it afterwards would re-track an
+-    // empty draft and close the menu again.
+-    if (editor !== null) focusDraftEditor(editor, revealSelection)
+-    toggleCommandMenu?.(keyboard.caretSpan())
+-  }
+-
+   // The no-session Workspace trigger: the resident editable div acts as the
+   // picker trigger for keyboard users (no editor is bound in this state).
+   const onWorkspaceKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+@@ -417,20 +407,7 @@ export const InputBar = memo(function InputBar({
+         />
+         <div ref={rowRef} className={css.row}>
+           <div className={css.tools} hidden={activity}>
+-            <Tooltip label={t('input.commands')} side="top" delayMs={500}>
+-              <button
+-                type="button"
+-                className={css.add}
+-                aria-label={t('input.commands')}
+-                aria-haspopup="listbox"
+-                aria-expanded={commandMenuOpen}
+-                disabled={locked || toggleCommandMenu === undefined}
+-                onMouseDown={keepFocus}
+-                onClick={onToggleCommandMenu}
+-              >
+-                <IconPlusOutlineMedium size={14} />
+-              </button>
+-            </Tooltip>
++            {/* lawbench P-5：去掉"+"按钮（它打开命令菜单，附件是其中一项）；斜杠命令仍可输入 / 调出 */}
+             <input
+               ref={fileInputRef}
+               type="file"
+diff --git a/packages/client/ui-conversation/tests/apply-inject.client.spec.tsx b/packages/client/ui-conversation/tests/apply-inject.client.spec.tsx
+index be25e250d3..a541da8eec 100644
+--- a/packages/client/ui-conversation/tests/apply-inject.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/apply-inject.client.spec.tsx
+@@ -436,6 +436,40 @@ describe('Conversation inject API', () => {
+     }
+   })
+ 
++  it('lawbench P-5: a registered intake hook takes the files before references or uploads', async () => {
++    vi.stubGlobal('__DSH_HOST_PATHS__', { pathFor: (file: File) => `/proj/${file.name}` })
++    onTestFinished(() => { vi.unstubAllGlobals() })
++    const b = await bench()
++    onTestFinished(() => b.runtime.dispose())
++    const composer = b.composerApi(ROOT)
++    const { state } = b.inputApi(ROOT)
++    const intake = b.runtime.ctx.get('conversationFileIntake')!
++    const note = new File([Uint8Array.of(1)], 'notes.md', { type: 'text/markdown' })
++    const shot = new File([Uint8Array.of(2)], 'shot.png', { type: 'image/png' })
++    const seen: Array<[SessionId, string[]]> = []
++    let answer: string | null | undefined = null
++    const off = intake.register((sessionId, files) => { seen.push([sessionId, files.map(f => f.name)]); return answer })
++    // Taken: no reference chip, no draft attachment, no upload.
++    expect(composer.addFiles?.([note, shot])).toBeNull()
++    expect(seen).toEqual([[ROOT, ['notes.md', 'shot.png']]])
++    expect(state.getSnapshot().draft).toBe('')
++    expect(state.getSnapshot().attachmentIds).toEqual([])
++    // Refused: the hook's message is the composer's answer, still nothing added.
++    answer = '请先打开案件'
++    expect(composer.addFiles?.([note])).toBe('请先打开案件')
++    expect(state.getSnapshot().draft).toBe('')
++    // Undefined: left to the default path (a reference chip).
++    answer = undefined
++    expect(composer.addFiles?.([note])).toBeNull()
++    expect(state.getSnapshot().draft).toBe('@notes.md ')
++    // Disposed: the hook is no longer consulted.
++    off()
++    seen.length = 0
++    expect(composer.addFiles?.([note])).toBeNull()
++    expect(seen).toEqual([])
++    expect(b.rootUpload).not.toHaveBeenCalled()
++  })
++
+   it('preserves selected text and file order and restores pasted directory chips from the draft', async () => {
+     vi.stubGlobal('__DSH_HOST_PATHS__', { pathFor: (file: File) => `/proj/${file.name}` })
+     onTestFinished(() => { vi.unstubAllGlobals(); cleanup() })
+diff --git a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
+index 3b025155eb..577e1e7046 100644
+--- a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
+@@ -1124,7 +1124,7 @@ describe('running and lock semantics', () => {
+     })
+     expect(textarea.getAttribute('aria-disabled')).toBe('true')
+     expect(placeholderOf(view.container)).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
+-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
++    expect(view.queryByLabelText('添加文件或调用指令')).toBeNull() // lawbench P-5："+"按钮已去掉
+     expect(button.getAttribute('aria-label')).toBe('发送消息')
+     expect(button.disabled).toBe(true)
+     expect(interruptButton?.disabled).toBe(false)
+@@ -1176,7 +1176,7 @@ describe('running and lock semantics', () => {
+     const { textarea, view } = bench({ disabled: true })
+     expect(textarea.getAttribute('aria-disabled')).toBe('true')
+     expect(placeholderOf(view.container)).toBe('会话不可用')
+-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
++    expect(view.queryByLabelText('添加文件或调用指令')).toBeNull() // lawbench P-5："+"按钮已去掉
+   })
+ 
+   it('idle primary sends and disables on empty draft', () => {
+@@ -1309,7 +1309,7 @@ describe('running and lock semantics', () => {
+     expect(editableOf(textarea)).toBe(false)
+     expect(textarea.getAttribute('aria-haspopup')).toBe('menu')
+     expect(textarea.getAttribute('aria-expanded')).toBe('false')
+-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
++    expect(view.queryByLabelText('添加文件或调用指令')).toBeNull() // lawbench P-5："+"按钮已去掉
+ 
+     fireEvent.click(textarea)
+     fireEvent.keyDown(textarea, { key: 'Enter' })
+@@ -1665,9 +1665,9 @@ describe('strips and variants', () => {
+ })
+ 
+ describe('command launcher chrome and control seats', () => {
+-  it('renders the command launcher and dispatches every empty control seat', () => {
++  it('renders no command launcher button (lawbench P-5) and dispatches every empty control seat', () => {
+     const { view, slotCalls } = bench()
+-    expect(view.getByLabelText('添加文件或调用指令')).toBeTruthy()
++    expect(view.queryByLabelText('添加文件或调用指令')).toBeNull()
+     // Capability absent (no permission slot entry): the chip renders nothing.
+     expect(view.queryByLabelText(/^访问模式/)).toBeNull()
+     // Every seat dispatched, nothing rendered (render passes may repeat; the
+@@ -1682,29 +1682,7 @@ describe('command launcher chrome and control seats', () => {
+     expect(view.queryByLabelText('Model')).toBeNull()
+   })
+ 
+-  it('passes the textarea selection to the command menu launcher and reflects its expanded state', () => {
+-    const toggleCommandMenu = vi.fn()
+-    const { view, shell, menuLauncher } = bench({ draft: 'draft text', toggleCommandMenu })
+-    act(() => { shell.editor.update(() => { $selectDetectSpan({ start: 2, end: 7 }) }, { discrete: true }) })
+-    const launcher = view.getByLabelText('添加文件或调用指令')
+-    expect(launcher.getAttribute('aria-expanded')).toBe('false')
+-    fireEvent.click(launcher)
+-    expect(toggleCommandMenu).toHaveBeenCalledExactlyOnceWith({ start: 2, end: 7 })
+-    act(() => { menuLauncher.set('command') })
+-    expect(launcher.getAttribute('aria-expanded')).toBe('true')
+-  })
+-
+-  it('opening the command menu from the button puts the keyboard in the editor first', () => {
+-    const toggleCommandMenu = vi.fn()
+-    const { view, textarea } = bench({ toggleCommandMenu })
+-    // Tab to the button and activate it: the keyboard is on the button, and the
+-    // menu is a combobox whose arrows live on the editor.
+-    textarea.blur()
+-    expect(document.activeElement).not.toBe(textarea)
+-    fireEvent.click(view.getByLabelText('添加文件或调用指令'))
+-    expect(document.activeElement).toBe(textarea)
+-    expect(toggleCommandMenu).toHaveBeenCalledTimes(1)
+-  })
++  // lawbench P-5："+"按钮已去掉，原"按钮打开命令菜单"的两个用例删除；命令菜单仍由输入 / 调出。
+ 
+   it('a registered entry fills its seat and receives the locked owner prop', () => {
+     const { view, slotCalls } = bench({
+@@ -1730,12 +1708,12 @@ describe('command launcher chrome and control seats', () => {
+     expect(attachmentOwner(live.slotCalls).canAcceptDrop).toBe(true)
+   })
+ 
+-  it('disabled locks the command launcher while running does not', () => {
++  it('has no command launcher button whether disabled or running (lawbench P-5)', () => {
+     const { view } = bench({ disabled: true })
+-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
++    expect(view.queryByLabelText('添加文件或调用指令')).toBeNull()
+     cleanup()
+     const live = bench({ running: true })
+-    expect((live.view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(false)
++    expect(live.view.queryByLabelText('添加文件或调用指令')).toBeNull()
+   })
+ })
+ 
+diff --git a/packages/client/ui-conversation/tests/input-matrix.client.spec.tsx b/packages/client/ui-conversation/tests/input-matrix.client.spec.tsx
+index e7c997cb61..7accd093a5 100644
+--- a/packages/client/ui-conversation/tests/input-matrix.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/input-matrix.client.spec.tsx
+@@ -344,7 +344,7 @@ describe('matrix row: locked (session disabled)', () => {
+   it('disables the textarea and chrome; the machine currency is untouched', () => {
+     const { view, textarea, shell } = bench({ disabled: true })
+     expect(textarea.getAttribute('aria-disabled')).toBe('true')
+-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
++    expect(view.queryByLabelText('添加文件或调用指令')).toBeNull() // lawbench P-5："+"按钮已去掉
+     expect(shell.snapshot.phase).toBe('plain')
+   })
+ 
