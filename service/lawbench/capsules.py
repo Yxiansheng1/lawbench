@@ -95,6 +95,8 @@ class CapsuleStore:
 
 
 def _merge_new(local: dict, default: dict) -> tuple[dict, bool]:
+    """升级后默认配置里新增的胶囊补进本机配置：hidden=true、new=true（契约 1.2 N35②；律师显示或隐藏一次后由界面
+    PUT /api/capsules 清掉 new）。"""
     merged = copy.deepcopy(local)
     present = {g["id"] for g in merged["groups"]} | {it["id"] for g in merged["groups"] for it in g["items"]}
     groups = {g["id"]: g for g in merged["groups"]}
@@ -103,7 +105,7 @@ def _merge_new(local: dict, default: dict) -> tuple[dict, bool]:
         if dg["id"] not in present:
             g = copy.deepcopy(dg)
             g["hidden"] = True
-            g["items"] = [dict(it, hidden=True) for it in g["items"] if it["id"] not in present]
+            g["items"] = [dict(it, hidden=True, new=True) for it in g["items"] if it["id"] not in present]
             merged["groups"].append(g)
             groups[g["id"]] = g
             present.add(g["id"])
@@ -112,7 +114,7 @@ def _merge_new(local: dict, default: dict) -> tuple[dict, bool]:
             continue
         for it in dg["items"]:
             if it["id"] not in present:
-                groups[dg["id"]]["items"].append(dict(copy.deepcopy(it), hidden=True))
+                groups[dg["id"]]["items"].append(dict(copy.deepcopy(it), hidden=True, new=True))  # 契约 1.2 N35②
                 present.add(it["id"])
                 added = True
     # shared、hint 律师不能改，始终与默认配置相同

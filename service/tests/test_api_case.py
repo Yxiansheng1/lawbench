@@ -60,8 +60,8 @@ def case_root(cases_dir) -> pathlib.Path:
 def test_health_without_token(client):
     r = client.get("/health", headers={"Authorization": ""})
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "contract_version": "1.1"}
-    assert contracts.version() == "1.1"
+    assert r.json() == {"status": "ok", "contract_version": "1.2"}
+    assert contracts.version() == "1.2"
 
 
 @pytest.mark.parametrize("hdr", [None, "", "Bearer", "Bearer wrong", "bearer " + "t" * 43, "Basic " + "t" * 43,
@@ -361,6 +361,17 @@ def test_capsules_new_default_merged_hidden(make_client, tmp_path, appdata):
     assert added and added[0]["hidden"] is True
     ng = [g for g in merged["groups"] if g["id"] == "new-group"][0]
     assert ng["hidden"] is True and ng["items"][0]["hidden"] is True
+    # 契约 1.2 N35②：新补进来的胶囊标 new=true；原有的不标
+    assert added[0]["new"] is True and ng["items"][0]["new"] is True
+    assert all("new" not in it for g in merged["groups"] for it in g["items"]
+               if it["id"] not in ("new-cap", "new-cap2"))
+    # 律师显示或隐藏一次后，界面 PUT 时不带 new：清掉，之后不再补标
+    for g in merged["groups"]:
+        for it in g["items"]:
+            it.pop("new", None)
+    ok(c2.put("/api/capsules", json=merged), "capsules")
+    again = ok(c2.get("/api/capsules"), "capsules")
+    assert all("new" not in it for g in again["groups"] for it in g["items"])
 
 
 # ---------- /api/connection/test ----------

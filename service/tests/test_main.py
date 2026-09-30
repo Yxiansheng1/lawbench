@@ -39,7 +39,7 @@ def test_entrypoint(tmp_path, via_env):
     proc = subprocess.Popen(args, cwd=SERVICE_DIR, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
         r = _wait(f"http://127.0.0.1:{port}/health", proc)
-        assert r.json() == {"status": "ok", "contract_version": "1.1"}
+        assert r.json() == {"status": "ok", "contract_version": "1.2"}
         assert httpx.get(f"http://127.0.0.1:{port}/api/case/recent", trust_env=False).status_code == 401
         r = httpx.get(f"http://127.0.0.1:{port}/api/case/recent", trust_env=False,
                       headers={"Authorization": f"Bearer {TOKEN}"})
