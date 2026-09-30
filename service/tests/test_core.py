@@ -138,7 +138,7 @@ def test_context_l0_capped(env):
 
 def test_context_l1_window_and_toc(env):
     small = _draft(env, "小输入", "短短一段。")
-    big = _draft(env, "大输入", "很长的前序成果内容。" * 2000)        # 约 2 万 token，超过 32K 窗口的 40%
+    big = _draft(env, "大输入", "很长的前序成果内容。" * 5000)        # 真计数、近似计数下都超过 32K 窗口的 40%，不超过 128K 的 40%
     after = _draft(env, "排在后面", "也很短。")
     req = {"case_id": env.case_id, "session_id": "sess-l1", "entry": None, "skill": None, "inputs": [small, big, after],
            "params": {"thinking": "中", "window": "32K", "max_tokens": 4096}}
