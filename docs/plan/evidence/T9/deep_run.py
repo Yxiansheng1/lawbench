@@ -14,7 +14,7 @@ bt.name.encode("mbcs")
 str(bt).encode("mbcs")   # 本机代码页编得了：中文是真中文
 env = dict(os.environ, PYTHONIOENCODING="utf-8")
 with open(out, "w", encoding="utf-8") as f:
-    f.write(f"basetemp 长度 {len(str(bt))} 字符，含中文（目录名见 lbdeep5\\<重复两遍的案件名>\\pt）\n")
+    f.write(f"basetemp 长度 {len(str(bt))} 字符，含中文（目录名见 lbdp-<随机>\\<重复两遍的案件名>\\pt）\n")
     f.flush()
     r = subprocess.run([str(pathlib.Path(r"D:\lawbench-B\service\.venv\Scripts\python.exe")), "-m", "pytest", "-q",
                         "-p", "no:cacheprovider", "--basetemp", str(bt), "tests"],
