@@ -110,6 +110,10 @@
   disabled: true
 - id: ui-sidebar-files
   disabled: true
+# 每轮成果卡片：Host 半边硬依赖 workspace-files 提供的 workspaceFiles，随上一行关掉后会"启用但起不来"，显式关掉
+# （执行令 2026-09-30 09:39 裁决；要开回须连 workspace-files 一起开，记入 N41）
+- id: ui-deliverables
+  disabled: true
 
 # 在别的程序里打开；session-controller 自带的 openWorkspacePath 不受这两行约束，要改源码，候 N40
 - id: open-in-app

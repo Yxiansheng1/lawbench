@@ -72,7 +72,7 @@ function Materials({ caseRef }: { caseRef: CaseRef }) {
 
   return (
     <div style={{ ...S.pane, outline: over ? `2px dashed ${C.brand}` : 'none', outlineOffset: -4 }}
-      onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true) }} onDragLeave={(e) => { e.stopPropagation(); setOver(false) }} onDrop={onDrop}>
+      data-lawbench-drop='' onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true) }} onDragLeave={(e) => { e.stopPropagation(); setOver(false) }} onDrop={onDrop}>
       <div style={S.between}>
         <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600 }}>{caseRef.name}</div><div style={S.sub}>拖入文件或文件夹即导入到"{DEFAULT_TARGET}"（可在确认框里改）</div></div>
       </div>

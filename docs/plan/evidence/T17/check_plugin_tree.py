@@ -1,4 +1,4 @@
-"""T4 插件树核对（返修版；T13 复制过来，白名单加 legal-ui；T17 第一步复制过来，21 行由白名单移入"必须关"，T13 目录里的原件未动）。
+"""T4 插件树核对（返修版；T13 复制过来，白名单加 legal-ui；T17 第一步复制过来，21 行由白名单移入"必须关"，第一步补再加 ui-deliverables，T13 目录里的原件未动）。
 
 输入：
   plugin-inventory-desktop.json  运行中的桌面端 Host 的 pluginInventory/list 返回（dump_inventory.ps1 导出）；
@@ -46,18 +46,19 @@ MUST_OFF = {
     "session-log-download",
     "ui-settings-plugins", "ui-settings-plugin-inventory", "plugin-inventory",
     "ui-settings-shell", "ui-settings-agent-loop", "ui-settings-subagent", "ui-settings-web-search",
+    # T17 第一步补（执行令 2026-09-30 09:39）：Host 半边硬依赖 workspace-files，随之显式关，不留"启用但起不来"
+    "ui-deliverables",
 }
 T17_STEP1 = {"terminal-controller", "ui-sidebar-terminal", "file-reference-local", "session-reference", "ui-reference",
              "workspace-files", "ui-sidebar-files", "open-in-app", "ui-open-in-app", "cordis-host-runner",
              "cordis-inspect-providers", "cordis-client-runner", "ui-cordis", "session-log-download",
              "ui-settings-plugins", "ui-settings-plugin-inventory", "plugin-inventory", "ui-settings-shell",
-             "ui-settings-agent-loop", "ui-settings-subagent", "ui-settings-web-search"}
+             "ui-settings-agent-loop", "ui-settings-subagent", "ui-settings-web-search", "ui-deliverables"}
 # 取证期允许临时启用的行（见文件头）
 OVERLAY_ROW = "plugin-inventory"
 # 启用但起不来、已上报主编排待裁决的行（单列显示，不隐藏；裁决后按结论改）
-PENDING_DECISION = {
-    "ui-deliverables": "Host 半边硬依赖 workspaceFiles（packages/client/ui-deliverables/src/index.ts:14），随 workspace-files 关闭而起不来；该行候 N41，已请示主编排（2026-09-30 09:16）",
-}
+# （ui-deliverables 曾列于此，主编排 09:39 裁决显式关掉，已移入"必须关"；现为空）
+PENDING_DECISION = {}
 OURS_REQUIRED = ["legal-ui", "legal-host", "legal-credentials", "preset-lawbench"]
 
 # 必须关的行在运行时清单里不存在时一律计入失败（可能是 id 写错或换了 DSH 提交），
@@ -157,7 +158,6 @@ ALLOWED = {
     "ui-approval": (UI, "审批界面"),
     "ui-chat": (UI, "聊天界面"),
     "ui-tool": (UI, "工具调用卡片"),
-    "ui-deliverables": (UI, "每轮成果卡片"),
     "ui-workflow-run": (UI, "工作流运行卡片；工作流工具已关"),
     "ui-input-trigger": (UI, "输入框 / 和 @ 触发"),
     "ui-commands": (UI, "斜杠命令菜单"),

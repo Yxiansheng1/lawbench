@@ -101,7 +101,7 @@ function RecentCases() {
       {cases.length === 0 && !err ? <Empty>还没有案件。打开或新建一个案件文件夹开始。</Empty> : null}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
         {cases.map((c) => (
-          <div key={c.case_id} onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (c.exists === false) e.dataTransfer.dropEffect = 'none'; else setOver(c.case_id) }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}
+          <div key={c.case_id} data-lawbench-drop='' onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (c.exists === false) e.dataTransfer.dropEffect = 'none'; else setOver(c.case_id) }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}
             style={{ ...S.card, borderColor: over === c.case_id ? C.brand : C.border, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={S.between}>
               <span style={{ fontWeight: 600 }}>{c.name}</span>

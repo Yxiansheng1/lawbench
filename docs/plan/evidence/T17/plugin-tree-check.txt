@@ -1,6 +1,6 @@
 # 桌面端运行时插件核对（pluginInventory/list，enabled 为桌面端语境下的实际状态）
 
-## 1. 必须关的行（70 行）
+## 1. 必须关的行（71 行）
   account-controller                   关
   agent-instructions                   关
   command-goal                         关
@@ -50,6 +50,7 @@
   tool-workflow                        关
   ui-brand-official                    关
   ui-cordis                            关
+  ui-deliverables                      关
   ui-message-feedback                  关
   ui-open-in-app                       关
   ui-plugin-manager                    关
@@ -72,7 +73,7 @@
   workflow-ptc                         关
   workspace-files                      关
 
-## 2. 反向检查：启用的行 111 个，逐条对白名单
+## 2. 反向检查：启用的行 110 个，逐条对白名单
 ### 核心运行时（65）
   agent                                Agent 运行服务
   agent-default-model                  新会话默认模型，已改成律所路由
@@ -139,9 +140,9 @@
   webserver                            本机 Web 服务，绑定 127.0.0.1
   workspace-changes                    按 git 快照记录每轮改动文件；律师工作台无文件工具，只读
   workspace-controller                 工作区远程接口，documentsDirectory 已改
-### 界面框架（35）
-  0085cbff（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
-  2e99cc41（随机 id）                      桌面端原生目录选择器（界面半边）
+### 界面框架（34）
+  1451b9e5（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
+  32d0dadd（随机 id）                      桌面端原生目录选择器（界面半边）
   api-remotes                          远程接口装配
   client-hmr                           界面热更新（开发期）
   connection                           界面到 Host 的连接
@@ -155,7 +156,6 @@
   ui-chat                              聊天界面
   ui-commands                          斜杠命令菜单
   ui-conversation                      对话区（附件入口改造归 P-5 / T17）
-  ui-deliverables                      每轮成果卡片
   ui-goal                              目标条
   ui-input-trigger                     输入框 / 和 @ 触发
   ui-jobs                              后台任务列表
@@ -190,8 +190,7 @@
   ui-workspace                         "默认工作区"入口界面（T13）
   workspace                            工作区服务与"默认工作区"入口（T13）
 
-## 2b. 启用但没有激活的行（依赖缺失等）：1 个
-  ui-deliverables                      fiberPhase=pending（待裁决：Host 半边硬依赖 workspaceFiles（packages/client/ui-deliverables/src/index.ts:14），随 workspace-files 关闭而起不来；该行候 N41，已请示主编排（2026-09-30 09:16））
+## 2b. 启用但没有激活的行（依赖缺失等）：0 个
 
 ## 2c. 我方插件与 preset 已加载并激活（组合包没加载时 DSH 静默以原版启动）
   legal-ui                             已激活
@@ -199,7 +198,7 @@
   legal-credentials                    已激活
   preset-lawbench                      已激活
 
-## 2d. 静态树里 T17 第一步这 21 行都写着 disabled: true（产品配置，不含取证叠加层）
+## 2d. 静态树里 T17 第一步这 22 行都写着 disabled: true（产品配置，不含取证叠加层）
   cordis-client-runner                 disabled: true
   cordis-host-runner                   disabled: true
   cordis-inspect-providers             disabled: true
@@ -210,6 +209,7 @@
   session-reference                    disabled: true
   terminal-controller                  disabled: true
   ui-cordis                            disabled: true
+  ui-deliverables                      disabled: true
   ui-open-in-app                       disabled: true
   ui-reference                         disabled: true
   ui-settings-agent-loop               disabled: true

@@ -85,6 +85,8 @@ CASES = [
     ("我方 legal-ui 行缺失（组合包没加载）", drop_entry("include:legal-ui"), tree_src, 1, "我方行没有加载或没有激活：legal-ui"),
     ("启用的 ui-chat 没有激活", set_phase("include:ui-chat", "pending"), tree_src, 1, "启用但没有激活：ui-chat"),
     ("不带取证声明时 plugin-inventory 启用", inv_src, tree_src, 1, "必须关的行仍启用：plugin-inventory", []),
+    # 第一步补：ui-deliverables 被改回启用（或启用但起不来）都要报出
+    ("ui-deliverables 被改回启用", enable_entry("include:ui-deliverables"), tree_src, 1, "必须关的行仍启用：ui-deliverables"),
 ]
 
 failed = 0
