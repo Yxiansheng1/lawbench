@@ -1,0 +1,48 @@
+# T13 第四轮返修 变异（撤回单处修法），跑 tests/dock-a19.spec.ts、tests/dock-review.spec.ts
+
+## P2-1 撤回：已保存就不写（不看显示的键）
+结果：1 failed | 82 passed (83)
+- E3 首页胶囊 A，Skill 列表慢 1.5 秒：写给服务的参数与参数框一致，发送后参数框不变
+- tests/dock-a19.spec.ts > E3 首页胶囊 A，Skill 列表慢 1.5 秒：写给服务的参数与参数框一致，发送后参数框不变
+
+## P3-1 撤回：挂上时读回与取提示并行
+结果：2 failed | 81 passed (83)
+- E7 挂上时 turnNotice 比 task/current 慢 50ms：改选写成后状态行回到就绪，成果区的选用照常带入
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E7 挂上时 turnNotice 比 task/current 慢 50ms：改选写成后状态行回到就绪，成果区的选用照常带入
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E7 挂上时 turnNotice 比 task/current 慢 50ms：改选写成后状态行回到就绪，成果区的选用照常带入
+
+## P3-2 撤回：写成时不清提示
+结果：4 failed | 79 passed (83)
+- E8 被拦下的那一轮进行中律师已改选 B（还没写）：一轮结束、B 写成后不误报，成功几轮也不出提示
+- E8b 改选 B 后 0.2 秒内发送（这一轮按服务的 A 跑、被拦下），B 随后写成：不误报
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E8 被拦下的那一轮进行中律师已改选 B（还没写）：一轮结束、B 写成后不误报，成功几轮也不出提示
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E8b 改选 B 后 0.2 秒内发送（这一轮按服务的 A 跑、被拦下），B 随后写成：不误报
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E8 被拦下的那一轮进行中律师已改选 B（还没写）：一轮结束、B 写成后不误报，成功几轮也不出提示
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E8b 改选 B 后 0.2 秒内发送（这一轮按服务的 A 跑、被拦下），B 随后写成：不误报
+
+## P3-3 撤回：切走后取到的提示丢掉
+结果：2 failed | 81 passed (83)
+- E13 取 turnNotice 在途时律师切走：回 S1 仍显示提示，发时不会显示就绪却被拦
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E13 取 turnNotice 在途时律师切走：回 S1 仍显示提示，发时不会显示就绪却被拦
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E13 取 turnNotice 在途时律师切走：回 S1 仍显示提示，发时不会显示就绪却被拦
+
+## R1：写成后 staleServer 不清
+结果：2 failed | 81 passed (83)
+- E4（NOTE R1）重选同一份必须真 POST（计数、快照刷新），写成后 staleServer 已清
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E4（NOTE R1）重选同一份必须真 POST（计数、快照刷新），写成后 staleServer 已清
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E4（NOTE R1）重选同一份必须真 POST（计数、快照刷新），写成后 staleServer 已清
+
+## Y7：挂上、换会话时不取提示（只在一轮结束时取）
+结果：8 failed | 75 passed (83)
+- E13 取 turnNotice 在途时律师切走：回 S1 仍显示提示，发时不会显示就绪却被拦
+- E6 S1 在后台被拦：S2 上不显示 S1 的提示、S2 挂上不取走 S1 的；回 S1 才显示
+- E7 挂上时 turnNotice 比 task/current 慢 50ms：改选写成后状态行回到就绪，成果区的选用照常带入
+- Y7 被拦下的一轮发生在别的会话显示时：回来后的提示与之后成功一轮的误报
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E13 取 turnNotice 在途时律师切走：回 S1 仍显示提示，发时不会显示就绪却被拦
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E6 S1 在后台被拦：S2 上不显示 S1 的提示、S2 挂上不取走 S1 的；回 S1 才显示
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（不重挂） > E7 挂上时 turnNotice 比 task/current 慢 50ms：改选写成后状态行回到就绪，成果区的选用照常带入
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E13 取 turnNotice 在途时律师切走：回 S1 仍显示提示，发时不会显示就绪却被拦
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E6 S1 在后台被拦：S2 上不显示 S1 的提示、S2 挂上不取走 S1 的；回 S1 才显示
+- tests/dock-a19.spec.ts > INPUT_CHANGED 第三轮复核实验（重挂） > E7 挂上时 turnNotice 比 task/current 慢 50ms：改选写成后状态行回到就绪，成果区的选用照常带入
+- tests/dock-review.spec.ts > 复核员 X 系列（不重挂） > Y7 被拦下的一轮发生在别的会话显示时：回来后的提示与之后成功一轮的误报
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y7 被拦下的一轮发生在别的会话显示时：回来后的提示与之后成功一轮的误报

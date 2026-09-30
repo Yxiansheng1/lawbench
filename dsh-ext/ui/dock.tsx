@@ -116,15 +116,15 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
       })
     }
     // 问 Host 上一轮是否被拦下（取一次即删）；输入材料变了（INPUT_CHANGED）就记下提示，并退回"正在读取"
+    // 提示按会话记进 store，取到了就记，不看 alive：Host 那边取一次即删，途中切走也不能丢（第三轮复核 P3-3）
     const notice = async (): Promise<void> => {
       const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
-      if (!alive) return
-      if (r.ok && r.value.code === 'INPUT_CHANGED') { markInputChanged(sid); setLoadedFor(null) }
+      if (r.ok && r.value.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
     }
     setError(null)
-    load()
-    // 挂上、换会话时也取一次：被拦下的那一轮结束时律师可能正看着别的会话（返修 P3-C ②）
-    void notice()
+    // 挂上、换会话时也取一次：被拦下的那一轮结束时律师可能正看着别的会话（返修 P3-C ②）。
+    // 与一轮结束时一样先取提示再读：并行时提示晚到会把已读完的 loadedFor 清掉，状态行卡在"正在读取"（第三轮复核 P3-1）
+    void notice().then(() => { if (alive) load() })
     // 一轮结束：先取提示再重读
     const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sid) void notice().then(() => { if (alive) load() }) }
     window.addEventListener(TURN_ENDED, onTurn)
@@ -141,8 +141,10 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   // 律师改动了（saved 为 false）：防抖后写给服务；写成功且途中没再改才记为已保存；写失败显示错误、保留下拉框的值。
   // 依赖整份 stored：律师再选一次、或点"重试"（setSelection 生成新的一份）都会重新写；依赖 key 见下。
   // 写哪个会话在发起时定下：写完时已换到别的会话的，结果只记到原会话，不动此刻显示的（T13 返修 P2-2）
+  // 已保存、但此刻显示的不是服务那份（Skill 列表比写成还晚回来，参数框改显示 Skill 预设）也要重写（第三轮复核 P2-1）；
+  // serverKey 为 null（刚换会话还没读到、或写失败）时不据此重写
   useEffect(() => {
-    if (!stored || stored.saved) return
+    if (!stored || (stored.saved && (serverKey.current === null || key === serverKey.current))) return
     const sid = sessionId
     clearInputChanged(sid)
     // 服务那份的输入快照过期了（INPUT_CHANGED 之后）：选回同一份也要真写，服务才会重算快照（返修 P3-B）
@@ -153,7 +155,9 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
       void sync.save(writing).then((r) => {
         const here = shownSession.current === sid
         if (r.ok) {
+          // 写成了，服务那份的输入快照已是新的：提示一并清（被拦那一轮前后刚改过选择时，否则红字误报到下次改动，第三轮复核 P3-2）
           clearStaleServer(sid)
+          clearInputChanged(sid)
           if (here) serverKey.current = writingKey
           markSelectionSaved(sid, (cur) => selectionKey({ capsuleId: cur.capsuleId, skill: cur.skill, inputs: cur.inputs, params: cur.params ?? writing.params }) === writingKey)
           if (here) setError((e) => (e?.sessionId === sid && e.key === writingKey ? null : e))

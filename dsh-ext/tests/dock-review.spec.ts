@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, forgetDockSyncs, TURN_ENDED } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockSyncs, INPUT_CHANGED_TEXT, TURN_ENDED } from '../ui/dock.tsx'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
 
@@ -249,6 +249,7 @@ for (const remount of [false, true]) {
       svc.versions[X] = 1
       const r = svc.run('S1'); await turnEnded('S1') // S1 在后台被拦下（显示的是 S2）
       await go('S1'); await flush(100)
+      expect(status()).toBe(INPUT_CHANGED_TEXT) // 第三轮复核 NOTE Y7：直接断言显示的就是提示
       seen = { shown: shown(), status: status() }; expect(row(`${M}|Y7-回S1时(后台那轮${r})`, svc.run('S1'))).not.toBe('不一致')
       svc.notices.take('S1') // 上一行模拟的 run 又记了一次，清掉，只留后台那轮的
       svc.notices.note('S1', 'INPUT_CHANGED')
