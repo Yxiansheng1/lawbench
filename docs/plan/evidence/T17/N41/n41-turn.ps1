@@ -1,6 +1,6 @@
 param([string]$Out)
 # 发一条消息（n41-probe.mjs send），期间每 150 毫秒看一次有没有 git.exe 进程；前后数系统临时目录里的 dsh-workspace-changes-* 目录。
-$d = 'C:\Users\19705\AppData\Local\Temp\claude\D--lawbench-A\83a515fe-3091-4d1d-bb29-68b2364c0be5\scratchpad'
+$d = 'C:\Users\<用户>\AppData\Local\Temp\claude\D--lawbench-A\83a515fe-3091-4d1d-bb29-68b2364c0be5\scratchpad'
 $before = @(Get-ChildItem $env:TEMP -Directory -Filter 'dsh-workspace-changes-*' -ErrorAction SilentlyContinue).Name
 $job = Start-Job -ScriptBlock { param($d) node "$d\n41-probe.mjs" send } -ArgumentList $d
 $seen = @{}

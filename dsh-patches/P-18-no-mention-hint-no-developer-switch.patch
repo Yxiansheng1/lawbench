@@ -1,3 +1,17 @@
+diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
+index 3c5553dae0..b6c2bb54b2 100644
+--- a/packages/client/ui-conversation/src/client/apply.ts
++++ b/packages/client/ui-conversation/src/client/apply.ts
+@@ -273,8 +273,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+         bindings: [{ code: 'Enter', modifiers: ['control'] }, { code: 'Enter', modifiers: ['meta'] }], group: 'input' },
+       { id: 'fixed.slash' as ShortcutCommandId, label: () => t('shortcut.slash'), keys: ['/'],
+         bindings: [{ code: 'Slash', modifiers: [] }], group: 'input' },
+-      { id: 'fixed.mention' as ShortcutCommandId, label: () => t('shortcut.mention'), keys: ['@'],
+-        bindings: [{ code: 'Digit2', modifiers: ['shift'] }], group: 'input' },
++      // lawbench P-18: no "@ opens the reference menu" row; the @ reference menu is disabled in the lawyer workbench
+     ]
+     for (const command of fixedInputs) {
+       scope.effect(() => scope.shortcuts.registerFixed(command), `ui-conversation: ${command.id}`)
 diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
 index 88ae0697f7..8fc08267e4 100644
 --- a/packages/client/ui-conversation/src/client/locales.ts
@@ -30,10 +44,10 @@ index 88ae0697f7..8fc08267e4 100644
    'placeholder.steerQueue': 'Cmd/Ctrl+Enter steers all queued messages',
    'input.commands': 'Add files or run commands',
 diff --git a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
-index 577e1e7046..eed39a3069 100644
+index 2e646f6cc7..3ef666fd17 100644
 --- a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
 +++ b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
-@@ -596,9 +596,9 @@ describe('Enter semantics', () => {
+@@ -632,9 +632,9 @@ describe('Enter semantics', () => {
    })
  
    it('keeps the owning placeholder or ordinary guidance when whole-queue steering is unavailable', () => {
@@ -46,7 +60,7 @@ index 577e1e7046..eed39a3069 100644
      expect(bench({
        running: true,
        queue: [row('q-1')],
-@@ -610,7 +610,7 @@ describe('Enter semantics', () => {
+@@ -646,7 +646,7 @@ describe('Enter semantics', () => {
        running: true,
        queue: [row('q-1')],
        commandMenuOpen: true,
@@ -55,7 +69,7 @@ index 577e1e7046..eed39a3069 100644
      // The steer hint intentionally outranks the plan placeholder: while it
      // shows, the whole-queue gesture is genuinely available in plan mode.
      expect(bench({
-@@ -1292,7 +1292,7 @@ describe('running and lock semantics', () => {
+@@ -1328,7 +1328,7 @@ describe('running and lock semantics', () => {
    it('disabled state shows the unavailable placeholder; custom placeholder wins', () => {
      expect(bench({ disabled: true }).placeholder).toBe('会话不可用')
      const live = bench()
@@ -64,7 +78,7 @@ index 577e1e7046..eed39a3069 100644
      const custom = bench({ placeholder: 'Custom placeholder' })
      expect(custom.placeholder).toBe('Custom placeholder')
    })
-@@ -1339,7 +1339,7 @@ describe('running and lock semantics', () => {
+@@ -1375,7 +1375,7 @@ describe('running and lock semantics', () => {
      expect(entering.placeholder).toBe('描述你的任务以生成计划')
      // Pending exit: target is default again.
      const leaving = bench({ plan: { active: true, pending: true } })

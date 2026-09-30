@@ -185,6 +185,16 @@
 - id: ui-plan
   disabled: true
 
+# 权限关掉后沙箱和审批写死，不再读环境变量 DSH_PERMISSION_MODE（桌面端把整个进程环境传给 Host，
+# 机器上有人设了 danger-full-access 也不生效；1516 令第一节小项③）。整行替换，字段写全（workspaceRoot 同 base）
+- id: sandbox-policy
+  config:
+    mode: workspace-write
+    workspaceRoot: !!js process.cwd()
+- id: approval
+  config:
+    policy: ask
+
 # ── 2. 改配置的行 ──────────────────────────────────────────────────────────
 
 # 默认 preset 指向律师工作台；不改的话仍指向已关掉的 standard，新建会话报 agent-preset/not-found

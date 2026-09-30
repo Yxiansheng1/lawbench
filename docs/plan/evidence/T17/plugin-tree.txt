@@ -174,11 +174,13 @@
   name: '@deepseek-ai/dsh-subprocess-local'
 - id: sandbox
   name: '@deepseek-ai/dsh-sandbox-local'
+# == @deepseek-ai/dsh-base, patched by lawbench-dsh
 - id: sandbox-policy
   name: '@deepseek-ai/dsh-sandbox-policy'
   config:
-    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    mode: workspace-write
     workspaceRoot: !!js process.cwd()
+# == @deepseek-ai/dsh-base
 - id: bash-sandbox
   name: '@deepseek-ai/dsh-bash-sandbox'
   disabled: !!js process.platform === 'win32'
@@ -187,13 +189,11 @@
 - id: pwsh-sandbox
   name: '@deepseek-ai/dsh-pwsh-sandbox'
   disabled: !!js process.platform !== 'win32'
+# == @deepseek-ai/dsh-base, patched by lawbench-dsh
 - id: approval
   name: '@deepseek-ai/dsh-user-approval'
   config:
-    policy: !!js >-
-      (process.env.DSH_PERMISSION_MODE ?? 'workspace-write') ===
-      'danger-full-access' ? 'never' : 'ask'
-# == @deepseek-ai/dsh-base, patched by lawbench-dsh
+    policy: ask
 - id: permission
   name: '@deepseek-ai/dsh-permission-presets'
   config:

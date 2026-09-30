@@ -209,6 +209,9 @@ EXPECT = {
     "locale": {"preference": "zh"},
     "ui-settings": {"enabled": False},
     "tools": {"mode": "native", "maxParallelSubCalls": 10},
+    # T17 第二步返修（1516 令小项③）：权限关掉后写死，不读 DSH_PERMISSION_MODE
+    "sandbox-policy": {"mode": "workspace-write", "workspaceRoot": "!!js process.cwd()"},
+    "approval": {"policy": "ask"},
 }
 LLM_EXPECT = {"baseURL": "http://127.0.0.1:18765/v1", "api": "openai-completions", "apiKeyEnv": "LAWFIRM_KEY",
               "retryPolicy": {"mode": "normal", "maxRetries": 1}}

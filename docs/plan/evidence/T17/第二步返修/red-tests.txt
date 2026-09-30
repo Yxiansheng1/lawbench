@@ -1,0 +1,71 @@
+## P-5 输入框不先问导入钩子
+文件：packages/client/ui-conversation/src/client/skeleton/InputBar.tsx；跑：packages/client/ui-conversation/tests/input-bar.client.spec.tsx
+结果：1 failed | 96 passed (97)
+- |thread-safe| packages/client/ui-conversation/tests/input-bar.client.spec.tsx > image draft rail > lawbench P-5: a registered import hook takes batches over the chat image limits, with no limit toast
+
+## P-9 主窗口仍可开 webview
+文件：apps/desktop/src/main.ts；跑：apps/desktop/tests/main-startup.spec.ts
+结果：1 failed | 106 passed (107)
+- |thread-safe| apps/desktop/tests/main-startup.spec.ts > desktop main startup > lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered
+
+## P-9 不关拼写检查
+文件：apps/desktop/src/main.ts；跑：apps/desktop/tests/main-startup.spec.ts
+结果：1 failed | 106 passed (107)
+- |thread-safe| apps/desktop/tests/main-startup.spec.ts > desktop main startup > lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered
+
+## P-9 侧栏浏览器 IPC 照旧注册
+文件：apps/desktop/src/main.ts；跑：apps/desktop/tests/main-startup.spec.ts
+结果：1 failed | 106 passed (107)
+- |thread-safe| apps/desktop/tests/main-startup.spec.ts > desktop main startup > lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered
+
+## P-9 file: 不限目录一律放行
+文件：apps/desktop/src/lawbench-request-policy.ts；跑：apps/desktop/tests/lawbench-request-policy.spec.ts
+结果：1 failed | 4 passed (5)
+- |thread-safe| apps/desktop/tests/lawbench-request-policy.spec.ts > lawbench P-9 request policy > file: only for the application renderer files (first-run window); other local files and shares refused
+
+## P-15 不先拒绝网络和设备路径前缀
+文件：packages/api/session-controller/src/media-references.ts；跑：packages/api/session-controller/tests/media-references.host.spec.ts
+结果：1 failed | 24 passed | 1 skipped (26)
+- |thread-safe| packages/api/session-controller/tests/media-references.host.spec.ts > SessionMediaReferences /api/file > lawbench P-15: refuses network and device path prefixes before touching the filesystem, even for a file inside the case
+
+## P-15 不存在仍回 404
+文件：packages/api/session-controller/src/media-references.ts；跑：packages/api/session-controller/tests/media-references.host.spec.ts
+结果：3 failed | 22 passed | 1 skipped (26)
+- |thread-safe| packages/api/session-controller/tests/media-references.host.spec.ts > SessionMediaReferences /api/file > answers HEAD without reading content and reports missing and non-regular files
+- |thread-safe| packages/api/session-controller/tests/media-references.host.spec.ts > SessionMediaReferences /api/file > lawbench P-15: refuses files outside registered workspaces and the attachment store, including via links and ..
+- |thread-safe| packages/api/session-controller/tests/media-references.host.spec.ts > SessionMediaReferences /api/file > rejects malformed paths, absent files, and directories
+
+## P-15 读取仍用请求里的写法
+文件：packages/api/session-controller/src/media-references.ts；跑：packages/api/session-controller/tests/media-references.host.spec.ts
+结果：1 failed | 24 passed | 1 skipped (26)
+- |thread-safe| packages/api/session-controller/tests/media-references.host.spec.ts > SessionMediaReferences /api/file > lawbench P-15: reads the canonical path that was checked, not the request spelling
+
+## P-17 用量页新窗口放行
+文件：apps/desktop/src/platform-view.ts；跑：apps/desktop/tests/platform-view.spec.ts
+结果：1 failed | 34 passed (35)
+- |thread-safe| apps/desktop/tests/platform-view.spec.ts > lawbench P-17: refuses every new window without handing it to the system browser
+
+## P-17 强制更新窗口"打开下载页"不报失败
+文件：apps/desktop/src/mandatory-update-window.ts；跑：apps/desktop/tests/mandatory-update-window.spec.ts
+结果：1 failed | 9 passed (10)
+- |thread-safe| apps/desktop/tests/mandatory-update-window.spec.ts > lawbench P-17: the page action never opens the system browser and reports failure; copy still works
+
+## P-17 比较前不解码
+文件：packages/client/ui-primitives/src/markdown/render.tsx；跑：packages/client/ui-primitives/tests/markdown.client.spec.tsx
+结果：1 failed | 34 passed (35)
+- |thread-safe| packages/client/ui-primitives/tests/markdown.client.spec.tsx > MarkdownText > lawbench P-17: an address with non-ASCII characters is shown once, not followed by its encoded form
+
+## B-F2 带文字的粘贴照样导入位图
+文件：ui/intake.ts；跑：tests/intake.spec.ts
+结果：1 failed | 3 passed (4)
+- tests/intake.spec.ts > 带文字的粘贴里的位图不导入（B-F2） > Excel、WPS 复制单元格（文字加一张截图）：钩子接手但不导入位图，也不弹提示
+
+## A-P3-7 不登记导入钩子
+文件：ui/index.tsx；跑：tests/intake.spec.ts
+结果：1 failed | 3 passed (4)
+- tests/intake.spec.ts > 界面插件 apply 之后两个 DSH 补丁服务各登记一次（A-P3-7） > conversationFileIntake、chatInlineMarks 各 register 一次
+
+## A-P3-7 不登记出处按钮
+文件：ui/index.tsx；跑：tests/intake.spec.ts
+结果：1 failed | 3 passed (4)
+- tests/intake.spec.ts > 界面插件 apply 之后两个 DSH 补丁服务各登记一次（A-P3-7） > conversationFileIntake、chatInlineMarks 各 register 一次

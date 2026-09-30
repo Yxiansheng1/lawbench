@@ -1,5 +1,5 @@
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 942444d3b7..bbcd3c4d6b 100644
+index 942444d3b7..3c5553dae0 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
 @@ -56,6 +56,26 @@ export const inject = [
@@ -44,8 +44,28 @@ index 942444d3b7..bbcd3c4d6b 100644
  
    ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
    const t = ctx.locale.bind(NS)
-@@ -458,6 +486,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+@@ -435,6 +463,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+         return {
+           keyboard: undefined,
+           addFiles: undefined,
++          intakeFirst: undefined,
+           removeAttachment: undefined,
+           resolveDraftAttachments: undefined,
+           retryFileUpload: undefined,
+@@ -456,8 +485,22 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+       const bridge = hostPathBridge()
+       return {
          keyboard: shell,
++        // lawbench P-5: the composer asks the hooks before its image-limit pre-check,
++        // so a batch over the chat attachment limits still reaches the import hook.
++        intakeFirst: (files, directories = new Set()) => {
++          if (sessions.binding(sessionId) === undefined) return undefined
++          for (const hook of intakeHooks) {
++            const taken = hook(sessionId, files, directories)
++            if (taken !== undefined) return taken
++          }
++          return undefined
++        },
          addFiles: (files, directories = new Set()) => {
            if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
 +          for (const hook of intakeHooks) {
@@ -55,6 +75,23 @@ index 942444d3b7..bbcd3c4d6b 100644
            if (shell.snapshot.phase === 'adjudicating' || shell.snapshot.phase === 'submitting') {
              return t('attachment.dropBlocked')
            }
+diff --git a/packages/client/ui-conversation/src/client/contract/slots.ts b/packages/client/ui-conversation/src/client/contract/slots.ts
+index 61f7d8ff8b..1447b923f1 100644
+--- a/packages/client/ui-conversation/src/client/contract/slots.ts
++++ b/packages/client/ui-conversation/src/client/contract/slots.ts
+@@ -384,6 +384,12 @@ export interface ComposerBarInjected {
+    * identified as directories.
+    */
+   addFiles: ((files: readonly File[], directories?: ReadonlySet<File>) => string | null) | undefined
++  /**
++   * lawbench P-5: offer one batch to the registered file-intake hooks before
++   * any client-side attachment limit applies. Resolves to the taking hook's
++   * result (rejection copy or null), or undefined when no hook took it.
++   */
++  intakeFirst?: ((files: readonly File[], directories?: ReadonlySet<File>) => string | null | undefined) | undefined
+   removeAttachment: ((id: DraftAttachmentId) => void) | undefined
+   resolveDraftAttachments: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
+   /** Restart one failed file upload; absent without a session. */
 diff --git a/packages/client/ui-conversation/src/client/index.ts b/packages/client/ui-conversation/src/client/index.ts
 index e5825f8c70..b1cce316d0 100644
 --- a/packages/client/ui-conversation/src/client/index.ts
@@ -68,7 +105,7 @@ index e5825f8c70..b1cce316d0 100644
    }
  }
 diff --git a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
-index f004aba1e9..26742653f6 100644
+index f004aba1e9..8d92620aa7 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx
 @@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
@@ -80,16 +117,41 @@ index f004aba1e9..26742653f6 100644
  } from '@deepseek-ai/dsh-client-ui-primitives'
  // Type-only: the `plan` projection key merge (the TodoDock posture — the
  // composer reads a host-computed value; the domain owns the key).
-@@ -45,7 +45,7 @@ export type InputBarProps = ComposerBarProps
+@@ -43,9 +43,9 @@ import css from './InputBar.module.css'
+ export type InputBarProps = ComposerBarProps
+ 
  export const InputBar = memo(function InputBar({
-   useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
+-  useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
++  useSession, useInput, inputActions, keyboard, addFiles, intakeFirst, removeAttachment, resolveDraftAttachments,
    retryFileUpload,
 -  toggleCommandMenu, stop, t,
 +  stop, t,
    renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
    useProjection, sessionId, variant, disabled: inert = false, blocked,
    workspacePickerOpen = false, onRequestWorkspace,
-@@ -271,16 +271,6 @@ export const InputBar = memo(function InputBar({
+@@ -210,6 +210,12 @@ export const InputBar = memo(function InputBar({
+   // this composer.
+   const intakeFiles = useCallback((files: readonly File[], directories?: ReadonlySet<File>): void => {
+     if (subagent !== null || addFiles === undefined || files.length === 0) return
++    // lawbench P-5: a registered import hook takes the batch before any chat attachment limit applies.
++    const taken = intakeFirst?.(files, directories)
++    if (taken !== undefined) {
++      if (taken !== null) showToast(taken)
++      return
++    }
+     const rejected = ((): string | null => {
+       if (imageLimits !== undefined) {
+         const mediaTypes = imageLimits.mediaTypes as readonly string[]
+@@ -230,7 +236,7 @@ export const InputBar = memo(function InputBar({
+       return addFiles(files, directories)
+     })()
+     if (rejected !== null) showToast(rejected)
+-  }, [subagent, addFiles, attachments, imageLimits, showToast, t])
++  }, [subagent, addFiles, intakeFirst, attachments, imageLimits, showToast, t])
+ 
+   const canAcceptDrop = subagent === null && !locked && !machineBusy && addFiles !== undefined
+ 
+@@ -271,16 +277,6 @@ export const InputBar = memo(function InputBar({
      keepDraftFocus(e, editor)
    }
  
@@ -106,7 +168,7 @@ index f004aba1e9..26742653f6 100644
    // The no-session Workspace trigger: the resident editable div acts as the
    // picker trigger for keyboard users (no editor is bound in this state).
    const onWorkspaceKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
-@@ -417,20 +407,7 @@ export const InputBar = memo(function InputBar({
+@@ -417,20 +413,7 @@ export const InputBar = memo(function InputBar({
          />
          <div ref={rowRef} className={css.row}>
            <div className={css.tools} hidden={activity}>
@@ -174,10 +236,67 @@ index be25e250d3..a541da8eec 100644
      vi.stubGlobal('__DSH_HOST_PATHS__', { pathFor: (file: File) => `/proj/${file.name}` })
      onTestFinished(() => { vi.unstubAllGlobals(); cleanup() })
 diff --git a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
-index 3b025155eb..577e1e7046 100644
+index 3b025155eb..2e646f6cc7 100644
 --- a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
 +++ b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
-@@ -1124,7 +1124,7 @@ describe('running and lock semantics', () => {
+@@ -101,6 +101,8 @@ interface BenchOptions {
+   /** Upload states served for file-kind drafts (absent = every file is ready). */
+   fileUploads?: DraftFileUploads
+   addFiles?: (files: readonly File[], directories?: ReadonlySet<File>) => string | null
++  /** lawbench P-5: the injected import-hook probe (absent = no hook registered). */
++  intakeFirst?: (files: readonly File[], directories?: ReadonlySet<File>) => string | null | undefined
+   commandMenuOpen?: boolean
+   busyEnter?: 'queue' | 'steer'
+   toggleCommandMenu?: (selection: { start: number; end: number }) => void
+@@ -196,6 +198,7 @@ function bench(over?: BenchOptions) {
+     inputActions: shell.actions,
+     keyboard: shell,
+     addFiles: over?.addFiles ?? (() => null),
++    intakeFirst: over?.intakeFirst,
+     useFileUploads: bindSnapshotSelector(createSnapshotStore<DraftFileUploads>(over?.fileUploads ?? {})),
+     retryFileUpload: undefined,
+     removeAttachment,
+@@ -421,6 +424,39 @@ describe('image draft rail', () => {
+     expect(within.view.queryByRole('alert')).toBeNull()
+   })
+ 
++  it('lawbench P-5: a registered import hook takes batches over the chat image limits, with no limit toast', () => {
++    const limits = {
++      maxImageBytes: 1024 * 1024,
++      maxImagesPerMessage: 20,
++      maxMessageImageBytes: 200 * 1024 * 1024,
++      maxImagePixels: 40_000_000,
++      maxImageDimension: 2000,
++      mediaTypes: ['image/png'] as const,
++    }
++    const png = (bytes: number, name: string) => new File([new ArrayBuffer(bytes)], name, { type: 'image/png' })
++    for (const files of [
++      Array.from({ length: 21 }, (_, i) => png(8, `scan-${i}.png`)),
++      [png(1024 * 1024 + 1, 'big.png')],
++    ]) {
++      const intakeFirst = vi.fn(() => null)
++      const result = bench({ addFiles: vi.fn(() => null), intakeFirst, imageLimits: limits })
++      act(() => { attachmentOwner(result.slotCalls).onAddFiles(files) })
++      expect(intakeFirst).toHaveBeenCalledWith(files, undefined)
++      expect(result.props.addFiles).not.toHaveBeenCalled()
++      expect(result.view.queryByRole('alert')).toBeNull()
++      cleanup()
++    }
++    // A hook that declines (undefined) leaves the limit pre-check in force.
++    const declined = bench({ addFiles: vi.fn(() => null), intakeFirst: vi.fn(() => undefined), imageLimits: limits })
++    act(() => { attachmentOwner(declined.slotCalls).onAddFiles([png(1024 * 1024 + 1, 'big.png')]) })
++    expect(declined.view.getByRole('alert').textContent).toContain('单张图片不能超过 1MB')
++    cleanup()
++    // A hook that refuses shows its own copy.
++    const refused = bench({ addFiles: vi.fn(() => null), intakeFirst: vi.fn(() => '材料只能导入到案件里'), imageLimits: limits })
++    act(() => { attachmentOwner(refused.slotCalls).onAddFiles([png(8, 'a.png')]) })
++    expect(refused.view.getByRole('alert').textContent).toContain('材料只能导入到案件里')
++  })
++
+   it('announces the format problem before any limit when the batch holds a non-image', () => {
+     const addFiles = vi.fn(() => '仅支持 PNG、JPG、WebP、GIF 格式的图片')
+     const result = bench({
+@@ -1124,7 +1160,7 @@ describe('running and lock semantics', () => {
      })
      expect(textarea.getAttribute('aria-disabled')).toBe('true')
      expect(placeholderOf(view.container)).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
@@ -186,7 +305,7 @@ index 3b025155eb..577e1e7046 100644
      expect(button.getAttribute('aria-label')).toBe('发送消息')
      expect(button.disabled).toBe(true)
      expect(interruptButton?.disabled).toBe(false)
-@@ -1176,7 +1176,7 @@ describe('running and lock semantics', () => {
+@@ -1176,7 +1212,7 @@ describe('running and lock semantics', () => {
      const { textarea, view } = bench({ disabled: true })
      expect(textarea.getAttribute('aria-disabled')).toBe('true')
      expect(placeholderOf(view.container)).toBe('会话不可用')
@@ -195,7 +314,7 @@ index 3b025155eb..577e1e7046 100644
    })
  
    it('idle primary sends and disables on empty draft', () => {
-@@ -1309,7 +1309,7 @@ describe('running and lock semantics', () => {
+@@ -1309,7 +1345,7 @@ describe('running and lock semantics', () => {
      expect(editableOf(textarea)).toBe(false)
      expect(textarea.getAttribute('aria-haspopup')).toBe('menu')
      expect(textarea.getAttribute('aria-expanded')).toBe('false')
@@ -204,7 +323,7 @@ index 3b025155eb..577e1e7046 100644
  
      fireEvent.click(textarea)
      fireEvent.keyDown(textarea, { key: 'Enter' })
-@@ -1665,9 +1665,9 @@ describe('strips and variants', () => {
+@@ -1665,9 +1701,9 @@ describe('strips and variants', () => {
  })
  
  describe('command launcher chrome and control seats', () => {
@@ -216,7 +335,7 @@ index 3b025155eb..577e1e7046 100644
      // Capability absent (no permission slot entry): the chip renders nothing.
      expect(view.queryByLabelText(/^访问模式/)).toBeNull()
      // Every seat dispatched, nothing rendered (render passes may repeat; the
-@@ -1682,29 +1682,7 @@ describe('command launcher chrome and control seats', () => {
+@@ -1682,29 +1718,7 @@ describe('command launcher chrome and control seats', () => {
      expect(view.queryByLabelText('Model')).toBeNull()
    })
  
@@ -247,7 +366,7 @@ index 3b025155eb..577e1e7046 100644
  
    it('a registered entry fills its seat and receives the locked owner prop', () => {
      const { view, slotCalls } = bench({
-@@ -1730,12 +1708,12 @@ describe('command launcher chrome and control seats', () => {
+@@ -1730,12 +1744,12 @@ describe('command launcher chrome and control seats', () => {
      expect(attachmentOwner(live.slotCalls).canAcceptDrop).toBe(true)
    })
  

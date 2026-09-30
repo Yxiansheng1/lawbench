@@ -97,6 +97,8 @@ CASES = [
     # 第三步：我方会话存储没加载；会话投影缓存被改回启用
     ("第三步：legal-session-store 缺失", drop_entry("include:legal-session-store"), tree_src, 1, "我方行没有加载或没有激活：legal-session-store"),
     ("第三步：session-projection-cache 被改回启用", enable_entry("include:session-projection-cache"), tree_src, 1, "必须关的行仍启用：session-projection-cache"),
+    # 第二步返修：审批写死被改回（读环境变量或改成 never）
+    ("返修：approval.policy 改成 never", inv_src, tree_src.replace("policy: ask", "policy: never", 1), 1, "approval 取值不符"),
 ]
 
 failed = 0

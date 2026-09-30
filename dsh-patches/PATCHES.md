@@ -37,10 +37,25 @@ git -C dsh apply ..\dsh-patches\P-18-no-mention-hint-no-developer-switch.patch
 | P-18 | `packages/client/ui-conversation/src/client/locales.ts`、`tests/input-bar.client.spec.tsx`；`packages/client/ui-settings-general/src/client/index.ts`、`tests/apply.client.spec.ts`（补丁 `P-18-no-mention-hint-no-developer-switch.patch`） | ① 输入框占位文字去掉"@ 文件或对话"：`placeholder.default` 为"发消息或创建任务, / 调用指令"，`placeholder.hero` 同样去掉，中英文都改。② 通用设置不再登记"代码工作工具"（开发者模式）开关这一行（`developer-tools`）；组件文件 `DeveloperToolsRow.tsx` 和它的组件测试不动，只是不再挂上 | 用户放行（T17 调研第 6 节两条小项，1039 令第 4 节）。`@` 引用菜单已在第一步由配置关掉，占位文字还在提它会误导；开发者模式开关控制轨迹、Agent 预设切换等，默认关但律师能自己打开 | `ui-conversation`、`ui-settings-general` 共 47 个测试文件：45 个通过，586 项全过。另 2 个（`ui-settings-general` 的 `apply`、`shell`）载入即失败，报 "cannot resolve plugin package @deepseek-ai/dsh-web-app"，是测试环境问题（同 P-15 记录）：换回补丁前的两个文件同样失败，所以 `apply.client.spec.ts` 里改的断言在本机跑不到。红测：占位文字改回带 `@` 的原文，`input-bar` 3 项变红（`docs\plan\evidence\T17\P-18\red-tests.txt`）。桌面端实测：输入框占位文字是"发消息或创建任务, / 调用指令"；通用设置里没有"代码工作工具"开关（截图 01、02）。改了要重新 `build:lib:client` 和 `build:web` |
 | P-6 | —（**不需要改源码**，T13 执行令 Q1） | 不改 `packages/api/remotes/src/client/index.ts`。界面插件（`legal-ui`）启动时自己 `ctx.remote.$mount` 一份手写的 `lawbench` 描述（`dsh-ext\ui\remote.ts`），再 `ctx.inject(['remote.lawbench', 'slots'], …)` 取子上下文调用，写法仍是 `ctx.remote.lawbench.<方法>()`。Host 端靠网关对无生成代码的远程服务的运行时回退（`packages/api/gateway/src/index.ts:743-830`，按 `typertRemote` 绑定和原型上的方法标记注册） | Spec 1.2 原写"要在官方 `api-remotes` 里加一行导入"，但那里导入的是 Typert 代码生成器的 `/remote` 产物，我方远程类是纯 JS、没有这份产物。网关的 `$mount` 对任何插件开放（`packages/api/gateway/src/client/index.ts:202-210`），只校验参数编解码为 `mode: 'strict'` 和命名空间不冲突；DSH 自己的实验插件 voice-input 也是这样挂载（`packages/experimental/client-ui-voice-input/src/client/mount.ts:60-65`）。直接在组件里读 `ctx.remote.lawbench` 会被 cordis 拒绝（"cannot get property … without inject"，实测），所以要先 `$mount` 再 `inject` | 桌面端设置页"律师工作台"调通 `setupState`（`docs\plan\evidence\T13\00-通路验证-设置页调用setupState.jpg`）；Host 方法表与界面描述一致由 `dsh-ext\tests\remote-methods.spec.ts` 守着（方法名、形参名，做过变异验证） |
 
+### T17 第二步返修增补（执行令 `致A-ORCH-执行令-T17第二步返修-20260930-1606.md`，综合裁决 `main:docs/plan/evidence/T17/review-综合裁决-第二轮.md` 第 2 节）
+
+下面各补丁都在上表那一行的基础上增补，补丁文件已按"固定提交 + 前面全部补丁"重新生成。重建办法：在本地克隆里从固定提交起逐个打原补丁，再跑各自的增补脚本，然后导出。P-14、P-16 重新导出后与原来逐字节相同。打好后的全部文件与工作区逐字节一致。
+
+| 补丁 | 增补 | 原因（复核编号） | 测试 |
+|---|---|---|---|
+| P-5 | 输入框收文件时（拖入、粘贴、选择三条路都经 `intakeFiles`）先问已登记的导入钩子：注入新方法 `intakeFirst`，`apply.ts` 里依次问钩子。钩子接手就跳过聊天图片上限预检；钩子拒绝就显示它的提示；钩子不接才走原来的上限检查和 `addFiles` | B-F1：超过 20 张、单张超过 20 MB 时，原来先弹聊天附件上限提示，根本到不了导入钩子 | `input-bar.client.spec.tsx`"a registered import hook takes batches over the chat image limits"：21 张、单张超大都交给钩子、无上限提示；钩子不接时上限检查照旧；钩子拒绝时显示它的话 |
+| P-9 | ① 所有窗口 `webviewTag: false`，主窗口原来是 `primary`。② 侧栏浏览器的 IPC `browserAcquire`、`browserRelease` 不再注册，`browserGuests` 对象留着不用。③ 所有窗口 `spellcheck: false`（Spec 3.2 P-9"主窗口关闭拼写检查"；拼写检查会联网取词典）。④ 协议白名单只留 `dsh-app:`（界面本身）、`data:` 和 `blob:`（渲染进程自己生成的资源）、`devtools:`（开发者工具）、`about:`（框架和窗口的初始 `about:blank`）；删掉 `file:`（没人用，而且 `file://主机/共享` 会走 SMB）和 `chrome:`、`chrome-extension:`（不用内部页面和扩展） | B-F7：任何渲染进程脚本都能借侧栏浏览器的 IPC 开独立分区的 webview，绕过白名单。A-P3-3、B-F6：`file:` 等多放的协议。A-P3-4：拼写检查 | `main-startup.spec.ts`"no window may host a webview or spellcheck, and the sidebar browser IPC is not registered"；`lawbench-request-policy.spec.ts`"refuses file:, chrome: and chrome-extension:" |
+| P-15 | ① `realpath` 之前先拒绝以两个斜杠或反斜杠开头的路径（`\\主机`、`//主机`、`\\?\`、`\\.\`），Host 不会先去访问 SMB。② 越界和不存在统一回 403，读取时提供方报"不存在"也是 403，不能借此探测文件在不在。③ 读取用核对过的规范路径，不用请求里的写法，核对和读取之间换了链接也改不了读谁 | B-F3、B-F4 | `media-references.host.spec.ts`：前缀五种写法，连指向案件里真实文件的 `\\?\` 也回 403；按规范路径读取；原来几处 404 的断言改为 403 |
+| P-17 | ① 用量页（`platform-view.ts`）新窗口一律拒绝，不再 `shell.openExternal`。② 强制更新窗口（`mandatory-update-window.ts`）"打开下载页"不再拉起系统浏览器，按打开失败处理，界面照旧提供复制地址。③ `showsAddress` 比较前两边都 `decodeURI`；补上的网址也按解码后显示，中文网址不再重复、不再显示成百分号编码。④ 文件头注释里的字面 `\n` 改为真换行 | 1516 令小项①；B-F9；A-P3-2 | `platform-view.spec.ts`"refuses every new window without handing it to the system browser"；`mandatory-update-window.spec.ts`"the page action never opens the system browser"；`markdown.client.spec.tsx`"an address with non-ASCII characters is shown once" |
+| P-18 | 快捷键说明里不再列"@ 打开引用菜单"（`ui-conversation/src/client/apply.ts` 的 `fixed.mention` 一行） | 1516 令小项② | 没有单测（DSH 没有测固定快捷键列表的用例）；桌面端在"编辑快捷键"里看 |
+
+以上各条的红测见 `docs\plan\evidence\T17\第二步返修\red-tests.txt`。
+
 ## 换 DSH 提交时的核对清单（我方依赖、但不在补丁里的 DSH 内部写法）
 
 | 依赖 | 在哪里用 | 怎么核对 |
 |---|---|---|
+| （T17 P-15 起）`attachments` 服务的 `root` 字段（`packages/attachment/attachment-local`，不在公开类型里，P-15 在 `media-references.ts` 里按 `(ctx.attachments as unknown as { root?: unknown }).root` 取本机附件库根目录） | `/api/file` 允许读取的根目录之一（P-15） | 换提交后若字段改名或去掉，附件库里的图片会回 403：跑 `media-references.host.spec.ts` 的"refuses files outside……"一组（其中读附件库文件的断言会变红），并在桌面端看一张粘贴进对话的图片能否显示 |
 | （T17 P-16 起）`ui-chat` 的 `chatInlineMarks` 服务和 `ChatInlineMark` 的字段（`pattern`、`ranges`、`label`、`open`），由 P-16 补丁提供 | 草稿正文里的出处按钮（`dsh-ext\ui\citation.ts` 的 `citationMark`，`ui\index.tsx` 登记）。原来依赖的对话区节点属性 `data-chat-flow-kind` 随 `citation-click.ts` 撤掉，不再依赖 | `dsh-ext\tests\citation.spec.ts`\"DSH 那一侧的出处按钮服务还在\"一组会先变红；另在桌面端真实回答上点一次出处实测 |
 
 ## 结论记录

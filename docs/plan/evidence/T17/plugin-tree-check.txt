@@ -148,11 +148,11 @@
   webserver                            本机 Web 服务，绑定 127.0.0.1
   workspace-controller                 工作区远程接口，documentsDirectory 已改
 ### 界面框架（28）
+  7edfb1b2（随机 id）                      桌面端原生目录选择器（界面半边）
   api-remotes                          远程接口装配
   client-hmr                           界面热更新（开发期）
   connection                           界面到 Host 的连接
-  d4218efe（随机 id）                      桌面端原生目录选择器（界面半边）
-  f571ea8f（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
+  ddf60f82（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
   file-upload                          界面上传通道（附件改导入归 P-5 / T17）
   locale                               语言，固定中文
   modules                              界面插件模块表
@@ -243,6 +243,8 @@
   locale                   一致  {"preference": "zh"}
   ui-settings              一致  {"enabled": false}
   tools                    一致  {"mode": "native", "maxParallelSubCalls": 10}
+  sandbox-policy           一致  {"mode": "workspace-write", "workspaceRoot": "!!js process.cwd()"}
+  approval                 一致  {"policy": "ask"}
   llm-pi-ai.baseURL            一致  "http://127.0.0.1:18765/v1"
   llm-pi-ai.api                一致  "openai-completions"
   llm-pi-ai.apiKeyEnv          一致  "LAWFIRM_KEY"

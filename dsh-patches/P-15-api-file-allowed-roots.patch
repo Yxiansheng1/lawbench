@@ -1,5 +1,5 @@
 diff --git a/packages/api/session-controller/src/media-references.ts b/packages/api/session-controller/src/media-references.ts
-index 9da80029f5..544ecd82ea 100644
+index 9da80029f5..2e3b5812c5 100644
 --- a/packages/api/session-controller/src/media-references.ts
 +++ b/packages/api/session-controller/src/media-references.ts
 @@ -1,14 +1,20 @@
@@ -26,7 +26,7 @@ index 9da80029f5..544ecd82ea 100644
  import { FsError, type FileSystem } from '@deepseek-ai/dsh-fs'
  import mime from 'mime-types'
  
-@@ -19,12 +25,42 @@ const BASE_HEADERS = {
+@@ -19,14 +25,49 @@ const BASE_HEADERS = {
    'Content-Security-Policy': "sandbox; default-src 'none'",
  }
  
@@ -63,14 +63,40 @@ index 9da80029f5..544ecd82ea 100644
    const path = new URL(request.url).searchParams.get('path')
    if (path === null || path.length === 0) return fail(400, 'missing path')
    if (path.includes('\0') || !isAbsolute(path)) return fail(400, 'absolute path required')
-+  // lawbench P-15: canonicalize (`..`, links, long-path prefixes) and require an allowed root; the path is never echoed
++  // lawbench P-15: network (\\host, //host) and device (\\?\, \\.\) paths are refused before any filesystem
++  // access, so the Host never reaches out to SMB; then canonicalize (`..`, links) and require an allowed root.
++  // Outside and missing answer the same 403 (no existence probe); the path is never echoed.
++  const refuse = (): Response => fail(403, 'outside the allowed folders')
++  if (/^[\\/]{2}/.test(path)) return refuse()
 +  let canonical: string
-+  try { canonical = await realpath(resolve(path)) } catch { return fail(404, 'not found') }
-+  if (!lawbenchPathInside(canonical, await servedRoots(rootsOf))) return fail(403, 'outside the allowed folders')
++  try { canonical = await realpath(resolve(path)) } catch { return refuse() }
++  if (!lawbenchPathInside(canonical, await servedRoots(rootsOf))) return refuse()
    try {
-     const target = await fs.resolve(path, { signal: request.signal })
+-    const target = await fs.resolve(path, { signal: request.signal })
++    // lawbench P-15: read the checked canonical path, not the request's spelling (a link swapped in between cannot redirect it)
++    const target = await fs.resolve(canonical, { signal: request.signal })
      const mediaType = mime.lookup(target.displayPath) || 'application/octet-stream'
-@@ -64,14 +100,22 @@ async function serveFile(request: Request, fs: FileSystem, maxBytes: number): Pr
+     const headers: Record<string, string> = {
+       ...BASE_HEADERS,
+@@ -34,7 +75,7 @@ async function serveFile(request: Request, fs: FileSystem, maxBytes: number): Pr
+     }
+     if (request.method === 'HEAD') {
+       const info = await fs.stat(target, request.signal)
+-      if (info === undefined) return fail(404, 'not found')
++      if (info === undefined) return refuse()
+       if (info.type !== 'file') return fail(403, 'not a regular file')
+       if (info.size !== undefined) {
+         if (info.size > maxBytes) return fail(413, 'file exceeds byte limit')
+@@ -48,7 +89,7 @@ async function serveFile(request: Request, fs: FileSystem, maxBytes: number): Pr
+   } catch (error: unknown) {
+     if (!(error instanceof FsError)) throw error
+     const statuses: Partial<Record<FsError['code'], number>> = {
+-      FS_NOT_FOUND: 404,
++      FS_NOT_FOUND: 403, // lawbench P-15: same answer as outside
+       FS_NOT_REGULAR_FILE: 403,
+       FS_PERMISSION_DENIED: 403,
+       FS_SANDBOX_DENIED: 403,
+@@ -64,14 +105,22 @@ async function serveFile(request: Request, fs: FileSystem, maxBytes: number): Pr
   * `ctx.fs` supplies the execution world's paths, reads, and access policy.
   */
  export const SessionMediaReferences = {
@@ -96,7 +122,7 @@ index 9da80029f5..544ecd82ea 100644
    },
  }
 diff --git a/packages/api/session-controller/tests/media-references.host.spec.ts b/packages/api/session-controller/tests/media-references.host.spec.ts
-index 61572ab0be..a7d5a52cc3 100644
+index 61572ab0be..3be0364c8a 100644
 --- a/packages/api/session-controller/tests/media-references.host.spec.ts
 +++ b/packages/api/session-controller/tests/media-references.host.spec.ts
 @@ -27,9 +27,11 @@ describe('SessionMediaReferences /api/file', () => {
@@ -121,7 +147,22 @@ index 61572ab0be..a7d5a52cc3 100644
      await ctx.plugin(LocalFileSystem, { cwd: root }).await()
      await ctx.plugin(SessionMediaReferences).await()
      const raw = (url: string, init?: RequestInit) => {
-@@ -164,21 +166,54 @@ describe('SessionMediaReferences /api/file', () => {
+@@ -144,7 +146,7 @@ describe('SessionMediaReferences /api/file', () => {
+     expect(response.headers.get('content-length')).toBe(String(PNG_BYTES.length))
+     expect(response.body).toBeNull()
+     expect(read).not.toHaveBeenCalled()
+-    expect((await route.call(join(root, 'missing'), { method: 'HEAD' })).status).toBe(404)
++    expect((await route.call(join(root, 'missing'), { method: 'HEAD' })).status).toBe(403) // lawbench P-15: missing = outside
+     expect((await route.call(root, { method: 'HEAD' })).status).toBe(403)
+     vi.spyOn(route.fs, 'stat').mockResolvedValue({ type: 'file', version: FsVersion('v1') })
+     expect((await route.call(path, { method: 'HEAD' })).headers.get('content-length')).toBeNull()
+@@ -159,26 +161,85 @@ describe('SessionMediaReferences /api/file', () => {
+     const head = await route.call('', { method: 'HEAD' })
+     expect(head.status).toBe(400)
+     expect(head.body).toBeNull()
+-    expect((await route.call(join(root, 'missing.png'))).status).toBe(404)
++    expect((await route.call(join(root, 'missing.png'))).status).toBe(403) // lawbench P-15: missing = outside
+     await mkdir(join(root, 'frames.png'))
      expect((await route.call(join(root, 'frames.png'))).status).toBe(403)
    })
  
@@ -145,7 +186,7 @@ index 61572ab0be..a7d5a52cc3 100644
 +      expect(refused.status).toBe(403)
 +      expect(await refused.text()).not.toContain(outside)
 +      expect((await route.call(join(root, '..', outside.split(/[\\/]/).at(-1)!, 'image.png'))).status).toBe(403)
-+      expect((await route.call(join(outside, 'missing.png'))).status).toBe(404)
++      expect((await route.call(join(outside, 'missing.png'))).status).toBe(403) // lawbench P-15: no existence probe
 +      // A directory link inside the workspace pointing outside it (a junction on Windows needs no privilege)
 +      const linkDir = join(root, 'linked')
 +      await symlink(outside, linkDir, process.platform === 'win32' ? 'junction' : 'dir')
@@ -160,9 +201,35 @@ index 61572ab0be..a7d5a52cc3 100644
      } finally {
        await rm(outside, { recursive: true, force: true })
 +      await rm(store, { recursive: true, force: true })
++    }
++  })
++
++  it('lawbench P-15: refuses network and device path prefixes before touching the filesystem, even for a file inside the case', async () => {
++    const route = await mount(DEFAULT_LIMIT, [root])
++    const inCase = join(root, 'case.png')
++    await writeFile(inCase, PNG_BYTES)
++    expect((await route.call(inCase)).status).toBe(200)
++    for (const path of ['\\\\127.0.0.1\\share\\x.png', '//127.0.0.1/share/x.png', `\\\\?\\${inCase}`, `\\\\.\\${inCase}`, `//?/${inCase}`]) {
++      const response = await route.call(path)
++      expect(response.status, path).toBe(403)
++      expect(await response.text()).not.toContain('share')
      }
    })
  
++  it('lawbench P-15: reads the canonical path that was checked, not the request spelling', async () => {
++    const route = await mount(DEFAULT_LIMIT, [root])
++    await mkdir(join(root, 'sub'))
++    const inCase = join(root, 'case.png')
++    await writeFile(inCase, PNG_BYTES)
++    const resolveSpy = vi.spyOn(route.fs, 'resolve')
++    // a literal, un-normalized spelling (join() would already fold the `..`), and on Windows a different letter case
++    const { sep } = await import('node:path')
++    const spelled = `${root}${sep}sub${sep}..${sep}${process.platform === 'win32' ? 'CASE.PNG' : 'case.png'}`
++    expect(await responseBytes(await route.call(spelled))).toEqual(PNG_BYTES)
++    expect(resolveSpy.mock.calls[0]![0]).not.toBe(spelled)
++    expect(resolveSpy.mock.calls[0]![0]).toBe(await realpath(inCase))
++  })
++
 +  it('lawbench P-15: serves nothing when no workspace is registered', async () => {
 +    const route = await mount(DEFAULT_LIMIT, [])
 +    const path = join(root, 'image.png')
@@ -185,7 +252,7 @@ index 61572ab0be..a7d5a52cc3 100644
    it.skipIf(process.platform === 'win32')('rejects a FIFO before opening it', async () => {
      const route = await mount()
      const path = join(root, 'stream.png')
-@@ -190,20 +225,23 @@ describe('SessionMediaReferences /api/file', () => {
+@@ -190,20 +251,23 @@ describe('SessionMediaReferences /api/file', () => {
  
    it('reads opaque remote targets through ctx.fs and preserves provider failures', async () => {
      const route = await mount()
@@ -199,7 +266,8 @@ index 61572ab0be..a7d5a52cc3 100644
 +    expect(await responseBytes(await route.call(local))).toEqual(PNG_BYTES)
      expect(read).toHaveBeenCalledWith(target, expect.any(AbortSignal), DEFAULT_LIMIT)
      for (const [code, status] of [
-       ['FS_PERMISSION_DENIED', 403], ['FS_SANDBOX_DENIED', 403], ['FS_NOT_FOUND', 404],
+-      ['FS_PERMISSION_DENIED', 403], ['FS_SANDBOX_DENIED', 403], ['FS_NOT_FOUND', 404],
++      ['FS_PERMISSION_DENIED', 403], ['FS_SANDBOX_DENIED', 403], ['FS_NOT_FOUND', 403],
        ['FS_NOT_REGULAR_FILE', 403], ['FS_TOO_LARGE', 413], ['FS_IO_ERROR', 500],
      ] as const) {
        read.mockRejectedValueOnce(new FsError('provider rejected read', code))

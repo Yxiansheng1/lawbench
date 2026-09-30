@@ -1,5 +1,5 @@
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index d5e49e1828..867de2bcb6 100644
+index 99fbbe85da..3d08a6cc45 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -16,7 +16,6 @@ import {
@@ -10,7 +10,7 @@ index d5e49e1828..867de2bcb6 100644
    type IpcMainInvokeEvent,
    type MenuItemConstructorOptions,
  } from 'electron'
-@@ -218,10 +217,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+@@ -221,10 +220,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
        devTools: true,
      },
    })
@@ -23,7 +23,7 @@ index d5e49e1828..867de2bcb6 100644
    if (process.platform === 'darwin') {
      // macOS hides the traffic lights in fullscreen; the page drops its
      // clearance for them off the html[data-fullscreen] flag this feeds.
-@@ -286,8 +283,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+@@ -289,8 +286,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
      const current = new URL(window.webContents.getURL())
      if (destination.protocol !== `${SCHEME}:`
        && !(destination.protocol === 'http:' && destination.origin === current.origin)) {
@@ -33,11 +33,66 @@ index d5e49e1828..867de2bcb6 100644
      }
    })
    return window
+diff --git a/apps/desktop/src/mandatory-update-window.ts b/apps/desktop/src/mandatory-update-window.ts
+index 724df4ff97..8c5c26a424 100644
+--- a/apps/desktop/src/mandatory-update-window.ts
++++ b/apps/desktop/src/mandatory-update-window.ts
+@@ -1,6 +1,6 @@
+ /** Shell-owned modal policy UI; only explicit actions authorize downloads or browser navigation. */
+ 
+-import { app, BrowserWindow, clipboard, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
++import { app, BrowserWindow, clipboard, ipcMain, type IpcMainInvokeEvent } from 'electron'
+ import type { DesktopLocale } from './locale.ts'
+ import { assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+ import { desktopPolicyPage, type DesktopPolicyState } from './mandatory-update-policy.ts'
+@@ -281,7 +281,9 @@ export class DesktopMandatoryUpdateWindow {
+         await clipboard.writeText(url)
+         if (await clipboard.readText() !== url) throw new Error('desktop policy: clipboard did not retain download address')
+       }
+-      else await shell.openExternal(url)
++      // lawbench P-17: the download page never opens in the system browser; the page action reports
++      // failure and the modal keeps offering to copy the address
++      else throw new Error('lawbench: external pages are not opened')
+       if (epoch !== this.navigationEpoch || this.disposed) return
+       if (action === 'copy') this.navigation = { page: this.navigation?.page ?? 'requested', copy: 'copied' }
+     } catch {
+diff --git a/apps/desktop/src/platform-view.ts b/apps/desktop/src/platform-view.ts
+index ce759c61b1..b254de3fbc 100644
+--- a/apps/desktop/src/platform-view.ts
++++ b/apps/desktop/src/platform-view.ts
+@@ -1,7 +1,7 @@
+ /** Isolated Platform documents owned by the desktop account lifetime. */
+ import type { EventEmitter } from 'node:events'
+ import { createHash, randomUUID } from 'node:crypto'
+-import { WebContentsView, session, shell, type Session, type View, type WebFrameMain } from 'electron'
++import { WebContentsView, session, type Session, type View, type WebFrameMain } from 'electron'
+ import { mergePlatformCookies, platformClientHeaders, type PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
+ import { desktopClientMetadata } from './client-metadata.ts'
+ 
+@@ -141,16 +141,8 @@ export class DesktopPlatformView {
+       nodeIntegration: false, webSecurity: true,
+     } })
+     this.view = view
+-    // External payment and documentation pages open without the embedded session or token.
+-    view.webContents.setWindowOpenHandler(({ url }) => {
+-      const destination = new URL(url)
+-      if (destination.protocol === 'https:' && !destination.username && !destination.password) {
+-        void shell.openExternal(url).catch(() => {
+-          // An OS browser-launch failure leaves the embedded page available for retry.
+-        })
+-      }
+-      return { action: 'deny' }
+-    })
++    // lawbench P-17: nothing leaves for the system browser; new windows are refused outright.
++    view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+     const allowNavigation = (url: string): boolean => {
+       try {
+         const parsed = new URL(url)
 diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
-index 1da296f615..0eb7cd3347 100644
+index f9e1d6ac5c..9723239b7f 100644
 --- a/apps/desktop/tests/main-startup.spec.ts
 +++ b/apps/desktop/tests/main-startup.spec.ts
-@@ -1020,20 +1020,20 @@ describe('desktop main startup', () => {
+@@ -1033,20 +1033,20 @@ describe('desktop main startup', () => {
      expect(harness.menu).not.toHaveBeenCalled()
    })
  
@@ -68,20 +123,78 @@ index 1da296f615..0eb7cd3347 100644
      const internal = { preventDefault: vi.fn() }
      window.webContents.emit('will-navigate', internal, 'dsh-app://app/session/task-1')
      expect(internal.preventDefault).not.toHaveBeenCalled()
+diff --git a/apps/desktop/tests/mandatory-update-window.spec.ts b/apps/desktop/tests/mandatory-update-window.spec.ts
+index 484d01065f..0766198978 100644
+--- a/apps/desktop/tests/mandatory-update-window.spec.ts
++++ b/apps/desktop/tests/mandatory-update-window.spec.ts
+@@ -99,18 +99,14 @@ it('defers without dismissing, and cancels pending approval on policy clearance
+   expect(native.handlers.size).toBe(0)
+ })
+ 
+-it('offers copy immediately while browser opening is pending and keeps navigation failures separate', async () => {
++it('lawbench P-17: the page action never opens the system browser and reports failure; copy still works', async () => {
+   const f = setup()
+-  const opened = Promise.withResolvers<undefined>()
+-  native.open.mockReturnValueOnce(opened.promise)
+   native.read.mockResolvedValue('https://downloads.example.com/desktop')
+-  const pending = f.action('page')
+-  expect(f.view().navigation).toEqual({ page: 'requested' })
++  await f.action('page')
++  expect(f.view().navigation).toEqual({ page: 'failed' })
+   await f.action('copy')
+-  expect(f.view().navigation).toEqual({ page: 'requested', copy: 'copied' })
+-  opened.reject(new Error('browser rejected'))
+-  await pending
+   expect(f.view().navigation).toEqual({ page: 'failed', copy: 'copied' })
++  expect(native.open).not.toHaveBeenCalled()
+   expect(f.view().error).toBeUndefined()
+   expect(f.view().policy.blocking).toBe(true)
+ })
+@@ -130,7 +126,7 @@ it('reports clipboard failure and ignores completion after the policy destinatio
+   expect(f.view().navigation).toBeUndefined()
+   f.policy({ blocking: true, checking: false, page: 'https://evil.example/desktop' })
+   await expect(f.action('page')).rejects.toThrow(/no allowed/)
+-  expect(native.open).toHaveBeenCalledTimes(1)
++  expect(native.open).not.toHaveBeenCalled() // lawbench P-17
+ })
+ 
+ it('rejects same-URL child frames and removes quit from renderer privileges', () => {
+diff --git a/apps/desktop/tests/platform-view.spec.ts b/apps/desktop/tests/platform-view.spec.ts
+index f62987d0e5..eb83416fb4 100644
+--- a/apps/desktop/tests/platform-view.spec.ts
++++ b/apps/desktop/tests/platform-view.spec.ts
+@@ -174,14 +174,11 @@ it.each([null, {}, { ...bounds, width: NaN }, { ...bounds, x: -1 }, { ...bounds,
+   expect(() => platformBounds(value)).toThrow()
+ })
+ 
+-it('opens HTTPS payment links in the system browser without an embedded child window', async () => {
++it('lawbench P-17: refuses every new window without handing it to the system browser', async () => {
+   const { manager, owner } = setup()
+   await manager.open(owner, 'top-up', bounds)
+   const handler = view().webContents.setWindowOpenHandler.mock.calls[0]![0] as (details: { url: string }) => { action: string }
+-  expect(handler({ url: 'https://payment.example/order' })).toEqual({ action: 'deny' })
+-  expect(state.openExternal).toHaveBeenCalledWith('https://payment.example/order')
+-  vi.mocked(state.openExternal).mockClear()
+-  for (const url of ['file:///tmp/test', 'javascript:alert(1)', 'https://user:pass@payment.example/order']) {
++  for (const url of ['https://payment.example/order', 'file:///tmp/test', 'javascript:alert(1)', 'https://user:pass@payment.example/order']) {
+     expect(handler({ url })).toEqual({ action: 'deny' })
+   }
+   expect(state.openExternal).not.toHaveBeenCalled()
 diff --git a/packages/client/ui-primitives/src/markdown/render.tsx b/packages/client/ui-primitives/src/markdown/render.tsx
-index adbf0022b4..1cbd1ff62e 100644
+index adbf0022b4..f685177b50 100644
 --- a/packages/client/ui-primitives/src/markdown/render.tsx
 +++ b/packages/client/ui-primitives/src/markdown/render.tsx
-@@ -4,7 +4,7 @@
+@@ -4,7 +4,8 @@
   * cache frozen blocks as React elements; the rendered DOM is pinned
   * byte-for-byte by `tests/fixtures/markdown-dom` and must not drift.
   *
 - * External link and image destinations pass a protocol allowlist; settled
-+ * External link and image destinations pass a protocol allowlist (lawbench\n * P-17: allowlisted links render as plain, copyable text, never anchors); settled
++ * External link and image destinations pass a protocol allowlist (lawbench
++ * P-17: allowlisted links render as plain, copyable text, never anchors); settled
   * local file links use an explicit owner callback. Images additionally require
   * absolute HTTP(S), raw HTML renders as literal text (no HTML enters the
   * DOM), and KaTeX runs without trusted commands. Fragment-anchor URLs fail
-@@ -16,7 +16,7 @@
+@@ -16,7 +17,7 @@
   * may add node types this renderer has no mapping for.
   */
  
@@ -90,7 +203,7 @@ index adbf0022b4..1cbd1ff62e 100644
  import type { Key, ReactNode } from 'react'
  import clsx from 'clsx'
  import type * as Md from 'mdast'
-@@ -574,35 +574,29 @@ function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
+@@ -574,35 +575,38 @@ function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
    return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
  }
  
@@ -107,7 +220,7 @@ index adbf0022b4..1cbd1ff62e 100644
 -  if (safeHref === '') return <Fragment key={key}>{children}</Fragment>
 -  return <MarkdownAnchor key={key} href={safeHref} glyph={glyph}>{children}</MarkdownAnchor>
 +  if (safeHref === '' || showsAddress(plainText(children), safeHref)) return <Fragment key={key}>{children}</Fragment>
-+  return <Fragment key={key}>{children}{`（${safeHref}）`}</Fragment>
++  return <Fragment key={key}>{children}{`（${decodedAddress(safeHref)}）`}</Fragment>
  }
  
 -function MarkdownAnchor({ href, glyph, children }: {
@@ -132,9 +245,18 @@ index adbf0022b4..1cbd1ff62e 100644
 -      {children}
 -    </a>
 -  )
-+/** The text already is the address (GFM literals `www.x`, `a@b` gain a scheme in the href). */
++/** A percent-encoded address as the lawyer reads it (non-ASCII paths); undecodable input stays as is. */
++function decodedAddress(value: string): string {
++  try { return decodeURI(value) } catch { return value }
++}
++
++/**
++ * The text already is the address (GFM literals `www.x`, `a@b` gain a scheme in the href). The href
++ * is percent-encoded (non-ASCII paths), so both sides compare decoded.
++ */
 +function showsAddress(text: string, href: string): boolean {
-+  return [text, `http://${text}`, `https://${text}`, `mailto:${text}`].includes(href)
++  const target = decodedAddress(href)
++  return [text, `http://${text}`, `https://${text}`, `mailto:${text}`].some(candidate => decodedAddress(candidate) === target)
 +}
 +
 +/** Visible text of rendered children (strings and element children, depth-first). */
@@ -601,7 +723,7 @@ index d0d7a8a205..37ee0d92d8 100644
    })
  })
 diff --git a/packages/client/ui-primitives/tests/markdown.client.spec.tsx b/packages/client/ui-primitives/tests/markdown.client.spec.tsx
-index c655a007d2..8b163b7eaa 100644
+index c655a007d2..10a4913cde 100644
 --- a/packages/client/ui-primitives/tests/markdown.client.spec.tsx
 +++ b/packages/client/ui-primitives/tests/markdown.client.spec.tsx
 @@ -57,8 +57,10 @@ describe('MarkdownText', () => {
@@ -743,11 +865,17 @@ index c655a007d2..8b163b7eaa 100644
      expect(screen.getByText('relative diagram')).toBeTruthy()
      expect(screen.getByText('absolute diagram')).toBeTruthy()
      expect(screen.getByText('file diagram')).toBeTruthy()
-@@ -361,13 +327,12 @@ describe('MarkdownText', () => {
+@@ -361,13 +327,18 @@ describe('MarkdownText', () => {
      expect(screen.getByText('mail diagram')).toBeTruthy()
    })
  
 -  it('leads a known site link with its own mark and an unknown host with the globe', () => {
++  it('lawbench P-17: an address with non-ASCII characters is shown once, not followed by its encoded form', () => {
++    const { container } = render(<MarkdownText text={'见 http://例子.测试/路径 与 [说明](https://例子.测试/资料/一)'} />)
++    expect(container.textContent).toBe('见 http://例子.测试/路径 与 说明（https://例子.测试/资料/一）')
++    expect(container.querySelector('a')).toBeNull()
++  })
++
 +  it('lawbench P-17: external links carry no site mark or globe (they are text, not anchors)', () => {
      const { container } = render(<MarkdownText text={'[repo](https://github.com/org/repo) [docs](https://example.com/a)'} />)
 -    const pathsOf = (svg: SVGSVGElement): (string | null)[] => [...svg.querySelectorAll('path')].map(path => path.getAttribute('d'))

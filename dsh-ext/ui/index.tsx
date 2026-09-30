@@ -14,9 +14,8 @@ import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
-import { makeIntakeHook, type IntakeHook } from './intake.ts'
+import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
 import { citationMark, type CitationMark, type MaterialLite, type OpenDeps } from './citation.ts'
-import { installDropGuard } from './drop-guard.ts'
 
 export const inject = ['slots', 'remote']
 
@@ -84,9 +83,6 @@ const citationDeps: OpenDeps = {
   openSource: (materialId, citation) => getNav().openTab(TABS.source, { material_id: materialId, citation }),
 }
 
-/** P-5 的对话框导入是否已接上（接上后拖入守卫让路）。 */
-let intakeActive = false
-
 /** 设置页一节、弹框：只要 slots 和 remote.lawbench。 */
 function registerCore(ctx: Ctx): void {
   setApi(unwrapRemote(ctx.remote.lawbench as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>))
@@ -96,8 +92,6 @@ function registerCore(ctx: Ctx): void {
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'lawbench', order: -10 }, ComposerDock))
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)
-  // 拖文件进对话区、往对话框粘贴文件：给中文提示，不生成发不出去的引用标签（T17 第一步补，P-5 落地前的过渡做法）
-  ctx.effect(() => installDropGuard({ notice, intakeActive: () => intakeActive }), '律师工作台界面：对话区拖入提示')
 }
 
 /** 首页：main 页面、侧栏入口，启动时显示首页。 */
@@ -144,8 +138,8 @@ function registerSessionTracking(ctx: Ctx): void {
 
 /** P-5：拖入、粘贴、选择到对话框的文件导入案件文件夹（要 DSH 源码补丁提供的 conversationFileIntake）。 */
 function registerIntake(ctx: Ctx): void {
+  ctx.effect(() => installPasteTextWatch(), '律师工作台界面：粘贴是否带文字')
   ctx.effect(() => ctx.conversationFileIntake.register(makeIntakeHook((id) => ctx.sessions.list.getSnapshot().byId[id]?.cwd)), '律师工作台界面：对话框导入')
-  ctx.effect(() => { intakeActive = true; return () => { intakeActive = false } }, '律师工作台界面：对话框导入接上')
 }
 
 /** P-16：草稿正文里的出处由 DSH 画成真按钮（键盘、读屏可用）；点了核对后打开原文。 */
