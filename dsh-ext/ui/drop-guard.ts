@@ -52,11 +52,22 @@ export function installDropGuard(deps: DropGuardDeps): () => void {
   }
   const onPaste = (e: Event): void => {
     const target = e.target instanceof Element ? e.target : null
-    const files = (e as ClipboardEvent).clipboardData?.files
+    const data = (e as ClipboardEvent).clipboardData
+    const files = data?.files
     if (!target?.closest(DSH_COMPOSER_INPUT) || !files || files.length === 0 || deps.intakeActive()) return
     e.preventDefault()
     e.stopPropagation()
     deps.notice(DROP_TITLE, DROP_TEXT)
+    // 剪贴板同时带文字（如从 Excel 复制单元格，会另带一张位图）：只拦文件，文字照常交给 DSH（复核 B-F2）。
+    // DSH 的粘贴处理按鸭子类型读 clipboardData（ui-conversation/src/client/input/editor/keymap.ts），
+    // 这里派发一个只含文字的 paste；它不带文件，本守卫不会再拦。
+    const text = data?.getData('text/plain') ?? ''
+    if (text === '') return
+    const textOnly = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(textOnly, 'clipboardData', {
+      value: { types: ['text/plain'], items: [], files: { length: 0 }, getData: (type: string) => (type === 'text/plain' ? text : '') },
+    })
+    target.dispatchEvent(textOnly)
   }
   const events: Array<[string, (e: Event) => void]> = [['dragenter', onDragMove], ['dragover', onDragMove], ['drop', onDrop], ['paste', onPaste]]
   for (const [name, fn] of events) document.addEventListener(name, fn, true)

@@ -37,23 +37,23 @@ MUST_OFF = {
     "skill-filesystem", "tool-skill", "tool-subagent", "tool-subagent-fork", "tool-subagent-control",
     "tool-subagent-list-agents", "workflow-ptc", "tool-workflow", "tool-ralph", "tool-todo",
     "tool-web", "tool-goal", "command-goal", "plan-mode", "tool-plugin-manager",
-    # T17 第一步（执行令 2026-09-30 08:54）：律师用不上的入口，Host 行和界面行成对关
+}
+# T17 第一步（执行令 2026-09-30 08:54）与第一步补（09:39）：律师用不上的入口，Host 行和界面行成对关；
+# ui-deliverables 的 Host 半边硬依赖 workspace-files，随之显式关，不留"启用但起不来"。
+# 名单只写这一份，并入"必须关"（复核 A-P3-3：不抄两遍）；第 2d 项静态树核对也用它。
+T17_STEP1 = {
     "terminal-controller", "ui-sidebar-terminal",
     "file-reference-local", "session-reference", "ui-reference",
-    "workspace-files", "ui-sidebar-files",
+    "workspace-files", "ui-sidebar-files", "ui-deliverables",
     "open-in-app", "ui-open-in-app",
     "cordis-host-runner", "cordis-inspect-providers", "cordis-client-runner", "ui-cordis",
     "session-log-download",
     "ui-settings-plugins", "ui-settings-plugin-inventory", "plugin-inventory",
     "ui-settings-shell", "ui-settings-agent-loop", "ui-settings-subagent", "ui-settings-web-search",
-    # T17 第一步补（执行令 2026-09-30 09:39）：Host 半边硬依赖 workspace-files，随之显式关，不留"启用但起不来"
-    "ui-deliverables",
 }
-T17_STEP1 = {"terminal-controller", "ui-sidebar-terminal", "file-reference-local", "session-reference", "ui-reference",
-             "workspace-files", "ui-sidebar-files", "open-in-app", "ui-open-in-app", "cordis-host-runner",
-             "cordis-inspect-providers", "cordis-client-runner", "ui-cordis", "session-log-download",
-             "ui-settings-plugins", "ui-settings-plugin-inventory", "plugin-inventory", "ui-settings-shell",
-             "ui-settings-agent-loop", "ui-settings-subagent", "ui-settings-web-search", "ui-deliverables"}
+# 条数守卫：执行令点名 21 行 + ui-deliverables；有人删掉一行而没改这里，脚本直接报错
+assert len(T17_STEP1) == 22, f"T17 第一步名单应为 22 行，现为 {len(T17_STEP1)} 行"
+MUST_OFF |= T17_STEP1
 # 取证期允许临时启用的行（见文件头）
 OVERLAY_ROW = "plugin-inventory"
 # 启用但起不来、已上报主编排待裁决的行（单列显示，不隐藏；裁决后按结论改）
@@ -62,7 +62,7 @@ PENDING_DECISION = {}
 OURS_REQUIRED = ["legal-ui", "legal-host", "legal-credentials", "preset-lawbench"]
 
 # 必须关的行在运行时清单里不存在时一律计入失败（可能是 id 写错或换了 DSH 提交），
-# 除非列在这里并写明原因。固定提交 477b4f4 下 48 行全部存在，所以目前为空。
+# 除非列在这里并写明原因。固定提交 477b4f4 下"必须关"的各行全部存在，所以目前为空。
 ALLOWED_ABSENT = {}
 
 # ── 2. 允许启用的行：类别 + 它是做什么的、为什么可以开 ─────────────────────

@@ -9,7 +9,12 @@ let intake = false
 let uninstall: () => void
 const notices: string[] = []
 const dshGot: string[] = []
-const dshListener = (e: Event) => { dshGot.push(e.type) }
+const dshText: string[] = []
+const dshListener = (e: Event) => {
+  dshGot.push(e.type)
+  const cd = (e as unknown as { clipboardData?: { getData(t: string): string } }).clipboardData
+  if (e.type === 'paste' && cd) dshText.push(cd.getData('text/plain'))
+}
 
 function page(): { composer: HTMLElement; chat: HTMLElement; zone: HTMLElement; zoneChild: HTMLElement } {
   document.body.innerHTML = `
@@ -30,16 +35,16 @@ function drag(target: Element, type: string, types: string[] = ['Files']): Event
   return e
 }
 
-function paste(target: Element, fileCount: number): Event {
+function paste(target: Element, fileCount: number, text = ''): Event {
   const e = new Event('paste', { bubbles: true, cancelable: true })
-  Object.defineProperty(e, 'clipboardData', { value: { files: { length: fileCount } } })
+  Object.defineProperty(e, 'clipboardData', { value: { files: { length: fileCount }, getData: (t: string) => (t === 'text/plain' ? text : '') } })
   target.dispatchEvent(e)
   return e
 }
 
 beforeEach(() => {
   intake = false
-  notices.length = 0; dshGot.length = 0
+  notices.length = 0; dshGot.length = 0; dshText.length = 0
   for (const t of ['dragenter', 'dragover', 'drop', 'paste']) document.addEventListener(t, dshListener)
   uninstall = installDropGuard({ notice: (_t, text) => { notices.push(text) }, intakeActive: () => intake })
 })
@@ -94,6 +99,26 @@ describe('对话区拖入、粘贴文件给中文提示（T17 第一步补）', 
     paste(chat, 2)
     expect(dshGot).toEqual(['paste', 'paste'])
     expect(notices).toEqual([DROP_TEXT])
+  })
+
+  it('剪贴板同时带文字和文件（如从 Excel 复制单元格）：只拦文件，文字照常交给 DSH（复核 B-F2）', () => {
+    const { composer } = page()
+    const p = paste(composer, 1, '合同金额 100 万元')
+    expect(p.defaultPrevented).toBe(true)
+    expect(notices).toEqual([DROP_TEXT])
+    // DSH 只收到一次粘贴：守卫重新派发的、只含文字、不带文件的那一次
+    expect(dshGot).toEqual(['paste'])
+    expect(dshText).toEqual(['合同金额 100 万元'])
+  })
+
+  it('P-5 接上后粘贴文件：不拦、不提示，原样交给 DSH（复核 B-F3）', () => {
+    const { composer } = page()
+    intake = true
+    const p = paste(composer, 1, '附带文字')
+    expect(p.defaultPrevented).toBe(false)
+    expect(notices).toEqual([])
+    expect(dshGot).toEqual(['paste'])
+    expect(dshText).toEqual(['附带文字'])
   })
 
   it('卸下后不再接住', () => {

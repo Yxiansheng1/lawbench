@@ -6,3 +6,16 @@ GET /api/session.export -> 404
 GET /api/session.export?sessionId=x -> 404
 
 路由出处：GET /api/session.export 定义于 packages/session-query/session-log-export/src/routes.ts:8（行 session-log-download）；POST /api/pluginInventory/list 由行 plugin-inventory 提供。
+
+## 发请求的命令（复核 A-P3-7；令牌从当次启动日志读，不落盘、不打印）
+```powershell
+$url = (Select-String -Path <启动日志> -Pattern 'dsh web: (http\S+)').Matches[0].Groups[1].Value   # 形如 http://127.0.0.1:<端口>/?token=<令牌>
+$u = [Uri]$url; $ws = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+Invoke-WebRequest -Uri $url -WebSession $ws -UseBasicParsing | Out-Null   # 用令牌换本机界面鉴权会话
+$base = "$($u.Scheme)://$($u.Authority)"
+$body = @{ type = 'client-request'; rpcId = [guid]::NewGuid().ToString(); method = 'pluginInventory/list'; payload = @{ args = @{} } } | ConvertTo-Json -Depth 5
+Invoke-WebRequest -Uri "$base/api/pluginInventory/list" -Method Post -WebSession $ws -ContentType 'application/json' -Body $body -UseBasicParsing   # 产品配置：404
+Invoke-WebRequest -Uri "$base/api/session.export" -WebSession $ws -UseBasicParsing   # 404
+Invoke-WebRequest -Uri "$base/api/session.export?sessionId=x" -WebSession $ws -UseBasicParsing   # 404
+``````
+对照：取证启动时同一 POST 返回 200，即 `dump_inventory.ps1` 的做法。
