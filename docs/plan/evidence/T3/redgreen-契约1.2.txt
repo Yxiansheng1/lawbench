@@ -1,0 +1,100 @@
+契约 1.2 红绿验证（T3、T5、T8）：15 类防护
+
+[01] T3 N35②·新补进来的分组里的胶囊标 new
+  改坏 capsules.py → 红：1 failed, 51 deselected in 1.78s
+      变红的用例：
+        tests/test_api_case.py::test_capsules_new_default_merged_hidden
+  复原 → 绿：1 passed, 51 deselected in 1.61s
+
+[02] T3 N35②·已有分组里新补的胶囊标 new
+  改坏 capsules.py → 红：1 failed, 51 deselected in 1.41s
+      变红的用例：
+        tests/test_api_case.py::test_capsules_new_default_merged_hidden
+  复原 → 绿：1 passed, 51 deselected in 1.30s
+
+[03] T5 X11/N26·index.json 重建后按 material_ids 拿回原编号
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.31s
+      变红的用例：
+        tests/test_t5_rework.py::test_x11_ids_not_reused_after_index_deleted
+  复原 → 绿：1 passed, 59 deselected in 1.03s
+
+[04] T5 X11/N26·分配编号时写 material_ids
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.27s
+      变红的用例：
+        tests/test_t5_rework.py::test_x11_ids_not_reused_after_index_deleted
+  复原 → 绿：1 passed, 59 deselected in 1.02s
+
+[05] T5 X13·单元格按显示值写
+  改坏 ingest/xlsx.py → 红：1 failed, 23 deselected in 0.38s
+      变红的用例：
+        tests/test_t5_contract12.py::test_x13_xlsx_written_as_displayed
+  复原 → 绿：1 passed, 23 deselected in 0.11s
+
+[06] T5 X13·格式版本变了原件没变也重解析
+  改坏 case/materials.py → 红：1 failed, 23 deselected in 8.62s
+      变红的用例：
+        tests/test_t5_contract12.py::test_x13_format_version_triggers_reparse
+  复原 → 绿：1 passed, 23 deselected in 15.88s
+
+[07] T5 N21·有外链没重算的 note
+  改坏 ingest/xlsx.py → 红：1 failed, 23 deselected in 1.31s
+      变红的用例：
+        tests/test_t5_contract12.py::test_n21_external_note
+  复原 → 绿：1 passed, 23 deselected in 1.09s
+
+[08] T5 N28·整份待识别的 Source 行
+  改坏 case/materials.py → 红：1 failed, 23 deselected in 1.02s
+      变红的用例：
+        tests/test_t5_contract12.py::test_n28_source_pending_ocr
+  复原 → 绿：1 passed, 23 deselected in 0.82s
+
+[09] T8 N31·分段读到单元末尾才记已读
+  改坏 tools/materials.py → 红：3 failed, 31 deselected in 2.79s
+      变红的用例：
+        tests/test_t8_rework.py::test_p1_1_long_unit_read_in_parts[500]
+        tests/test_t8_rework.py::test_p1_1_long_unit_read_in_parts[None]
+        tests/test_t8_rework.py::test_p1_1_skipping_part_not_counted
+  复原 → 绿：3 passed, 31 deselected in 3.32s
+
+[10] T8 N31·分段读要从 0 起连续
+  改坏 case/task.py → 红：1 failed, 33 deselected in 1.27s
+      变红的用例：
+        tests/test_t8_rework.py::test_p1_1_skipping_part_not_counted
+  复原 → 绿：1 passed, 33 deselected in 1.34s
+
+[11] T8 N37·begin 复制选择，不消耗
+  改坏 case/task.py → 红：1 failed, 33 deselected in 9.19s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_7_selection_not_consumed
+  复原 → 绿：1 passed, 33 deselected in 8.73s
+
+[12] T8 N37·新选择顶掉旧的
+  改坏 case/task.py → 红：3 failed, 31 deselected in 9.40s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_7_selection_not_consumed
+        tests/test_t8_rework.py::test_p2_7_same_second_later_wins
+        tests/test_t8_rework.py::test_p2_7_voided_not_listed
+  复原 → 绿：3 passed, 31 deselected in 9.53s
+
+[13] T8 N37·/api/task/current 返回当前选择
+  改坏 case/task.py → 红：1 failed, 33 deselected in 8.68s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_7_task_current_three_forms
+  复原 → 绿：1 passed, 33 deselected in 8.75s
+
+[14] T8 N35①·tasks_list 带 coverage
+  改坏 case/task.py → 红：1 failed, 33 deselected in 8.93s
+      变红的用例：
+        tests/test_t8_rework.py::test_n35_tasks_list_has_coverage_and_check
+  复原 → 绿：1 passed, 33 deselected in 8.97s
+
+[15] T8 N35⑥·/api/outputs 返回 成果/索引.json
+  改坏 case/task.py → 红：1 failed, 33 deselected in 9.12s
+      变红的用例：
+        tests/test_t8_rework.py::test_n35_outputs_empty_and_filled
+  复原 → 绿：1 passed, 33 deselected in 8.74s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T5\pytest-返修第一轮*.txt）
+
+结论：15/15 类防护 改坏即红、复原即绿
