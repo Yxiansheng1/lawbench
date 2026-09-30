@@ -25,6 +25,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'listSkills', params: [] },
   // T13 执行令 Q3②：粘贴的截图由 Host 存临时文件后经 /api/materials/import 导入
   { method: 'importPastedImage', params: ['request'] },
+  // ORCH 注记 2026-09-30 13:18：上一轮被拦下的原因（INPUT_CHANGED 等），输入区在一轮结束后取
+  { method: 'turnNotice', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

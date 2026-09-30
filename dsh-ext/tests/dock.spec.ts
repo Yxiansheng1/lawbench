@@ -34,6 +34,9 @@ class Service {
   writeDelay = 0
   readDelay = 0
   n = 0
+  /** 输入材料变了：发消息时 /core/context 报 INPUT_CHANGED，整轮被拦下（Agent 插件记下，Host 的 turnNotice 取走）。 */
+  inputChanged = false
+  blocked = new Map<string, string>()
   write(req: { session_id: string; entry: string | null; skill: string | null; inputs: string[]; params: unknown }) {
     if (this.failWrite) return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } }
     const t = { task_id: `T-20260930120000-${String(++this.n).padStart(4, '0')}`, entry: req.entry, skill: req.skill, inputs: req.inputs, params: req.params, updated_at: '2026-09-30T12:00:00+08:00' }
@@ -47,6 +50,7 @@ class Service {
   }
   /** 发一条消息：按当前选择新建执行中的任务（复制一份），返回这条按什么跑；当前选择不消耗。 */
   send(sessionId: string): string {
+    if (this.inputChanged) { this.blocked.set(sessionId, 'INPUT_CHANGED'); return '被拦下' }
     const s = this.selections.get(sessionId)
     return s && s.entry ? s.entry : '自由对话'
   }
@@ -65,6 +69,12 @@ function api(): LawbenchApi {
     taskCurrent: async (r) => {
       if (svc.readDelay) await new Promise((res) => setTimeout(res, svc.readDelay))
       return svc.current((r as { session_id: string }).session_id)
+    },
+    turnNotice: async (r) => {
+      const id = (r as { session_id: string }).session_id
+      const code = svc.blocked.get(id) ?? null
+      svc.blocked.delete(id)
+      return { ok: true, value: { code } }
     },
     getCapsules: async () => ({ ok: true, value: CAPSULES }),
     caseRecent: async () => ({ ok: true, value: { cases: [CASE] } }),
@@ -316,6 +326,45 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     expect(turnEnds(running, { S1: { running: true }, S2: { running: false } })).toEqual([])
     expect(turnEnds(running, { S1: { running: false }, S2: { running: false } })).toEqual(['S1'])
     expect(turnEnds(running, { S1: { running: false } })).toEqual([])
+  })
+
+  it('一轮结束的判断：running 的翻转被合并掉时，空闲会话的 updatedAt 变了也算（被拦下的一轮很短）', () => {
+    const running = new Map<string, boolean>()
+    const updated = new Map<string, number>()
+    expect(turnEnds(running, { S1: { running: false, updatedAt: 1 } }, updated)).toEqual([]) // 头一次看到不算
+    expect(turnEnds(running, { S1: { running: false, updatedAt: 1 } }, updated)).toEqual([])
+    expect(turnEnds(running, { S1: { running: false, updatedAt: 2 } }, updated)).toEqual(['S1'])
+    expect(turnEnds(running, { S1: { running: true, updatedAt: 3 } }, updated)).toEqual([]) // 在跑时变了不算
+    expect(turnEnds(running, { S1: { running: false, updatedAt: 4 } }, updated)).toEqual(['S1']) // 由真变假只报一次
+  })
+
+  it('INPUT_CHANGED（ORCH 注记 13:18）：上一轮因输入材料变化被拦下，状态行提示重新选择并重读；律师改选后提示消失，写成后就绪', async () => {
+    await pick(A.id); await flush(600)
+    svc.inputChanged = true
+    const n = svc.n
+    expect(await send('S1')).toBe('被拦下')
+    expect(status()).toBe('输入材料已变化，请重新选择')
+    expect(shown()).toBe(A.id) // 重读回服务的选择（仍是 A），不自动改写
+    expect(svc.n).toBe(n) // 不自动重写
+    await turnEnded('S1') // 再一轮结束（这次没被拦下）不消掉提示：律师还没重新选
+    expect(status()).toBe('输入材料已变化，请重新选择')
+    svc.inputChanged = false
+    await pick(B.id)
+    expect(status()).toBe('正在保存选择…')
+    await flush(600)
+    expect(status()).toBe(READY(B.name))
+    expect(await send('S1')).toBe(B.id)
+  })
+
+  it('INPUT_CHANGED 的提示只在被拦下的那个会话显示', async () => {
+    await pick(A.id); await flush(600)
+    svc.inputChanged = true
+    await send('S1')
+    svc.inputChanged = false
+    await mount('S2')
+    expect(status()).toBe('自由对话')
+    await mount('S1')
+    expect(status()).toBe('输入材料已变化，请重新选择')
   })
 
   it('自由对话下改参数也写（复核 A6）：1.2 起选择一直生效，参数要到服务那边', async () => {

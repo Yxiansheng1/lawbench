@@ -1,0 +1,25 @@
+## 输入区不看 turnNotice 的 INPUT_CHANGED
+文件：ui/dock.tsx；跑：tests/dock.spec.ts
+结果：2 failed | 39 passed (41)
+- tests/dock.spec.ts > 输入区任务单：契约 1.2（管到律师改掉为止） > INPUT_CHANGED 的提示只在被拦下的那个会话显示
+- tests/dock.spec.ts > 输入区任务单：契约 1.2（管到律师改掉为止） > INPUT_CHANGED（ORCH 注记 13:18）：上一轮因输入材料变化被拦下，状态行提示重新选择并重读；律师改选后提示消失，写成后就绪
+
+## 律师改选后提示不消失
+文件：ui/dock.tsx；跑：tests/dock.spec.ts
+结果：1 failed | 40 passed (41)
+- tests/dock.spec.ts > 输入区任务单：契约 1.2（管到律师改掉为止） > INPUT_CHANGED（ORCH 注记 13:18）：上一轮因输入材料变化被拦下，状态行提示重新选择并重读；律师改选后提示消失，写成后就绪
+
+## 提示不分会话
+文件：ui/dock.tsx；跑：tests/dock.spec.ts
+结果：1 failed | 40 passed (41)
+- tests/dock.spec.ts > 输入区任务单：契约 1.2（管到律师改掉为止） > INPUT_CHANGED 的提示只在被拦下的那个会话显示
+
+## 一轮结束不看 updatedAt
+文件：ui/tasksheet.ts；跑：tests/dock.spec.ts
+结果：1 failed | 40 passed (41)
+- tests/dock.spec.ts > 输入区任务单：契约 1.2（管到律师改掉为止） > 一轮结束的判断：running 的翻转被合并掉时，空闲会话的 updatedAt 变了也算（被拦下的一轮很短）
+
+## Agent 拒绝 context 时不记错误码
+文件：agent/index.ts；跑：tests/agent.spec.ts
+结果：1 failed | 9 passed (10)
+- tests/agent.spec.ts > Q11：取任务失败 > 拒绝整轮时记下错误码，界面经 Host 的 turnNotice 取走（ORCH 注记 13:18：INPUT_CHANGED）

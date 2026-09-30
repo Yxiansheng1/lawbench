@@ -1,0 +1,41 @@
+﻿[
+ {
+  "step": "挂上",
+  "status": "自由对话"
+ },
+ {
+  "step": "选合同审查",
+  "value": "contract-review"
+ },
+ {
+  "step": "写成后",
+  "status": "下一条消息按「合同审查」运行（直到你改掉）"
+ },
+ {
+  "step": "发送后 300 ms 起",
+  "status": "下一条消息按「合同审查」运行（直到你改掉）"
+ },
+ {
+  "step": "发送后 1000 ms 起",
+  "status": "输入材料已变化，请重新选择"
+ },
+ {
+  "step": "发送后 3000 ms 起",
+  "status": "输入材料已变化，请重新选择"
+ },
+ {
+  "step": "发送后 6000 ms 起",
+  "status": "输入材料已变化，请重新选择"
+ },
+ {
+  "step": "改选合同起草",
+  "value": "contract-draft"
+ },
+ {
+  "step": "写成后",
+  "status": "下一条消息按「合同起草」运行（直到你改掉）"
+ }
+]
+{"ts":"2026-09-30T06:04:30.731Z","method":"POST","path":"/core/task/begin","status":200,"ms":1,"ok":true}
+{"ts":"2026-09-30T06:04:30.738Z","method":"POST","path":"/core/context","status":200,"ms":1,"ok":false,"code":"INPUT_CHANGED"}
+{"ts":"2026-09-30T06:04:30.825Z","method":"GET","path":"/api/task/current","status":200,"ms":1,"ok":true}

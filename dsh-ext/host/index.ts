@@ -13,6 +13,7 @@ import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor
 import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
 import { API_ROUTES, buildRequest, type ApiRoute } from '../shared/api-routes.ts'
 import { listSkills, type SkillInfo } from './skills.ts'
+import { TurnNotices } from '../shared/turn-notices.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -113,6 +114,7 @@ export class LawbenchRemote {
     private readonly credentials: () => CredentialsLike | undefined,
     private readonly skillDirs: readonly string[] = [],
     private readonly log: LogFn = () => {},
+    private readonly notices: TurnNotices = new TurnNotices(),
   ) {
     this.typertRemote = Object.freeze({ service: this, serviceKey: LAWBENCH_SERVICE, namespace: LAWBENCH_NAMESPACE })
   }
@@ -156,6 +158,15 @@ export class LawbenchRemote {
   }
 
   /** Skill 列表（T13 执行令 Q4）：读 SKILL.md 头部并按契约校验；同名时先读到的目录（管理员目录）为准。 */
+  /**
+   * 某会话上一轮被 Agent 插件拦下的原因（错误码，取一次即删；没有为 null）。ORCH 注记 2026-09-30 13:18：
+   * 1.2 语义下输入材料变了，/core/context 报 INPUT_CHANGED、整轮被拒，DSH 的 reject 带不了消息，输入区经这里知道。
+   */
+  async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null } }> {
+    const sessionId = (request as { session_id?: unknown } | null)?.session_id
+    return { ok: true, value: { code: typeof sessionId === 'string' ? this.notices.take(sessionId) : null } }
+  }
+
   async listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }> {
     const { skills, invalid } = await listSkills(this.skillDirs)
     if (invalid) this.log('warn', 'skills.invalid_frontmatter', { count: invalid })
@@ -378,12 +389,15 @@ export function apply(ctx: Ctx, config: Config): void {
     log,
   })
 
+  const notices = new TurnNotices()
   ctx.provide('lawbenchCore', Object.freeze({
     endpoint: () => supervisor.endpoint(),
+    /** Agent 插件拒绝整轮时记下原因，界面经 turnNotice 取走。 */
+    noteTurnBlocked: (sessionId: string, code: string) => notices.note(sessionId, code),
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))
-  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log))
+  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices))
   void cleanPasteDir(config.appData).then((n) => { if (n) log('info', 'paste.cleaned', { count: n }) })
   ctx.effect(() => {
     void supervisor.start().catch((e: unknown) => log('error', 'service.start_failed', { error: String((e as Error)?.message ?? e) }))

@@ -5,6 +5,7 @@
 //   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）、
 //   --fixtures（T13：其余 /api/* 按 ui/fixtures/<契约>.json 回答，供界面开发和截图；胶囊配置存在 LB_APPDATA 里，重启后保持）、
 //   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）、
+//   --fail-context <错误码>（/core/context 一律返回这个错误，如 INPUT_CHANGED：测输入材料变化后整轮被拦下的提示）、
 //   --case-root <目录>（T13：假数据里第一个案件的文件夹改成这个真实存在的空目录，桌面端才能把它当工作区打开）
 //   --llm-reply <文件>（T17：在本机转发端口 LB_FORWARD_PORT 上假扮模型网关，POST /v1/chat/completions 以流式返回这个文件的内容，
 //     让 DSH 用真实的 Markdown 渲染一段回答；只监听 127.0.0.1，不连外网）
@@ -28,6 +29,7 @@ const TOKEN = process.env.LB_TOKEN ?? ''
 const APPDATA = process.env.LB_APPDATA ?? join(dirname(fileURLToPath(import.meta.url)), '.fake-appdata')
 const CALLS = arg('--calls', null)
 const FAIL_BEGIN = flag('--fail-begin')
+const FAIL_CONTEXT = arg('--fail-context', null)
 const BAD_RESPONSE = flag('--bad-response')
 const FIXTURES = flag('--fixtures')
 const CASE_ROOT = arg('--case-root', null)
@@ -88,6 +90,7 @@ function handle(method, path, body) {
     case 'POST /core/context': {
       const v = check('core/context', 'request', body); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
       if (!tasks.has(body.task_id) && !BAD_RESPONSE) return [fail('TASK_NOT_FOUND', '找不到该任务')]
+      if (FAIL_CONTEXT) return [fail(FAIL_CONTEXT, '输入材料已变化，请重新选择')]
       return [example('core_context.res.json')]
     }
     case 'POST /core/tool': {

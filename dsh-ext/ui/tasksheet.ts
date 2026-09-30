@@ -41,6 +41,7 @@ export type SheetStatus =
   | { kind: 'error'; error: ApiError }
   | { kind: 'free' }
   | { kind: 'ready'; label: string }
+  | { kind: 'notice'; text: string }
 
 /**
  * 状态行显示什么。
@@ -61,19 +62,27 @@ export function statusText(st: SheetStatus): string {
     case 'error': return st.error.message
     case 'free': return '自由对话'
     case 'ready': return `下一条消息按「${st.label}」运行（直到你改掉）`
+    case 'notice': return st.text
   }
 }
 
 /**
- * 会话列表变化时找出"一轮刚结束"的会话（running 由真变假），并更新记录（index.tsx 用）。
+ * 会话列表变化时找出"一轮刚结束"的会话，并更新记录（index.tsx 用）：
+ * running 由真变假；或者一直没看到在跑、但会话的 updatedAt 变了（一轮很短、被拦下时 running 的翻转可能被合并掉，
+ * ORCH 注记 2026-09-30 13:18 的 INPUT_CHANGED 就是这样）。多报一次只是多读一次服务，无害。
  * @param running - 上一次看到的各会话 running（原地更新）。
+ * @param updated - 上一次看到的各会话 updatedAt（原地更新）。
  */
-export function turnEnds(running: Map<string, boolean>, byId: Record<string, { running?: boolean } | undefined>): string[] {
+export function turnEnds(running: Map<string, boolean>, byId: Record<string, { running?: boolean; updatedAt?: number } | undefined>, updated: Map<string, number> = new Map()): string[] {
   const ended: string[] = []
   for (const [id, s] of Object.entries(byId)) {
     const now = s?.running === true
-    if (running.get(id) === true && !now) ended.push(id)
+    const was = running.get(id) === true
+    const at = s?.updatedAt
+    const touched = at !== undefined && updated.has(id) && updated.get(id) !== at
+    if ((was && !now) || (!was && !now && touched)) ended.push(id)
     running.set(id, now)
+    if (at !== undefined) updated.set(id, at)
   }
   return ended
 }

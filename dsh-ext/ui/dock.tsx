@@ -15,6 +15,8 @@ import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type Api
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
 const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 const WRITE_DELAY_MS = 500
+/** 上一轮因输入材料变化被拦下（/core/context 报 INPUT_CHANGED）时状态行的话（ORCH 注记 2026-09-30 13:18）。 */
+export const INPUT_CHANGED_TEXT = '输入材料已变化，请重新选择'
 /** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */
 export const TURN_ENDED = 'lawbench:turn-ended'
 
@@ -56,6 +58,8 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   /** 已经读回过（成败都算）的会话：换会话后、读回之前状态行说"正在读取当前选择…"。 */
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
+  /** 上一轮因输入材料变化被拦下的会话：状态行提示重新选择，直到律师改动选择。 */
+  const [inputChanged, setInputChanged] = useState<string | null>(null)
   /**
    * 服务那边此刻的选择（刚读回或刚写成功的）的键；律师选回同一份时不必再写。
    * null 表示不知道：还没读回、换了会话、写失败之后（超时或返回不合契约时服务可能已经建了单，T13 返修 P2-1）。
@@ -104,7 +108,14 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
     }
     setError(null)
     load()
-    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sid) load() }
+    // 一轮结束：先问 Host 这一轮是否被拦下；输入材料变了（INPUT_CHANGED）就提示重新选择，并退回"正在读取"再读一次
+    const afterTurn = async () => {
+      const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
+      if (!alive) return
+      if (r.ok && r.value.code === 'INPUT_CHANGED') { setInputChanged(sid); setLoadedFor(null) }
+      load()
+    }
+    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sid) void afterTurn() }
     window.addEventListener(TURN_ENDED, onTurn)
     return () => { alive = false; window.removeEventListener(TURN_ENDED, onTurn) }
   }, [sync, sessionId, reload]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -122,6 +133,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   useEffect(() => {
     if (!stored || stored.saved) return
     const sid = sessionId
+    setInputChanged((x) => (x === sid ? null : x))
     if (key === serverKey.current) { markSelectionSaved(sid, () => true); setError(null); return }
     const t = setTimeout(() => {
       const writing = ui
@@ -144,8 +156,10 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   // 读错误总显示（T13 返修 P3-1）；写错误只在失败的就是此刻显示的这份时显示
   const shownError = error && error.sessionId === sessionId && (error.op === 'read' || error.key === key) ? error.error : null
   const reading = loadedFor !== sessionId && (!stored || stored.saved)
-  const status = statusOf(stored && !reading ? ui : undefined, sel.saved, shownError, label)
-  const statusColor = status.kind === 'error' ? C.err : status.kind === 'ready' ? C.ok : C.sub
+  const status = inputChanged === sessionId && !shownError && (!stored || stored.saved)
+    ? { kind: 'notice' as const, text: INPUT_CHANGED_TEXT }
+    : statusOf(stored && !reading ? ui : undefined, sel.saved, shownError, label)
+  const statusColor = status.kind === 'error' || status.kind === 'notice' ? C.err : status.kind === 'ready' ? C.ok : C.sub
 
   const pickCapsule = (id: string) => {
     const c = capsules.find((x) => x.id === id)
