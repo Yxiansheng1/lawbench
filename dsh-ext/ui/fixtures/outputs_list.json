@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "value": {
+    "v": 1,
+    "outputs": [
+      {
+        "title": "合同审查意见",
+        "version": 1,
+        "files": [
+          {
+            "format": "docx",
+            "path": "成果/合同审查意见-v1.docx"
+          },
+          {
+            "format": "md",
+            "path": "成果/合同审查意见-v1.md"
+          }
+        ],
+        "task_id": "T-20260929140000-a1b2",
+        "inputs": [],
+        "citation_passed": false,
+        "confirmed_at": "2026-09-29T15:10:00+08:00"
+      }
+    ]
+  }
+}

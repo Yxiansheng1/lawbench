@@ -42,6 +42,8 @@ export const API_ROUTES: readonly ApiRoute[] = [
   { method: 'redline', http: 'POST', path: '/api/redline', contract: 'redline', timeoutMs: LONG },
   { method: 'getWikiSuggestions', http: 'GET', path: '/api/wiki/suggestions', contract: 'wiki_suggestions' },
   { method: 'postWikiSuggestions', http: 'POST', path: '/api/wiki/suggestions/{id}', contract: 'wiki_suggestions', require: ['id', 'accept'] },
+  // 契约 1.2（N35 ⑥）：本案已确认的成果（成果/索引.json）
+  { method: 'outputsList', http: 'GET', path: '/api/outputs', contract: 'outputs_list' },
   { method: 'outputsConfirm', http: 'POST', path: '/api/outputs/confirm', contract: 'outputs_confirm', timeoutMs: LONG },
   { method: 'source', http: 'GET', path: '/api/source', contract: 'source' },
   { method: 'search', http: 'GET', path: '/api/search', contract: 'search' },

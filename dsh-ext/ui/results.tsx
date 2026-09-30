@@ -1,9 +1,10 @@
 // 右侧栏"成果"标签（PRD 7.9）：任务和草稿、自检结果、确认保存、导出格式、选作下一步输入。
-// T13 执行令 Q8：只显示 tasks_list 现有内容；"自检结果""没读全的材料"放占位"暂未提供"；
-// T10 接入之前不显示"出处核对通过"——citation_passed 一律不显示。
+// 契约 1.2（N35，执行令 1134）：任务项用 coverage 显示"没读全的材料"、用 citation_check 显示自检结果
+// （为 null 时"尚未统计""尚未核对"，不显示"通过"）；"已确认的成果"用 GET /api/outputs（成果/索引.json）。
+// citation_passed（任务项、成果项里的布尔值）仍不单独显示，自检结果以 citation_check 为准。
 import { useEffect, useState } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { errorText } from './format.ts'
+import { citationSummary, coverageLines, errorText, type CitationCheck, type Coverage } from './format.ts'
 import { Badge, Button, C, Empty, Loading, S, useLoad } from './kit.tsx'
 import { app, call, lb, notice, setSelection, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
@@ -12,7 +13,8 @@ import { WithCase, type SessionProps } from './session-case.tsx'
 const NO_INPUTS: string[] = []
 
 interface Draft { title: string; path: string; version: number }
-interface Task { task_id: string; skill: string | null; status: string; drafts: Draft[]; finished_at: string | null }
+interface Task { task_id: string; skill: string | null; status: string; drafts: Draft[]; finished_at: string | null; coverage: Coverage | null; citation_check: CitationCheck | null }
+interface Output { title: string; version: number; files: Array<{ format: string; path: string }>; task_id: string; confirmed_at: string }
 
 const TASK_WORD: Record<string, [string, 'ok' | 'warn' | 'err' | 'info' | 'faint']> = {
   running: ['进行中', 'info'], completed: ['已完成', 'ok'], cancelled: ['已停止', 'faint'], interrupted: ['中断', 'warn'],
@@ -26,6 +28,7 @@ export function ResultsTab(p: SessionProps) {
 function Results({ caseRef }: { caseRef: CaseRef }) {
   const id = caseRef.case_id
   const [tasks, reload] = useLoad(() => call<{ tasks: Task[] }>('tasksList', { case_id: id }), [id], 5000)
+  const [outputs, reloadOutputs] = useLoad(() => call<{ outputs: Output[] }>('outputsList', { case_id: id }), [id])
   const [titles, setTitles] = useState<Record<string, string>>({})
   // 选择器必须返回稳定的引用：每次新建 [] 会让 useSyncExternalStore 无限重渲染（React #185）
   const inputs = useStore(app, (s) => s.selections[id]?.inputs) ?? NO_INPUTS
@@ -55,13 +58,23 @@ function Results({ caseRef }: { caseRef: CaseRef }) {
                   </div>
                 </div>
               ))}
-              <div style={{ ...S.sub, color: C.faint }}>自检结果：暂未提供</div>
-              <div style={{ ...S.sub, color: C.faint }}>没读全的材料：暂未提供</div>
+              <CheckLine title="自检结果" {...citationSummary(t.citation_check)} />
+              {(() => { const cov = coverageLines(t.coverage); return <CheckLine title="没读全的材料" tone={cov.ok ? 'ok' : t.coverage ? 'err' : 'faint'} summary={cov.summary} lines={cov.lines} /> })()}
             </li>
           )
         })}</ul>
       )}</Loading>
-      {confirming ? <ConfirmDialog caseRef={caseRef} task={confirming.task} draft={confirming.draft} onClose={() => setConfirming(null)} onDone={() => { setConfirming(null); void reload() }} /> : null}
+      <div style={{ fontWeight: 600, marginTop: 8 }}>已确认的成果</div>
+      <Loading data={outputs}>{(v) => v.outputs.length === 0 ? <Empty>还没有确认保存的成果。</Empty> : (
+        <ul style={S.list}>{v.outputs.map((o) => (
+          <li key={`${o.title}-${o.version}`} style={{ ...S.card, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={S.between}><span style={{ fontWeight: 500 }}>{o.title}</span><span style={S.sub}>第 {o.version} 版</span></div>
+            <div style={S.sub}>确认于 {new Date(o.confirmed_at).toLocaleString('zh-CN')}</div>
+            {o.files.map((f) => <div key={f.path} style={{ ...S.sub, wordBreak: 'break-all' }}>{f.path}</div>)}
+          </li>
+        ))}</ul>
+      )}</Loading>
+      {confirming ? <ConfirmDialog caseRef={caseRef} task={confirming.task} draft={confirming.draft} onClose={() => setConfirming(null)} onDone={() => { setConfirming(null); void reload(); void reloadOutputs() }} /> : null}
     </div>
   )
 }
@@ -102,5 +115,17 @@ function ConfirmDialog({ caseRef, task, draft, onClose, onDone }: { caseRef: Cas
         {!md && !docx ? <div style={{ color: C.err, fontSize: 12 }}>至少选一种格式</div> : null}
       </div>
     </Modal>
+  )
+}
+
+/** 自检结果、没读全的材料：一行结论，有明细时可展开。 */
+function CheckLine({ title, tone, summary, lines }: { title: string; tone: 'ok' | 'err' | 'faint'; summary: string; lines: string[] }) {
+  const color = tone === 'ok' ? C.ok : tone === 'err' ? C.err : C.faint
+  if (!lines.length) return <div style={{ ...S.sub, color }}>{title}：{summary}</div>
+  return (
+    <details>
+      <summary style={{ ...S.sub, color, cursor: 'pointer' }}>{title}：{summary}</summary>
+      <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12, color: C.sub }}>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+    </details>
   )
 }

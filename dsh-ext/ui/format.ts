@@ -133,3 +133,40 @@ export function shouldNotifyWikiDone(watchedId: string | null, tasks: ReadonlyAr
   if (!watchedId || !tasks) return false
   return tasks.find((t) => t.task_id === watchedId)?.status === 'completed'
 }
+
+/** 覆盖清单（契约 1.2 tasks_list.coverage；按实际读取记录算，不采信模型自报）。 */
+export interface Coverage {
+  total: number
+  fully_read: string[]
+  partially_read: Array<{ name: string; read_units: number; total_units: number }>
+  not_read: string[]
+  unreadable: Array<{ name: string; reason: string }>
+}
+
+/** "没读全的材料"一行：没读全的三类都要让律师看见（执行令 1134 第 1 条）。null 为服务还没算（尚未统计）。 */
+export function coverageLines(c: Coverage | null): { ok: boolean; summary: string; lines: string[] } {
+  if (!c) return { ok: false, summary: '尚未统计', lines: [] }
+  const lines = [
+    ...c.partially_read.map((x) => `${x.name}：只读了 ${x.read_units} / ${x.total_units}`),
+    ...c.not_read.map((x) => `${x}：没有读`),
+    ...c.unreadable.map((x) => `${x.name}：读不了（${x.reason}）`),
+  ]
+  if (!lines.length) return { ok: true, summary: `本任务范围内 ${c.total} 份材料都读全了`, lines }
+  return { ok: false, summary: `本任务范围内 ${c.total} 份材料，${lines.length} 份没读全`, lines }
+}
+
+/** 出处核对结果（契约 1.2 tasks_list.citation_check；界面叫"数值与出处位置核对"）。 */
+export interface CitationCheck {
+  passed: boolean
+  problems: Array<{ class: string; severity: 'must_fix' | 'hint'; excerpt: string; citation?: string | null; message: string }>
+  stats: { citations: number; must_fix: number; hints: number }
+}
+
+/** "自检结果"一行：null 时显示"尚未核对"（T10 接入前），不显示"通过"。 */
+export function citationSummary(c: CitationCheck | null): { tone: 'ok' | 'err' | 'faint'; summary: string; lines: string[] } {
+  if (!c) return { tone: 'faint', summary: '尚未核对', lines: [] }
+  const lines = c.problems.map((p) => `${p.severity === 'must_fix' ? '必须修改' : '提示'}：${p.excerpt}——${p.message}`)
+  const hints = c.stats.hints ? `，另有 ${c.stats.hints} 条提示` : ''
+  if (c.passed) return { tone: 'ok', summary: `没有必须修改的问题（核对了 ${c.stats.citations} 处出处${hints}）`, lines }
+  return { tone: 'err', summary: `有 ${c.stats.must_fix} 处必须修改（核对了 ${c.stats.citations} 处出处${hints}）`, lines }
+}

@@ -236,6 +236,20 @@
             ],
             "hidden": false,
             "custom": false
+          },
+          {
+            "id": "case-archiving-v2",
+            "name": "案卷归档（新版）",
+            "kind": "skill",
+            "skills": [
+              "case-archiving"
+            ],
+            "outputs": [
+              "归档方案"
+            ],
+            "hidden": true,
+            "custom": false,
+            "new": true
           }
         ]
       }

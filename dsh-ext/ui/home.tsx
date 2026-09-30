@@ -1,7 +1,7 @@
 // 首页（PRD 6.3、7.9；Spec U-11、U-12）：分流提示、两级胶囊、右上角"管理胶囊"、最近案件、新建 / 打开案件。
 import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
+import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport, withCase } from './cases.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, useLoad } from './kit.tsx'
 import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, pushDialog, setSelection, type CaseRef, type SkillInfo } from './state.ts'
@@ -45,6 +45,11 @@ function CapsuleHome({ caps, skills, onManage }: { caps: Capsules; skills: Skill
   return (
     <>
       <div style={{ ...S.card, color: C.sub, lineHeight: 1.7 }}>{caps.hint}</div>
+      {newCapsules(caps).length ? (
+        <div role="note" style={{ ...S.card, borderColor: C.brand, color: C.text }}>
+          有新功能，可在管理胶囊中显示：{newCapsules(caps).map((x) => x.name).join('、')}
+        </div>
+      ) : null}
       <div style={S.between}>
         <div role="tablist" aria-label="业务分组" style={{ ...S.row, flexWrap: 'wrap' }}>
           {groups.map((g) => (
@@ -188,7 +193,10 @@ function CapsuleManager({ initial, skills, onDone }: { initial: Capsules; skills
                 title="拖动调整顺序"
                 style={{ border: `1px dashed ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', minWidth: 170, cursor: 'grab', opacity: item.hidden ? 0.55 : 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={S.between}>
-                  <NameEdit id={item.id} name={item.name} editing={editing === item.id} onEdit={setEditing} onSave={doRename} />
+                  <span style={S.row}>
+                    <NameEdit id={item.id} name={item.name} editing={editing === item.id} onEdit={setEditing} onSave={doRename} />
+                    {item.new ? <Badge tone="info">新</Badge> : null}
+                  </span>
                   <HideToggle hidden={item.hidden} onClick={() => setC(toggleHidden(c, item.id))} />
                 </div>
                 <span style={S.sub}>{item.kind === 'skill' ? item.skills.map(title).join(' → ') : `内置工具：${TOOL_WORD[item.tool]}`}{item.custom ? '（自己新增的）' : ''}</span>

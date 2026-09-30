@@ -37,7 +37,7 @@ describe('界面假数据', () => {
   }
 
   it('每个成功响应文件都齐全', () => {
-    const need = ['case_open', 'case_recent', 'materials_scan', 'materials_import', 'materials_list', 'ocr_submit', 'ocr_list', 'ocr_cancel', 'task_create', 'task_current', 'pipeline_run', 'pipeline_status', 'pipeline_cancel', 'tasks_list', 'redline', 'wiki_suggestions', 'outputs_confirm', 'source', 'search', 'capsules', 'capsules_reset', 'archive_build', 'invoice_run', 'retainer_driver']
+    const need = ['case_open', 'case_recent', 'materials_scan', 'materials_import', 'materials_list', 'ocr_submit', 'ocr_list', 'ocr_cancel', 'task_create', 'task_current', 'pipeline_run', 'pipeline_status', 'pipeline_cancel', 'tasks_list', 'redline', 'wiki_suggestions', 'outputs_confirm', 'outputs_list', 'source', 'search', 'capsules', 'capsules_reset', 'archive_build', 'invoice_run', 'retainer_driver']
     for (const n of need) expect(files).toContain(`${n}.json`)
   })
 

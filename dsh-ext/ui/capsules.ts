@@ -1,8 +1,9 @@
 // 胶囊管理（U-11、F-CAP-02、Spec 10.3）的纯函数：排序、改名、隐藏 / 显示、新增。没有删除。
 // 保存时服务端还会校验（PUT /api/capsules）；这里先按同样的规则拦一遍，给律师即时提示。
 
-export interface SkillCapsule { id: string; name: string; kind: 'skill'; skills: string[]; outputs: string[]; hidden: boolean; custom: boolean }
-export interface ToolCapsule { id: string; name: string; kind: 'tool'; tool: 'invoice' | 'retainer'; hidden: boolean; custom: boolean }
+/** new：升级时新补进来、律师还没处理过的胶囊（契约 1.2，可缺省；补进来时 hidden 为 true）。律师显示或隐藏一次后清掉。 */
+export interface SkillCapsule { id: string; name: string; kind: 'skill'; skills: string[]; outputs: string[]; hidden: boolean; custom: boolean; new?: boolean }
+export interface ToolCapsule { id: string; name: string; kind: 'tool'; tool: 'invoice' | 'retainer'; hidden: boolean; custom: boolean; new?: boolean }
 export type Capsule = SkillCapsule | ToolCapsule
 export interface Group { id: string; name: string; hidden: boolean; items: Capsule[] }
 export interface Capsules { v: 1; hint: string; shared: string[]; groups: Group[] }
@@ -63,7 +64,7 @@ export function toggleHidden(c: Capsules, id: string): Capsules {
   for (const g of out.groups) {
     if (g.id === id) { g.hidden = !g.hidden; return out }
     const item = g.items.find((x) => x.id === id)
-    if (item) { item.hidden = !item.hidden; return out }
+    if (item) { item.hidden = !item.hidden; delete item.new; return out } // 显示或隐藏过一次，就不再算"新"（契约 1.2 N35 ②）
   }
   return c
 }
@@ -121,6 +122,11 @@ export function checkBeforeSave(c: Capsules, defaults: Capsules): string[] {
 }
 
 /** 首页显示用：去掉隐藏的分组和胶囊。 */
+/** 升级时新补进来、律师还没处理过的胶囊（首页据此提示"有新功能"）。 */
+export function newCapsules(c: Capsules): Capsule[] {
+  return c.groups.flatMap((g) => g.items.filter((x) => x.new === true))
+}
+
 export function visible(c: Capsules): Group[] {
   return c.groups.filter((g) => !g.hidden).map((g) => ({ ...g, items: g.items.filter((x) => !x.hidden) }))
 }

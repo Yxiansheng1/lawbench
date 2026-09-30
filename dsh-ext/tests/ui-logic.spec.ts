@@ -1,8 +1,8 @@
 // 界面纯逻辑：胶囊管理（U-11）、确认框文字（Q10）、页码解析。
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsuleId, rename, toggleHidden, visible, type Capsules } from '../ui/capsules.ts'
-import { ocrConfirmText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
+import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsuleId, newCapsules, rename, toggleHidden, visible, type Capsules } from '../ui/capsules.ts'
+import { citationSummary, coverageLines, ocrConfirmText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
 import { validateRoot } from '../shared/contracts.ts'
 
 const defaults = JSON.parse(readFileSync(join(__dirname, '..', '..', 'skills', 'capsules.default.json'), 'utf8')) as Capsules
@@ -156,5 +156,34 @@ describe('wiki 整理结束的通知（第二次返修一并做）', () => {
     expect(shouldNotifyWikiDone(id, [{ task_id: 'P-20260930120000-ffff', status: 'completed' }])).toBe(false)
     expect(shouldNotifyWikiDone(id, undefined)).toBe(false)
     expect(shouldNotifyWikiDone(null, [{ task_id: id, status: 'completed' }])).toBe(false)
+  })
+})
+
+describe('契约 1.2：新胶囊提示、覆盖清单、自检结果（执行令 1134）', () => {
+  const base = (): Capsules => JSON.parse(readFileSync(join(__dirname, '..', 'ui', 'fixtures', 'capsules.json'), 'utf8')).value
+  it('标了 new 的胶囊列为"新功能"；律师显示或隐藏一次后 new 去掉，存回服务时不再带', () => {
+    const c = base()
+    for (const g of c.groups) for (const x of g.items) delete x.new // 假数据里本来带的那个先去掉，只看这一个
+    const item = c.groups[0]!.items[0]!
+    item.new = true; item.hidden = true
+    expect(newCapsules(c).map((x) => x.id)).toEqual([item.id])
+    const shown = toggleHidden(c, item.id)
+    const after = shown.groups[0]!.items[0]!
+    expect([after.hidden, 'new' in after]).toEqual([false, false])
+    expect(newCapsules(shown)).toEqual([])
+    expect(JSON.stringify(shown)).not.toContain('"new"')
+  })
+  it('没读全的材料：部分读、没读、读不了三类都列出；null 为"尚未统计"；全读完说读全了', () => {
+    expect(coverageLines(null)).toEqual({ ok: false, summary: '尚未统计', lines: [] })
+    const r = coverageLines({ total: 5, fully_read: ['甲'], partially_read: [{ name: '乙', read_units: 2, total_units: 12 }], not_read: ['丙'], unreadable: [{ name: '丁', reason: '文件已加密' }] })
+    expect(r.ok).toBe(false)
+    expect(r.lines).toEqual(['乙：只读了 2 / 12', '丙：没有读', '丁：读不了（文件已加密）'])
+    expect(coverageLines({ total: 2, fully_read: ['甲', '乙'], partially_read: [], not_read: [], unreadable: [] })).toMatchObject({ ok: true, summary: '本任务范围内 2 份材料都读全了' })
+  })
+  it('自检结果：null 为"尚未核对"，不说通过；有必须修改的列出来', () => {
+    expect(citationSummary(null)).toEqual({ tone: 'faint', summary: '尚未核对', lines: [] })
+    const bad = citationSummary({ passed: false, problems: [{ class: 'B', severity: 'must_fix', excerpt: '金额 50 万', message: '原文是 30 万' }], stats: { citations: 8, must_fix: 1, hints: 0 } })
+    expect(bad).toMatchObject({ tone: 'err', summary: '有 1 处必须修改（核对了 8 处出处）', lines: ['必须修改：金额 50 万——原文是 30 万'] })
+    expect(citationSummary({ passed: true, problems: [], stats: { citations: 3, must_fix: 0, hints: 2 } }).summary).toBe('没有必须修改的问题（核对了 3 处出处，另有 2 条提示）')
   })
 })
