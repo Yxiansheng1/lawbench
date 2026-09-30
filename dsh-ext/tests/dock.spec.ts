@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 // 输入区（ui\dock.tsx）按契约 1.2 的操作顺序测试：在 jsdom 里渲染真实的输入区组件，接一个按 1.2 语义写的内存服务
 // （POST /api/task 设置当前选择、新的顶掉旧的；GET /api/task/current 读回；发消息按当前选择复制执行，不消耗）。
-// 逐条对应复核员第三轮那张"操作顺序 → 显示与实际"的表（docs\plan\evidence\T13\review-REVIEW-第三轮.md 第一部分第二节）。
+// 逐条对应复核员第三轮那张"操作顺序 → 显示与实际"的表（docs\plan\evidence\T13\review-REVIEW-第三轮.md 第一部分第二节），
+// 和契约 1.2 复核的 X 系列（review-契约1.2.md）。换会话默认不重挂输入区（只换 sessionId 属性），重挂的另测。
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, TURN_ENDED } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockSyncs, TURN_ENDED } from '../ui/dock.tsx'
 import { toRequest, turnEnds } from '../ui/tasksheet.ts'
-import { app, setApi, setSelection, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
+import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -27,13 +28,17 @@ class Service {
   selections = new Map<string, Sel>()
   failWrite = false
   failRead = false
-  /** 写入耗时（毫秒，假时钟）；测"写到一半律师又改了"。 */
+  /** 服务建了单，但界面收到的是失败（X1、X2：响应超时，或返回不合契约）。 */
+  failAfterCreate: { code: string; message: string } | null = null
+  /** 写入、读回耗时（毫秒，假时钟）；测"写到一半律师又改了""读回要 2 秒"。 */
   writeDelay = 0
+  readDelay = 0
   n = 0
   write(req: { session_id: string; entry: string | null; skill: string | null; inputs: string[]; params: unknown }) {
     if (this.failWrite) return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } }
     const t = { task_id: `T-20260930120000-${String(++this.n).padStart(4, '0')}`, entry: req.entry, skill: req.skill, inputs: req.inputs, params: req.params, updated_at: '2026-09-30T12:00:00+08:00' }
     this.selections.set(req.session_id, t)
+    if (this.failAfterCreate) return { ok: false as const, error: this.failAfterCreate }
     return { ok: true as const, value: { task_id: t.task_id } }
   }
   current(sessionId: string) {
@@ -57,7 +62,10 @@ function api(): LawbenchApi {
       if (svc.writeDelay) await new Promise((res) => setTimeout(res, svc.writeDelay))
       return svc.write(r as Parameters<Service['write']>[0])
     },
-    taskCurrent: async (r) => svc.current((r as { session_id: string }).session_id),
+    taskCurrent: async (r) => {
+      if (svc.readDelay) await new Promise((res) => setTimeout(res, svc.readDelay))
+      return svc.current((r as { session_id: string }).session_id)
+    },
     getCapsules: async () => ({ ok: true, value: CAPSULES }),
     caseRecent: async () => ({ ok: true, value: { cases: [CASE] } }),
     listSkills: async () => ({ ok: true, value: { skills: SKILLS } }),
@@ -70,10 +78,11 @@ async function flush(ms = 0): Promise<void> {
   await act(async () => { await Promise.resolve() })
 }
 
-async function mount(sessionId: string): Promise<void> {
+/** 显示某个会话的输入区。默认不重挂（同一个组件只换 sessionId）；remount 为真时按会话重挂。 */
+async function mount(sessionId: string, remount = false): Promise<void> {
   if (!root) root = createRoot(container)
   const useSessions = <T,>(select: (s: { byId: Record<string, { cwd?: string }> }) => T): T => select({ byId: { [sessionId]: { cwd: CASE.root } } })
-  await act(async () => { root!.render(createElement(ComposerDock, { key: sessionId, sessionId, useSessions })) })
+  await act(async () => { root!.render(createElement(ComposerDock, { key: remount ? sessionId : 'dock', sessionId, useSessions })) })
   await flush()
 }
 
@@ -81,7 +90,7 @@ async function mount(sessionId: string): Promise<void> {
 async function restart(sessionId: string): Promise<void> {
   await act(async () => { root?.unmount() })
   root = undefined
-  app.set((s) => ({ ...s, selections: {} }))
+  app.set((s) => ({ ...s, selections: {}, intents: {} }))
   await mount(sessionId)
 }
 
@@ -111,9 +120,10 @@ const READY = (name: string) => `下一条消息按「${name}」运行（直到�
 
 beforeEach(async () => {
   vi.useFakeTimers()
+  forgetDockSyncs()
   svc = new Service()
   setApi(api())
-  app.set((s) => ({ ...s, cases: [CASE], selections: {} }))
+  app.set((s) => ({ ...s, cases: [CASE], selections: {}, intents: {} }))
   container = document.createElement('div')
   document.body.appendChild(container)
   await mount('S1')
@@ -222,18 +232,20 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     expect(svc.selections.get('S1')).toMatchObject({ entry: A.id })
   })
 
-  it('选 A 不发，切到别的会话再切回（R9）；同一案件两个会话交替（R10）：各按各的当前选择', async () => {
-    await pick(A.id); await flush(600)
-    await mount('S2')
-    expect(shown()).toBe('自由对话')
-    await pick(B.id); await flush(600)
-    await mount('S1')
-    expect([shown(), status()]).toEqual([A.id, READY(A.name)])
-    expect(await send('S1')).toBe(A.id)
-    await mount('S2')
-    expect(shown()).toBe(B.id)
-    expect(await send('S2')).toBe(B.id)
-  })
+  for (const remount of [false, true]) {
+    it(`选 A 不发，切到别的会话再切回（R9）；同一案件两个会话交替（R10）：各按各的当前选择（${remount ? '重挂' : '不重挂'}）`, async () => {
+      await pick(A.id); await flush(600)
+      await mount('S2', remount)
+      expect(shown()).toBe('自由对话')
+      await pick(B.id); await flush(600)
+      await mount('S1', remount)
+      expect([shown(), status()]).toEqual([A.id, READY(A.name)])
+      expect(await send('S1')).toBe(A.id)
+      await mount('S2', remount)
+      expect([shown(), status()]).toEqual([B.id, READY(B.name)])
+      expect(await send('S2')).toBe(B.id)
+    })
+  }
 
   it('发消息的同时改选择（R11）：写成功之前说"正在保存"，那条按原来的跑；之后按新的', async () => {
     await pick(A.id); await flush(600)
@@ -247,12 +259,23 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
   it('首页点胶囊再进案件（选择先于输入区挂上）：挂上后不被服务的旧值盖掉，写成后按它跑', async () => {
     await act(async () => { root?.unmount() })
     root = undefined
-    setSelection(CASE.case_id, { capsuleId: A.id, skill: A.skill, params: null, inputs: [] })
+    setIntent(CASE.case_id, { capsuleId: A.id, skill: A.skill, params: null, inputs: [] })
     await mount('S3')
     expect(shown()).toBe(A.id)
     await flush(600)
     expect(status()).toBe(READY(A.name))
     expect(await send('S3')).toBe(A.id)
+    expect(app.get().intents[CASE.case_id]).toBeUndefined() // 取走一次
+  })
+
+  it('首页点胶囊、成果区选用是按案件的待带入意向：只由当前会话取走一次，换到同案别的会话不再带入（P2-2）', async () => {
+    await pick(A.id); await flush(600)
+    await act(async () => { setIntent(CASE.case_id, { capsuleId: B.id, skill: B.skill, params: null, inputs: [] }) })
+    await flush(600)
+    expect(svc.selections.get('S1')).toMatchObject({ entry: B.id })
+    await mount('S2'); await flush(600)
+    expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+    expect(svc.selections.get('S2')).toBeUndefined()
   })
 
   it('一轮结束后重读：服务那边的选择变了（别处改的）就跟着显示', async () => {
@@ -308,5 +331,138 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     const n = svc.n
     await pick(A.id); await flush(600)
     expect(svc.n).toBe(n)
+  })
+
+  describe('契约 1.2 复核 X 系列（T13 返修）', () => {
+    for (const [name, error] of [['X1b 响应超时', { code: 'TIMEOUT', message: '工作台服务响应超时，请稍后重试' }], ['X2 返回不合契约', { code: 'BAD_RESPONSE', message: '工作台服务返回的内容不对，请联系技术支持' }]] as const) {
+      it(`${name}但服务已建单 B，律师改回 A：重新写一次，状态行和实际一致（P2-1）`, async () => {
+        await pick(A.id); await flush(600)
+        svc.failAfterCreate = error
+        await pick(B.id); await flush(600)
+        expect(svc.selections.get('S1')).toMatchObject({ entry: B.id }) // 服务那边其实已经是 B
+        expect(status()).toBe(error.message)
+        svc.failAfterCreate = null
+        const n = svc.n
+        await pick(A.id)
+        expect(status()).toBe('正在保存选择…') // 修前：直接绿字"按合同审查运行"，实际按 B 跑
+        await flush(600)
+        expect(svc.n).toBe(n + 1)
+        expect(status()).toBe(READY(A.name))
+        expect(await send('S1')).toBe(A.id)
+      })
+    }
+
+    it('X1 写入超时但已建 B，律师不改直接发：红字报错，不声称按 A 或 B 就绪', async () => {
+      await pick(A.id); await flush(600)
+      svc.failAfterCreate = { code: 'TIMEOUT', message: '工作台服务响应超时，请稍后重试' }
+      await pick(B.id); await flush(600)
+      expect([shown(), status()]).toEqual([B.id, '工作台服务响应超时，请稍后重试'])
+      expect(await send('S1')).toBe(B.id)
+    })
+
+    it('X3 改过选择、别处改成 B，一轮结束时读失败：显示读错误，不再显示绿字 A（P3-1）', async () => {
+      await pick(A.id); await flush(600)
+      svc.write({ session_id: 'S1', entry: B.id, skill: B.skill, inputs: [], params: null })
+      svc.failRead = true
+      expect(await send('S1')).toBe(B.id)
+      expect(status()).toContain('工作台服务未启动')
+      expect(status()).not.toBe(READY(A.name))
+      svc.failRead = false
+      await turnEnded('S1')
+      expect([shown(), status()]).toEqual([B.id, READY(B.name)])
+    })
+
+    for (const remount of [false, true]) {
+      it(`X4 切到 S2、读回要 2 秒、读回前发：不显示 S1 的选择，状态行说正在读取（P2-2，${remount ? '重挂' : '不重挂'}）`, async () => {
+        await pick(A.id); await flush(600)
+        svc.readDelay = 2000
+        await mount('S2', remount)
+        expect(shown()).toBe('自由对话')
+        expect(status()).toBe('正在读取当前选择…')
+        expect(await send('S2')).toBe('自由对话')
+        await flush(2000)
+        expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+      })
+
+      it(`X4 变体：S2 以前看过（选的 B），再切过去读回前：显示 S2 上次的 B，状态行说正在读取，不说就绪（${remount ? '重挂' : '不重挂'}）`, async () => {
+        await mount('S2', remount); await pick(B.id); await flush(600)
+        await mount('S1', remount); await pick(A.id); await flush(600)
+        svc.readDelay = 2000
+        await mount('S2', remount)
+        expect([shown(), status()]).toEqual([B.id, '正在读取当前选择…'])
+        await flush(2000)
+        expect([shown(), status()]).toEqual([B.id, READY(B.name)])
+      })
+
+      it(`X5 S1 改 B 没到防抖就切到 S2：B 不写进 S2；切回 S1 时 B 还在、写进 S1（P2-2，${remount ? '重挂' : '不重挂'}）`, async () => {
+        await pick(A.id); await flush(600)
+        await pick(B.id); await flush(200)
+        await mount('S2', remount); await flush(1000)
+        expect(svc.selections.get('S2')).toBeUndefined()
+        expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+        expect(await send('S2')).toBe('自由对话')
+        await mount('S1', remount)
+        expect([shown(), status()]).toEqual([B.id, '正在保存选择…'])
+        await flush(600)
+        expect(svc.selections.get('S1')).toMatchObject({ entry: B.id })
+        expect(status()).toBe(READY(B.name))
+      })
+
+      it(`X6 S1 写 B 失败后切到 S2：B 不写进 S2，S2 不显示 S1 的错误（P2-2，${remount ? '重挂' : '不重挂'}）`, async () => {
+        await pick(A.id); await flush(600)
+        svc.failWrite = true
+        await pick(B.id); await flush(600)
+        expect(status()).toContain('工作台服务未启动')
+        await mount('S2', remount)
+        svc.failWrite = false
+        await flush(1000)
+        expect(svc.selections.get('S2')).toBeUndefined()
+        expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+        expect(svc.selections.get('S1')).toMatchObject({ entry: A.id })
+      })
+    }
+
+    it('写 B 在途时切到 S2、写完才回来：结果记到 S1，不动 S2 的显示', async () => {
+      await pick(A.id); await flush(600)
+      svc.writeDelay = 1000
+      await pick(B.id); await flush(600) // 开始写 B
+      await mount('S2'); await flush(1500)
+      expect(svc.selections.get('S1')).toMatchObject({ entry: B.id })
+      expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+      await mount('S1')
+      expect([shown(), status()]).toEqual([B.id, READY(B.name)])
+    })
+
+    it('S1 的 B 在 S2 显示时才写成，律师随后在 S2 也选 B：照样写进 S2（S1 的结果不当成 S2 服务那边的值）', async () => {
+      await pick(A.id); await flush(600)
+      svc.writeDelay = 1000
+      await pick(B.id); await flush(600)
+      await mount('S2'); await flush(1500) // S2 先读回（自由对话），S1 的 B 随后写成
+      svc.writeDelay = 0
+      await pick(B.id); await flush(600)
+      expect(svc.selections.get('S2')).toMatchObject({ entry: B.id })
+      expect(status()).toBe(READY(B.name))
+      expect(await send('S2')).toBe(B.id)
+    })
+
+    it('切到 S2、读回前就选了和 S1 一样的 A：照样写进 S2，不拿 S1 服务那边的值当 S2 的', async () => {
+      await pick(A.id); await flush(600)
+      svc.readDelay = 2000
+      await mount('S2')
+      await pick(A.id); await flush(600)
+      expect(status()).toBe('正在保存选择…')
+      await flush(2500)
+      expect(svc.selections.get('S2')).toMatchObject({ entry: A.id })
+      expect([shown(), status()]).toEqual([A.id, READY(A.name)])
+      expect(await send('S2')).toBe(A.id)
+    })
+
+    it('X8 改 B 未到防抖就重载：读回 A、按 A 跑（B 没写成，和显示一致）', async () => {
+      await pick(A.id); await flush(600)
+      await pick(B.id); await flush(200)
+      await restart('S1')
+      expect([shown(), status()]).toEqual([A.id, READY(A.name)])
+      expect(await send('S1')).toBe(A.id)
+    })
   })
 })

@@ -1,13 +1,13 @@
 // 会话输入区上方（DSH 插槽 conversation.input.dock）：当前胶囊和 Skill 选择、必问问题、参数、选用的前序成果（PRD 7.9）。
-// 契约 1.2（N37）：服务管该会话"当前的选择"，管到律师改掉为止（执行时不消耗）。界面不在本地记：
+// 契约 1.2（N37）：服务管该会话"当前的选择"，管到律师改掉为止（执行时不消耗）。界面按会话存（与服务同口径），不另记：
 // 挂上、切换会话、每轮结束之后从 GET /api/task/current 读，下拉框和状态行都设成服务返回的；律师改动时 POST /api/task，
 // 写成功之前状态行显示"正在保存选择…"，写失败显示错误并保留下拉框的值。entry 填胶囊 id（T13 执行令 Q5）。
 // 运行状态和停止沿用 DSH 对话区自带的。
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
-import { errorText } from './format.ts'
+import { statusErrorText } from './format.ts'
 import { Badge, Button, C, S } from './kit.tsx'
-import { app, applyServerSelection, call, lb, markSelectionSaved, MODE_AGENT, setSelection, type CaseRef, type Params, type SkillInfo } from './state.ts'
+import { app, applyServerSelection, call, lb, markSelectionSaved, MODE_AGENT, setSelection, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
 import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
@@ -25,6 +25,22 @@ const loadSkills = () => (skillsCache ??= lb().listSkills().then((r) => r.value.
 /** 胶囊改动后首页调用，让输入区重新读。 */
 export const forgetDockCache = (): void => { capsCache = undefined }
 
+const syncs = new Map<string, SelectionSync>()
+/** 测试用：丢掉各会话的读写队列（上一个用例假时钟里没走完的请求不带到下一个）。 */
+export const forgetDockSyncs = (): void => { syncs.clear() }
+function syncFor(sessionId: string, caseId: string): SelectionSync {
+  const k = JSON.stringify([sessionId, caseId])
+  let s = syncs.get(k)
+  if (!s) {
+    s = new SelectionSync({
+      write: (req) => call<{ task_id: string }>('taskCreate', { case_id: caseId, session_id: sessionId, ...req }) as Promise<WriteResult>,
+      current: () => call<{ selection: ServerSelection | null }>('taskCurrent', { session_id: sessionId }) as Promise<CurrentResult>,
+    })
+    syncs.set(k, s)
+  }
+  return s
+}
+
 export function ComposerDock(p: SessionProps) {
   const { caseRef } = useSessionCase(p)
   if (!caseRef) return null
@@ -35,12 +51,22 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   const [caps, setCaps] = useState<Capsules | undefined>()
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [open, setOpen] = useState(false)
-  const [error, setError] = useState<{ key: string; op: 'read' | 'write'; error: ApiError } | null>(null)
+  /** 最近一次读或写失败（sessionId：哪个会话的；key：写失败时写的那份选择）。 */
+  const [error, setError] = useState<{ sessionId: string; key: string; op: 'read' | 'write'; error: ApiError } | null>(null)
+  /** 已经读回过（成败都算）的会话：换会话后、读回之前状态行说"正在读取当前选择…"。 */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
-  /** 服务那边此刻的选择（刚读回或刚写成功的）的键；律师选回同一份时不必再写。 */
+  /**
+   * 服务那边此刻的选择（刚读回或刚写成功的）的键；律师选回同一份时不必再写。
+   * null 表示不知道：还没读回、换了会话、写失败之后（超时或返回不合契约时服务可能已经建了单，T13 返修 P2-1）。
+   */
   const serverKey = useRef<string | null>(null)
+  // DSH 换会话时输入区不一定重挂（插槽可能只换属性）：按会话 id 重置"服务那边是什么"（T13 返修 P2-2）
+  const shownSession = useRef(sessionId)
+  if (shownSession.current !== sessionId) { shownSession.current = sessionId; serverKey.current = null }
   useEffect(() => { void loadCaps().then(setCaps); void loadSkills().then(setSkills) }, [])
-  const stored = useStore(app, (s) => s.selections[caseRef.case_id])
+  const stored = useStore(app, (s) => s.selections[sessionId])
+  const intent = useStore(app, (s) => s.intents[caseRef.case_id])
   const sel = stored ?? { capsuleId: null, skill: null, params: null, inputs: [], saved: false }
   const defaults = useStore(app, (s) => s.defaults)
   const presets = useStore(app, (s) => s.presets)
@@ -52,63 +78,80 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   const skill = agentSkills.find((s) => s.name === sel.skill)
   const params: Params = sel.params ?? (skill ? presets[skill.name] ?? skill.params : defaults) ?? { thinking: '中', window: '128K', max_tokens: 16384 }
 
-  // 同一会话的读、写排成一队（tasksheet.ts）
-  const sync = useMemo(() => new SelectionSync({
-    write: (req) => call<{ task_id: string }>('taskCreate', { case_id: caseRef.case_id, session_id: sessionId, ...req }) as Promise<WriteResult>,
-    current: () => call<{ selection: ServerSelection | null }>('taskCurrent', { session_id: sessionId }) as Promise<CurrentResult>,
-  }), [sessionId, caseRef.case_id])
+  // 同一会话的读、写排成一队（tasksheet.ts）；队列按会话留着，换走再换回时接着排
+  const sync = useMemo(() => syncFor(sessionId, caseRef.case_id), [sessionId, caseRef.case_id])
   const label = capsule ? capsule.name : sel.inputs.length ? '自由对话（带选用的成果）' : '自由对话'
   const ui: UiSelection = { capsuleId: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params }
   const key = selectionKey(ui)
 
-  // 读服务的当前选择：挂上（含切换会话）、每轮结束之后。律师有还没写成功的改动时不覆盖（写完会再读到同样的值）
+  // 读服务的当前选择：挂上、换会话、每轮结束之后。律师有还没写成功的改动时不覆盖（写完会再读到同样的值）
   useEffect(() => {
     let alive = true
+    const sid = sessionId
     const load = () => {
       void sync.current().then((r) => {
         if (!alive) return
-        if (!r.ok) { setError({ key: selectionKey(ui), op: 'read', error: { code: r.error.code, message: errorText(r.error) } }); return }
-        const cur = app.get().selections[caseRef.case_id]
+        setLoadedFor(sid)
+        if (!r.ok) { setError({ sessionId: sid, key: '', op: 'read', error: { code: r.error.code, message: statusErrorText(r.error) } }); return }
+        setError((e) => (e?.op === 'read' ? null : e))
+        const cur = app.get().selections[sid]
         if (cur && !cur.saved) return
         const s = fromServer(r.value.selection)
         serverKey.current = selectionKey(s.params ? s : { ...s, params })
-        applyServerSelection(caseRef.case_id, { capsuleId: s.capsuleId, skill: s.skill, inputs: s.inputs, params: (s.params as Params | null) ?? null })
+        applyServerSelection(sid, { capsuleId: s.capsuleId, skill: s.skill, inputs: s.inputs, params: (s.params as Params | null) ?? null })
         setError(null)
       })
     }
+    setError(null)
     load()
-    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sessionId) load() }
+    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sid) load() }
     window.addEventListener(TURN_ENDED, onTurn)
     return () => { alive = false; window.removeEventListener(TURN_ENDED, onTurn) }
-  }, [sync, sessionId, caseRef.case_id, reload]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sync, sessionId, reload]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 首页、成果区留给本案件的待带入意向：本会话读回之后取走一次，当作律师在这里改的
+  useEffect(() => {
+    if (loadedFor !== sessionId || !intent) return
+    const patch = takeIntent(caseRef.case_id)
+    if (patch) setSelection(sessionId, patch)
+  }, [loadedFor, sessionId, intent, caseRef.case_id])
 
   // 律师改动了（saved 为 false）：防抖后写给服务；写成功且途中没再改才记为已保存；写失败显示错误、保留下拉框的值。
-  // 依赖整份 stored：律师再选一次、或点"重试"（setSelection 生成新的一份）都会重新写
+  // 依赖整份 stored：律师再选一次、或点"重试"（setSelection 生成新的一份）都会重新写。
+  // 写哪个会话在发起时定下：写完时已换到别的会话的，结果只记到原会话，不动此刻显示的（T13 返修 P2-2）
   useEffect(() => {
     if (!stored || stored.saved) return
-    if (key === serverKey.current) { markSelectionSaved(caseRef.case_id, () => true); setError(null); return }
+    const sid = sessionId
+    if (key === serverKey.current) { markSelectionSaved(sid, () => true); setError(null); return }
     const t = setTimeout(() => {
       const writing = ui
       const writingKey = key
       void sync.save(writing).then((r) => {
+        const here = shownSession.current === sid
         if (r.ok) {
-          serverKey.current = writingKey
-          markSelectionSaved(caseRef.case_id, (cur) => selectionKey({ capsuleId: cur.capsuleId, skill: cur.skill, inputs: cur.inputs, params: cur.params ?? writing.params }) === writingKey)
-          setError((e) => (e?.key === writingKey ? null : e))
-        } else setError({ key: writingKey, op: 'write', error: { code: r.error.code, message: errorText(r.error) } })
+          if (here) serverKey.current = writingKey
+          markSelectionSaved(sid, (cur) => selectionKey({ capsuleId: cur.capsuleId, skill: cur.skill, inputs: cur.inputs, params: cur.params ?? writing.params }) === writingKey)
+          if (here) setError((e) => (e?.sessionId === sid && e.key === writingKey ? null : e))
+        } else if (here) {
+          serverKey.current = null
+          setError({ sessionId: sid, key: writingKey, op: 'write', error: { code: r.error.code, message: statusErrorText(r.error) } })
+        }
       })
     }, WRITE_DELAY_MS)
     return () => clearTimeout(t)
   }, [stored, sync]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const status = statusOf(stored ? ui : undefined, sel.saved, error && error.key === key ? error.error : null, label)
+  // 读错误总显示（T13 返修 P3-1）；写错误只在失败的就是此刻显示的这份时显示
+  const shownError = error && error.sessionId === sessionId && (error.op === 'read' || error.key === key) ? error.error : null
+  const reading = loadedFor !== sessionId && (!stored || stored.saved)
+  const status = statusOf(stored && !reading ? ui : undefined, sel.saved, shownError, label)
   const statusColor = status.kind === 'error' ? C.err : status.kind === 'ready' ? C.ok : C.sub
 
   const pickCapsule = (id: string) => {
     const c = capsules.find((x) => x.id === id)
-    setSelection(caseRef.case_id, { capsuleId: c?.id ?? null, skill: c?.skills[0] ?? null, params: null })
+    setSelection(sessionId, { capsuleId: c?.id ?? null, skill: c?.skills[0] ?? null, params: null })
   }
-  const setParam = <K extends keyof Params>(k: K, v: Params[K]) => setSelection(caseRef.case_id, { params: { ...params, [k]: v } })
+  const setParam = <K extends keyof Params>(k: K, v: Params[K]) => setSelection(sessionId, { params: { ...params, [k]: v } })
 
   return (
     <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', margin: '0 0 6px', fontSize: 13, color: C.text, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -121,7 +164,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
         </label>
         {capsule ? (
           <label style={S.row}>Skill
-            <select style={S.input} value={sel.skill ?? ''} onChange={(e) => setSelection(caseRef.case_id, { skill: e.target.value || null, params: null })} aria-label="Skill">
+            <select style={S.input} value={sel.skill ?? ''} onChange={(e) => setSelection(sessionId, { skill: e.target.value || null, params: null })} aria-label="Skill">
               {choices.map((n) => <option key={n} value={n}>{agentSkills.find((s) => s.name === n)?.title ?? n}</option>)}
             </select>
           </label>
@@ -130,12 +173,12 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
         {sel.inputs.map((path) => (
           <span key={path} style={{ ...S.row, gap: 4, border: `1px solid ${C.border}`, borderRadius: 999, padding: '0 6px', fontSize: 12 }}>
             选用：{path.split('/').pop()}
-            <button type="button" aria-label="不再选用" onClick={() => setSelection(caseRef.case_id, { inputs: sel.inputs.filter((x) => x !== path) })}
+            <button type="button" aria-label="不再选用" onClick={() => setSelection(sessionId, { inputs: sel.inputs.filter((x) => x !== path) })}
               style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', padding: 0 }}>×</button>
           </span>
         ))}
         <span role="status" style={{ fontSize: 12, color: statusColor }}>{statusText(status)}</span>
-        {status.kind === 'error' ? <Button size="sm" variant="ghost" onClick={() => (error?.op === 'write' ? setSelection(caseRef.case_id, {}) : setReload((n) => n + 1))}>重试</Button> : null}
+        {status.kind === 'error' ? <Button size="sm" variant="ghost" onClick={() => (error?.op === 'write' ? setSelection(sessionId, {}) : setReload((n) => n + 1))}>重试</Button> : null}
       </div>
       {open ? (
         <div style={{ ...S.row, flexWrap: 'wrap' }}>
@@ -149,7 +192,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
             <input type="number" min={256} max={262144} step={1024} style={{ ...S.input, width: 100 }} value={params.max_tokens}
               onChange={(e) => { const n = Number(e.target.value); if (n >= 256 && n <= 262144) setParam('max_tokens', n) }} />
           </label>
-          <Button size="sm" variant="ghost" onClick={() => setSelection(caseRef.case_id, { params: null })}>恢复默认</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelection(sessionId, { params: null })}>恢复默认</Button>
         </div>
       ) : null}
       {skill && skill.questions.length ? (

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsuleId, newCapsules, rename, toggleHidden, visible, type Capsules } from '../ui/capsules.ts'
-import { citationSummary, coverageLines, ocrConfirmText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
+import { citationSummary, coverageLines, ERROR_HINT, GENERIC_ERROR, ocrConfirmText, statusErrorText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
 import { validateRoot } from '../shared/contracts.ts'
 
 const defaults = JSON.parse(readFileSync(join(__dirname, '..', '..', 'skills', 'capsules.default.json'), 'utf8')) as Capsules
@@ -35,6 +35,17 @@ describe('胶囊管理', () => {
     expect(visible(h).map((g) => g.id)).not.toContain('criminal')
     expect(visible(h).flatMap((g) => g.items.map((x) => x.id))).not.toContain('invoice')
     expect(visible(toggleHidden(h, 'criminal')).map((g) => g.id)).toContain('criminal')
+  })
+
+  it('管理胶囊里显示一个胶囊：所在分组隐藏着时一并显示分组（T13 返修 P3-3）；隐藏胶囊不动分组', () => {
+    const group = defaults.groups.find((g) => g.id === 'criminal')!
+    const item = group.items[0]!.id
+    const hidden = toggleHidden(toggleHidden(defaults, 'criminal'), item) // 分组和胶囊都隐藏
+    expect(hidden.groups.find((g) => g.id === 'criminal')!.hidden).toBe(true)
+    const shown = toggleHidden(hidden, item)
+    expect(shown.groups.find((g) => g.id === 'criminal')!.hidden).toBe(false)
+    expect(visible(shown).find((g) => g.id === 'criminal')!.items.map((x) => x.id)).toContain(item)
+    expect(validateRoot(CAPS_ID, shown)).toEqual([])
   })
 
   it('新增胶囊：id 不重复、custom 为真、只能选已安装的 Skill；结果合契约', () => {
@@ -179,6 +190,14 @@ describe('契约 1.2：新胶囊提示、覆盖清单、自检结果（执行令
     expect(r.ok).toBe(false)
     expect(r.lines).toEqual(['乙：只读了 2 / 12', '丙：没有读', '丁：读不了（文件已加密）'])
     expect(coverageLines({ total: 2, fully_read: ['甲', '乙'], partially_read: [], not_read: [], unreadable: [] })).toMatchObject({ ok: true, summary: '本任务范围内 2 份材料都读全了' })
+    // T13 返修小项②：清单为 0 份时不说"0 份材料都读全了"，也不标绿
+    expect(coverageLines({ total: 0, fully_read: [], partially_read: [], not_read: [], unreadable: [] })).toEqual({ ok: false, summary: '本任务没有列入材料', lines: [] })
+  })
+  it('输入区状态行的错误只说一句：原文和说明都叫人稍后再试时不重复（T13 返修小项③）；说明另有做法时照旧接上', () => {
+    expect(statusErrorText({ code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' })).toBe('工作台服务未启动，请稍后重试')
+    expect(statusErrorText({ code: 'SERVICE_UNAVAILABLE', message: 'fetch failed' })).toBe(ERROR_HINT.SERVICE_UNAVAILABLE)
+    expect(statusErrorText({ code: 'CASE_NOT_FOUND', message: '案件不存在' })).toBe(`案件不存在 ${ERROR_HINT.CASE_NOT_FOUND}`)
+    expect(statusErrorText({ code: 'TIMEOUT', message: 'timeout' })).toBe(GENERIC_ERROR)
   })
   it('自检结果：null 为"尚未核对"，不说通过；有必须修改的列出来', () => {
     expect(citationSummary(null)).toEqual({ tone: 'faint', summary: '尚未核对', lines: [] })

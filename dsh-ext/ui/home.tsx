@@ -4,7 +4,7 @@ import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport, withCase } from './cases.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, useLoad } from './kit.tsx'
-import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, pushDialog, setSelection, type CaseRef, type SkillInfo } from './state.ts'
+import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, pushDialog, setIntent, type CaseRef, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { errorText, lawyerMessage } from './format.ts'
 
@@ -38,7 +38,8 @@ function CapsuleHome({ caps, skills, onManage }: { caps: Capsules; skills: Skill
       return
     }
     withCase(current, (c) => {
-      setSelection(c.case_id, { capsuleId: item.id, skill: item.skills[0] ?? null, params: null, inputs: [] })
+      // 留给该案件的待带入意向，由案件当前会话的输入区读回服务的选择后取走（T13 返修 P2-2）
+      setIntent(c.case_id, { capsuleId: item.id, skill: item.skills[0] ?? null, params: null, inputs: [] })
       if (current && c.case_id === current.case_id) void getNav().openCaseWorkspace(c.root)
     })
   }

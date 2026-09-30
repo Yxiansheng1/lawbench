@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { citationSummary, coverageLines, errorText, type CitationCheck, type Coverage } from './format.ts'
 import { Badge, Button, C, Empty, Loading, S, useLoad } from './kit.tsx'
-import { app, call, lb, notice, setSelection, type CaseRef } from './state.ts'
+import { app, call, lb, notice, setIntent, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
 
@@ -22,20 +22,21 @@ const TASK_WORD: Record<string, [string, 'ok' | 'warn' | 'err' | 'info' | 'faint
 }
 
 export function ResultsTab(p: SessionProps) {
-  return <WithCase p={p}>{(c) => <Results caseRef={c} />}</WithCase>
+  return <WithCase p={p}>{(c) => <Results caseRef={c} sessionId={p.sessionId} />}</WithCase>
 }
 
-function Results({ caseRef }: { caseRef: CaseRef }) {
+function Results({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   const id = caseRef.case_id
   const [tasks, reload] = useLoad(() => call<{ tasks: Task[] }>('tasksList', { case_id: id }), [id], 5000)
   const [outputs, reloadOutputs] = useLoad(() => call<{ outputs: Output[] }>('outputsList', { case_id: id }), [id])
   const [titles, setTitles] = useState<Record<string, string>>({})
   // 选择器必须返回稳定的引用：每次新建 [] 会让 useSyncExternalStore 无限重渲染（React #185）
-  const inputs = useStore(app, (s) => s.selections[id]?.inputs) ?? NO_INPUTS
+  // 显示的是本会话的选择；还有没取走的待带入意向时以它为准（T13 返修 P2-2）
+  const inputs = useStore(app, (s) => s.intents[id]?.inputs ?? s.selections[sessionId]?.inputs) ?? NO_INPUTS
   const [confirming, setConfirming] = useState<{ task: Task; draft: Draft } | null>(null)
   useEffect(() => { void lb().listSkills().then((r) => setTitles(Object.fromEntries(r.value.skills.map((s) => [s.name, s.title])))).catch(() => undefined) }, [])
   const skillName = (t: Task) => t.task_id.startsWith('P-') ? '案件 wiki 整理' : t.skill ? titles[t.skill] ?? t.skill : '自由对话'
-  const toggleInput = (path: string) => setSelection(id, { inputs: inputs.includes(path) ? inputs.filter((x) => x !== path) : [...inputs, path] })
+  const toggleInput = (path: string) => setIntent(id, { inputs: inputs.includes(path) ? inputs.filter((x) => x !== path) : [...inputs, path] })
 
   return (
     <div style={S.pane}>
@@ -59,7 +60,7 @@ function Results({ caseRef }: { caseRef: CaseRef }) {
                 </div>
               ))}
               <CheckLine title="自检结果" {...citationSummary(t.citation_check)} />
-              {(() => { const cov = coverageLines(t.coverage); return <CheckLine title="没读全的材料" tone={cov.ok ? 'ok' : t.coverage ? 'err' : 'faint'} summary={cov.summary} lines={cov.lines} /> })()}
+              {(() => { const cov = coverageLines(t.coverage); return <CheckLine title="没读全的材料" tone={cov.ok ? 'ok' : cov.lines.length ? 'err' : 'faint'} summary={cov.summary} lines={cov.lines} /> })()}
             </li>
           )
         })}</ul>

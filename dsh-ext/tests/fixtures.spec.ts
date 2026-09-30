@@ -60,8 +60,8 @@ describe('界面假数据', () => {
     expect(ids.has(load('search.json').data.value.hits[0].material_id)).toBe(true)
     const tasks = new Set<string>(load('tasks_list.json').data.value.tasks.map((t: any) => t.task_id))
     for (const s of load('wiki_suggestions.json').data.value.suggestions) expect(tasks.has(s.task_id), s.task_id).toBe(true)
-    expect(tasks.has(load('task_create.json').data.value.task_id)).toBe(true)
     expect(tasks.has(load('pipeline_run.json').data.value.task_id)).toBe(true)
+    // task_create 的编号不查：契约 1.2 起它是"当前选择"的编号，发消息时服务另复制出新编号执行，不会出现在任务列表（T13 返修小项①）
   })
 
   it('材料列表覆盖各种状态', () => {

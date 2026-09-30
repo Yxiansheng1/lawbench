@@ -115,6 +115,20 @@ export function errorText(e: { code: string; message: string }): string {
 }
 
 /**
+ * 输入区状态行用的错误文字：说明和原文说的是同一件事时只留一句（T13 返修小项③，原来显示成
+ * "工作台服务未启动，请稍后重试 工作台服务正在启动或已停止，稍后再试。"）。原文是通用提示时用说明；
+ * 原文和说明都只是叫人稍后再试时用原文；说明另有做法（如"请回到首页重新打开案件"）时照旧接在后面。
+ */
+export function statusErrorText(e: { code: string; message: string }): string {
+  const msg = lawyerMessage(e.message)
+  const hint = ERROR_HINT[e.code]
+  if (!hint) return msg
+  if (msg === GENERIC_ERROR) return hint
+  if (/稍后/.test(msg) && /稍后/.test(hint)) return msg
+  return `${msg} ${hint}`
+}
+
+/**
  * 出处文本（契约 citation_text：〔材料名 位置、材料名 位置〕）拆成可点的几处，材料名按材料列表换成编号。
  * 〔未找到依据〕〔推断〕和列表里找不到的材料不给编号（界面只显示文字，不可点）。
  */
@@ -151,6 +165,7 @@ export function coverageLines(c: Coverage | null): { ok: boolean; summary: strin
     ...c.not_read.map((x) => `${x}：没有读`),
     ...c.unreadable.map((x) => `${x.name}：读不了（${x.reason}）`),
   ]
+  if (!lines.length && c.total === 0) return { ok: false, summary: '本任务没有列入材料', lines }
   if (!lines.length) return { ok: true, summary: `本任务范围内 ${c.total} 份材料都读全了`, lines }
   return { ok: false, summary: `本任务范围内 ${c.total} 份材料，${lines.length} 份没读全`, lines }
 }

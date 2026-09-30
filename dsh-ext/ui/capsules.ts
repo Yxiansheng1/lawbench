@@ -64,7 +64,12 @@ export function toggleHidden(c: Capsules, id: string): Capsules {
   for (const g of out.groups) {
     if (g.id === id) { g.hidden = !g.hidden; return out }
     const item = g.items.find((x) => x.id === id)
-    if (item) { item.hidden = !item.hidden; delete item.new; return out } // 显示或隐藏过一次，就不再算"新"（契约 1.2 N35 ②）
+    if (item) {
+      item.hidden = !item.hidden
+      delete item.new // 显示或隐藏过一次，就不再算"新"（契约 1.2 N35 ②）
+      if (!item.hidden) g.hidden = false // 显示一个胶囊时所在分组若隐藏着，一并显示，否则首页仍看不到（T13 返修 P3-3）
+      return out
+    }
   }
   return c
 }
