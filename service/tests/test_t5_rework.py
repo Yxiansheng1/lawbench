@@ -604,8 +604,15 @@ def test_x11_ids_not_reused_after_index_deleted(make_client, cases_dir):
     (root / "b.txt").write_text("b", encoding="utf-8")
     scan(client, cid)
     new = {r: m["material_id"] for r, m in by_rel(root).items()}
-    assert sorted(new.values()) == ["M0008", "M0009", "M0010"]
-    assert index_of(root)["next_seq"] == 11
+    # 契约 1.2 N26：同一份原件按 material_ids 表拿回原编号；新编号不占用任何留过痕的旧编号
+    assert new["a.txt"] == "M0001" and new["c.txt"] == "M0002"
+    assert new["b.txt"] == "M0008"
+    assert index_of(root)["next_seq"] == 9
+    con = sqlite3.connect(root / "工作区" / "case.db")
+    rows = dict(con.execute("SELECT material_id, rel_path FROM material_ids").fetchall())
+    meta = con.execute("SELECT value FROM meta WHERE key = 'next_material_seq'").fetchone()
+    con.close()
+    assert rows == {"M0001": "a.txt", "M0002": "c.txt", "M0008": "b.txt"} and meta == ("9",)
 
 
 def test_x11_sources_each_count(make_client, cases_dir):

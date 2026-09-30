@@ -42,6 +42,12 @@ SOURCE_KIND = {"none": "文字版", "partial": "部分识别", "full": "识别�
 CONVERTED_NOTE = {"doc": "由 doc 转换", "wps": "由 wps 转换", "xls": "由 xls 转换"}
 SHORTCUT_EXT = {".lnk", ".url"}
 ZIP_MAX_FILES = 500
+# 材料文本的格式版本（X13）：写在 _处理状态.md 里（那个文件"无固定格式"，不加契约字段）。版本变了，下次扫描时
+# 这几种材料原件没变也重新解析：2 = Excel 按显示值写（N27）、整份待识别的 Source 行写"待识别"（N28）
+TEXT_FORMAT_VERSION = 2
+REFORMAT_TYPES = ("xlsx", "xls", "pdf", "image")
+_FORMAT_LINE = re.compile(r"^材料文本格式版本：(\d+)\s*$", re.M)
+EXTERNAL_NOTE = "有外部链接，未重算公式"  # 契约 1.2 N21
 # 本服务在 工作区/临时/ 下自己建的项的前缀（X6 按前缀清残留）
 TEMP_PREFIXES = ("lo-", "unzip-", gate.IMPORT_TMP_PREFIX)
 STANDARD_TOPS = {rel for t in TEMPLATES.values() for rel in t if "/" not in rel}
@@ -121,6 +127,9 @@ def assign_names(rels: list[str]) -> dict[str, str]:
 
 def render(name: str, entry: dict, parsed: Parsed) -> str:
     kind = SOURCE_KIND[entry["is_ocr"]]
+    if entry["is_ocr"] == "none" and parsed.unit == "page" and parsed.pages_need_ocr and \
+            len(parsed.pages_need_ocr) == parsed.unit_count:
+        kind = "待识别"  # 整份都是扫描件、还没有识别结果（契约 1.2 N28）
     head = [f"# {name}", "", f"> Source: {entry['rel_path']}（{kind}，{parsed.unit_count}{parsed.count_word}）",
             f"> Collected: {entry['imported_at'][:10]}"]
     if entry["note"]:
@@ -236,13 +245,16 @@ class Materials:
                                   note=CONVERTED_NOTE.get(mtype))
             if mtype in ("xlsx", "xls"):
                 if kind == "zip":
-                    return xlsx.parse(path, recalc=self._recalc(path, s))
+                    rc = self._recalc(path, s)
+                    return xlsx.parse(path, recalc=rc, blocked_note=None if rc else EXTERNAL_NOTE)
                 if kind != "ole":
                     raise ParseError("corrupt" if mtype == "xlsx" else "unchecked")
                 if detect.ole_encrypted(path):
                     raise ParseError("encrypted")
                 converted = s.convert(path, "xlsx", suffix=".xls")
-                return xlsx.parse(converted, recalc=self._recalc(converted, s), note=CONVERTED_NOTE["xls"])
+                rc = self._recalc(converted, s)
+                return xlsx.parse(converted, recalc=rc, note=CONVERTED_NOTE["xls"],
+                                  blocked_note=None if rc else EXTERNAL_NOTE)
         raise ParseError("corrupt")
 
     @staticmethod
@@ -273,37 +285,48 @@ class Materials:
         by_key = {_key(m["rel_path"]): m for m in index["materials"]}
         found, unreadable_dirs = self.walk_all(root)
         conv = Converter(gate.resolve_internal(root, TEMP_REL), lo_base=self.lo_base)
+        stale_format = self._text_format(root) < TEXT_FORMAT_VERSION
+        ids = _MaterialIds(root)
         added = changed = removed = failed = recovered = 0
         parsed_now: dict[str, Parsed | None] = {}
         now = now_iso()
 
+        counts = {"added": 0, "changed": 0, "failed": 0, "recovered": 0}
         for rel, (abspath, st) in sorted(found.items()):
             entry = by_key.get(_key(rel))
             live = entry is not None and entry["status"] != "source_deleted"
             # 跟环境有关的失败（转换程序异常、超时、路径太长、无法读取等）每次扫描都重试（X9）
             retry = live and entry["status"] == "failed" and entry["error"] in RETRY_MESSAGES
+            # 材料文本格式版本变了：这几种材料原件没变也重新解析（X13）
+            refresh = live and stale_format and entry["type"] in REFORMAT_TYPES and entry["status"] != "failed"
+            redo = retry or refresh
             mt = mtime_iso(st) if st is not None else None
-            if live and not retry and st is not None and entry["size"] == st.st_size and entry["mtime"] == mt:
+            if live and not redo and st is not None and entry["size"] == st.st_size and entry["mtime"] == mt:
                 continue
             try:
                 digest = sha256_file(abspath) if st is not None else None
             except OSError:
                 digest = None  # 被占用、没有权限：登记为失败（X8），下次扫描重试
-            if live and not retry and digest is not None and entry["sha256"] == digest:
+            if live and not redo and digest is not None and entry["sha256"] == digest:
                 entry["size"], entry["mtime"] = st.st_size, mt
                 continue
             mtype = detect.material_type(pathlib.Path(rel))
             if entry is None:
-                entry = {"material_id": f"M{index['next_seq']:04d}", "rel_path": rel, "name": "",
-                         "imported_at": now}
-                index["next_seq"] += 1
+                used = {m["material_id"] for m in index["materials"]}
+                mid = ids.reuse(rel, digest, used) if digest else None  # index.json 重建后拿回原编号（N26）
+                if mid is None:
+                    seq = max(index["next_seq"], ids.next_seq())
+                    mid = f"M{seq:04d}"
+                    index["next_seq"] = seq + 1
+                ids.record(mid, rel, digest or "0" * 64, now, index["next_seq"])
+                entry = {"material_id": mid, "rel_path": rel, "name": "", "imported_at": now}
                 index["materials"].append(entry)
                 by_key[_key(rel)] = entry
-                added += 1
-            elif retry and (digest is None or digest == entry["sha256"]):
-                pass  # 原件没变，只是重试
+                counts["added"] += 1
+            elif redo and (digest is None or digest == entry["sha256"]):
+                pass  # 原件没变，只是重试或按新格式重写
             else:
-                changed += 1
+                counts["changed"] += 1
             # 读不了的原件没有哈希：沿用上次的；第一次就读不了的先填 64 个 0（契约要求 sha256 格式），下次重试时更正
             entry.update(type=mtype, size=st.st_size if st is not None else entry.get("size", 0),
                          mtime=mt or entry.get("mtime", now), sha256=digest or entry.get("sha256", "0" * 64),
@@ -319,7 +342,7 @@ class Materials:
                 p = None
                 entry.update(status="failed", unit=_default_unit(mtype), unit_count=0, pages_need_ocr=[],
                              pages_mixed=[], note=None, error=e.message)
-                failed += 1
+                counts["failed"] += 1
                 logs.event("materials", "parse", status="fail", case_id=case_id, error=e.reason)
             except ApiError:
                 raise
@@ -327,15 +350,17 @@ class Materials:
                 p = None
                 entry.update(status="failed", unit=_default_unit(mtype), unit_count=0, pages_need_ocr=[],
                              pages_mixed=[], note=None, error=REASONS["corrupt"])
-                failed += 1
+                counts["failed"] += 1
                 logs.event("materials", "parse", status="fail", case_id=case_id, error=type(e).__name__)
             else:
                 entry.update(status="needs_ocr" if p.pages_need_ocr else "parsed", unit=p.unit,
                              unit_count=p.unit_count, pages_need_ocr=p.pages_need_ocr, pages_mixed=p.pages_mixed,
                              note=p.note, error=None)
                 if retry:
-                    recovered += 1
+                    counts["recovered"] += 1
             parsed_now[entry["material_id"]] = p
+        ids.close()
+        added, changed, failed, recovered = counts["added"], counts["changed"], counts["failed"], counts["recovered"]
 
         seen = {_key(r) for r in found}
         for m in index["materials"]:
@@ -377,6 +402,16 @@ class Materials:
                 "review_needed": bool(added or changed or removed or recovered)}
 
     @staticmethod
+    def _text_format(root: str) -> int:
+        """_处理状态.md 里记的材料文本格式版本；没有这个文件或这一行的算 1（X13 之前）。"""
+        try:
+            p = gate.resolve_internal(root, STATUS_REL, op="materials_status")
+            m = _FORMAT_LINE.search(p.read_text(encoding="utf-8")) if p.is_file() else None
+        except (ApiError, OSError, UnicodeDecodeError):
+            return 1
+        return int(m.group(1)) if m else 1
+
+    @staticmethod
     def _clean_temp(root: str) -> None:
         """扫描开始时（已在该案件的锁内）清掉本服务自己前缀的残留：转换的 lo-*、解压的 unzip-*、导入复制的 imp-*
         （T5 返修 X6）。只认这几个前缀：工作区/临时/ 里粘贴的截图、委托材料窗口的下载不能动。链接一律不碰。"""
@@ -411,7 +446,7 @@ class Materials:
         mats = index["materials"]
         count = {s: sum(1 for m in mats if m["status"] == s) for s in
                  ("parsed", "needs_ocr", "failed", "source_deleted")}
-        lines = ["# 材料处理状态", "", f"更新时间：{now_iso()}", "",
+        lines = ["# 材料处理状态", "", f"更新时间：{now_iso()}", f"材料文本格式版本：{TEXT_FORMAT_VERSION}", "",
                  f"共 {len(mats)} 份：已解析 {count['parsed']}，待识别 {count['needs_ocr']}，"
                  f"失败 {count['failed']}，原件已删除 {count['source_deleted']}。", ""]
         for title, st in (("处理失败", "failed"), ("待识别", "needs_ocr"), ("原件已删除", "source_deleted")):
@@ -700,12 +735,18 @@ def _recover_next_seq(root: str) -> int:
         if db.is_file():
             con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
             try:
-                for table in ("ocr_jobs", "search_units"):
+                for table in ("material_ids", "ocr_jobs", "search_units"):
                     try:
                         for (mid,) in con.execute(f"SELECT DISTINCT material_id FROM {table}"):
                             take(mid)
                     except sqlite3.Error:
                         pass
+                try:
+                    row = con.execute("SELECT value FROM meta WHERE key = 'next_material_seq'").fetchone()
+                    if row and str(row[0]).isdigit():
+                        seen.append(int(row[0]) - 1)
+                except sqlite3.Error:
+                    pass
             finally:
                 con.close()
     except (ApiError, OSError, sqlite3.Error):
@@ -715,6 +756,68 @@ def _recover_next_seq(root: str) -> int:
 
 def _same_path(a: str, b: str) -> bool:
     return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
+class _MaterialIds:
+    """case.db 的 material_ids 表（契约 1.2 N26，T5 返修 X11）：分配编号时写一行，meta 里记 next_material_seq；
+    index.json 丢失后重建时，同一份原件（rel_path + sha256）拿回原编号，新编号从
+    max(next_material_seq, 表内最大编号 + 1) 起。index.json 仍是主本：case.db 不在或读写出错时只记日志，照常扫描。"""
+
+    def __init__(self, root: str):
+        self.con = None
+        try:
+            db = gate.resolve_internal(root, "工作区/case.db", op="materials_ids")
+            if db.is_file():
+                con = sqlite3.connect(str(db), timeout=10)
+                con.execute("SELECT 1 FROM material_ids LIMIT 1")
+                self.con = con
+        except (ApiError, OSError, sqlite3.Error) as e:
+            logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
+
+    def _q(self, sql: str, args=()):
+        if self.con is None:
+            return []
+        try:
+            return self.con.execute(sql, args).fetchall()
+        except sqlite3.Error as e:
+            logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
+            return []
+
+    def reuse(self, rel: str, digest: str, used: set[str]) -> str | None:
+        for (mid,) in self._q("SELECT material_id FROM material_ids WHERE rel_path = ? AND sha256 = ? "
+                              "ORDER BY material_id", (rel, digest)):
+            if mid not in used and _MID.match(mid):
+                return mid
+        return None
+
+    def next_seq(self) -> int:
+        n = 1
+        for (mid,) in self._q("SELECT material_id FROM material_ids"):
+            m = _MID.match(mid)
+            if m:
+                n = max(n, int(m.group(1)) + 1)
+        for (v,) in self._q("SELECT value FROM meta WHERE key = 'next_material_seq'"):
+            if str(v).isdigit():
+                n = max(n, int(v))
+        return n
+
+    def record(self, mid: str, rel: str, digest: str, now: str, next_seq: int) -> None:
+        if self.con is None:
+            return
+        try:
+            with self.con:
+                self.con.execute("INSERT OR IGNORE INTO material_ids (material_id, rel_path, sha256, first_seen) "
+                                 "VALUES (?, ?, ?, ?)", (mid, rel, digest, now))
+                cur = self.next_seq()
+                self.con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('next_material_seq', ?)",
+                                 (str(max(cur, next_seq)),))
+        except sqlite3.Error as e:
+            logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
+
+    def close(self) -> None:
+        if self.con is not None:
+            self.con.close()
+            self.con = None
 
 
 def _join(a: str, b: str) -> str:
