@@ -1,10 +1,10 @@
 // 点草稿正文（对话区助手回答）里的出处打开原文（T13 后续项，主编排 06:34 注记裁决走 A：插件内命中测试，不改 DSH 源码）。
 // - 只看助手回答那一块（DSH 的 `[data-chat-flow-kind="assistant-step"]`）里的点击，别处一律不碰、不拦；
 // - 在 document 的捕获阶段监听，用 caretPositionFromPoint 取点中的文字，按段落整体文字换算位置（出处跨加粗等行内元素也能认）；
-// - 不改 DOM：出处下划线用 CSS 自定义高亮（CSS.highlights），不包 span，不和 React 抢节点；
+// - 不改对话区的内容：出处下划线用 CSS 自定义高亮（CSS.highlights），不包 span，不和 React 抢节点（只往页面头部加一个样式元素）；
 // - 依赖的 DSH 属性名、取值写在下面的常量里，tests\citation.spec.ts 核对 DSH 源码里仍有它们，PATCHES.md 升级核对清单里也记了一行。
 // 已知限制：键盘和读屏够不着（不是真按钮），见交付说明。
-import { citationAt, citationRanges, DSH_ASSISTANT_KIND, DSH_FLOW_ATTR, resolveCitation, type MaterialLite } from './citation.ts'
+import { citationAt, citationRanges, DSH_ASSISTANT_KIND, DSH_FLOW_ATTR, openCitation, shouldHandleClick, type MaterialLite, type OpenDeps } from './citation.ts'
 import { TABS } from './cases.ts'
 import { getNav } from './kit.tsx'
 import { app, call, currentCase, notice } from './state.ts'
@@ -49,22 +49,29 @@ function textNodesOf(block: Element): Text[] {
   return out
 }
 
-async function openCitation(item: { text: string; name: string; loc: string }): Promise<void> {
-  const c = currentCase(app.get())
-  if (!c) { notice('没有打开原文', '这个会话不在已打开的案件里。请从首页打开案件后再点出处。'); return }
-  const r = await call<{ materials: MaterialLite[] }>('materialsList', { case_id: c.case_id })
-  if (!r.ok) { notice('没有打开原文', '读不到本案材料列表，请稍后重试。'); return }
-  const v = resolveCitation(item, r.value.materials)
-  if (!v.ok) { notice('没有打开原文', v.message); return }
-  getNav().openTab(TABS.source, { material_id: v.material.material_id, citation: `〔${item.text}〕` })
+/** 双击、三击选字时第一下单击不立即打开：等这么久，期间有第二下或选中了文字就作罢（返修 B2）。 */
+const OPEN_DELAY_MS = 300
+let pendingOpen: ReturnType<typeof setTimeout> | undefined
+
+const openDeps: OpenDeps = {
+  caseId: () => currentCase(app.get())?.case_id,
+  materials: async (caseId) => {
+    const r = await call<{ materials: MaterialLite[] }>('materialsList', { case_id: caseId })
+    return r.ok ? r.value.materials : undefined
+  },
+  notice,
+  openSource: (materialId, citation) => getNav().openTab(TABS.source, { material_id: materialId, citation }),
 }
 
 function onClick(e: MouseEvent): void {
-  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
   const target = e.target instanceof Element ? e.target : null
-  if (!target || !target.closest(ASSISTANT_SELECTOR) || target.closest(SKIP_SELECTOR)) return
+  if (e.detail > 1 && pendingOpen !== undefined) { clearTimeout(pendingOpen); pendingOpen = undefined }
   const sel = window.getSelection()
-  if (sel && !sel.isCollapsed) return // 在选文字，不打扰
+  if (!shouldHandleClick({
+    button: e.button, modifier: e.ctrlKey || e.metaKey || e.shiftKey || e.altKey,
+    inAnswer: !!target?.closest(ASSISTANT_SELECTOR), inSkipped: !!target?.closest(SKIP_SELECTOR),
+    selectionCollapsed: !sel || sel.isCollapsed, detail: e.detail,
+  })) return
   const caret = caretAt(e.clientX, e.clientY)
   if (!caret || !caret.node.parentElement?.closest(ASSISTANT_SELECTOR)) return
   const ch = charUnderPointer(caret.node, caret.offset, e.clientX, e.clientY)
@@ -79,7 +86,11 @@ function onClick(e: MouseEvent): void {
   if (hit.kind !== 'item') return // 不是出处，或是〔未找到依据〕〔推断〕：不反应
   e.preventDefault()
   e.stopPropagation()
-  void openCitation(hit.item)
+  pendingOpen = setTimeout(() => {
+    pendingOpen = undefined
+    if (window.getSelection()?.isCollapsed === false) return // 这期间选中了文字（双击、三击）：不打开
+    void openCitation(hit.item, openDeps)
+  }, OPEN_DELAY_MS)
 }
 
 /** 给出处加虚下划线（有 CSS.highlights 时）；DOM 有变化时重算，只读不改。 */
