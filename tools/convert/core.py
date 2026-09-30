@@ -39,6 +39,11 @@ STALE_S = 600
 INTERNAL = "处理失败（程序内部错误），其余文件不受影响。"
 # 交给 LibreOffice 之前先查外链的旧格式（Spec 14.3：查到就拒绝转换）
 CHECK_LINKS = (".doc", ".wps")
+# 本版小工具不转换 .doc、.wps（用户 2026-09-30 拍板 N24 ②）：外链检查没有经过独立验证，而且可能误拒正常文档。
+# 只能改这里，不做成环境变量或配置项。extlinks.py 留档，开关为真时才调用。
+LEGACY_WORD_ENABLED = False
+LEGACY_WORD_REASON = ("小工具暂不转换 .doc、.wps（为避免文档里的外部链接联网）；"
+                      "请在 Word 或 WPS 里另存为 docx 后再转换")
 MAX_PROFILE_PATH = 100          # LibreOffice 配置目录路径超过约 140 字符时 soffice 直接崩溃（实测），留足余量
 CRASH_CODES = (0xC0000409, 0xC0000409 - 2**32)   # STATUS_STACK_BUFFER_OVERRUN（无符号 / 有符号两种写法）
 LO_REGISTRY = (
@@ -258,6 +263,8 @@ def _convert_file(kind: str, src: Path, notes: list[str]) -> tuple[Path, list[st
         raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.inputs)}）。")
     if not src.is_file():
         raise ConvertError(f"{src.name} 不存在或无法读取。")
+    if src.suffix.lower() in CHECK_LINKS and not LEGACY_WORD_ENABLED:
+        raise ConvertError(f"{src.name}：{LEGACY_WORD_REASON}。")      # 不检查、不交给 LibreOffice
     if src.suffix.lower() in CHECK_LINKS:
         try:
             linked = extlinks.has_external_links(src)

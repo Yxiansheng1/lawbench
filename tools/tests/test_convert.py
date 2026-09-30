@@ -46,6 +46,12 @@ def samples(tmp_path_factory):
     return out
 
 
+@pytest.fixture
+def legacy_on(monkeypatch):
+    """本版小工具不转换 .doc / .wps（N24 ②）。测留档的外链检查和旧格式转换路径时，临时把开关打开。"""
+    monkeypatch.setattr(core, "LEGACY_WORD_ENABLED", True)
+
+
 def check_unchanged_and_clean(src, before):
     import tempfile
     assert sha256(src) == before
@@ -85,7 +91,9 @@ CASES = [
 
 
 @pytest.mark.parametrize("kind,sample", CASES)
-def test_each_conversion(samples, kind, sample):
+def test_each_conversion(samples, kind, sample, monkeypatch):
+    if sample in ("doc", "wps"):                         # 测留档的旧格式转换路径（本版默认关闭，见 N24）
+        monkeypatch.setattr(core, "LEGACY_WORD_ENABLED", True)
     src = samples[sample]
     before = sha256(src)
     out = core.convert_file(kind, src)
@@ -304,7 +312,7 @@ def test_conversions_do_not_fetch_remote_resources(tmp_path, listener):
 
 
 @need_lo
-def test_doc_with_external_image_rejected_without_fetch(tmp_path, listener):
+def test_doc_with_external_image_rejected_without_fetch(tmp_path, listener, legacy_on):
     """带外链图片的 .doc：查到外链就拒绝转换（Spec 14.3），不交给 LibreOffice，监听收到 0 次请求，原文件不变。"""
     port, hits = listener
     dx = tmp_path / "外链图片.docx"
@@ -323,7 +331,7 @@ def test_doc_with_external_image_rejected_without_fetch(tmp_path, listener):
 
 
 @need_lo
-def test_doc_with_hyperlink_and_plain_url_still_converts(tmp_path, listener):
+def test_doc_with_hyperlink_and_plain_url_still_converts(tmp_path, listener, legacy_on):
     """正文里的普通网址文字和超链接不触发拒绝，照常转换，也不联网。"""
     from docx import Document
     port, hits = listener
@@ -338,7 +346,7 @@ def test_doc_with_hyperlink_and_plain_url_still_converts(tmp_path, listener):
     assert hits == [], f"转换时访问了网络：{hits}"
 
 
-def test_disguised_rtf_doc_with_remote_image_rejected(tmp_path):
+def test_disguised_rtf_doc_with_remote_image_rejected(tmp_path, legacy_on):
     """扩展名是 .doc、内容其实是 RTF / HTML 的文件：出现外部地址就拒绝（宁可误拒）。"""
     rtf = tmp_path / "伪装.doc"
     rtf.write_bytes(b'{\\rtf1 {\\field{\\*\\fldinst INCLUDEPICTURE "http://127.0.0.1:9/x.png" \\\\d}}}')
@@ -519,7 +527,7 @@ def _linked_doc_variants(tmp_path, port):
 
 
 @need_lo
-def test_field_check_catches_switch_first_and_no_data_address(tmp_path, listener, monkeypatch):
+def test_field_check_catches_switch_first_and_no_data_address(tmp_path, listener, monkeypatch, legacy_on):
     """①开关在前、Data 流无地址；②域代码原样、Data 流无地址：都被拒，没有起 soffice，监听 0 次请求。"""
     port, hits = listener
     v1, v2 = _linked_doc_variants(tmp_path, port)
@@ -532,7 +540,7 @@ def test_field_check_catches_switch_first_and_no_data_address(tmp_path, listener
 
 
 @need_lo
-def test_plain_english_link_text_not_rejected(tmp_path, listener):
+def test_plain_english_link_text_not_rejected(tmp_path, listener, legacy_on):
     """③英文正文 "Please see the link http://…"、"import https://…" 不在域指令里，照常转换，监听 0 次。"""
     from docx import Document
     port, hits = listener
@@ -560,7 +568,7 @@ def test_readonly_source_dir_reason(samples, tmp_path):
 
 
 @need_lo
-def test_corrupt_doc_structure_reason(tmp_path):
+def test_corrupt_doc_structure_reason(tmp_path, legacy_on):
     from docx import Document
     dx = tmp_path / "a.docx"
     Document().save(dx)
@@ -630,7 +638,9 @@ def _unc_of(p: Path) -> Path:
     pytest.param("word2pdf", "docx", marks=need_lo, id="docx→pdf"),
     pytest.param("doc2docx", "doc", marks=need_lo, id="doc→docx"),
 ])
-def test_convert_from_network_share(samples, isolated_temp, kind, sample):
+def test_convert_from_network_share(samples, isolated_temp, kind, sample, monkeypatch):
+    if sample == "doc":                                  # 测留档的旧格式转换路径（本版默认关闭，见 N24）
+        monkeypatch.setattr(core, "LEGACY_WORD_ENABLED", True)
     """源文件在网络共享路径（\\\\127.0.0.1\\c$\\…）上：转换成功，结果写在原文件旁，原文件不变。"""
     d = isolated_temp / "share"
     d.mkdir()
@@ -717,3 +727,45 @@ def test_no_test_writes_real_profile_root(short_profile_root):
     import os
     real = Path(os.environ.get("LOCALAPPDATA", "")) / "lawbench" / "lo"
     assert core.profile_root() != real and core.profile_root().parent.name.startswith("lbp-")
+
+
+# ---------------------------------------------------------------- N24 ②：本版小工具不转换 .doc / .wps
+
+
+def test_legacy_word_disabled_in_this_version():
+    assert core.LEGACY_WORD_ENABLED is False
+
+
+@pytest.mark.parametrize("kind,sample", [("doc2docx", "doc"), ("doc2docx", "wps"), ("word2pdf", "doc")],
+                         ids=["doc→docx", "wps→docx", "doc→pdf"])
+def test_legacy_word_refused_without_touching_file(samples, kind, sample, monkeypatch, listener):
+    """.doc / .wps 一律不转换：给出另存为 docx 的提示，不做外链检查、不调用 LibreOffice、不联网、原文件不变、不留结果文件夹。"""
+    if sample not in samples:
+        pytest.skip("本机没有 LibreOffice，造不出 .doc 样本")
+    port, hits = listener
+    called = []
+    monkeypatch.setattr(core, "_libreoffice", lambda *a, **k: called.append(a))
+    monkeypatch.setattr(core.extlinks, "has_external_links", lambda p: called.append(p) or False)
+    src = samples[sample]
+    before = sha256(src)
+    res = core.convert_many(kind, [src])
+    _, r, _ = res[0]
+    assert isinstance(r, str) and "另存为 docx" in r
+    assert called == [] and hits == []
+    assert sha256(src) == before
+
+
+def test_legacy_word_note_in_gui():
+    import tkinter as tk
+    from convert.app import ConvertApp
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("没有图形界面环境")
+    root.withdraw()
+    app = ConvertApp(root)
+    for key in ("doc2docx", "word2pdf"):
+        app.kind.set(core.BY_KEY[key].label)
+        app._update_note()
+        assert "另存为 docx" in app.note["text"]
+    root.destroy()

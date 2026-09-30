@@ -1,5 +1,5 @@
-# cd tools; python -m pytest -q tests（T19 第四轮返修后）    2026-09-30 10:42:17 +0800
-.........................................................                [100%]
+# cd tools; python -m pytest -q tests（N24 ②：小工具暂不转换 .doc/.wps 之后）    2026-09-30 10:56:12 +0800
+...................................................s..........           [100%]
 =================================== PASSES ====================================
 _________________ test_batch_errors_are_chinese_and_isolated __________________
 ---------------------------- Captured stderr call -----------------------------
@@ -53,6 +53,10 @@ PASSED tests/test_convert.py::test_left_behind_notice_survives_timeout
 PASSED tests/test_convert.py::test_left_behind_notice_survives_other_exception
 PASSED tests/test_convert.py::test_left_behind_notice_on_success_stays_in_notes
 PASSED tests/test_convert.py::test_no_test_writes_real_profile_root
+PASSED tests/test_convert.py::test_legacy_word_disabled_in_this_version
+PASSED tests/test_convert.py::test_legacy_word_refused_without_touching_file[doc\u2192docx]
+PASSED tests/test_convert.py::test_legacy_word_refused_without_touching_file[wps\u2192docx]
+PASSED tests/test_convert.py::test_legacy_word_refused_without_touching_file[doc\u2192pdf]
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\u8272\u80cc\u666f.png]
 PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u5f69\u8272\u80cc\u666f.png]
 PASSED tests/test_splitter.py::test_no_blank_overlaps_and_warns
@@ -63,8 +67,6 @@ PASSED tests/test_splitter.py::test_plan_ignores_short_runs
 PASSED tests/test_splitter.py::test_rerun_does_not_overwrite
 PASSED tests/test_splitter.py::test_batch_errors_are_chinese_and_isolated
 PASSED tests/test_splitter.py::test_gui_builds
-57 passed in 225.79s (0:03:45)
+SKIPPED [1] tests\test_convert.py:764: 没有图形界面环境
+61 passed, 1 skipped in 223.04s (0:03:43)
 exit=0
-
-# F3 核对：整轮测试前后真实 %LOCALAPPDATA%\lawbench\lo 的修改时间不变（1790735912 → 1790735912）；
-# 真实系统临时目录里没有留下 lbt-* / lbp-*（0 个）。
