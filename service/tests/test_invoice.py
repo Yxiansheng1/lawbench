@@ -58,6 +58,8 @@ ALL_REQUESTS = [
     {"action": "reimburse", "batch": "九月", "apply": False},
     {"action": "reimburse", "batch": "九月", "apply": True},
     {"action": "review", "sha256": "a" * 64, "reviewer": "李律师", "confirm": True},
+    {"action": "exclude", "period": "2026-09", "item": "b" * 64, "reason": "分类不出，人工排除", "reviewer": "李律师",
+     "confirm": True},
 ]
 
 
@@ -231,24 +233,54 @@ def test_one_action_at_a_time(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- 真引擎：一期（虚构样本）
 
+def _ledger_bytes(ledger: pathlib.Path) -> dict[str, str]:
+    """台账目录里除 _任务 以外每个文件的 sha256（主台账、_原票、_提取记录、_日志……）。"""
+    import hashlib
+    return {str(f.relative_to(ledger)): hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in ledger.rglob("*") if f.is_file() and "_任务" not in f.relative_to(ledger).parts}
+
+
+def _pending_ids(csv_path: pathlib.Path) -> dict[str, str]:
+    import csv
+    with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        return {r["记录ID"]: r["文件或链接"] for r in csv.DictReader(f) if r["状态"] == "待核"}
+
+
 @pytest.fixture(scope="module")
 def period(tmp_path_factory):
-    """真引擎跑一期（plan → run → analyze → prepare）。缓存目录放短路径（回写①）。"""
+    """真引擎走一期：plan → run → analyze →（exclude 待核两项）→ analyze → prepare → reimburse 预览 → --apply。
+    缓存目录放短路径（回写①）。"""
     base = pathlib.Path(os.environ.get("TEMP", tmp_path_factory.getbasetemp())) / f"lbiv{os.getpid()}"
     shutil.rmtree(base, ignore_errors=True)
     (base / "src").mkdir(parents=True)
     for f in FIXTURES.iterdir():
         shutil.copy(f, base / "src")
     r = R.InvoiceRunner(FakeSettings(str(base / "office")), base / "ad")
+    ledger = base / "office" / "发票台账"
     res: dict = {}
-    for req in [{"action": "plan", "period": "2026-09", "channel": "local", "history": "exclude", "history_numbers": []},
-                {"action": "run", "period": "2026-09", "batch": "九月", "src": str(base / "src"), "channel": "local"},
-                {"action": "analyze", "period": "2026-09"},
-                {"action": "prepare", "period": "2026-09", "batch": "九月", "replace": False}]:
+
+    def step(name, req):
         try:
-            res[req["action"]] = r.run(req)
+            res[name] = r.run(req)
         except ApiError as e:
-            res[req["action"]] = e
+            res[name] = e
+
+    step("plan", {"action": "plan", "period": "2026-09", "channel": "local", "history": "exclude", "history_numbers": []})
+    step("run", {"action": "run", "period": "2026-09", "batch": "九月", "src": str(base / "src"), "channel": "local"})
+    step("analyze", {"action": "analyze", "period": "2026-09"})
+    step("prepare_blocked", {"action": "prepare", "period": "2026-09", "batch": "九月", "replace": False})
+    csv_path = ledger / "_任务" / "2026-09" / "收集对账表.csv"
+    res["pending"] = _pending_ids(csv_path)
+    res["ledger_before_exclude"] = _ledger_bytes(ledger)
+    for item in res["pending"]:
+        step(f"exclude:{item}", {"action": "exclude", "period": "2026-09", "item": item,
+                                 "reason": "分类不出，本期人工排除（测试）", "reviewer": "李律师", "confirm": True})
+    res["ledger_after_exclude"] = _ledger_bytes(ledger)
+    step("analyze2", {"action": "analyze", "period": "2026-09"})
+    step("prepare", {"action": "prepare", "period": "2026-09", "batch": "九月", "replace": False})
+    step("reimburse_preview", {"action": "reimburse", "batch": "2026-09_九月", "apply": False})
+    step("reimburse", {"action": "reimburse", "batch": "2026-09_九月", "apply": True})
+    step("report", {"action": "report"})
     yield base, res
     shutil.rmtree("\\\\?\\" + str(base), ignore_errors=True)
 
@@ -256,27 +288,41 @@ def period(tmp_path_factory):
 def test_period_flags_duplicates_and_wrong_buyer(period):
     _, res = period
     assert res["plan"]["exit_code"] == 0
-    for step in ("run", "analyze"):
-        v = res[step]
-        assert v["exit_code"] == 2 and v["attention"] is True
+    for s in ("run", "analyze"):
+        assert res[s]["exit_code"] == 2 and res[s]["attention"] is True
     csv = pathlib.Path(next(f for f in res["analyze"]["files"] if f.endswith("收集对账表.csv"))).read_text(encoding="utf-8")
     assert csv.count(",重复,") == 2                                  # zip 里的 02、03 与单张同票
     assert "发票05-购买方不符.pdf,抬头错误," in csv
-    assert "26999000000000410001" in csv                             # 输出明细有票号（只在界面）
 
 
 def test_prepare_blocked_while_items_pending_is_engine_failed(period):
     """有待核项时引擎 [BLOCKED] 退出 2：服务判 ENGINE_FAILED，不当"须看明细"（回写②）。"""
     _, res = period
-    assert isinstance(res["prepare"], ApiError) and res["prepare"].code == "ENGINE_FAILED"
-    assert res["prepare"].reason == "blocked"
+    assert isinstance(res["prepare_blocked"], ApiError) and res["prepare_blocked"].code == "ENGINE_FAILED"
 
 
-@pytest.mark.xfail(reason="发票01 判'待核：分类缺失'，review 拒绝放行、exclude 不在白名单，一期走不完；"
-                          "待主编排定（致ORCH-C-注记-T25两条待定-1711 B）", strict=True)
-def test_full_period_reimburse(period):
+def test_exclude_only_touches_task_dir(period):
+    """exclude：发票01 与它的重复 04 两项待核被排除；台账目录（主台账、_原票、_提取记录等）逐字节不变。"""
     _, res = period
-    assert not isinstance(res["prepare"], ApiError)
+    assert sorted(res["pending"].values()) == ["发票01-办公用品.pdf", "发票04-办公用品-重复.pdf"]
+    for k, v in res.items():
+        if k.startswith("exclude:"):
+            assert not isinstance(v, ApiError) and v["exit_code"] == 0
+    assert res["ledger_before_exclude"] and res["ledger_after_exclude"] == res["ledger_before_exclude"]
+
+
+def test_full_period_reimburse(period):
+    """排除后一期走完：处理完成、建批次、预览、确认已报；台账里本期已报的是 02、03 两张（1366.50 元）。"""
+    base, res = period
+    for s in ("prepare", "reimburse_preview", "reimburse", "report"):
+        assert not isinstance(res[s], ApiError), (s, getattr(res[s], "reason", None))
+    assert '"processing_complete": true' in res["analyze2"]["output"]
+    assert any(f.endswith("贴票清单.html") for f in res["prepare"]["files"])
+    import openpyxl
+    wb = openpyxl.load_workbook(base / "office" / "发票台账" / "发票主台账.xlsx", read_only=True)
+    rows = [r for ws in wb.worksheets for r in ws.iter_rows(values_only=True)]
+    paid = {str(r[7]) for r in rows if r and len(r) > 8 and r[8] == "已报"}
+    assert paid == {"26999000000000410002", "26999000000000410003"}
 
 
 def test_logs_have_no_invoice_details(period, tmp_path):

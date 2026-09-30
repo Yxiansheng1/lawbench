@@ -29,7 +29,7 @@ TIMEOUT_S = 30 * 60
 SCRIPTS = ("env_check.py", "workflow.py", "invoice_db.py")      # 只允许这三个脚本
 # 每个脚本允许的子命令（env_check.py 没有子命令）；Spec 13.3 白名单
 SUBCOMMANDS = {"workflow.py": ("history", "plan", "run", "analyze", "import", "prepare", "reprint", "cancel",
-                               "reimburse", "review"),
+                               "reimburse", "review", "exclude"),
                "invoice_db.py": ("report", "check-schema")}
 # 任何位置都不能出现的参数（Spec 13.3"不提供"；T25 调研绕过口子）。参数值（批次名等）不在此列
 FORBIDDEN_FLAGS = ("--download-links", "--imap-host", "--account", "--folder", "--img")
@@ -143,6 +143,12 @@ class InvoiceRunner:
             argv = ["workflow.py", "reimburse", "--ledger", L, "--batch", req["batch"]]
             if req["apply"]:
                 argv.append("--apply")
+        elif action == "exclude":
+            # 契约 1.3：只改任务目录内的 collection.json 与对账表，不碰台账、不联网、不可逆；确认在界面做，一律带 --confirm
+            J = job(req["period"])
+            argv = ["workflow.py", "exclude", "--job", J, "--item", req["item"], "--reason", req["reason"],
+                    "--reviewer", req["reviewer"], "--confirm"]
+            files.append(pathlib.Path(J) / "收集对账表.csv")
         elif action == "review":
             argv = ["workflow.py", "review", "--ledger", L, "--sha256", req["sha256"], "--reviewer", req["reviewer"]]
             if req["confirm"]:

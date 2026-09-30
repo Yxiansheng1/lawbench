@@ -1,0 +1,8 @@
+# T25 测试记录（line-C，2026-09-30 暂停时的状态）
+
+## 最近一次完整的 service 全量（exclude 接入之前，3bd6a51 之后，20:0x）
+771 passed, 6 skipped, 1 xfailed（xfail = 一期走不完，等 exclude）
+
+## exclude 接入之后
+- tests/test_invoice.py：53 passed（含真引擎走完一期 test_full_period_reimburse、exclude 只动任务目录 test_exclude_only_touches_task_dir；原 xfail 已翻成正式用例）
+- service 全量：20:32 开跑，用户暂停到明天，**未跑完、已中止**。明天恢复后先重跑全量，把结果写回本文件。
