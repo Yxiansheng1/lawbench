@@ -1,0 +1,8 @@
+﻿# 产品配置启动（profile 补丁层为 []，无取证叠加层）下对已关接口的请求（本机 127.0.0.1，经界面鉴权会话）
+# 对照：取证启动（叠加层写 plugin-inventory disabled: false）时同一 POST 返回 200，导出即 plugin-inventory-desktop.json
+
+POST /api/pluginInventory/list -> 404 
+GET /api/session.export -> 404
+GET /api/session.export?sessionId=x -> 404
+
+路由出处：GET /api/session.export 定义于 packages/session-query/session-log-export/src/routes.ts:8（行 session-log-download）；POST /api/pluginInventory/list 由行 plugin-inventory 提供。

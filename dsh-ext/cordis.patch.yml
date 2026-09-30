@@ -87,6 +87,66 @@
 - id: session-log-deepseek
   disabled: true
 
+# ── 1c. 律师用不上的入口（T17 第一步，执行令 2026-09-30 08:54；调研注记第 4 节）────
+# Host 行和界面行成对关：只关 Host 行，界面照样挂着、调一个没人服务的命名空间。
+
+# 终端
+- id: terminal-controller
+  disabled: true
+- id: ui-sidebar-terminal
+  disabled: true
+
+# @ 文件引用、跨会话引用（session-reference 的 Host 行会把别的会话内容塞进本次请求，不需要界面，必须关）
+# 输入框占位文字"@ 文件或对话"要改源码，候 N40
+- id: file-reference-local
+  disabled: true
+- id: session-reference
+  disabled: true
+- id: ui-reference
+  disabled: true
+
+# 工作区文件浏览（read / stat 接受工作区外的绝对路径）
+- id: workspace-files
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+
+# 在别的程序里打开；session-controller 自带的 openWorkspacePath 不受这两行约束，要改源码，候 N40
+- id: open-in-app
+  disabled: true
+- id: ui-open-in-app
+  disabled: true
+
+# 在线装插件的运行器（动态 Cordis 包）
+- id: cordis-host-runner
+  disabled: true
+- id: cordis-inspect-providers
+  disabled: true
+- id: cordis-client-runner
+  disabled: true
+- id: ui-cordis
+  disabled: true
+
+# 导出会话（/export、标题栏按钮、GET /api/session.export 整个会话记录加附件的 ZIP）
+- id: session-log-download
+  disabled: true
+
+# 设置里的"内置插件"及附属页
+- id: ui-settings-plugins
+  disabled: true
+- id: ui-settings-plugin-inventory
+  disabled: true
+- id: plugin-inventory
+  disabled: true
+- id: ui-settings-shell
+  disabled: true
+- id: ui-settings-agent-loop
+  disabled: true
+- id: ui-settings-subagent
+  disabled: true
+- id: ui-settings-web-search
+  disabled: true
+
 # ── 2. 改配置的行 ──────────────────────────────────────────────────────────
 
 # 默认 preset 指向律师工作台；不改的话仍指向已关掉的 standard，新建会话报 agent-preset/not-found
