@@ -1,0 +1,79 @@
+T5 第二轮返修红绿验证：12 类防护
+
+[01] B-P2-1·按文件身份判断导入源是不是案件根目录或在它里面
+  改坏 case/materials.py → 红：2 failed, 1 passed, 15 deselected in 3.48s
+      变红的用例：
+        tests/test_t5_rework2.py::test_bp2_1_alias_of_root_only_scans[long]
+        tests/test_t5_rework2.py::test_bp2_1_alias_of_root_only_scans[unc]
+  复原 → 绿：3 passed, 15 deselected in 3.74s
+
+[02] B-P2-1·导入文件夹时按文件身份跳过案件根目录那一支
+  改坏 case/materials.py → 红：1 failed, 1 passed, 16 deselected in 11.20s
+      变红的用例：
+        tests/test_t5_rework2.py::test_bp2_1_alias_of_parent_skips_case_branch[unc]
+  复原 → 绿：2 passed, 16 deselected in 1.65s
+
+[03] A-P2-1·打开已有的库也执行 case_db.sql、扫描时查不到表就补建（两层一起去掉）
+  改坏 case/materials.py、case/registry.py → 红：1 failed, 17 deselected in 1.01s
+      变红的用例：
+        tests/test_t5_rework2.py::test_ap2_1_old_db_upgraded_on_open_and_ids_kept
+  复原 → 绿：1 passed, 17 deselected in 1.22s
+
+[04] A-P2-1·扫描时查不到表就补建并记日志
+  改坏 case/materials.py → 红：1 failed, 17 deselected in 1.07s
+      变红的用例：
+        tests/test_t5_rework2.py::test_ap2_1_missing_table_recreated_not_silent
+  复原 → 绿：1 passed, 17 deselected in 0.82s
+
+[05] B-P2-3·常规格式按 15 位有效数字
+  改坏 ingest/xlsx.py → 红：1 failed, 17 deselected in 0.40s
+      变红的用例：
+        tests/test_t5_rework2.py::test_bp2_3_general_uses_15_significant_digits
+  复原 → 绿：1 passed, 17 deselected in 0.12s
+
+[06] B-P2-4·xlsx 加载前流式数格子
+  改坏 ingest/xlsx.py → 红：1 failed, 17 deselected in 109.96s (0:01:49)
+      变红的用例：
+        tests/test_t5_rework2.py::test_bp2_4_dense_sheet_rejected_before_load
+  复原 → 绿：1 passed, 17 deselected in 12.92s
+
+[07] B-P2-4·docx 建树前流式数段落
+  改坏 ingest/docx.py → 红：1 failed, 17 deselected in 8.70s
+      变红的用例：
+        tests/test_t5_rework2.py::test_bp2_4_docx_too_many_paragraphs
+  复原 → 绿：1 passed, 17 deselected in 2.90s
+
+[08] X6·只认本服务自己的形状（入口和删除前两处一起改回按前缀）
+  改坏 case/materials.py → 红：1 failed, 17 deselected in 1.01s
+      变红的用例：
+        tests/test_t5_rework2.py::test_x6_only_own_shapes_cleaned
+  复原 → 绿：1 passed, 17 deselected in 0.73s
+
+[09] X9·第一次读不了、重试成功不计 changed
+  改坏 case/materials.py → 红：1 failed, 17 deselected in 1.09s
+      变红的用例：
+        tests/test_t5_rework2.py::test_x9_first_unreadable_then_retry_counts_and_sha
+  复原 → 绿：1 passed, 17 deselected in 0.88s
+
+[10] X9·material_ids 的 sha 在重试成功后更正
+  改坏 case/materials.py → 红：1 failed, 17 deselected in 1.10s
+      变红的用例：
+        tests/test_t5_rework2.py::test_x9_first_unreadable_then_retry_counts_and_sha
+  复原 → 绿：1 passed, 17 deselected in 0.89s
+
+[11] N44·内容不是 Office 格式的 .xls/.doc 用新原因
+  改坏 case/materials.py → 红：1 failed, 17 deselected in 1.15s
+      变红的用例：
+        tests/test_t5_rework2.py::test_n44_not_office_reason_and_no_retry[\u94f6\u884c\u6d41\u6c34.xls]
+  复原 → 绿：1 passed, 17 deselected in 0.95s
+
+[12] A-P3-3·PDF、图片在格式版本变了时也重扫
+  改坏 case/materials.py → 红：2 failed, 16 deselected in 2.36s
+      变红的用例：
+        tests/test_t5_rework2.py::test_reformat_pdf_and_image[criminal-01/\u8d77\u8bc9\u610f\u89c1\u4e66.pdf]
+        tests/test_t5_rework2.py::test_reformat_pdf_and_image[image]
+  复原 → 绿：2 passed, 16 deselected in 1.76s
+
+源码与开始时逐字节一致：是
+
+结论：12/12 类防护 改坏即红、复原即绿

@@ -1,0 +1,128 @@
+T8 返修红绿验证：20 类防护
+
+[01] P1-1·截断的单元不记进 reads.json
+  改坏 tools/materials.py → 红：2 failed, 25 deselected in 1.94s
+      变红的用例：
+        tests/test_t8_rework.py::test_p1_1_truncated_unit_not_recorded[500]
+        tests/test_t8_rework.py::test_p1_1_truncated_unit_not_recorded[None]
+  复原 → 绿：2 passed, 25 deselected in 2.33s
+
+[02] P1-2·重开案件不把本进程 begin 过的任务标异常
+  改坏 case/task.py → 红：1 failed, 26 deselected in 8.83s
+      变红的用例：
+        tests/test_t8_rework.py::test_p1_2_reopen_does_not_touch_running_task_of_this_process
+  复原 → 绿：1 passed, 26 deselected in 8.34s
+
+[03] P1-3·progress 的读-改-写在任务锁里
+  改坏 case/task.py → 红：1 failed, 26 deselected in 9.30s
+      变红的用例：
+        tests/test_t8_rework.py::test_p1_3_progress_and_save_draft_do_not_lose_drafts
+  复原 → 绿：1 passed, 26 deselected in 9.15s
+
+[04] P2-1·占位单元不算已读
+  改坏 case/task.py → 红：1 failed, 26 deselected in 9.17s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_1_placeholder_units_not_read
+  复原 → 绿：1 passed, 26 deselected in 9.43s
+
+[05] P2-2·已有版本不分大小写匹配
+  改坏 tools/drafts.py → 红：1 failed, 26 deselected in 8.85s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_2_case_insensitive_versions
+  复原 → 绿：1 passed, 26 deselected in 9.32s
+
+[06] P2-2·取版本号和写文件在同一把锁里
+  改坏 tools/drafts.py → 红：1 failed, 26 deselected in 9.39s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_2_concurrent_same_title
+  复原 → 绿：1 passed, 26 deselected in 10.15s
+
+[07] P2-3·待确认.json 的读-改-写加锁
+  改坏 tools/drafts.py → 红：1 failed, 26 deselected in 9.36s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_3_concurrent_suggestions
+  复原 → 绿：1 passed, 26 deselected in 10.42s
+
+[08] P2-4·end 遇到已结束的任务直接返回
+  改坏 case/task.py → 红：1 failed, 26 deselected in 8.89s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_4_end_is_idempotent_and_progress_after_end_ignored
+  复原 → 绿：1 passed, 26 deselected in 9.14s
+
+[09] P2-4·progress 在任务不是执行中时不写
+  改坏 case/task.py → 红：1 failed, 26 deselected in 9.33s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_4_end_is_idempotent_and_progress_after_end_ignored
+  复原 → 绿：1 passed, 26 deselected in 8.69s
+
+[10] P2-5·index() 不拿案件锁
+  改坏 case/materials.py → 红：1 failed, 26 deselected in 12.17s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_5_index_does_not_wait_for_scan_lock
+  复原 → 绿：1 passed, 26 deselected in 11.40s
+
+[11] P2-6·_mkdirs 接住 FileExistsError
+  改坏 case/gate.py → 红：1 failed, 26 deselected in 0.44s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_6_mkdirs_tolerates_concurrent_creation
+  复原 → 绿：1 passed, 26 deselected in 0.12s
+
+[12] P2-7·新建任务单作废同一会话更早的待执行任务单
+  改坏 case/task.py → 红：2 failed, 1 passed, 24 deselected in 8.97s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_7_newer_pending_replaces_older
+        tests/test_t8_rework.py::test_p2_7_same_second_later_wins
+  复原 → 绿：3 passed, 24 deselected in 9.10s
+
+[13] P2-7·目录里不只有 task.json 的不删
+  改坏 case/task.py → 红：1 failed, 26 deselected in 9.06s
+      变红的用例：
+        tests/test_t8_rework.py::test_p2_7_pending_with_extra_files_not_deleted
+  复原 → 绿：1 passed, 26 deselected in 8.36s
+
+[14] P3-1·目录那几行计入预算
+  改坏 case/context.py → 红：1 failed, 26 deselected in 12.94s
+      变红的用例：
+        tests/test_t8_rework.py::test_p3_1_toc_counted_in_budget
+  复原 → 绿：1 passed, 26 deselected in 12.24s
+
+[15] P3-2·progress 对还没 begin 的任务报 TASK_NOT_FOUND
+  改坏 case/task.py → 红：1 failed, 26 deselected in 8.77s
+      变红的用例：
+        tests/test_t8_rework.py::test_p3_2_progress_end_on_pending
+  复原 → 绿：1 passed, 26 deselected in 8.47s
+
+[16] P3-2·end 对还没 begin 的任务报 TASK_NOT_FOUND
+  改坏 case/task.py → 红：1 failed, 26 deselected in 8.73s
+      变红的用例：
+        tests/test_t8_rework.py::test_p3_2_progress_end_on_pending
+  复原 → 绿：1 passed, 26 deselected in 8.35s
+
+[17] P3-3·elapsed_s 从 begin 算起
+  改坏 case/task.py → 红：1 failed, 26 deselected in 8.81s
+      变红的用例：
+        tests/test_t8_rework.py::test_p3_3_elapsed_from_begin
+  复原 → 绿：1 passed, 26 deselected in 8.22s
+
+[18] 缺口 M6·覆盖计算裁掉超出范围的单元号
+  改坏 case/task.py → 红：1 failed, 26 deselected in 1.20s
+      变红的用例：
+        tests/test_t8_rework.py::test_gap_coverage_clips_unit_numbers
+  复原 → 绿：1 passed, 26 deselected in 0.87s
+
+[19] 缺口 M7·add_read 的锁
+  改坏 case/task.py → 红：1 failed, 26 deselected in 1.30s
+      变红的用例：
+        tests/test_t8_rework.py::test_gap_add_read_is_locked
+  复原 → 绿：1 passed, 26 deselected in 1.49s
+
+[20] 缺口 M8·单元超长时截断
+  改坏 tools/materials.py → 红：2 failed, 25 deselected in 2.01s
+      变红的用例：
+        tests/test_t8_rework.py::test_p1_1_truncated_unit_not_recorded[500]
+        tests/test_t8_rework.py::test_p1_1_truncated_unit_not_recorded[None]
+  复原 → 绿：2 passed, 25 deselected in 1.99s
+
+源码与开始时逐字节一致：是
+
+结论：20/20 类防护 改坏即红、复原即绿

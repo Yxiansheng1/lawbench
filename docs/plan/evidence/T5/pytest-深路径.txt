@@ -1,0 +1,18 @@
+﻿basetemp（150 字符）：C:\Users\<用户>\AppData\Local\Temp\claude\D--lawbench-B\28601f6c-018b-4cbf-a02b-932d3a7bc447\scratchpad\深层目录abcdefghij深层目录abcdefghij深层目录abcdefghij\full
+........................................................................ [ 18%]
+........ss..............s............................................... [ 37%]
+........................................................................ [ 55%]
+........................................................................ [ 74%]
+........................................................................ [ 92%]
+............................                                             [100%]
+============================== warnings summary ===============================
+tests\conftest.py:15
+  D:\lawbench-B\service\tests\conftest.py:15: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_gate.py:117: 本机账号没有创建符号链接的权限（开发者模式未开）
+SKIPPED [1] tests\test_gate.py:124: 本机账号没有创建符号链接的权限（开发者模式未开）
+SKIPPED [1] tests\test_gate.py:199: 本机账号没有创建符号链接的权限（开发者模式未开）
+385 passed, 3 skipped, 1 warning in 372.64s (0:06:12)

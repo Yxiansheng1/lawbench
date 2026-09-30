@@ -1,0 +1,44 @@
+........................................................................ [ 10%]
+..................................ss..............s..................... [ 21%]
+........................................................................ [ 32%]
+........................................................................ [ 43%]
+........................................................................ [ 54%]
+........................................................................ [ 64%]
+..................................................F..................... [ 75%]
+........................................................................ [ 86%]
+........................................................................ [ 97%]
+.................                                                        [100%]
+================================== FAILURES ===================================
+_____________________________ test_xls_no_request _____________________________
+
+make_client = <function make_client.<locals>._make at 0x000001BFDA8CB1A0>
+cases_dir = WindowsPath('C:/Users/<用户>/AppData/Local/Temp/lbs-yp2q5rxa/pt/test_xls_no_request0/cases')
+
+    @needs_lo
+    def test_xls_no_request(make_client, cases_dir):
+        """扩展名 .xls、内容是带外链图片的 xlsx（Y8：换成有区分力的样本——关掉检查时转换程序确实会去取图，
+        见 test_xls_disguised_would_fetch_without_check）：按文件头走 xlsx 的检查，不交给 LibreOffice，0 次请求。"""
+        with CountingListener() as lis:
+            root = cases_dir / "xls"
+            root.mkdir()
+            linked_image_xlsx(root / "流水.xls", lis.url)
+            mats = open_scan(make_client(), root)
+            assert lis.count == 0
+        m = mats["流水"]
+>       assert m["status"] == "parsed" and m["note"] is None     # 没经过转换
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert ('parsed' == 'parsed'
+E         
+E           parsed and '有外部链接，未重算公式' is None)
+
+tests\test_t5_convert_safety.py:243: AssertionError
+============================== warnings summary ===============================
+tests\conftest.py:17
+  D:\lawbench-B\service\tests\conftest.py:17: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_t5_convert_safety.py::test_xls_no_request - AssertionError:...
+1 failed, 661 passed, 3 skipped, 1 warning in 631.41s (0:10:31)
+short-rc=1

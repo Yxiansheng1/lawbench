@@ -1,0 +1,60 @@
+D:\lawbench-B\docs\plan\evidence\T3\redgreen_round3.py:41: SyntaxWarning: invalid escape sequence '\p'
+  """结尾那次"复原后全量"不在这里跑：三张卡提交后深、短路径各跑一次全量，见 T5\pytest-*.txt。"""
+T3 第三轮红绿验证：5 类防护
+
+[01] S1·设置 PUT 与启动时用 httpx 同一解析器再校验
+  改坏 net.py → 红：36 failed, 43 deselected in 20.42s
+      变红的用例：
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:8000/v1\n-llm_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:8000/v1\n-prep_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:8000/v1\n-llm_alt_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:8000/v1\n-prep_alt_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:80\n00/v1-llm_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:80\n00/v1-prep_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:80\n00/v1-llm_alt_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1:80\n00/v1-prep_alt_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1\t:8000/v1-llm_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1\t:8000/v1-prep_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1\t:8000/v1-llm_alt_base_url]
+        tests/test_t3_rework3.py::test_s1_put_f10_url_rejected_not_written[http://127.0.0.1\t:8000/v1-prep_alt_base_url]
+        …共 36 个
+  复原 → 绿：36 passed, 43 deselected in 70.18s (0:01:10)
+
+[02] S1·拒绝控制字符、非 ASCII 和 @?#%\
+  改坏 net.py → 红：6 failed, 23 passed, 50 deselected in 0.32s
+      变红的用例：
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://127.0.0.1:8000/v1\u200b]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://127.0.0.1:8000/\u6750\u6599]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://127.0.0.1\\@192.168.8.77:8000/v1]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://a@127.0.0.1:8000/v1]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://127.0.0.1:8000/v1#x]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://127.0.0.1:8000/v1?a=1]
+  复原 → 绿：29 passed, 50 deselected in 0.11s
+
+[03] S1·两个解析器的主机、端口要一致
+  改坏 net.py → 红：1 failed, 78 deselected in 0.28s
+      变红的用例：
+        tests/test_t3_rework3.py::test_s1_parsers_must_agree_alone
+  复原 → 绿：1 passed, 78 deselected in 0.04s
+
+[04] S1·主机名只收 ASCII 标签或 IP 字面量，拒绝非标准 IPv4 写法
+  改坏 net.py → 红：3 failed, 26 passed, 50 deselected in 0.35s
+      变红的用例：
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://0x7f.1:8000/v1]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://127.1:8000/v1]
+        tests/test_t3_rework3.py::test_s1_bad_urls_rejected[http://2130706433:8000/v1]
+  复原 → 绿：29 passed, 50 deselected in 0.08s
+
+[05] S1·probe 接住解析异常，不出 500
+  改坏 net.py → 红：4 failed, 75 deselected in 2.95s
+      变红的用例：
+        tests/test_t3_rework3.py::test_s1_probe_catches_invalid_url[http://127.0.0.1:8000/v1\n]
+        tests/test_t3_rework3.py::test_s1_probe_catches_invalid_url[http://127.0.0.1:80\n00/v1]
+        tests/test_t3_rework3.py::test_s1_probe_catches_invalid_url[http://127.0.0.1\t:8000/v1]
+        tests/test_t3_rework3.py::test_s1_probe_catches_invalid_url[http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54:8000/v1]
+  复原 → 绿：4 passed, 75 deselected in 2.22s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T5\pytest-返修第一轮*.txt）
+
+结论：5/5 类防护 改坏即红、复原即绿

@@ -1,0 +1,189 @@
+T5 第一轮返修红绿验证：28 类防护
+
+[01] X1·扩展名 .xls、内容是 xlsx：按文件头走 xlsx 的检查（改回先转换）
+  改坏 case/materials.py → 红：1 failed, 32 deselected in 10.89s
+      变红的用例：
+        tests/test_t5_convert_safety.py::test_xls_no_request
+  复原 → 绿：1 passed, 32 deselected in 1.11s
+
+[02] X1·扩展名 .doc、内容是 docx：直接读，不交给 LibreOffice
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.76s
+      变红的用例：
+        tests/test_t5_rework.py::test_x1_doc_with_docx_content_parsed_directly
+  复原 → 绿：1 passed, 59 deselected in 1.13s
+
+[03] X1·内容既不是 OLE 也不是压缩包：不交给 LibreOffice
+  改坏 case/materials.py → 红：2 failed, 1 passed, 57 deselected in 19.73s
+      变红的用例：
+        tests/test_t5_rework.py::test_x1_other_content_not_given_to_converter[\u7f51\u9875.doc]
+        tests/test_t5_rework.py::test_x1_other_content_not_given_to_converter[\u7f51\u9875.wps]
+  复原 → 绿：3 passed, 57 deselected in 3.22s
+
+[04] X2·关系文件解析出错即拒绝
+  改坏 ingest/links.py → 红：1 failed, 59 deselected in 0.87s
+      变红的用例：
+        tests/test_t5_rework.py::test_x2_bad_rels_rejected_not_passed
+  复原 → 绿：1 passed, 59 deselected in 1.14s
+
+[05] X2·Data 流读不了即拒绝
+  改坏 ingest/links.py → 红：1 failed, 59 deselected in 0.37s
+      变红的用例：
+        tests/test_t5_rework.py::test_x2_ole_checks_fail_closed
+  复原 → 绿：1 passed, 59 deselected in 0.08s
+
+[06] X2·加密判断出错即拒绝
+  改坏 ingest/detect.py → 红：1 failed, 59 deselected in 0.32s
+      变红的用例：
+        tests/test_t5_rework.py::test_x2_ole_checks_fail_closed
+  复原 → 绿：1 passed, 59 deselected in 0.08s
+
+[07] X3·导入源是案件根目录：只扫描
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.23s
+      变红的用例：
+        tests/test_t5_rework.py::test_x3_import_case_root_itself
+  复原 → 绿：1 passed, 59 deselected in 0.83s
+
+[08] X3·导入源是案件的上级：跳过案件根目录那一支
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 5.61s
+      变红的用例：
+        tests/test_t5_rework.py::test_x3_import_parent_skips_case_branch
+  复原 → 绿：1 passed, 59 deselected in 0.89s
+
+[09] X4·压缩包部件解压前看大小
+  改坏 ingest/links.py → 红：2 failed, 58 deselected in 4.78s
+      变红的用例：
+        tests/test_t5_rework.py::test_x4_docx_part_over_limit_not_decompressed
+        tests/test_t5_rework.py::test_x4_xlsx_part_over_limit
+  复原 → 绿：2 passed, 58 deselected in 2.57s
+
+[10] X4·xlsx 只遍历实际存在的单元格
+  改坏 ingest/xlsx.py → 红：1 failed, 59 deselected in 67.88s (0:01:07)
+      变红的用例：
+        tests/test_t5_rework.py::test_x4_xlsx_far_cell_fast[coord0]
+  复原 → 绿：1 passed, 59 deselected in 0.15s
+
+[11] X4·写出的格子数上限
+  改坏 ingest/xlsx.py → 红：1 failed, 59 deselected in 1.06s
+      变红的用例：
+        tests/test_t5_rework.py::test_x4_xlsx_too_many_cells_rendered
+  复原 → 绿：1 passed, 59 deselected in 0.13s
+
+[12] X5·导入的临时文件写在 工作区/临时/
+  改坏 case/gate.py → 红：2 failed, 1 passed, 57 deselected in 2.10s
+      变红的用例：
+        tests/test_t5_rework.py::test_x5_x6_killed_import_leaves_nothing_in_originals
+        tests/test_t5_rework.py::test_x5_temp_written_in_work_temp_then_moved
+  复原 → 绿：3 passed, 57 deselected in 1.87s
+
+[13] X6·扫描开始时清本服务前缀的残留
+  改坏 case/materials.py → 红：2 failed, 58 deselected in 2.18s
+      变红的用例：
+        tests/test_t5_rework.py::test_x5_x6_killed_import_leaves_nothing_in_originals
+        tests/test_t5_rework.py::test_x6_scan_cleans_only_own_prefixes
+  复原 → 绿：2 passed, 58 deselected in 1.79s
+
+[14] X6·只清自己前缀的
+  改坏 case/materials.py → 红：1 failed, 1 passed, 58 deselected in 2.12s
+      变红的用例：
+        tests/test_t5_rework.py::test_x6_scan_cleans_only_own_prefixes
+  复原 → 绿：2 passed, 58 deselected in 1.86s
+
+[15] X7·工作区 下 临时 以外的文件不接受导入
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.25s
+      变红的用例：
+        tests/test_t5_rework.py::test_x7_non_temp_work_files_not_imported
+  复原 → 绿：1 passed, 59 deselected in 0.89s
+
+[16] X7·复制成功后才删临时文件
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.20s
+      变红的用例：
+        tests/test_t5_rework.py::test_x7_temp_file_deleted_only_after_copy
+  复原 → 绿：1 passed, 59 deselected in 0.86s
+
+[17] X8·长路径前缀遍历，超长原件登记为失败
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.47s
+      变红的用例：
+        tests/test_t5_rework.py::test_x8_too_long_original_registered_as_failed
+  复原 → 绿：1 passed, 59 deselected in 0.76s
+
+[18] X8·读不了的文件夹里的旧条目不标原件已删除
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.13s
+      变红的用例：
+        tests/test_t5_rework.py::test_x8_unreadable_folder_keeps_old_entries
+  复原 → 绿：1 passed, 59 deselected in 0.83s
+
+[19] X8·读不了的原件登记为失败
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.01s
+      变红的用例：
+        tests/test_t5_rework.py::test_x8_locked_file_registered_then_retried
+  复原 → 绿：1 passed, 59 deselected in 0.91s
+
+[20] X9·跟环境有关的失败每次扫描都重试
+  改坏 case/materials.py → 红：6 failed, 6 passed, 48 deselected in 8.66s
+      变红的用例：
+        tests/test_t5_rework.py::test_x9_retry_by_reason[converter_crashed-True]
+        tests/test_t5_rework.py::test_x9_retry_by_reason[convert_timeout-True]
+        tests/test_t5_rework.py::test_x9_retry_by_reason[path_too_long-True]
+        tests/test_t5_rework.py::test_x9_retry_by_reason[appdata_too_long-True]
+        tests/test_t5_rework.py::test_x9_retry_by_reason[unreadable-True]
+        tests/test_t5_rework.py::test_x9_retry_by_reason[no_converter-True]
+  复原 → 绿：12 passed, 48 deselected in 9.46s
+
+[21] X10·第三级仍重名时加 _2、_3
+  改坏 case/materials.py → 红：4 failed, 1 passed, 55 deselected in 1.15s
+      变红的用例：
+        tests/test_t5_rework.py::test_x10_names_unique_with_suffix
+        tests/test_t5_rework.py::test_x10_existing_name_kept_newcomer_suffixed
+        tests/test_t5_rework.py::test_x10_suffix_does_not_collide_with_natural_name
+        tests/test_t5_rework.py::test_x10_scan_names_unique
+  复原 → 绿：5 passed, 55 deselected in 0.93s
+
+[22] X11·index.json 丢失后编号从能找到的最大编号加 1 起
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.26s
+      变红的用例：
+        tests/test_t5_rework.py::test_x11_ids_not_reused_after_index_deleted
+  复原 → 绿：1 passed, 59 deselected in 0.88s
+
+[23] X12·导入文件夹时跳过任何层级的点开头项
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.09s
+      变红的用例：
+        tests/test_t5_rework.py::test_x12_dot_items_skipped_at_any_level
+  复原 → 绿：1 passed, 59 deselected in 0.76s
+
+[24] X12·ZIP 里的点开头成员跳过
+  改坏 case/materials.py → 红：1 failed, 59 deselected in 1.08s
+      变红的用例：
+        tests/test_t5_rework.py::test_x12_dot_members_in_zip_skipped
+  复原 → 绿：1 passed, 59 deselected in 0.78s
+
+[25] Y5·文本框只取 Choice
+  改坏 ingest/docx.py → 红：1 failed, 59 deselected in 0.35s
+      变红的用例：
+        tests/test_t5_rework.py::test_y5_textbox_once
+  复原 → 绿：1 passed, 59 deselected in 0.11s
+
+[26] Y5·带 DOCTYPE 的部件按失败
+  改坏 ingest/docx.py → 红：1 failed, 59 deselected in 0.35s
+      变红的用例：
+        tests/test_t5_rework.py::test_y5_doctype_fails
+  复原 → 绿：1 passed, 59 deselected in 0.10s
+
+[27] Y6·UTF-16 文本
+  改坏 ingest/text.py → 红：4 failed, 56 deselected in 0.49s
+      变红的用例：
+        tests/test_t5_rework.py::test_y6_utf16[\u8bb0\u4e8b\u672c.txt-utf-16-le-\xff\xfe]
+        tests/test_t5_rework.py::test_y6_utf16[\u8bb0\u4e8b\u672c.txt-utf-16-be-\xfe\xff]
+        tests/test_t5_rework.py::test_y6_utf16[\u8868.csv-utf-16-le-\xff\xfe]
+        tests/test_t5_rework.py::test_y6_utf16[\u8868.csv-utf-16-be-\xfe\xff]
+  复原 → 绿：4 passed, 56 deselected in 0.10s
+
+[28] Y7·重算不成退回写公式
+  改坏 ingest/xlsx.py → 红：2 failed, 58 deselected in 1.10s
+      变红的用例：
+        tests/test_t5_rework.py::test_y7_recalc_failure_falls_back_to_formula
+        tests/test_t5_rework.py::test_y7_scan_xlsx_parsed_when_recalc_fails
+  复原 → 绿：2 passed, 58 deselected in 0.77s
+
+源码与开始时逐字节一致：是
+
+结论：28/28 类防护 改坏即红、复原即绿
