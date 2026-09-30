@@ -170,11 +170,11 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
   beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'lb-store-')) })
   afterEach(() => { rmSync(tmp, { recursive: true, force: true }) })
 
-  it('案件里的会话只写进 <案件>\\工作区\\会话，默认根没有；不在案件里的写默认根', async () => {
+  it('案件里的会话只写进 <案件>\\工作区\\会话，默认根没有；开关打开时不在案件里的写默认根', async () => {
     const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions'); const caseRoot = join(tmp, '刑事-虚构甲')
     mkdirSync(caseRoot, { recursive: true })
     new CaseRoots(appData).merge([{ root: caseRoot, exists: true }])
-    const s = await startStore(appData, home)
+    const s = await startStore(appData, home, { allowOutsideCase: true })
     try {
       const h = await s.persistence.create(meta('in-case', caseRoot) as never)
       await (h as unknown as { append(e: unknown): Promise<void> }).append(oneTurnLog())
@@ -186,6 +186,23 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
     expect(files(join(caseRoot, '工作区', '会话')).some((f) => f.includes('in-case'))).toBe(true)
     expect(files(home).some((f) => f.includes('in-case'))).toBe(false)
     expect(files(home).some((f) => f.includes('outside'))).toBe(true)
+  })
+
+  it('N46 ②（默认）：不在案件里的会话拒绝新建、给中文说明，$DSH_HOME\\sessions 下不新增目录；案件里的照常', async () => {
+    const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions'); const caseRoot = join(tmp, '刑事-虚构丙')
+    mkdirSync(caseRoot, { recursive: true }); mkdirSync(home, { recursive: true })
+    new CaseRoots(appData).merge([{ root: caseRoot, exists: true }])
+    const before = readdirSync(home)
+    const s = await startStore(appData, home)
+    try {
+      await expect(s.persistence.create(meta('outside', join(tmp, '别处')) as never)).rejects.toThrow(OUTSIDE_CASE)
+      await expect(s.persistence.create(meta('no-cwd') as never)).rejects.toThrow(OUTSIDE_CASE)
+      const h = await s.persistence.create(meta('in-case', caseRoot) as never)
+      await (h as unknown as { append(e: unknown): Promise<void> }).append(oneTurnLog())
+      await (h as unknown as { close(): Promise<void> }).close()
+    } finally { await s.dispose() }
+    expect(readdirSync(home)).toEqual(before)
+    expect(files(join(caseRoot, '工作区', '会话')).some((f) => f.includes('in-case'))).toBe(true)
   })
 
   it('搬家：案件目录整个改名、名单按服务更新后重启，旧会话能列出（cwd 为新路径）、能打开、能续写，不需要改原版包', async () => {
@@ -243,6 +260,7 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
 // ── 三、DSH 的存储契约整套对路由再跑一遍 ──────────────────────────────────
 runPersistenceContract('lawbench-session-store（默认根）', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lb-store-contract-'))
-  const s = await startStore(join(dir, 'appdata'), join(dir, 'sessions'))
+  // 契约用例的会话 cwd 不在任何案件里，按开关打开跑（验的是原版实例经路由转发的语义）
+  const s = await startStore(join(dir, 'appdata'), join(dir, 'sessions'), { allowOutsideCase: true })
   return { persistence: s.persistence as never, dispose: async () => { await s.dispose(); rmSync(dir, { recursive: true, force: true }) } } as never
 })

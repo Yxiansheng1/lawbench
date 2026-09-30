@@ -379,5 +379,5 @@
         backendModule: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-persistence-jsonl')"
         defaultRoot: !!js dshHomePath('sessions')
         appData: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
-        # 不在案件里的会话是否允许新建：N46 候用户定，暂按允许；定了"不允许"改为 false
-        allowOutsideCase: true
+        # 不在案件里的会话不许新建（N46 用户定 ②：没有打开案件就不能发消息）；已有的照常可读
+        allowOutsideCase: false

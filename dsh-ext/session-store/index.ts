@@ -19,7 +19,7 @@ export interface Config {
   defaultRoot: string
   /** 应用数据目录（案件根名单缓存、日志）；不给时用 %LOCALAPPDATA%\lawbench。 */
   appData?: string
-  /** 不在案件里的会话是否允许新建（N46 候定，默认允许；用户定"不允许"后改为 false）。 */
+  /** 不在案件里的会话是否允许新建（N46 用户定 ②：不允许，默认 false；已有的照常可读）。 */
   allowOutsideCase?: boolean
   /** 原版的物理编码（不给时用原版默认）。 */
   compression?: string
@@ -78,7 +78,7 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
   const router = new SessionRouter(
     (root) => new Jsonl(ctx.isolate('sessionPersistence'), { root, ...(config.compression ? { compression: config.compression } : {}) }),
     roots,
-    { defaultRoot: config.defaultRoot, allowOutsideCase: config.allowOutsideCase ?? true, refresh, log },
+    { defaultRoot: config.defaultRoot, allowOutsideCase: config.allowOutsideCase ?? false, refresh, log },
   )
 
   class LawbenchSessionPersistence extends Base {
@@ -90,7 +90,7 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     list(options?: never) { return router.list(options) }
   }
   new LawbenchSessionPersistence(ctx)
-  log('info', 'session_store.started', { case_roots: roots.list().length, allow_outside_case: config.allowOutsideCase ?? true })
+  log('info', 'session_store.started', { case_roots: roots.list().length, allow_outside_case: config.allowOutsideCase ?? false })
 
   // 工作台服务起来（或重启）后刷新一次名单；lawbenchCore 由 legal-host 提供，不是硬依赖（会话存储要比它先可用）
   ctx.inject(['lawbenchCore'], (c) => {

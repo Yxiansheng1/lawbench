@@ -30,7 +30,7 @@ export type LogFn = (level: 'info' | 'warn' | 'error', event: string, meta?: Rec
 export interface RouterOptions {
   /** 不在案件里的会话的记录根（$DSH_HOME\sessions）。 */
   defaultRoot: string
-  /** 不在案件里的会话是否允许新建（N46 候定，默认允许）。 */
+  /** 不在案件里的会话是否允许新建（N46 用户定 ②：不允许）。 */
   allowOutsideCase: boolean
   /** 刷新案件根名单（问工作台服务）；服务不在时什么也不做。 */
   refresh?: (force?: boolean) => Promise<void>

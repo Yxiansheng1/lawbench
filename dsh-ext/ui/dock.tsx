@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
 import { statusErrorText } from './format.ts'
-import { Badge, Button, C, S } from './kit.tsx'
+import { Badge, Button, C, getNav, S } from './kit.tsx'
 import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, setSelection, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
@@ -43,9 +43,19 @@ function syncFor(sessionId: string, caseId: string): SelectionSync {
   return s
 }
 
+/** 会话不在已登记案件里时输入区上方的提示（N46 用户定 ②：没有打开案件就不能发消息；发了也会被会话存储拒绝）。 */
+export const NO_CASE_TEXT = '先打开或新建一个案件，再在这里发消息。'
+
 export function ComposerDock(p: SessionProps) {
   const { caseRef } = useSessionCase(p)
-  if (!caseRef) return null
+  if (!caseRef) {
+    return (
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', margin: '0 0 6px', fontSize: 13, color: C.err, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span role="status">{NO_CASE_TEXT}</span>
+        <Button size="sm" variant="ghost" onClick={() => getNav().goHome()}>回首页</Button>
+      </div>
+    )
+  }
   return <Dock caseRef={caseRef} sessionId={p.sessionId} />
 }
 

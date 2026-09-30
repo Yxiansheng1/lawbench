@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, forgetDockSyncs, TURN_ENDED } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockSyncs, NO_CASE_TEXT, TURN_ENDED } from '../ui/dock.tsx'
 import { toRequest, turnEnds } from '../ui/tasksheet.ts'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 
@@ -363,6 +363,17 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     await pick('高', think()); await flush(600)
     expect(svc.selections.get('S1')).toMatchObject({ entry: null, skill: null, params: { thinking: '高' } })
     expect(status()).toBe('自由对话')
+  })
+
+  it('N46 ②：会话不在已登记案件里时，输入区上方提示先打开或新建案件，有"回首页"', async () => {
+    await act(async () => { root?.unmount() })
+    root = createRoot(container)
+    const useSessions = <T,>(select: (s: { byId: Record<string, { cwd?: string }> }) => T): T => select({ byId: { S9: { cwd: 'D:\\别处' } } })
+    await act(async () => { root!.render(createElement(ComposerDock, { sessionId: 'S9', useSessions })) })
+    await flush()
+    expect(status()).toBe(NO_CASE_TEXT)
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent === '回首页')).toBe(true)
+    expect(container.querySelector('select[aria-label="胶囊"]')).toBeNull()
   })
 
   it('同一选择连选两次：只写一次', async () => {
