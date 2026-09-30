@@ -1,4 +1,4 @@
-﻿# == @deepseek-ai/dsh-base
+# == @deepseek-ai/dsh-base
 - id: tool-plugin-manager
   name: '@deepseek-ai/dsh-plugin-manager/tools'
   disabled: true
@@ -191,6 +191,7 @@
     policy: !!js >-
       (process.env.DSH_PERMISSION_MODE ?? 'workspace-write') ===
       'danger-full-access' ? 'never' : 'ask'
+# == @deepseek-ai/dsh-base, patched by lawbench-dsh
 - id: permission
   name: '@deepseek-ai/dsh-permission-presets'
   config:
@@ -204,6 +205,8 @@
       danger-full-access:
         sandbox: danger-full-access
         approval: never
+  disabled: true
+# == @deepseek-ai/dsh-base
 - id: shell-env
   name: '@deepseek-ai/dsh-shell-env'
 # == @deepseek-ai/dsh-base, patched by @deepseek-ai/dsh-web-app
@@ -251,8 +254,11 @@
 # == @deepseek-ai/dsh-base
 - id: commands
   name: '@deepseek-ai/dsh-commands'
+# == @deepseek-ai/dsh-base, patched by lawbench-dsh
 - id: command-feedback
   name: '@deepseek-ai/dsh-command-feedback'
+  disabled: true
+# == @deepseek-ai/dsh-base
 - id: goal
   name: '@deepseek-ai/dsh-goal'
 - id: goal-round-driver
@@ -677,9 +683,10 @@
 - id: ui-deliverables
   name: '@deepseek-ai/dsh-client-ui-deliverables'
   disabled: true
-# == @deepseek-ai/dsh-web-app
 - id: workspace-changes
   name: '@deepseek-ai/dsh-workspace-changes'
+  disabled: true
+# == @deepseek-ai/dsh-web-app
 - id: ui-workspace
   name: '@deepseek-ai/dsh-client-ui-workspace'
 - id: ui-workflow-run
@@ -702,20 +709,22 @@
 - id: ui-schedule
   name: '@deepseek-ai/dsh-client-ui-schedule'
   disabled: true
+# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
 - id: ui-goal
   name: '@deepseek-ai/dsh-client-ui-goal'
-# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
+  disabled: true
 - id: ui-message-feedback
   name: '@deepseek-ai/dsh-client-ui-message-feedback'
   disabled: true
-# == @deepseek-ai/dsh-web-app
 - id: ui-model-selection
   name: '@deepseek-ai/dsh-client-ui-model-selection'
+  disabled: true
 - id: ui-permission
   name: '@deepseek-ai/dsh-client-ui-permission-presets'
+  disabled: true
 - id: ui-agent-preset
   name: '@deepseek-ai/dsh-client-ui-agent-preset'
-# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
+  disabled: true
 - id: ui-settings-plugins
   name: '@deepseek-ai/dsh-client-ui-settings-plugins'
   disabled: true
@@ -731,14 +740,16 @@
 - id: ui-settings-web-search
   name: '@deepseek-ai/dsh-client-ui-settings-web-search'
   disabled: true
-# == @deepseek-ai/dsh-web-app
 - id: ui-plan
   name: '@deepseek-ai/dsh-client-ui-plan'
+  disabled: true
+# == @deepseek-ai/dsh-web-app
 - id: ui-user-questions
   name: '@deepseek-ai/dsh-client-ui-user-questions'
+# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
 - id: ui-trajectory
   name: '@deepseek-ai/dsh-client-ui-trajectory'
-# == @deepseek-ai/dsh-web-app, patched by lawbench-dsh
+  disabled: true
 - id: agent-preset-registry
   name: '@deepseek-ai/dsh-agent-preset-registry'
   config:

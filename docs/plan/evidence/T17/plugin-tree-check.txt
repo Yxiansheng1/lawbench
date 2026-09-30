@@ -1,8 +1,9 @@
-# 桌面端运行时插件核对（pluginInventory/list，enabled 为桌面端语境下的实际状态）
+﻿# 桌面端运行时插件核对（pluginInventory/list，enabled 为桌面端语境下的实际状态）
 
-## 1. 必须关的行（71 行）
+## 1. 必须关的行（80 行）
   account-controller                   关
   agent-instructions                   关
+  command-feedback                     关
   command-goal                         关
   cordis-client-runner                 关
   cordis-host-runner                   关
@@ -16,6 +17,7 @@
   message-feedback                     关
   office-to-pdf                        关
   open-in-app                          关
+  permission                           关
   plan-mode                            关
   plugin-inventory                     取证期临时启用（--inventory-overlay）
   plugin-manager                       关
@@ -48,11 +50,16 @@
   tool-todo                            关
   tool-web                             关
   tool-workflow                        关
+  ui-agent-preset                      关
   ui-brand-official                    关
   ui-cordis                            关
   ui-deliverables                      关
+  ui-goal                              关
   ui-message-feedback                  关
+  ui-model-selection                   关
   ui-open-in-app                       关
+  ui-permission                        关
+  ui-plan                              关
   ui-plugin-manager                    关
   ui-reference                         关
   ui-settings-account                  关
@@ -67,21 +74,22 @@
   ui-sidebar-documentpreview           关
   ui-sidebar-files                     关
   ui-sidebar-terminal                  关
+  ui-trajectory                        关
   web                                  关
   web-fetch-http                       关
   web-search-deepseek                  关
   workflow-ptc                         关
+  workspace-changes                    关
   workspace-files                      关
 
-## 2. 反向检查：启用的行 110 个，逐条对白名单
-### 核心运行时（65）
+## 2. 反向检查：启用的行 101 个，逐条对白名单
+### 核心运行时（62）
   agent                                Agent 运行服务
   agent-default-model                  新会话默认模型，已改成律所路由
   agent-loop                           Agent 循环
   agent-preset-registry                preset 注册表，default: lawbench
   approval                             用户审批服务
   authorization                        本机界面鉴权
-  command-feedback                     /feedback 只在本机会话日志追加 feedback/record 事件；上传它的 session-telemetry-otel 已关
   commands                             斜杠命令注册表
   config-editor                        把设置写进 profile 自己的补丁（叠在我方补丁之后、即时重载）；界面入口：插件页已随 ui-plugin-manager 关闭，设置页"打开配置文件"由 P-13 在桌面端去掉；设置接口的远程写入（update / mutate）归 T17，由 P-7 地址白名单兜底
   deepseek-llm-api-extensions          DeepSeek 官方 API 附加字段注册表，只被已关的 llm-deepseek 使用，处于空转
@@ -98,7 +106,6 @@
   llm                                  LLM 适配器注册表，路由由 llm-pi-ai 提供
   llm-pi-ai                            律所模型路由（唯一路由，指向 127.0.0.1:18765）
   llm-retry                            LLM 重试服务，策略在 llm-pi-ai 路由的 retryPolicy
-  permission                           权限预设
   pwsh-sandbox                         PowerShell 沙箱后端；tool-pwsh 已关，没有模型入口
   repeat-tool-reminder                 重复工具调用提醒（提示词段）
   sandbox                              沙箱服务；命令工具已关，只作基础设施
@@ -138,31 +145,25 @@
   web-runtime                          界面静态资源与启动地址
   web-startup                          Web 启动参数
   webserver                            本机 Web 服务，绑定 127.0.0.1
-  workspace-changes                    按 git 快照记录每轮改动文件；律师工作台无文件工具，只读
   workspace-controller                 工作区远程接口，documentsDirectory 已改
-### 界面框架（34）
-  1451b9e5（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
-  32d0dadd（随机 id）                      桌面端原生目录选择器（界面半边）
+### 界面框架（28）
+  89212866（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
   api-remotes                          远程接口装配
   client-hmr                           界面热更新（开发期）
   connection                           界面到 Host 的连接
+  f713b9f1（随机 id）                      桌面端原生目录选择器（界面半边）
   file-upload                          界面上传通道（附件改导入归 P-5 / T17）
   locale                               语言，固定中文
   modules                              界面插件模块表
   resources                            资源协议
   shortcuts                            快捷键服务
-  ui-agent-preset                      preset 选择入口；开发者模式（ui-settings.enabled）关闭时不显示
   ui-approval                          审批界面
   ui-chat                              聊天界面
   ui-commands                          斜杠命令菜单
   ui-conversation                      对话区（附件入口改造归 P-5 / T17）
-  ui-goal                              目标条
   ui-input-trigger                     输入框 / 和 @ 触发
   ui-jobs                              后台任务列表
   ui-layout                            布局
-  ui-model-selection                   模型与思考档选择
-  ui-permission                        权限模式选择
-  ui-plan                              计划模式入口；plan-mode 已关
   ui-renderer                          渲染器
   ui-session                           会话界面
   ui-shortcuts                         快捷键界面
@@ -172,12 +173,11 @@
   ui-subagent                          子智能体卡片；工具已关
   ui-theme                             主题
   ui-tool                              工具调用卡片
-  ui-trajectory                        执行轨迹
   ui-user-questions                    ask_user_question 的界面
   ui-workflow-run                      工作流运行卡片；工作流工具已关
 ### 设置（2）
   ui-settings                          设置页外壳；enabled: false 即开发者模式关
-  ui-settings-general                  通用设置页（权限、语言、外观、字号、开发者模式开关等）；其中"打开配置文件"按钮会用系统编辑器打开 profile 补丁，已由 P-13 在桌面端去掉
+  ui-settings-general                  通用设置页（语言、外观、字号等）；"打开配置文件"按钮已由 P-13 在桌面端去掉，开发者模式开关由 P-18 去掉，权限一行随 ui-permission 关掉
 ### 我方（4）
   legal-credentials                    我方凭据插件：只认 LAWFIRM_KEY、读写 Windows 凭据管理器；授权记录只在内存；不读环境变量
   legal-host                           我方 Host 插件：启动并看护工作台服务（只监听 127.0.0.1），提供 lawbenchCore 服务和 lawbench 远程接口（首次配置页用）；不对模型暴露工具
@@ -198,19 +198,26 @@
   legal-credentials                    已激活
   preset-lawbench                      已激活
 
-## 2d. 静态树里 T17 第一步这 22 行都写着 disabled: true（产品配置，不含取证叠加层）
+## 2d. 静态树里 T17 第一步这 22 行、第二步 N41 这 9 行都写着 disabled: true（产品配置，不含取证叠加层）
+  command-feedback                     disabled: true
   cordis-client-runner                 disabled: true
   cordis-host-runner                   disabled: true
   cordis-inspect-providers             disabled: true
   file-reference-local                 disabled: true
   open-in-app                          disabled: true
+  permission                           disabled: true
   plugin-inventory                     disabled: true
   session-log-download                 disabled: true
   session-reference                    disabled: true
   terminal-controller                  disabled: true
+  ui-agent-preset                      disabled: true
   ui-cordis                            disabled: true
   ui-deliverables                      disabled: true
+  ui-goal                              disabled: true
+  ui-model-selection                   disabled: true
   ui-open-in-app                       disabled: true
+  ui-permission                        disabled: true
+  ui-plan                              disabled: true
   ui-reference                         disabled: true
   ui-settings-agent-loop               disabled: true
   ui-settings-plugin-inventory         disabled: true
@@ -220,6 +227,8 @@
   ui-settings-web-search               disabled: true
   ui-sidebar-files                     disabled: true
   ui-sidebar-terminal                  disabled: true
+  ui-trajectory                        disabled: true
+  workspace-changes                    disabled: true
   workspace-files                      disabled: true
 
 ## 3. 改配置的行（比较取值，来源 plugin-tree.txt）

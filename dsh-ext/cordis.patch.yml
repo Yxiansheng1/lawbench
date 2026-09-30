@@ -97,7 +97,7 @@
   disabled: true
 
 # @ 文件引用、跨会话引用（session-reference 的 Host 行会把别的会话内容塞进本次请求，不需要界面，必须关）
-# 输入框占位文字"@ 文件或对话"要改源码，候 N40
+# 输入框占位文字"@ 文件或对话"已由源码补丁 P-18 去掉
 - id: file-reference-local
   disabled: true
 - id: session-reference
@@ -149,6 +149,40 @@
 - id: ui-settings-subagent
   disabled: true
 - id: ui-settings-web-search
+  disabled: true
+
+# ── 1d. 要取舍的入口（N41，用户 2026-09-30 同意主编排推荐；执行令 10:39 第 1 节）──────
+# 同样 Host 行和界面行成对关。
+
+# "权限"菜单（输入区和通用设置里的权限选择）。关掉后沙箱和审批按 base 的默认：
+# sandbox-policy 取 DSH_PERMISSION_MODE ?? 'workspace-write'，approval 为 ask；产品启动环境不设这个变量
+- id: permission
+  disabled: true
+- id: ui-permission
+  disabled: true
+
+# "模型"选择器：只有一条律所路由，新会话默认模型由 agent-default-model 行给出
+- id: ui-model-selection
+  disabled: true
+
+# "Agent 预设"设置页：会显示我方系统提示全文；preset 注册表（agent-preset-registry）保留
+- id: ui-agent-preset
+  disabled: true
+
+# /feedback 命令（会写 /.anonymous-user-id）
+- id: command-feedback
+  disabled: true
+
+# 轨迹视图；每轮记录改动（会在案件文件夹里跑 git、往系统临时目录复制改动的文件）
+- id: ui-trajectory
+  disabled: true
+- id: workspace-changes
+  disabled: true
+
+# "目标""计划"入口（模型侧 tool-goal、command-goal、plan-mode 早已关）
+- id: ui-goal
+  disabled: true
+- id: ui-plan
   disabled: true
 
 # ── 2. 改配置的行 ──────────────────────────────────────────────────────────

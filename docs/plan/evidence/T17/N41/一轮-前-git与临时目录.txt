@@ -1,0 +1,8 @@
+﻿probe: {  "composerControls": [   "鍙傛暟",   "璁块棶妯″紡锛屽綋鍓嶏細宸ヤ綔鍖哄唴淇敼",   "閫夋嫨妯″瀷锛屽綋鍓?寰嬫墍妯″瀷锛?28K锛夛紝鎺ㄧ悊绛夌骇 Low",   "鍙戦€佹秷鎭?,   "3 杞?3 姝?路 2308 tok/s",   "60 tok 路 缂撳瓨鍛戒腑 0%",   "涓婁笅鏂囧凡鐢?0%"  ],  "slashMenu": [],  "sent": true }
+git.exe processes seen: 4
+  D:\git\Git\cmd\git.EXE add --all --ignore-errors
+  D:\git\Git\cmd\git.EXE rev-parse --show-toplevel --absolute-git-dir --git-path objects
+  git.exe add --all --ignore-errors
+  D:\git\Git\cmd\git.EXE write-tree
+new dsh-workspace-changes-* dirs in TEMP: 1
+  dsh-workspace-changes-tMpFyH

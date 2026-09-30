@@ -1,4 +1,4 @@
-"""check_plugin_tree.py 的变异验证（T17 第一步复制并增补：这一批某行被改回启用、静态树里没关、我方行缺失、启用行没激活、不带取证声明时 plugin-inventory 启用；T13 复制并增补"清单外启用行"一例；T4 第二轮返修 P3-B；T7 增补：Skill 目录整项相等、persona 改为读文件、原 credentials 行）。
+"""check_plugin_tree.py 的变异验证（T17 第二步 N41 增补 6 例；T17 第一步复制并增补：这一批某行被改回启用、静态树里没关、我方行缺失、启用行没激活、不带取证声明时 plugin-inventory 启用；T13 复制并增补"清单外启用行"一例；T4 第二轮返修 P3-B；T7 增补：Skill 目录整项相等、persona 改为读文件、原 credentials 行）。
 
 对真实输入逐一做一处篡改，确认检查脚本报出；不篡改时必须通过。
 用法：python mutate_check.py plugin-inventory-desktop.json plugin-tree.txt
@@ -87,6 +87,13 @@ CASES = [
     ("不带取证声明时 plugin-inventory 启用", inv_src, tree_src, 1, "必须关的行仍启用：plugin-inventory", []),
     # 第一步补：ui-deliverables 被改回启用（或启用但起不来）都要报出
     ("ui-deliverables 被改回启用", enable_entry("include:ui-deliverables"), tree_src, 1, "必须关的行仍启用：ui-deliverables"),
+    # 第二步 N41：成对关的 9 行，Host 半边、界面半边各抽一行改回启用；静态树里没关；从清单里消失
+    ("N41：permission 被改回启用", enable_entry("include:permission"), tree_src, 1, "必须关的行仍启用：permission"),
+    ("N41：ui-permission 被改回启用", enable_entry("include:ui-permission"), tree_src, 1, "必须关的行仍启用：ui-permission"),
+    ("N41：workspace-changes 被改回启用", enable_entry("include:workspace-changes"), tree_src, 1, "必须关的行仍启用：workspace-changes"),
+    ("N41：静态树里 ui-model-selection 没有关", inv_src, tree_enable("ui-model-selection"), 1, "静态树里没有关：ui-model-selection"),
+    ("N41：静态树里 command-feedback 没有关", inv_src, tree_enable("command-feedback"), 1, "静态树里没有关：command-feedback"),
+    ("N41：ui-agent-preset 从清单里消失", drop_entry("include:ui-agent-preset"), tree_src, 1, "必须关的行在清单里不存在（id 写错或 DSH 提交变了）：ui-agent-preset"),
 ]
 
 failed = 0

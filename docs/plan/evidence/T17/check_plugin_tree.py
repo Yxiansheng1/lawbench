@@ -1,4 +1,4 @@
-"""T4 插件树核对（返修版；T13 复制过来，白名单加 legal-ui；T17 第一步复制过来，21 行由白名单移入"必须关"，第一步补再加 ui-deliverables，T13 目录里的原件未动）。
+"""T4 插件树核对（返修版；T13 复制过来，白名单加 legal-ui；T17 第一步复制过来，21 行由白名单移入"必须关"，第一步补再加 ui-deliverables；T17 第二步 N41 再移 9 行；T13 目录里的原件未动）。
 
 输入：
   plugin-inventory-desktop.json  运行中的桌面端 Host 的 pluginInventory/list 返回（dump_inventory.ps1 导出）；
@@ -54,6 +54,17 @@ T17_STEP1 = {
 # 条数守卫：执行令点名 21 行 + ui-deliverables；有人删掉一行而没改这里，脚本直接报错
 assert len(T17_STEP1) == 22, f"T17 第一步名单应为 22 行，现为 {len(T17_STEP1)} 行"
 MUST_OFF |= T17_STEP1
+# T17 第二步 N41（用户同意主编排推荐，执行令 10:39 第 1 节）：要取舍的入口，同样成对关，由白名单移入"必须关"
+T17_N41 = {
+    "permission", "ui-permission",
+    "ui-model-selection",
+    "ui-agent-preset",
+    "command-feedback",
+    "ui-trajectory", "workspace-changes",
+    "ui-goal", "ui-plan",
+}
+assert len(T17_N41) == 9, f"N41 名单应为 9 行，现为 {len(T17_N41)} 行"
+MUST_OFF |= T17_N41
 # 取证期允许临时启用的行（见文件头）
 OVERLAY_ROW = "plugin-inventory"
 # 启用但起不来、已上报主编排待裁决的行（单列显示，不隐藏；裁决后按结论改）
@@ -103,12 +114,10 @@ ALLOWED = {
     "sandbox-policy": (CORE, "沙箱策略"),
     "pwsh-sandbox": (CORE, "PowerShell 沙箱后端；tool-pwsh 已关，没有模型入口"),
     "approval": (CORE, "用户审批服务"),
-    "permission": (CORE, "权限预设"),
     "shell-env": (CORE, "Shell 环境变量；命令工具已关"),
     "fs-observation-policy": (CORE, "文件观察策略"),
     "skill": (CORE, "Skill 注册表；只由 preset 内 skill-filesystem 注册两处目录"),
     "commands": (CORE, "斜杠命令注册表"),
-    "command-feedback": (CORE, "/feedback 只在本机会话日志追加 feedback/record 事件；上传它的 session-telemetry-otel 已关"),
     "goal": (CORE, "目标状态服务；模型侧 tool-goal、command-goal 已关"),
     "goal-round-driver": (CORE, "目标续跑驱动；无目标时空转"),
     "token-meter": (CORE, "用量统计，preset 的 compaction 依赖它"),
@@ -137,7 +146,6 @@ ALLOWED = {
     "webserver": (CORE, "本机 Web 服务，绑定 127.0.0.1"),
     "web-runtime": (CORE, "界面静态资源与启动地址"),
     "agent-preset-registry": (CORE, "preset 注册表，default: lawbench"),
-    "workspace-changes": (CORE, "按 git 快照记录每轮改动文件；律师工作台无文件工具，只读"),
     # 界面框架：只渲染，不对模型暴露工具、不外连
     "client-hmr": (UI, "界面热更新（开发期）"),
     "modules": (UI, "界面插件模块表"),
@@ -164,16 +172,10 @@ ALLOWED = {
     "ui-skill": (UI, "Skill 引用"),
     "ui-subagent": (UI, "子智能体卡片；工具已关"),
     "ui-jobs": (UI, "后台任务列表"),
-    "ui-goal": (UI, "目标条"),
-    "ui-model-selection": (UI, "模型与思考档选择"),
-    "ui-permission": (UI, "权限模式选择"),
-    "ui-agent-preset": (UI, "preset 选择入口；开发者模式（ui-settings.enabled）关闭时不显示"),
-    "ui-plan": (UI, "计划模式入口；plan-mode 已关"),
     "ui-user-questions": (UI, "ask_user_question 的界面"),
-    "ui-trajectory": (UI, "执行轨迹"),
     # 设置
     "ui-settings": (SET, "设置页外壳；enabled: false 即开发者模式关"),
-    "ui-settings-general": (SET, "通用设置页（权限、语言、外观、字号、开发者模式开关等）；其中\"打开配置文件\"按钮会用系统编辑器打开 profile 补丁，已由 P-13 在桌面端去掉"),
+    "ui-settings-general": (SET, "通用设置页（语言、外观、字号等）；\"打开配置文件\"按钮已由 P-13 在桌面端去掉，开发者模式开关由 P-18 去掉，权限一行随 ui-permission 关掉"),
     # 我方
     "preset-lawbench": (OURS, "律师工作台 preset"),
     "legal-host": (OURS, "我方 Host 插件：启动并看护工作台服务（只监听 127.0.0.1），提供 lawbenchCore 服务和 lawbench 远程接口（首次配置页用）；不对模型暴露工具"),
@@ -282,8 +284,8 @@ def main(inv_path, tree_path, overlay=False):
     class L(yaml.SafeLoader): pass
     L.add_constructor("tag:yaml.org,2002:js", lambda l, n: "!!js " + l.construct_scalar(n))
     rows = {r.get("id"): r for r in yaml.load(open(tree_path, encoding="utf-8-sig"), Loader=L) if isinstance(r, dict)}
-    out += ["", f"## 2d. 静态树里 T17 第一步这 {len(T17_STEP1)} 行都写着 disabled: true（产品配置，不含取证叠加层）"]
-    for i in sorted(T17_STEP1):
+    out += ["", f"## 2d. 静态树里 T17 第一步这 {len(T17_STEP1)} 行、第二步 N41 这 {len(T17_N41)} 行都写着 disabled: true（产品配置，不含取证叠加层）"]
+    for i in sorted(T17_STEP1 | T17_N41):
         r = rows.get(i)
         ok = bool(r) and r.get("disabled") is True
         if not ok:
