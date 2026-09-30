@@ -2029,7 +2029,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <ul>
 <li>每个案件一个 FTS5 表，放在 <code>case.db</code> 中，使用 <code>tokenize='trigram'</code>。</li>
 <li><strong>索引单位</strong>：一页、一段、一个工作表的每 20 行，或文本文件的每 50 行；每条记录包含 <code>material_id, loc, text, text_norm</code>。</li>
-<li><strong>归一化</strong>（<code>text_norm</code>，查询词也做同样处理）：全角转半角；去掉数字中的千分位逗号；统一空白字符。</li>
+<li><strong>归一化</strong>（<code>text_norm</code>，查询词也做同样处理）：全角转半角；去掉数字中的千分位逗号；统一空白字符。（2026-09-30 T9 复核后补：<strong>两个汉字（CJK 统一表意文字及中文标点）之间的空白一并去掉</strong>——PDF 材料文本常在句中硬换行，否则跨行的词搜不到；拉丁字母、数字之间的空白保留；位置映射照样保留，出处仍指向原文位置。）</li>
 <li><strong>短词</strong>：trigram 要求至少 3 个字。查询词 1–2 个字时，改为在 <code>text_norm</code> 上用 <code>instr</code> 逐条扫描。单个案件的数据量在几十 MB 以内，速度可以接受。<strong>保证不会静默搜不到</strong>（F-SRCH-03）。</li>
 <li><strong>查询扩展</strong>：
 <ul>
