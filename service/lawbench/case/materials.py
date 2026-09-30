@@ -292,6 +292,7 @@ class Materials:
         conv = Converter(gate.resolve_internal(root, TEMP_REL), lo_base=self.lo_base)
         stale_format = self._text_format(root) < TEXT_FORMAT_VERSION
         ids = _MaterialIds(root, self.cases.sql_path)
+        ids.backfill(index)  # 升级前已有的材料：按 index.json 回填编号留底（T5 第三轮 P3-1）
         added = changed = removed = failed = recovered = 0
         parsed_now: dict[str, Parsed | None] = {}
         now = now_iso()
@@ -849,6 +850,19 @@ class _MaterialIds:
                 cur = self.next_seq()
                 self.con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('next_material_seq', ?)",
                                  (str(max(cur, next_seq)),))
+        except sqlite3.Error as e:
+            logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
+
+    def backfill(self, index: dict) -> None:
+        """把 index.json 里已有的材料补进 material_ids（INSERT OR IGNORE）：1.2 之前建的库补表后是空的，
+        不回填的话 index.json 再丢一次，这些材料就拿不回原编号。"""
+        if self.con is None or not index["materials"]:
+            return
+        try:
+            with self.con:
+                self.con.executemany(
+                    "INSERT OR IGNORE INTO material_ids (material_id, rel_path, sha256, first_seen) VALUES (?, ?, ?, ?)",
+                    [(m["material_id"], m["rel_path"], m["sha256"], m["imported_at"]) for m in index["materials"]])
         except sqlite3.Error as e:
             logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
 

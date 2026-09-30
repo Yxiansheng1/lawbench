@@ -1,0 +1,25 @@
+T5 第三轮小修红绿验证：3 类防护
+
+[01] P2-1·15 位以上的整数按 15 位有效数字
+  改坏 ingest/xlsx.py → 红：2 failed, 2 passed, 3 deselected in 0.59s
+      变红的用例：
+        tests/test_t5_rework3.py::test_p2_1_big_integers_15_digits[1.10101199003071E+17-110101199003071000]
+        tests/test_t5_rework3.py::test_p2_1_big_integers_15_digits[6.2284801234567898E+18-6228480123456790000]
+  复原 → 绿：4 passed, 3 deselected in 0.28s
+
+[02] P3-1·扫描时按 index.json 回填 material_ids
+  改坏 case/materials.py → 红：1 failed, 6 deselected in 1.57s
+      变红的用例：
+        tests/test_t5_rework3.py::test_p3_1_backfill_old_db_keeps_ids
+  复原 → 绿：1 passed, 6 deselected in 1.31s
+
+[03] P3-2·按 workbook 关系文件定位工作表部件
+  改坏 ingest/xlsx.py → 红：1 failed, 6 deselected in 3.74s
+      变红的用例：
+        tests/test_t5_rework3.py::test_p3_2_sheet_part_located_by_workbook_rels
+  复原 → 绿：1 passed, 6 deselected in 11.50s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T5\pytest-返修第三轮*.txt）
+
+结论：3/3 类防护 改坏即红、复原即绿

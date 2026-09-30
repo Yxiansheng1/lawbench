@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import pathlib
+import posixpath
 import re
 import zipfile
 from decimal import Decimal
@@ -20,7 +21,7 @@ from openpyxl.utils import get_column_letter
 from .. import logs
 from . import MAX_SHEET_CELLS, Block, Parsed, ParseError, numfmt
 from .detect import is_ole, ole_encrypted
-from .links import count_tags, open_zip
+from .links import _rels_root, count_tags, open_zip
 
 
 def _fmt(v) -> str:
@@ -28,9 +29,10 @@ def _fmt(v) -> str:
         return ""
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
-    if isinstance(v, float) and v.is_integer():
+    if isinstance(v, float) and v.is_integer() and abs(v) < 1e15:
         return str(int(v))
     if isinstance(v, float):
+        # 15 位以上的整数（证件号、账号被存成数字）同样只有 15 位有效数字，末尾补 0，不编出二进制尾数（T5 第三轮 P2-1）
         # 常规格式：Excel 显示最多 15 位有效数字；缓存值常是 17 位（1234.6599999999999），照写会带二进制尾数（B-P2-3）
         s = f"{v:.15g}"
         if "e" in s or "E" in s:
@@ -55,14 +57,31 @@ _S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _SHEET_PART = re.compile(r"^xl/worksheets/[^/]+\.xml$", re.I)
 
 
+def _sheet_targets(z) -> set[str]:
+    """xl/_rels/workbook.xml.rels 里 worksheet 关系的 Target（工作表部件不一定在 xl/worksheets/ 下；T5 第三轮 P3-2）。"""
+    name = next((n for n in z.namelist() if n.lower() == "xl/_rels/workbook.xml.rels"), None)
+    if name is None:
+        return set()
+    out = set()
+    for rel in _rels_root(z, name).iter():
+        if not isinstance(rel.tag, str) or not (rel.get("Type") or "").endswith("/worksheet"):
+            continue
+        target = (rel.get("Target") or "").replace("\\", "/")
+        if target.startswith("/"):
+            out.add(target.lstrip("/"))
+        else:
+            out.add(posixpath.normpath(posixpath.join("xl", target)))
+    return out
+
+
 def _check_cells(path: pathlib.Path) -> None:
     """openpyxl 会把整份表读进内存（密集表格 300 万格约 3 GB）。加载之前先流式数所有工作表部件里 <c> 的个数，
     超过 MAX_SHEET_CELLS 直接报"文件过大"（B-P2-4）。"""
     total = 0
     with open_zip(path) as z:
-        for name in z.namelist():
-            if not _SHEET_PART.match(name):
-                continue
+        names = set(z.namelist())
+        parts = {n for n in names if _SHEET_PART.match(n)} | (_sheet_targets(z) & names)
+        for name in sorted(parts):
             with z.open(name) as f:
                 total += count_tags(f, (_S + "c", _S + "row"), _S + "c", MAX_SHEET_CELLS - total)
             if total > MAX_SHEET_CELLS:
