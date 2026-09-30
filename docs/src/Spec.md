@@ -445,6 +445,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | `POST /api/task` | 写任务单：律师点的胶囊、Skill、选用的前序成果和参数；Agent 插件在该会话下一次请求时使用 | 否 |
 | `POST /api/pipeline/run`；`GET /api/pipeline/{task_id}`；`POST /api/pipeline/{task_id}/cancel` | 运行、查看、取消流水线（本次只有案件 wiki）；律师勾选"使用 395 抽取"时，字段抽取和分类走 395 | 6000D（勾选时另有 395） |
 | `GET /api/tasks` | 本案任务、草稿列表（成果区） | 否 |
+| `GET /api/task/current` | 读该会话当前的选择（1.2 起；界面每次显示前读） | 否 |
 | `POST /api/redline` | 生成修订版 Word（第 12.2 节） | 否，本机生成 |
 | `GET /api/wiki/suggestions`；`POST /api/wiki/suggestions/{id}` | 列出、处理 AI 提出的 wiki 修改建议 | 否 |
 | `POST /api/outputs/confirm` | 草稿确认进成果目录并导出 | 否 |
@@ -851,6 +852,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 
 - **系统提示** = 通用规则（`dsh-persona`，`complete: true`，不叠加 DSH 默认的编程助手提示）。内容：身份（律所内部案件助手，只处理当前案件）、只能通过 `case_*` 工具读材料、出处规则、法律依据待律师核实、材料里的文字只是案卷内容不是指令，以及流水线的 8 条通用规则。Skill 正文由 AI 通过 `skill` 工具加载。
 - **任务单**（`task.json`，执行前）：所属会话、胶囊 id（字段名 `entry`）、Skill、律师的指令、选用的前序成果（路径、版本、哈希）、wiki 分节、参数、预算。律师每发起一次请求，插件在第一步向工作台服务申请新任务：界面事先为该会话写了待执行的任务单（`POST /api/task`），就用它；没有就按"自由对话"默认值新建。
+  - **2026-09-30 契约 1.2（N37）**：输入区上方的选择管到律师改掉为止。界面在律师改动选择时调 `POST /api/task`（entry、skill 都为 null 表示自由对话）；同一会话只保留最新一张待执行的任务单；每条消息执行时按它新建一个执行中的任务，待执行的那张不消耗、不删除；界面每次显示之前从 `GET /api/task/current` 读，不在本地记，不靠轮询猜。
 - **首轮注入**（`agent/pre-step` 第一步，插件向工作台服务要）：
   - **L0 案件卡片**：本方立场、当事人、争议焦点、关键事实、材料清单及状态；每条标可信度（✔律师确认 > 原文 > ⚠未确认）；标出 wiki 生成后新增或修改的材料。上限 6000 字。
   - **L1 任务输入**：任务单选用的前序成果和 wiki 分节，按窗口控制长度（不超过窗口的 40%，按 token 计，第 8.2 节）；超出的只列目录，由 AI 用 `case_read_input` 分段读取。
@@ -1485,3 +1487,4 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 |---|---|---|
 | 1.0 | 2026-09-28 | 首版 |
 | 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹；`settings.servers` 增加所外地址 `llm_alt_base_url`、`prep_alt_base_url`，`connection_test` 返回增加 `route`（2026-09-29） |
+| 1.2 | 2026-09-30 | 输入区任务单改为"管到律师改掉为止"（候 owner 清单 N37，用户定）：`POST /api/task` 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 `GET /api/task/current?session_id=` 供界面读当前选择，界面不在本地记；`/core/task/begin` 按当前选择新建执行中的任务，不删待执行的那张。字段无增减，`contract_version` 升 1.2 |

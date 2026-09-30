@@ -304,5 +304,23 @@
   "schema": "skill/capsules.schema.json",
   "pointer": "",
   "expect": "invalid"
+ },
+ {
+  "file": "api_task_current.req.json",
+  "schema": "api/task_current.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_task_current.res.json",
+  "schema": "api/task_current.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_task_current.res_free.json",
+  "schema": "api/task_current.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
  }
 ]

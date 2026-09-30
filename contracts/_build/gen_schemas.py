@@ -164,7 +164,7 @@ def endpoint(path, title, desc, req, res):
         "value": res})
 
 endpoint("core/task_begin.schema.json", "POST /core/task/begin",
-         "Agent 插件在每轮第一步调用：由会话头 cwd 找到案件，取该会话待执行的任务单；没有则按'自由对话'默认值新建",
+         "Agent 插件在每轮第一步调用：由会话头 cwd 找到案件，按该会话当前的选择（待执行的任务单，不消耗、不删除）新建一个执行中的任务；没有则按'自由对话'默认值新建",
          obj({"session_id": ref("session_id"), "cwd": s("会话头的 cwd，原样传入；服务只用它查注册表")}),
          obj({"task_id": ref("task_id"), "case_id": ref("case_id"), "skill": nullable(s()),
               "params": ref("params"), "budget": ref("budget")}))
@@ -324,11 +324,16 @@ api = [
      obj({"jobs": arr(job_row)})),
     ("ocr_cancel", "POST /api/ocr/jobs/{job_id}/cancel", "取消识别；已完成的页保留",
      obj({"job_id": ref("job_id")}), obj({"job_id": ref("job_id"), "status": s()})),
-    ("task_create", "POST /api/task", "为某个会话写待执行的任务单；Agent 插件在该会话下一次请求时取用",
+    ("task_create", "POST /api/task", "设置该会话当前的选择（胶囊、Skill、输入、参数），写成一张待执行的任务单；同一会话只保留最新一张（新的顶掉旧的）；执行时不消耗：之后每条消息都按它运行，直到下一次设置或清除。entry 与 skill 都为 null 表示自由对话（1.2 起；1.1 是一条消息用掉一张）",
      obj({"case_id": ref("case_id"), "session_id": ref("session_id"), "entry": nullable(s("发起任务的胶囊 id（capsules.json 中的 id，改名不影响）；自由对话为 null")),
           "skill": nullable(s()), "inputs": arr(ref("rel_path"), description="选用的草稿或成果路径，服务端计算版本和 sha256"),
           "params": ref("params")}),
      obj({"task_id": ref("task_id")})),
+    ("task_current", "GET /api/task/current?session_id=", "读该会话当前的选择（1.2 起）；界面每次显示之前都从这里读，不在本地记；selection 为 null 表示自由对话或还没设置过",
+     obj({"session_id": ref("session_id")}),
+     obj({"selection": nullable(obj({"task_id": ref("task_id"), "entry": nullable(s("胶囊 id；自由对话为 null")),
+                                     "skill": nullable(s()), "inputs": arr(ref("rel_path")), "params": ref("params"),
+                                     "updated_at": ref("time")}))})),
     ("pipeline_run", "POST /api/pipeline/run", "运行流水线（本次只有案件 wiki 的生成和更新）",
      obj({"case_id": ref("case_id"), "step": enum("wiki_build", "wiki_update"),
           "use_prep": b("字段抽取和分类用 395 的 9B（路由表：律师勾选即授权）"), "params": ref("params")}),

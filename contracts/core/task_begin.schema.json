@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "lawbench://contracts/core/task_begin.schema.json",
   "title": "POST /core/task/begin",
-  "description": "Agent 插件在每轮第一步调用：由会话头 cwd 找到案件，取该会话待执行的任务单；没有则按'自由对话'默认值新建",
+  "description": "Agent 插件在每轮第一步调用：由会话头 cwd 找到案件，按该会话当前的选择（待执行的任务单，不消耗、不删除）新建一个执行中的任务；没有则按'自由对话'默认值新建",
   "$defs": {
     "request": {
       "type": "object",

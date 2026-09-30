@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/task_current.schema.json",
+  "title": "GET /api/task/current?session_id=",
+  "description": "读该会话当前的选择（1.2 起）；界面每次显示之前都从这里读，不在本地记；selection 为 null 表示自由对话或还没设置过",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/session_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "selection": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "task_id": {
+                          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+                        },
+                        "entry": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "胶囊 id；自由对话为 null"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "skill": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "inputs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+                          }
+                        },
+                        "params": {
+                          "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+                        },
+                        "updated_at": {
+                          "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "task_id",
+                        "entry",
+                        "skill",
+                        "inputs",
+                        "params",
+                        "updated_at"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "selection"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "selection": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "task_id": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id"
+                },
+                "entry": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "胶囊 id；自由对话为 null"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "skill": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+                  }
+                },
+                "params": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/params"
+                },
+                "updated_at": {
+                  "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "task_id",
+                "entry",
+                "skill",
+                "inputs",
+                "params",
+                "updated_at"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "selection"
+      ]
+    }
+  }
+}

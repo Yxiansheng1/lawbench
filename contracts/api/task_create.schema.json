@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "lawbench://contracts/api/task_create.schema.json",
   "title": "POST /api/task",
-  "description": "为某个会话写待执行的任务单；Agent 插件在该会话下一次请求时取用",
+  "description": "设置该会话当前的选择（胶囊、Skill、输入、参数），写成一张待执行的任务单；同一会话只保留最新一张（新的顶掉旧的）；执行时不消耗：之后每条消息都按它运行，直到下一次设置或清除。entry 与 skill 都为 null 表示自由对话（1.2 起；1.1 是一条消息用掉一张）",
   "$defs": {
     "request": {
       "type": "object",
