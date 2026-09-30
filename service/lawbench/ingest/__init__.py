@@ -34,6 +34,8 @@ REASONS = {
     # X9：超时、找不到转换程序原来都报 convert_failed，拆开后才能分出"跟环境有关、要重试"的
     "convert_timeout": "转换超时，没有完成转换；重新打开案件会自动重试，多次出现请在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
     "no_converter": "本机没有可用的转换程序，无法转换该文件；请联系技术支持，或在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
+    # N44 ①（用户定）：扩展名是 .doc/.wps/.xls、内容其实是 HTML、RTF 等：不解析，文件本身的失败，不重试
+    "not_office": "文件内容不是 Excel/Word 格式（常见于银行导出的表格），请用 Excel 或 Word 打开后另存为 .xlsx / .docx 再导入",
 }
 
 # X9：跟环境有关的失败，每次扫描都重试；其余（加密、过大、损坏、有外链被拒、无法检查、转换不出结果）
@@ -46,6 +48,9 @@ RETRY_MESSAGES = frozenset(REASONS[r] for r in RETRY_REASONS)
 MAX_PART_BYTES = MAX_BYTES
 # X4：一个工作表写进材料文本的格子数上限（有内容的行数 × 列宽），超过按"文件过大"
 MAX_SHEET_CELLS = 2_000_000
+# T5 第二轮 B-P2-4：docx 建树之前先流式数 document.xml 里的段落，超过这个数按"文件过大"，不建树。
+# 与格子数上限同一数量级；一个段落在 lxml 树里比一个单元格重得多，取格子数上限的四分之一
+MAX_DOCX_PARAS = 500_000
 
 
 class ParseError(Exception):

@@ -50,6 +50,11 @@ _FORMAT_LINE = re.compile(r"^材料文本格式版本：(\d+)\s*$", re.M)
 EXTERNAL_NOTE = "有外部链接，未重算公式"  # 契约 1.2 N21
 # 本服务在 工作区/临时/ 下自己建的项的前缀（X6 按前缀清残留）
 TEMP_PREFIXES = ("lo-", "unzip-", gate.IMPORT_TMP_PREFIX)
+# 只认本服务自己建的形状（T5 第二轮）：lo-/unzip- 加 8 位十六进制的目录、imp- 加 8 位十六进制的文件；
+# 律师自己放的 lo-截图.png、imp-合同.pdf 不动
+_OWN_TEMP_DIR = re.compile(r"^(lo|unzip)-[0-9a-f]{8}$")
+_OWN_TEMP_FILE = re.compile(r"^imp-[0-9a-f]{8}$")
+ZERO_SHA = "0" * 64
 STANDARD_TOPS = {rel for t in TEMPLATES.values() for rel in t if "/" not in rel}
 _FILE_ATTRIBUTE_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 
@@ -236,7 +241,7 @@ class Materials:
                 if kind == "zip":
                     return docx.parse(path)
                 if kind != "ole":
-                    raise ParseError("corrupt" if mtype == "docx" else "unchecked")
+                    raise ParseError("corrupt" if mtype == "docx" else "not_office")  # N44 ①
                 if detect.ole_encrypted(path):
                     raise ParseError("encrypted")
                 if links.has_external_picture(path):
@@ -248,7 +253,7 @@ class Materials:
                     rc = self._recalc(path, s)
                     return xlsx.parse(path, recalc=rc, blocked_note=None if rc else EXTERNAL_NOTE)
                 if kind != "ole":
-                    raise ParseError("corrupt" if mtype == "xlsx" else "unchecked")
+                    raise ParseError("corrupt" if mtype == "xlsx" else "not_office")  # N44 ①
                 if detect.ole_encrypted(path):
                     raise ParseError("encrypted")
                 converted = s.convert(path, "xlsx", suffix=".xls")
@@ -286,7 +291,7 @@ class Materials:
         found, unreadable_dirs = self.walk_all(root)
         conv = Converter(gate.resolve_internal(root, TEMP_REL), lo_base=self.lo_base)
         stale_format = self._text_format(root) < TEXT_FORMAT_VERSION
-        ids = _MaterialIds(root)
+        ids = _MaterialIds(root, self.cases.sql_path)
         added = changed = removed = failed = recovered = 0
         parsed_now: dict[str, Parsed | None] = {}
         now = now_iso()
@@ -323,10 +328,12 @@ class Materials:
                 index["materials"].append(entry)
                 by_key[_key(rel)] = entry
                 counts["added"] += 1
-            elif redo and (digest is None or digest == entry["sha256"]):
-                pass  # 原件没变，只是重试或按新格式重写
+            elif redo and (digest is None or digest == entry["sha256"] or entry["sha256"] == ZERO_SHA):
+                pass  # 原件没变（或第一次就读不了、没有哈希可比），只是重试或按新格式重写
             else:
                 counts["changed"] += 1
+            if digest and entry.get("sha256") == ZERO_SHA:
+                ids.fix_sha(entry["material_id"], digest)  # 第一次读不了时留底的是 64 个 0，现在更正
             # 读不了的原件没有哈希：沿用上次的；第一次就读不了的先填 64 个 0（契约要求 sha256 格式），下次重试时更正
             entry.update(type=mtype, size=st.st_size if st is not None else entry.get("size", 0),
                          mtime=mt or entry.get("mtime", now), sha256=digest or entry.get("sha256", "0" * 64),
@@ -421,15 +428,15 @@ class Materials:
         except OSError:
             return
         for e in entries:
-            if not e.name.startswith(TEMP_PREFIXES):
+            if not (_OWN_TEMP_DIR.match(e.name) or _OWN_TEMP_FILE.match(e.name)):
                 continue
             try:
                 st = e.stat(follow_symlinks=False)
                 if _is_link_entry(st):
                     logs.event("materials", "temp_cleanup", status="denied", error="LINK")
-                elif stat.S_ISDIR(st.st_mode):
+                elif stat.S_ISDIR(st.st_mode) and _OWN_TEMP_DIR.match(e.name):
                     remove_tree(pathlib.Path(e.path))  # 删不掉会记日志
-                else:
+                elif stat.S_ISREG(st.st_mode) and _OWN_TEMP_FILE.match(e.name):
                     os.unlink(e.path)
             except OSError as err:
                 logs.event("materials", "temp_cleanup", status="fail", error=type(err).__name__)
@@ -526,7 +533,7 @@ class Materials:
         for src in paths:
             if not os.path.isabs(src):
                 raise ApiError("INVALID_ARGUMENT", "path_not_abs")
-            p = os.path.normpath(src)
+            p = gate.strip_long_prefix(os.path.normpath(src))  # \\?\ 写法先去掉前缀（B-P2-1）
             try:
                 st = os.lstat(p)
             except OSError:
@@ -536,10 +543,13 @@ class Materials:
                 skipped.append({"path": src, "reason": "链接或快捷方式"})
                 continue
             real = os.path.realpath(p)
-            if _same_path(real, root):
-                continue  # 导入源就是案件根目录：按"已在案件内"处理，只扫描（X3）
-            if gate.is_within(root, real):
+            # 是不是案件根目录或它里面：按文件身份逐级比对上级目录，\\?\、UNC 管理共享等别名写法也认得出（B-P2-1）
+            parts = _parts_in_case(p, root)
+            if parts is None and gate.is_within(root, real):
                 parts = os.path.relpath(real, root).replace("\\", "/").split("/")
+            if parts == []:
+                continue  # 导入源就是案件根目录：按"已在案件内"处理，只扫描（X3）
+            if parts is not None:
                 if parts[0] == gate.WORK:
                     # 只有 工作区/临时/ 下的文件（粘贴的截图、委托材料下载）按临时文件导入：复制成功或判定
                     # "同名同内容已存在"之后才删；工作区 下其他位置的不接受导入（X7）
@@ -584,7 +594,7 @@ class Materials:
                 if _is_link_entry(st) or os.path.splitext(e.name)[1].lower() in SHORTCUT_EXT:
                     skipped.append({"path": e.path, "reason": "链接或快捷方式"})
                 elif stat.S_ISDIR(st.st_mode):
-                    if not _same_path(os.path.realpath(e.path), root):
+                    if not _same_file(e.path, root):  # 案件根目录那一支：按文件身份比，别名写法也认得出
                         stack.append((e.path, _join(dest, e.name)))
                 elif stat.S_ISREG(st.st_mode):
                     self._copy_one(root, e.path, _join(dest, e.name), copied, skipped)
@@ -754,6 +764,27 @@ def _recover_next_seq(root: str) -> int:
     return max(seen, default=0) + 1
 
 
+def _same_file(a: str, b: str) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except (OSError, ValueError):
+        return _same_path(os.path.realpath(a), b)
+
+
+def _parts_in_case(path: str, root: str) -> list[str] | None:
+    """path 是案件根目录本身返回 []；在根目录之内返回相对的各级名字；不在返回 None。逐级往上比文件身份。"""
+    cur = os.path.abspath(path)
+    names: list[str] = []
+    while True:
+        if _same_file(cur, root):
+            return list(reversed(names))
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        names.append(os.path.basename(cur))
+        cur = parent
+
+
 def _same_path(a: str, b: str) -> bool:
     return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
 
@@ -763,14 +794,21 @@ class _MaterialIds:
     index.json 丢失后重建时，同一份原件（rel_path + sha256）拿回原编号，新编号从
     max(next_material_seq, 表内最大编号 + 1) 起。index.json 仍是主本：case.db 不在或读写出错时只记日志，照常扫描。"""
 
-    def __init__(self, root: str):
+    def __init__(self, root: str, sql_path: pathlib.Path | None = None):
         self.con = None
         try:
             db = gate.resolve_internal(root, "工作区/case.db", op="materials_ids")
-            if db.is_file():
-                con = sqlite3.connect(str(db), timeout=10)
-                con.execute("SELECT 1 FROM material_ids LIMIT 1")
-                self.con = con
+            if not db.is_file():
+                logs.event("materials", "material_ids", status="fail", error="CASE_DB_MISSING")
+                return
+            con = sqlite3.connect(str(db), timeout=10)
+            has = con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'material_ids'").fetchone()
+            if not has:
+                # 打开案件时已按契约补建；万一还没有（旧库、打开之后被人动过）：按契约补建并记日志，不静默跳过
+                logs.event("materials", "material_ids", status="fail", error="TABLE_MISSING")
+                if sql_path is not None:
+                    con.executescript(pathlib.Path(sql_path).read_text(encoding="utf-8"))
+            self.con = con
         except (ApiError, OSError, sqlite3.Error) as e:
             logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
 
@@ -811,6 +849,16 @@ class _MaterialIds:
                 cur = self.next_seq()
                 self.con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('next_material_seq', ?)",
                                  (str(max(cur, next_seq)),))
+        except sqlite3.Error as e:
+            logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
+
+    def fix_sha(self, mid: str, digest: str) -> None:
+        if self.con is None:
+            return
+        try:
+            with self.con:
+                self.con.execute("UPDATE material_ids SET sha256 = ? WHERE material_id = ? AND sha256 = ?",
+                                 (digest, mid, ZERO_SHA))
         except sqlite3.Error as e:
             logs.event("materials", "material_ids", status="fail", error=type(e).__name__)
 

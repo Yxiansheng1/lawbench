@@ -152,6 +152,9 @@ class CaseRegistry:
                     if not ver or ver[0] != SCHEMA_VERSION:
                         # 第一版只有版本 1，不做升级：版本对不上就拒绝打开，不改动这份 case.db
                         raise ApiError("INVALID_ARGUMENT", "case_db_version")
+                    # 契约 1.2 补了 material_ids 表（schema_version 仍为 1）：已有的库也执行一次，全是 IF NOT EXISTS
+                    # （T5 第二轮 A-P2-1）
+                    con.executescript(self.sql_path.read_text(encoding="utf-8"))
                     return row[0]
             con.executescript(self.sql_path.read_text(encoding="utf-8"))
             case_id = str(uuid.uuid4())

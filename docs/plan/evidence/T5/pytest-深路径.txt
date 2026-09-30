@@ -1,4 +1,4 @@
-﻿basetemp（150 字符）：C:\Users\19705\AppData\Local\Temp\claude\D--lawbench-B\28601f6c-018b-4cbf-a02b-932d3a7bc447\scratchpad\深层目录abcdefghij深层目录abcdefghij深层目录abcdefghij\full
+﻿basetemp（150 字符）：C:\Users\<用户>\AppData\Local\Temp\claude\D--lawbench-B\28601f6c-018b-4cbf-a02b-932d3a7bc447\scratchpad\深层目录abcdefghij深层目录abcdefghij深层目录abcdefghij\full
 ........................................................................ [ 18%]
 ........ss..............s............................................... [ 37%]
 ........................................................................ [ 55%]

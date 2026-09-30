@@ -13,9 +13,9 @@ import zipfile
 
 from lxml import etree
 
-from . import Block, Parsed, ParseError
+from . import MAX_DOCX_PARAS, Block, Parsed, ParseError
 from .detect import is_ole, ole_encrypted
-from .links import open_zip
+from .links import count_tags, open_zip
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -131,6 +131,9 @@ def parse(path: pathlib.Path, note: str | None = None) -> Parsed:
         raise ParseError("encrypted" if ole_encrypted(path) else "corrupt")
     try:
         with open_zip(path) as z:
+            with z.open("word/document.xml") as f:  # 建树之前先流式数段落（B-P2-4）
+                if count_tags(f, (_P,), _P, MAX_DOCX_PARAS) > MAX_DOCX_PARAS:
+                    raise ParseError("too_large")
             root = _parse_xml(z.read("word/document.xml"))
             extras = _extras(z)
     except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, OSError):

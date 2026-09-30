@@ -102,6 +102,26 @@ def open_zip(path: pathlib.Path) -> zipfile.ZipFile:
     return z
 
 
+def count_tags(stream, tags: tuple[str, ...], count: str, limit: int) -> int:
+    """流式数 XML 里某个元素的个数，边数边清掉已处理的元素（不建整棵树）；数到超过 limit 就停（B-P2-4）。
+    tags 是要经过的元素（含 count 本身和它的上级行元素），count 是要数的那个。解析出错报"损坏"。"""
+    n = 0
+    try:
+        for _, el in etree.iterparse(stream, events=("end",), tag=tags, resolve_entities=False, no_network=True,
+                                     load_dtd=False):
+            if el.tag == count:
+                n += 1
+                if n > limit:
+                    return n
+            el.clear(keep_tail=False)
+            parent = el.getparent()
+            while parent is not None and el.getprevious() is not None:
+                del parent[0]
+    except etree.XMLSyntaxError:
+        raise ParseError("corrupt")
+    return n
+
+
 def _rels_root(z: zipfile.ZipFile, name: str):
     try:
         data = z.read(name)

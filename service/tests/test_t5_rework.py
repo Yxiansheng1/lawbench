@@ -106,7 +106,7 @@ def test_x1_other_content_not_given_to_converter(make_client, cases_dir, no_soff
         scan(client, open_case(client, root))
         assert lis.count == 0
     m = by_rel(root)[name]
-    assert m["status"] == "failed" and m["error"] == REASONS["unchecked"]
+    assert m["status"] == "failed" and m["error"] == REASONS["not_office"]
     assert no_soffice_start == []
 
 

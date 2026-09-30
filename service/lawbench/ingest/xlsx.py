@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import datetime as dt
 import pathlib
+import re
 import zipfile
+from decimal import Decimal
 from typing import Callable
 
 import openpyxl
@@ -18,7 +20,7 @@ from openpyxl.utils import get_column_letter
 from .. import logs
 from . import MAX_SHEET_CELLS, Block, Parsed, ParseError, numfmt
 from .detect import is_ole, ole_encrypted
-from .links import open_zip
+from .links import count_tags, open_zip
 
 
 def _fmt(v) -> str:
@@ -28,6 +30,12 @@ def _fmt(v) -> str:
         return "TRUE" if v else "FALSE"
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
+    if isinstance(v, float):
+        # 常规格式：Excel 显示最多 15 位有效数字；缓存值常是 17 位（1234.6599999999999），照写会带二进制尾数（B-P2-3）
+        s = f"{v:.15g}"
+        if "e" in s or "E" in s:
+            s = f"{Decimal(s):f}"
+        return s.rstrip("0").rstrip(".") if "." in s else s
     if isinstance(v, dt.datetime):
         return v.strftime("%Y-%m-%d") if v.time() == dt.time() else v.isoformat(sep=" ")
     if isinstance(v, (dt.date, dt.time)):
@@ -41,6 +49,24 @@ def _display(cell) -> str:
     if shown is None:
         return _fmt(cell.value)
     return shown.replace("|", "\\|")
+
+
+_S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_SHEET_PART = re.compile(r"^xl/worksheets/[^/]+\.xml$", re.I)
+
+
+def _check_cells(path: pathlib.Path) -> None:
+    """openpyxl 会把整份表读进内存（密集表格 300 万格约 3 GB）。加载之前先流式数所有工作表部件里 <c> 的个数，
+    超过 MAX_SHEET_CELLS 直接报"文件过大"（B-P2-4）。"""
+    total = 0
+    with open_zip(path) as z:
+        for name in z.namelist():
+            if not _SHEET_PART.match(name):
+                continue
+            with z.open(name) as f:
+                total += count_tags(f, (_S + "c", _S + "row"), _S + "c", MAX_SHEET_CELLS - total)
+            if total > MAX_SHEET_CELLS:
+                raise ParseError("too_large")
 
 
 def _load(path: pathlib.Path, data_only: bool):
@@ -75,7 +101,7 @@ def parse(path: pathlib.Path, recalc: Callable[[pathlib.Path], pathlib.Path] | N
     重算不成（深路径、转换程序异常等）时退回"没有缓存值的单元格写公式本身"，不让整份失败（Y7）。"""
     if is_ole(path):
         raise ParseError("encrypted" if ole_encrypted(path) else "corrupt")
-    open_zip(path).close()  # 单个部件解压后超过 300 MB：按过大，不交给 openpyxl（X4）
+    _check_cells(path)  # 单个部件超过 300 MB、格子总数超过上限：按过大，不交给 openpyxl（X4、B-P2-4）
     values = _load(path, True)
     formulas = _load(path, False)
     missing = _missing_cache(values, formulas)

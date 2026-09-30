@@ -12,7 +12,7 @@
 _____________________________ test_xls_no_request _____________________________
 
 make_client = <function make_client.<locals>._make at 0x000001BFDA8CB1A0>
-cases_dir = WindowsPath('C:/Users/19705/AppData/Local/Temp/lbs-yp2q5rxa/pt/test_xls_no_request0/cases')
+cases_dir = WindowsPath('C:/Users/<用户>/AppData/Local/Temp/lbs-yp2q5rxa/pt/test_xls_no_request0/cases')
 
     @needs_lo
     def test_xls_no_request(make_client, cases_dir):
