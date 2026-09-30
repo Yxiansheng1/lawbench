@@ -22,6 +22,7 @@ import httpx
 
 from .. import logs
 from ..config import REPO_ROOT
+from ..errors import ApiError
 
 DRIVER_DIR = REPO_ROOT / "engines" / "retainer" / "tools" / "ocr-driver"
 HOST, PORT = "127.0.0.1", 17801
@@ -33,7 +34,6 @@ MSG_REUSED = "证件识别已就绪（沿用已在运行的驱动）"
 MSG_STOPPED = "证件识别已关闭"
 MSG_NOT_RUNNING = "证件识别未运行"
 MSG_PORT_TAKEN = "端口 17801 被其他程序占用，证件识别无法启动；委托材料的其他功能不受影响"
-MSG_MODELS_BAD = "证件识别的模型文件缺失或损坏，请重新安装客户端；委托材料的其他功能不受影响"
 MSG_START_FAILED = "证件识别启动失败；委托材料的其他功能不受影响，可手工填写"
 
 
@@ -76,7 +76,8 @@ class RetainerDriver:
         if self._port_taken():
             return self._value(False, MSG_PORT_TAKEN)
         if not models_ok(self.driver_dir):
-            return self._value(False, MSG_MODELS_BAD)
+            # 模型缺失或损坏时驱动会自己联网重下：不启动，报 ENGINE_FAILED（1701 令 P11）
+            raise ApiError("ENGINE_FAILED", "driver_models")
         cmd = [self.python, str(self.driver_dir / "driver.py"), "--port", str(self.port), "--host", HOST,
                "--engine", "rapidocr"]
         self._proc = subprocess.Popen(cmd, cwd=str(self.driver_dir), env=child_env(), stdin=subprocess.DEVNULL,

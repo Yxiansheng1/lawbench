@@ -126,8 +126,15 @@ def test_batch_value_named_like_subcommand_is_fine(tmp_path):
     {"action": "attach"}, {"action": "collect"}, {"action": "exclude"},
     {"action": "run", "period": "2026-09", "batch": "../x", "src": "C:\\x", "channel": "local"},
     {"action": "plan", "period": "2026-09", "channel": "local", "history": "selected", "history_numbers": ["12345678"]},
+    {"action": "plan", "period": "2026-09", "channel": "eml", "history": "exclude", "history_numbers": []},
+    {"action": "plan", "period": "2026-09", "channel": "eml", "history": "exclude", "history_numbers": [],
+     "start": "2026-08-01", "end": None},
 ])
-def test_api_refuses_by_contract(client, body):
+def test_api_refuses_by_contract(client, body, tmp_path):
+    """契约挡住的，以及契约放行但服务要再挡的（eml 缺起止日期，契约 1.3）。"""
+    s = ok(client.get("/api/settings"), "settings")
+    s["office"]["dir"] = str(tmp_path / "日常办公")
+    ok(client.put("/api/settings", json=s), "settings")
     fail(client.post("/api/invoice/run", json=body), "invoice_run", "INVALID_ARGUMENT")
 
 
@@ -142,6 +149,24 @@ def test_env_only_whitelisted(tmp_path, monkeypatch):
     assert env["INVOICE_RUNTIME_CACHE"] == str(tmp_path / "ad" / "ivc")
     r2 = R.InvoiceRunner(FakeSettings(str(tmp_path), buyer=None), tmp_path / "ad")
     assert "INVOICE_BUYER" not in r2.env()                        # 未设置时不传，引擎自己判"待核"
+
+
+def test_child_process_sees_only_whitelisted_env(tmp_path, monkeypatch):
+    """真起子进程：塞一个 LB_CANARY 和代理变量，子进程看不到（Spec 13.3 回写⑤）。"""
+    eng = tmp_path / "eng"
+    (eng / "scripts").mkdir(parents=True)
+    (eng / "scripts" / "invoke.py").write_text(
+        "import json, os\nprint(json.dumps(sorted(os.environ)))\n", encoding="utf-8")
+    monkeypatch.setenv("LB_CANARY", "canary-should-not-pass")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+    r = make_runner(tmp_path, engine_dir=eng)
+    v = r.run({"action": "report"})
+    seen = set(json.loads(v["output"]))
+    assert "LB_CANARY" not in seen and "HTTPS_PROXY" not in seen
+    # Windows 会给每个进程自动补几项（如 SystemRoot 的大小写变体），除此之外只有名单里的
+    allowed = {k.upper() for k in (*R.PASS_ENV, "PYTHONUTF8", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE")}
+    extra = {k for k in seen if k.upper() not in allowed}
+    assert extra <= {"__PYVENV_LAUNCHER__"}, extra
 
 
 def test_office_dir_not_set(client):

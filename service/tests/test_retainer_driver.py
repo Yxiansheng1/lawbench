@@ -62,8 +62,10 @@ def test_damaged_model_refuses_to_start(tmp_path):
     victim.write_bytes(victim.read_bytes()[:-1] + b"\0")
     assert not D.models_ok(fake)
     d = D.RetainerDriver(driver_dir=fake, port=free_port())
-    v = d.start()
-    assert v == {"running": False, "port": 17801, "message": D.MSG_MODELS_BAD}
+    from lawbench.errors import ApiError
+    with pytest.raises(ApiError) as e:
+        d.start()
+    assert e.value.code == "ENGINE_FAILED" and d._proc is None           # 不启动（1701 令 P11）
     victim.unlink()
     assert not D.models_ok(fake)
 

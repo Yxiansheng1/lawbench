@@ -106,6 +106,8 @@ class InvoiceRunner:
             argv = ["workflow.py", "history", "--ledger", L, "--out", str(out)]
             files.append(out)
         elif action == "plan":
+            if req["channel"] == "eml" and not (req.get("start") and req.get("end")):
+                raise ApiError("INVALID_ARGUMENT", "eml_needs_dates")    # 契约 1.3：eml 时起止日期必填
             J = job(req["period"])
             argv = ["workflow.py", "plan", "--job", J, "--period", req["period"], "--channel", req["channel"],
                     "--history", req["history"]]
