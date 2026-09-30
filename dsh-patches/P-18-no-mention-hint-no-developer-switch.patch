@@ -1,0 +1,142 @@
+diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
+index 88ae0697f7..8fc08267e4 100644
+--- a/packages/client/ui-conversation/src/client/locales.ts
++++ b/packages/client/ui-conversation/src/client/locales.ts
+@@ -17,10 +17,11 @@ export const zh = {
+   'hint.goal': '输入目标，智能体将持续执行',
+   'hint.goal.active': '当前目标进行中。可输入 edit 修改 / pause 暂停 / resume 继续 / clear 清除',
+   'placeholder.plan': PLAN_NEXT_ACTION_ZH,
+-  'placeholder.default': '发消息或创建任务, / 调用指令, @ 文件或对话',
++  // lawbench P-18: the @ reference menu is disabled in the lawyer workbench, so the hint no longer offers it
++  'placeholder.default': '发消息或创建任务, / 调用指令',
+   'placeholder.unavailable': '会话不可用',
+   'placeholder.parentOffline': '父会话已离线，无法继续发送；仍可停止当前运行',
+-  'placeholder.hero': '描述你想要构建的内容, / 调用指令, @ 文件或对话',
++  'placeholder.hero': '描述你想要构建的内容, / 调用指令',
+   'placeholder.workspace': '选择一个工作区开始',
+   'placeholder.steerQueue': 'Cmd/Ctrl+Enter 插话发送全部排队消息',
+   'input.commands': '添加文件或调用指令',
+@@ -387,10 +388,10 @@ export const en = {
+   'hint.goal': 'describe the objective for a long-running task',
+   'hint.goal.active': 'goal active — edit / pause / resume / clear',
+   'placeholder.plan': PLAN_NEXT_ACTION_EN,
+-  'placeholder.default': 'Message or run a task, / commands, @ files or sessions',
++  'placeholder.default': 'Message or run a task, / commands',
+   'placeholder.unavailable': 'Session unavailable',
+   'placeholder.parentOffline': 'Parent session offline; sending is unavailable but you can still stop the run',
+-  'placeholder.hero': 'Describe what you want to build, / commands, @ files or sessions',
++  'placeholder.hero': 'Describe what you want to build, / commands',
+   'placeholder.workspace': 'Choose a workspace to start',
+   'placeholder.steerQueue': 'Cmd/Ctrl+Enter steers all queued messages',
+   'input.commands': 'Add files or run commands',
+diff --git a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
+index 577e1e7046..eed39a3069 100644
+--- a/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/input-bar.client.spec.tsx
+@@ -596,9 +596,9 @@ describe('Enter semantics', () => {
+   })
+ 
+   it('keeps the owning placeholder or ordinary guidance when whole-queue steering is unavailable', () => {
+-    expect(bench({ running: true }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
+-    expect(bench({ queue: [row('q-1')] }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
+-    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
++    expect(bench({ running: true }).placeholder).toBe('发消息或创建任务, / 调用指令')
++    expect(bench({ queue: [row('q-1')] }).placeholder).toBe('发消息或创建任务, / 调用指令')
++    expect(bench({ running: true, queue: [row('q-1')], draft: '消息' }).placeholder).toBe('发消息或创建任务, / 调用指令')
+     expect(bench({
+       running: true,
+       queue: [row('q-1')],
+@@ -610,7 +610,7 @@ describe('Enter semantics', () => {
+       running: true,
+       queue: [row('q-1')],
+       commandMenuOpen: true,
+-    }).placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
++    }).placeholder).toBe('发消息或创建任务, / 调用指令')
+     // The steer hint intentionally outranks the plan placeholder: while it
+     // shows, the whole-queue gesture is genuinely available in plan mode.
+     expect(bench({
+@@ -1292,7 +1292,7 @@ describe('running and lock semantics', () => {
+   it('disabled state shows the unavailable placeholder; custom placeholder wins', () => {
+     expect(bench({ disabled: true }).placeholder).toBe('会话不可用')
+     const live = bench()
+-    expect(live.placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
++    expect(live.placeholder).toBe('发消息或创建任务, / 调用指令')
+     const custom = bench({ placeholder: 'Custom placeholder' })
+     expect(custom.placeholder).toBe('Custom placeholder')
+   })
+@@ -1339,7 +1339,7 @@ describe('running and lock semantics', () => {
+     expect(entering.placeholder).toBe('描述你的任务以生成计划')
+     // Pending exit: target is default again.
+     const leaving = bench({ plan: { active: true, pending: true } })
+-    expect(leaving.placeholder).toBe('发消息或创建任务, / 调用指令, @ 文件或对话')
++    expect(leaving.placeholder).toBe('发消息或创建任务, / 调用指令')
+     // Owner placeholder outranks the plan swap.
+     const custom = bench({ plan: { active: true, pending: false }, placeholder: 'Custom placeholder' })
+     expect(custom.placeholder).toBe('Custom placeholder')
+diff --git a/packages/client/ui-settings-general/src/client/index.ts b/packages/client/ui-settings-general/src/client/index.ts
+index 514b4217ac..2ce8ed3d91 100644
+--- a/packages/client/ui-settings-general/src/client/index.ts
++++ b/packages/client/ui-settings-general/src/client/index.ts
+@@ -33,7 +33,6 @@ import { DesktopUpdateSource } from './desktop-update-source.ts'
+ import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
+ import { GeneralSection } from './GeneralSection.tsx'
+ import { CurrentVersionRow } from './CurrentVersionRow.tsx'
+-import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperToolsRow.tsx'
+ import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
+ import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
+ import { SettingsDocumentStore } from './settings-document-store.ts'
+@@ -73,13 +72,7 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settin
+  * @param ctx - client root context.
+  */
+ export function apply(ctx: ClientContext): void {
+-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+-    name: 'settings.general.item', id: 'developer-tools', order: 15, locale: NS,
+-    inject: (): DeveloperToolsRowInjected => ({
+-      hooks: { developerTools: ctx.configForms.developerTools.enabled },
+-      setEnabled: enabled => ctx.configForms.developerTools.setEnabled(enabled),
+-    }),
+-  }, DeveloperToolsRow))
++  // lawbench P-18: no developer-tools (coding tools) switch in General; the lawyer workbench keeps it off.
+   // Last row: every feature-registered preference row orders below 100.
+   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+     name: 'settings.general.item', id: 'current-version', order: 100, locale: NS,
+diff --git a/packages/client/ui-settings-general/tests/apply.client.spec.ts b/packages/client/ui-settings-general/tests/apply.client.spec.ts
+index 6a5d909196..6ff94e3bc6 100644
+--- a/packages/client/ui-settings-general/tests/apply.client.spec.ts
++++ b/packages/client/ui-settings-general/tests/apply.client.spec.ts
+@@ -13,7 +13,6 @@ import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-clie
+ import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+ import { LOCALE_SETTINGS_NAMESPACE, LocaleSettingsSchema } from '@deepseek-ai/dsh-client-locale/src/locale-settings.ts'
+ import { inject } from '../src/client/index.ts'
+-import type { DeveloperToolsRowInjected } from '../src/client/DeveloperToolsRow.tsx'
+ import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+ import { GeneralSection } from '../src/client/GeneralSection.tsx'
+ import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
+@@ -101,16 +100,9 @@ describe('ui-settings-general apply', () => {
+     // The nav label is a locale-following thunk; owners resolve at read time.
+     expect(generalLabel(c)).toBe('通用设置')
+     expect(c.ctx.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
+-    // The shared developer-tool control belongs to General; onboarding remains feature-owned.
+-    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools', 'current-version'])
++    // lawbench P-18: General seats no developer-tools switch; onboarding remains feature-owned.
++    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['current-version'])
+     expect(c.ctx.slots.entries('settings.onboarding').filter(row => row.locale === NS)).toEqual([])
+-    const developerRow = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'developer-tools')!
+-    const developer = (developerRow.inject as unknown as () => DeveloperToolsRowInjected)()
+-    expect(developer.hooks.developerTools).toBe(c.ctx.configForms.developerTools.enabled)
+-    expect(developer.hooks.developerTools.getSnapshot()).toBe(false)
+-    const setEnabled = vi.spyOn(c.ctx.configForms.developerTools, 'setEnabled').mockResolvedValue(undefined)
+-    await developer.setEnabled(true)
+-    expect(setEnabled).toHaveBeenCalledExactlyOnceWith(true)
+     const { controller, hooks } = actionInjectedOf(c)
+     expect(controller.store.getSnapshot().status).toBe('idle')
+     expect(hooks.snapshot).toBe(controller.store)
+@@ -213,7 +205,7 @@ describe('ui-settings-general apply', () => {
+       expect(ownEntries(c, name)[0]).not.toBe(before[index])
+     })
+     expect(c.ctx.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
+-    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools', 'current-version'])
++    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['current-version'])
+     // The recovered registrations still ride the locale path.
+     const english = localeView('en', 1)
+     const chinese = localeView('zh', 2)
