@@ -3,7 +3,8 @@
 索引
 - 索引单位：一页、一段、一个工作表的每 20 行、文本文件的每 50 行（与材料文本的【第N行】分块一致）。
   每条记下材料编号、原件版本（sha256）、位置范围、原文、归一化文本；search_fts 是 search_units 的 trigram 外部内容表。
-- 建索引的时机：每次检索前按需补（T9 注记 1544 第 1 条的默认做法，不改 case/materials.py）——
+- 建索引的时机：扫描、导入结束时建（materials._scan 末尾调用 refresh_after_scan，裁决 1548 第 1 条）；
+  每次检索前再按需核对补一次作兜底——
   材料的原件 sha256、材料文本的修改时间和大小，与本进程记下的对不上，就只重建这一份；材料不在了删掉它的单元。
   本进程第一次检索某个案件时整案重建一次（case.db 里没有记"材料文本版本"的地方，加字段是改契约）。
 - 失败的材料（没有材料文本）不进索引。
@@ -172,6 +173,23 @@ def refresh(root: str, index: dict, con: sqlite3.Connection) -> int:
                     n += 1
     _state[root] = state
     return n
+
+
+def refresh_after_scan(root: str, case_id: str, index: dict) -> None:
+    """扫描、导入之后建索引（T9 三处裁决第 1 条：台账"导入时写"）。任何异常都兜住、只记元数据日志，
+    不让扫描失败；检索前的按需核对重建仍保留作兜底。"""
+    t0 = time.monotonic()
+    try:
+        with _lock(root):
+            con = _connect(root)
+            try:
+                refresh(root, index, con)
+            finally:
+                con.close()
+    except Exception as e:  # noqa: BLE001
+        logs.event("search", "index", status="fail", case_id=case_id, error=type(e).__name__)
+        return
+    logs.event("search", "index", case_id=case_id, duration_ms=(time.monotonic() - t0) * 1000)
 
 
 # ---------- 查询 ----------

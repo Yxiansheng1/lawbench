@@ -247,13 +247,19 @@ class TaskStore:
             task["state"] = "running"
             # 先记下"本进程 begin 过"，再写任何文件：重开案件的 mark_abnormal 不会在写到一半时把它当成遗留任务（F1）
             self._begun[tid] = datetime.now().astimezone()
-            self._write(root, self.rel(tid, "task.json"), task, "files/task.schema.json")
-            self._write(root, self.rel(tid, "result.json"), {
-                "v": 1, "task_id": tid, "status": "running",
-                "usage": {"model_calls": 0, "tool_calls": 0, "elapsed_s": 0}, "drafts": [], "citation_check": None,
-                "coverage": None, "citations": [], "finished_at": None}, "files/result.schema.json")
-            self._write(root, self.rel(tid, "reads.json"), {"v": 1, "task_id": tid, "reads": []},
-                        "files/reads.schema.json")
+            try:
+                self._write(root, self.rel(tid, "task.json"), task, "files/task.schema.json")
+                self._write(root, self.rel(tid, "result.json"), {
+                    "v": 1, "task_id": tid, "status": "running",
+                    "usage": {"model_calls": 0, "tool_calls": 0, "elapsed_s": 0}, "drafts": [],
+                    "citation_check": None, "coverage": None, "citations": [], "finished_at": None},
+                    "files/result.schema.json")
+                self._write(root, self.rel(tid, "reads.json"), {"v": 1, "task_id": tid, "reads": []},
+                            "files/reads.schema.json")
+            except BaseException:
+                # 写到一半失败：它不算"本进程正在执行"，重开案件时应按异常中断处理（T8 第三轮复核 P3）
+                self._begun.pop(tid, None)
+                raise
             self._where[tid] = case_id
         logs.event("task", "begin", case_id=case_id)
         return {"task_id": tid, "case_id": case_id, "skill": task["skill"], "params": task["params"],

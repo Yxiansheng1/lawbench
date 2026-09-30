@@ -1,9 +1,7 @@
-"""case_list_materials、case_read_material、case_search。"""
+"""case_list_materials、case_read_material（case_search 在 tools/search.py，T9）。"""
 from __future__ import annotations
 
 import dataclasses
-import re
-import unicodedata
 from datetime import datetime
 
 from ..case import texts
@@ -11,8 +9,6 @@ from ..errors import ApiError
 from . import ToolContext
 
 MAX_CHARS = 8000
-SNIPPET = 40
-UNIT_WORD = {"page": "页", "para": "段", "line": "行"}
 
 
 # ---------- case_list_materials ----------
@@ -92,55 +88,3 @@ def _read_part(ctx: ToolContext, m: dict, u: texts.Unit, offset: int, limit: int
     return {"name": m["name"], "material_id": m["material_id"], "unit": m["unit"], "start": u.no, "end": u.no,
             "text": text, "has_more": more or nxt is not None, "next_start": u.no if more else nxt,
             "next_offset": end if more else None}
-
-
-# ---------- case_search（本卡为逐单元扫描的临时实现；T9 换成 FTS5 与查询扩展） ----------
-
-def normalize(s: str) -> str:
-    """全角转半角、去掉数字中的千分位逗号、统一空白（Spec 第 11 节）。"""
-    s = unicodedata.normalize("NFKC", s)
-    s = re.sub(r"(?<=\d),(?=\d{3})", "", s)
-    return re.sub(r"\s+", " ", s)
-
-
-def _col_letter(i: int) -> str:
-    out = ""
-    while i:
-        i, r = divmod(i - 1, 26)
-        out = chr(65 + r) + out
-    return out
-
-
-def _citation(m: dict, u: texts.Unit, qn: str) -> str:
-    if m["unit"] == "cell":
-        cells = [c.strip() for c in u.text.strip().strip("|").split("|")]
-        col = next((i for i, c in enumerate(cells[1:], 1) if qn in normalize(c)), 1)
-        return f"〔{m['name']} {u.sheet}!{_col_letter(col)}{u.row}〕"
-    return f"〔{m['name']} 第{u.no}{UNIT_WORD[m['unit']]}〕"
-
-
-def search(ctx: ToolContext, a: dict) -> dict:
-    qn = normalize(a["query"]).strip()
-    if not qn:
-        raise ApiError("INVALID_ARGUMENT", "empty_query")
-    max_hits = a.get("max_hits", 20)
-    hits: list[dict] = []
-    total = 0
-    for m in ctx.index()["materials"]:
-        if m["status"] == "failed":
-            continue
-        try:
-            units = texts.split_units(texts.read_text(ctx.root, m), m["unit"])
-        except ApiError:
-            continue
-        for u in units:
-            tn = normalize(u.text)
-            pos = tn.find(qn)
-            if pos < 0:
-                continue
-            total += 1
-            if len(hits) < max_hits:
-                snippet = tn[max(0, pos - SNIPPET):pos + len(qn) + SNIPPET]
-                hits.append({"name": m["name"], "material_id": m["material_id"], "citation": _citation(m, u, qn),
-                             "snippet": snippet, "is_ocr": u.is_ocr, "match": "exact"})
-    return {"hits": hits, "total": total, "truncated": total > len(hits)}

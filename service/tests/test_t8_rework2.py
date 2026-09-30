@@ -183,3 +183,29 @@ def test_f5_same_second_tie_prefers_latest(env, monkeypatch):
         monkeypatch.undo()
         assert env.task_dir(a).exists()
         assert env.begin(sess)["skill"] == "case-summary", i
+
+
+# ---------- 第三轮复核 P3：begin 写到一半失败 ----------
+
+def test_begin_write_failure_not_left_as_begun(env, monkeypatch):
+    s = store(env)
+    real_write = TaskStore._write
+
+    def fail_on_result(self, root, rel, data, schema):
+        if rel.endswith("result.json") and data.get("status") == "running":
+            raise OSError(28, "磁盘满")          # task.json 已写成 running，result.json 写不进去
+        return real_write(self, root, rel, data, schema)
+
+    monkeypatch.setattr(TaskStore, "_write", fail_on_result)
+    before = set(s._begun)
+    with pytest.raises(OSError):
+        s.begin("sess-halfwrite", str(env.root))
+    monkeypatch.undo()
+    assert set(s._begun) == before                                      # 没留在"本进程 begin 过"里
+    half = [d.name for d in (env.root / "工作区" / "任务").iterdir()
+            if (d / "task.json").exists() and not (d / "result.json").exists()
+            and '"state": "running"' in (d / "task.json").read_text(encoding="utf-8")]
+    assert half                                                         # task.json 写成了 running，result.json 没写成
+    s.mark_abnormal(env.case_id)
+    for tid in half:
+        assert env.read_json(tid, "task.json", "files/task.schema.json")["state"] == "abnormal"

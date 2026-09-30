@@ -46,7 +46,8 @@ def count(text: str) -> int:
     - 英文字母：连续的一串按每 3 个字母 1 token 向上取整（常见实测约 4 个字母 1 token）；
     - 其他 ASCII 符号：每个 1 token；连续空白算 1 token；
     - 其余非 ASCII 字符（其他文字、表情等）：每字 2 token。
-    与真实长度的偏差：没有 tokenizer，未核实。"""
+    与真实长度的偏差（T8 交付说明第 13 节实测）：仓库 68 份样本上近似 ÷ 真实为 1.03–1.90，中位数 1.46，没有少算；
+    扩展区生僻字（4 字节 UTF-8）会少算（约 0.43），已知限制。"""
     tok = _tokenizer()
     if tok is not None:
         return len(tok.encode(text).ids)

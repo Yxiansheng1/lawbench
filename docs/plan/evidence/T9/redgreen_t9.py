@@ -53,6 +53,20 @@ rg.MUTATIONS = [
     ("完全匹配排在扩展匹配前面", "search/fts.py", [
         ('"key": (0 if kind == "exact" else 1, order[mid], key)', '"key": (0, order[mid], key)'),
     ], f"{R} -k exact_ranked_before_expanded"),
+    ("裁决 1·扫描完就建索引", "case/materials.py", [
+        ("        search_fts.refresh_after_scan(root, case_id, index)  # T9", "        pass  # T9"),
+    ], f"{R} -k index_built_at_scan"),
+    ("裁决 1·建索引出错兜住、不让扫描失败", "search/fts.py", [
+        ('    except Exception as e:  # noqa: BLE001\n        logs.event("search", "index"',
+         '    except ZeroDivisionError as e:  # noqa: BLE001\n        logs.event("search", "index"'),
+    ], f"{R} -k index_failure_does_not_break_scan"),
+    ("裁决 2·case_search 工具用 T9", "tools/__init__.py", [
+        ('        "case_search": search.search,',
+         '        "case_search": lambda ctx, a: {"hits": [], "total": 0, "truncated": False},'),
+    ], f"{R} -k case_search_tool_uses_t9"),
+    ("T8 小项·begin 写到一半失败时移出 _begun", "case/task.py", [
+        ("                self._begun.pop(tid, None)\n", ""),
+    ], "tests/test_t8_rework2.py -k begin_write_failure"),
     ("英文字母不分大小写", "search/fts.py", [
         ("    if len(low) == len(norm) and len(ql) == len(q):\n        norm, q = low, ql\n", ""),
     ], f"{R} -k case_insensitive"),

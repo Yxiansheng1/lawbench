@@ -287,3 +287,55 @@ def test_exact_ranked_before_expanded(make_client, cases_dir):
     ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
     v = q(client, cid, "80000")
     assert [(h["citation"], h["match"]) for h in v["hits"]] == [("〔a 第2行〕", "exact"), ("〔a 第1行〕", "expanded")]
+
+
+# ---------- 裁决 1548 第 1 条：扫描完就建索引，出错不影响扫描 ----------
+
+def test_index_built_at_scan(make_client, cases_dir):
+    client = make_client()
+    root = cases_dir / "扫描即建"
+    root.mkdir()
+    (root / "a.txt").write_text("扫描完就该有索引\n", encoding="utf-8")
+    cid = ok(client.post("/api/case/open", json={"path": str(root)}), "api/case_open.schema.json")["case_id"]
+    ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
+    con = sqlite3.connect(root / "工作区" / "case.db")
+    n = con.execute("SELECT count(*) FROM search_units").fetchone()[0]
+    fts_hits = con.execute("SELECT count(*) FROM search_fts WHERE search_fts MATCH '\"就该有\"'").fetchone()[0]
+    con.close()
+    assert n == 1 and fts_hits == 1                                    # 还没检索过，索引已经在了
+
+
+def test_index_failure_does_not_break_scan(make_client, cases_dir, appdata, monkeypatch):
+    client = make_client()
+    root = cases_dir / "建索引出错"
+    root.mkdir()
+    (root / "a.txt").write_text("内容\n", encoding="utf-8")
+    cid = ok(client.post("/api/case/open", json={"path": str(root)}), "api/case_open.schema.json")["case_id"]
+
+    def boom(*a, **k):
+        raise RuntimeError("坏了")
+
+    monkeypatch.setattr(fts, "refresh", boom)
+    v = ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
+    assert v["added"] == 1
+    monkeypatch.undo()
+    assert [h["citation"] for h in q(client, cid, "内容")["hits"]] == ["〔a 第1行〕"]   # 检索前按需补，自愈
+    logs.close()
+    text = "".join(p.read_text(encoding="utf-8") for p in (appdata / "logs").glob("*"))
+    assert '"op": "index", "status": "fail"' in text and "RuntimeError" in text
+
+
+# ---------- 裁决 1548 第 2 条：case_search 工具用 T9 ----------
+
+def test_case_search_tool_uses_t9(small):
+    client, root, cid = small
+    tid = ok(client.post("/core/task/begin", json={"session_id": "s-t9", "cwd": str(root)}),
+             "core/task_begin.schema.json")["task_id"]
+    v = ok(client.post("/core/tool", json={"task_id": tid, "tool": "case_search", "args": {"query": "8万"}}),
+           "core/tool.schema.json")
+    errs = list(validator("tools/case_search.schema.json", "#/$defs/result").iter_errors(v))
+    assert not errs
+    assert [(h["citation"], h["match"]) for h in v["hits"]] == [("〔说明 第3行〕", "exact")]
+    v = ok(client.post("/core/tool", json={"task_id": tid, "tool": "case_search", "args": {"query": "80000"}}),
+           "core/tool.schema.json")
+    assert ("〔说明 第3行〕", "expanded") in {(h["citation"], h["match"]) for h in v["hits"]}   # 扩展：T8 临时实现没有
