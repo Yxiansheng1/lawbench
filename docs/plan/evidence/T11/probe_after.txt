@@ -1,0 +1,23 @@
+# 395 部署后核对（2026-09-30，用户在 395 管理员窗口执行，输出由用户贴回；未跑整份 probe_395.ps1——它不在 395 上，取了验收要的几项）
+
+## powercfg /a（摘）
+此系统上没有以下睡眠状态:
+    休眠
+        尚未启用休眠。
+    混合睡眠 / 快速启动：休眠不可用。
+（另：交流电自动睡眠 STANDBYIDLE 设为 0，即从不；用户同意）
+
+## 9000 端口占用（重装前）
+LocalAddress 192.168.8.124  LocalPort 9000  OwningProcess 16800 → python.exe  C:\prep395\python\python.exe
+（重装后所内、所外两地址均监听，/health 均 ok）
+
+## 重启后 Get-Service prep395*
+prep395       Running Automatic
+prep395-llm9b Running Automatic
+prep395-ocr   Running Automatic
+所外 curl http://10.126.126.3:9000/health → {"status":"ok","ocr":"ok","llm9b":"ok",...}
+
+## 其他
+- TPM Present/Ready True；BitLocker C: FullyDecrypted（用户 15:03 决定暂缓）。
+- 22 端口：C:\Windows\System32\OpenSSH\sshd.exe（部署前已有，未动；Get-Service sshd 无结果）。
+- 向日葵：开机自启已关（用户操作）。

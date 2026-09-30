@@ -1,0 +1,3 @@
+# 2026-09-30 15:17:08 开发机 → 395 一次真实识别（criminal-01 讯问笔录第 1 页，测试 Key A）
+HTTP 200；返回字段：['backend', 'elapsed_ms', 'image_png_base64', 'markdown', 'unclear']
+契约 contracts\prep395\ocr_page.schema.json 校验：通过
