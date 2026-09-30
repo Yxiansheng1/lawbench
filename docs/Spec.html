@@ -1335,6 +1335,7 @@ li{margin:3px 0}
 </tr>
 </tbody>
 </table>
+<p><strong>2026-09-30 用户定（候 owner 清单 N27）</strong>：&quot;显示值&quot;指律师在 Excel 里看到的样子，不是单元格存的原始值：数字按单元格的数字格式套出来写（百分比 <code>12.5%</code>、千分位 <code>1,234.50</code>、固定小数位、日期和时间按格式、会计格式的负号和货币符号）；套不出来的冷门格式写原始值并在交付说明列出哪些；公式仍单独存一份。改了取法后已导入的表格要重扫一次（原件没变也要重解析，按材料文本格式版本号触发）。</p>
 <p>LibreOffice 调用方式：<code>soffice --headless --norestore -env:UserInstallation=file:///&lt;案件&gt;/工作区/临时/lo_profile --convert-to &lt;格式&gt; --outdir &lt;临时目录&gt; &lt;文件&gt;</code>。用户配置目录放在案件临时目录，转换后删除，避免在系统里留下&quot;最近打开的文件&quot;记录（SEC-11）。超时 120 秒。</p>
 <p><strong>配置目录的位置改为短路径</strong>（2026-09-29，T19、T3 复核实测）：LibreOffice 会在配置目录下再建很深的子路径，配置目录自身的路径长到约 146 个字符时 <code>soffice</code> 直接崩溃（退出码 <code>0xC0000409</code>，没有任何输出），115 个字符时正常。案件文件夹的路径常常很长，所以配置目录不放在案件里，改放 <code>&lt;应用数据&gt;\临时\lo\&lt;8 位随机&gt;\</code>，每次转换新建、用完删除（删除用长路径前缀并重试，失败要报出来，不能静默）；启动时清理这个目录下的残留。被转换的文件副本和转换结果仍放 <code>&lt;案件&gt;\工作区\临时\</code>。调用前检查配置目录路径长度，超过 100 个字符时不调用、报&quot;软件的数据目录路径太长&quot;；<code>soffice</code> 以 <code>0xC0000409</code> 退出时报&quot;转换程序异常退出&quot;，不要报成&quot;文件可能已损坏或加密&quot;。</p>
 <p><strong>无法处理的文件</strong>（写入失败清单，并附原因）：</p>
