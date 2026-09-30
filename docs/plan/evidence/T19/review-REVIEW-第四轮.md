@@ -7,8 +7,9 @@
 - 时间：2026-09-30 01:33 起，约 25 分钟（无人值守窗内）
 - 第一部分是复核员最终报告的原文，未作删改；第二部分是主编排的裁决
 
----
+- （2026-09-30 08:05 (+08:00) 主编排补记）归档时原样带进了复核员报告里的本机路径，其中含开发机的用户名；现已把路径里的用户名替换成 `<用户>`，其余文字未动。替换前的版本仍在提交历史里。
 
+---
 ## 第一部分 复核员报告
 T19 第三轮返修复核（line-C @ 9e32a12，只读）
 
@@ -64,7 +65,7 @@ T19 第三轮返修复核（line-C @ 9e32a12，只读）
 
 ## 四、实际跑过的命令和实验
 
-实验环境：`TEMP`/`TMP`/`LOCALAPPDATA` 都指到 `C:\Users\19705\AppData\Local\Temp\claude\rvC6s\…`，`PYTHONDONTWRITEBYTECODE=1`，pytest 加 `-p no:cacheprovider --basetemp rv-C6-lab\bt\…`。pandoc 通过在 PATH 前面加 `%LOCALAPPDATA%\Pandoc` 找到，没有设置 `LAWBENCH_PANDOC`。
+实验环境：`TEMP`/`TMP`/`LOCALAPPDATA` 都指到 `C:\Users\<用户>\AppData\Local\Temp\claude\rvC6s\…`，`PYTHONDONTWRITEBYTECODE=1`，pytest 加 `-p no:cacheprovider --basetemp rv-C6-lab\bt\…`。pandoc 通过在 PATH 前面加 `%LOCALAPPDATA%\Pandoc` 找到，没有设置 `LAWBENCH_PANDOC`。
 
 1. 全量测试跑了两次：
    - 第一次 43 passed、9 skipped：因为 `LOCALAPPDATA` 被我改走，找不到 pandoc。
@@ -77,7 +78,7 @@ T19 第三轮返修复核（line-C @ 9e32a12，只读）
 7. P2-1 和 NOTE-1 各一次改坏→红→复原→绿。改动都在副本 `rv-C6-lab\m\` 上做，复原后与克隆逐字节比对哈希一致。
 8. conftest 清理的场景实验：`cft_setup.py`，外加 `pytest --co`。
 
-脚本和输出都在 `C:\Users\19705\AppData\Local\Temp\claude\D--lawbench\780b8a59-1849-4c63-905e-c6705fafa3f6\scratchpad\rv-C6-lab\`（`full2.txt`/`.log`、`p21-clone.txt`、`p21b-clone.txt`、`note1-clone.txt`、`n3mut.txt`、`p21mut.txt`、`n1mut.txt` 等）。
+脚本和输出都在 `C:\Users\<用户>\AppData\Local\Temp\claude\D--lawbench\780b8a59-1849-4c63-905e-c6705fafa3f6\scratchpad\rv-C6-lab\`（`full2.txt`/`.log`、`p21-clone.txt`、`p21b-clone.txt`、`note1-clone.txt`、`n3mut.txt`、`p21mut.txt`、`n1mut.txt` 等）。
 
 ## 五、残留审计
 
@@ -96,8 +97,9 @@ T19 第三轮返修复核（line-C @ 9e32a12，只读）
 
 AMEND（本结论不含外链检查的健壮性）
 
----
+- （2026-09-30 08:05 (+08:00) 主编排补记）归档时原样带进了复核员报告里的本机路径，其中含开发机的用户名；现已把路径里的用户名替换成 `<用户>`，其余文字未动。替换前的版本仍在提交历史里。
 
+---
 ## 第二部分 主编排裁决（2026-09-30 01:51 (+08:00)）
 
 **T19 第四轮返修，清单冻结两条。** 本次返修没有弄坏别的；P2-1（网络共享路径）已关闭。

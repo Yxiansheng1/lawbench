@@ -7,8 +7,9 @@
 - 时间：2026-09-29 23:32 起，约 36 分钟（无人值守窗内）
 - 以下是复核员最终报告的原文，未作删改
 
----
+- （2026-09-30 08:05 (+08:00) 主编排补记）归档时原样带进了复核员报告里的本机路径，其中含开发机的用户名；现已把路径里的用户名替换成 `<用户>`，其余文字未动。替换前的版本仍在提交历史里。
 
+---
 T3 这一轮没有全部关闭：S1 只关了一部分，S6 也只关了一部分，所以 T3 判 AMEND。T5 在最重要的几件事上成立：原件区里原有的文件，所有实验里都逐字节未变；所有联网实验中本机监听收到的连接数都是 0；闸门没被绕过；两次全量都是 385 passed / 3 skipped。但 T5 有 2 个 P1、7 个 P2，所以也判 AMEND。
 
 先说一件合并流程上的事（NOTE）：`git merge-base --is-ancestor c6a4005 30f7425` 返回 1，分支的实际基点是 `a859fe5`，没有 rebase 到 main。HEAD 已核实为 `30f7425c…`。克隆里的 Spec 和复核记录因此比 main 旧：Spec 5.2、14.3 的最新补丁（`e9f5c5d`、`c6a4005`）和 `review-*-第二轮.md` 都不在克隆里，这些我用 `git show c6a4005:<path>` 读的。`git merge-tree --write-tree c6a4005 HEAD` 显示合并无冲突。
@@ -226,7 +227,7 @@ T3 这一轮没有全部关闭：S1 只关了一部分，S6 也只关了一部�
 | 条件 | 结果 | 耗时 |
 |---|---|---|
 | 深路径（`--basetemp` 在 lab 下） | 385 passed，3 skipped，0 failed | 421 秒 |
-| 短路径（`--basetemp` 在 `C:\Users\19705\AppData\Local\Temp\claude\rvB3b\pt`） | 385 passed，3 skipped，0 failed | 379 秒 |
+| 短路径（`--basetemp` 在 `C:\Users\<用户>\AppData\Local\Temp\claude\rvB3b\pt`） | 385 passed，3 skipped，0 failed | 379 秒 |
 
 3 个跳过都是符号链接权限不足。跑之前确认导入指向克隆：`lawbench.__file__` 打印的是克隆里的路径。
 
