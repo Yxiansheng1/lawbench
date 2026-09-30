@@ -1155,7 +1155,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 - 日常办公文件夹未设置时返回 `OFFICE_DIR_NOT_SET`；设置时按 SEC-14 的规则拒绝云同步目录。
 - 发票不是案卷：台账和原票在日常办公文件夹，不进案件检索，不进 AI 上下文。
 
-**2026-09-30 T25 调研后回写（主编排定）**：①引擎缓存路径超过 259 字符会失败（`LongPathsEnabled=0` 时 `%LOCALAPPDATA%` 长过约 59 字符即触发）：服务另传 `INVOICE_RUNTIME_CACHE=<应用数据>\ivc`（加入上面"只传"名单），T20 安装时检查该路径长度并提示；②引擎所有异常都退出 2 且输出以 `[BLOCKED]` 开头——服务见 `[BLOCKED]` 判 `ENGINE_FAILED`，不当"待核"；③`cancel` 引擎不支持预览：界面先用 `report`/`reprint` 展示批次内容再确认，服务对 `cancel` 一律带 `--apply`；④本地渠道不处理图片发票（引擎记"未选取"）：第一版界面写明"图片发票请先转成 PDF（可用小工具）"，`import --img` 不进白名单；⑤`invoke.py` 接受任意脚本路径、`run` 自带 `--download-links`、`collect` 可直接调用、子进程继承全部环境变量：服务把脚本名和参数写死、启动引擎时清空环境只传名单内变量，并断言测试；⑥缓存日常启动只核大小不核 sha256：本机信任边界内的已知风险；⑦`check_schema`、`import` 会往台账目录 `_日志\`、`运行日志\` 和 `%TEMP%\invoice-ocr-*` 写文件：列入第 14 节数据落点表；⑧引擎贴票清单写死了律所名（`reimbursement.py:86`）：候 owner N50。契约 1.3 相应改动见 20.12。
+**2026-09-30 T25 调研后回写（主编排定）**：①引擎缓存路径超过 259 字符会失败（`LongPathsEnabled=0` 时 `%LOCALAPPDATA%` 长过约 59 字符即触发）：服务另传 `INVOICE_RUNTIME_CACHE=<应用数据>\ivc`（加入上面"只传"名单），T20 安装时检查该路径长度并提示；②引擎所有异常都退出 2 且输出以 `[BLOCKED]` 开头——服务见 `[BLOCKED]` 判 `ENGINE_FAILED`，不当"待核"；③`cancel` 引擎不支持预览：界面先用 `report`/`reprint` 展示批次内容再确认，服务对 `cancel` 一律带 `--apply`；④本地渠道不处理图片发票（引擎记"未选取"）：第一版界面写明"图片发票请先转成 PDF（可用小工具）"，`import --img` 不进白名单；⑤`invoke.py` 接受任意脚本路径、`run` 自带 `--download-links`、`collect` 可直接调用、子进程继承全部环境变量：服务把脚本名和参数写死、启动引擎时清空环境只传名单内变量，并断言测试；⑥缓存日常启动只核大小不核 sha256：本机信任边界内的已知风险；⑦`check_schema`、`import` 会往台账目录 `_日志\`、`运行日志\` 和 `%TEMP%\invoice-ocr-*` 写文件：列入第 14 节数据落点表；⑧引擎贴票清单写死了律所名（`reimbursement.py:86`）：用户定 N50 ③——服务在引擎生成清单后把这一个固定字符串替换成设置里的"发票购买方名称"（为空则不替换），这是对引擎输出的唯一一处后处理；引擎不改。契约 1.3 相应改动见 20.12。
 
 ### 13.4 刑期计算（`calc/sentence.py`，工具 `case_calc_sentence`）
 
