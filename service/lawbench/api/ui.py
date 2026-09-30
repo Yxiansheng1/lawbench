@@ -127,6 +127,9 @@ def routes(st) -> list[Route]:
     def invoice_run(d: dict) -> dict:
         return st.invoice.run(d)
 
+    def retainer_driver(d: dict) -> dict:
+        return st.retainer.handle(d)
+
     E = lambda name, fn, **kw: _endpoint(st, name, fn, **kw)  # noqa: E731
     return [
         Route("/api/case/open", E("case_open", case_open), methods=["POST"]),
@@ -151,6 +154,7 @@ def routes(st) -> list[Route]:
         Route("/api/wiki/suggestions", E("wiki_suggestions", wiki_suggestions, query=True), methods=["GET"]),
         Route("/api/wiki/suggestions/{id}", E("wiki_suggestions", wiki_suggestions), methods=["POST"]),
         Route("/api/invoice/run", E("invoice_run", invoice_run), methods=["POST"]),
+        Route("/api/retainer/driver", E("retainer_driver", retainer_driver), methods=["POST"]),
     ]
 
 

@@ -18,6 +18,7 @@ from .capsules import CapsuleStore
 from .case.materials import Materials
 from .ingest import libreoffice
 from .invoice.runner import InvoiceRunner
+from .retainer.driver import RetainerDriver
 from .case.registry import CaseRegistry
 from .case.task import TaskStore
 from .config import Config
@@ -54,6 +55,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st.tasks = TaskStore(st.cases, st.settings, st.materials)
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
     st.invoice = InvoiceRunner(st.settings, config.appdata)
+    st.retainer = RetainerDriver()
     try:
         servers = st.settings.get()["servers"]
     except Exception as e:  # noqa: BLE001 settings.json 损坏：服务照常起来，先用默认地址，设置接口返回错误

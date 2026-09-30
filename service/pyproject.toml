@@ -27,6 +27,21 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=9.1,<10"]
+retainer = [
+  # 委托材料的证件识别驱动（engines/retainer/tools/ocr-driver，Spec 13.5）：rapidocr 3.9.2 由驱动 vendor/ 自带，
+  # 这里是它运行和导入时要的包（T25 调研：requests 在导入阶段就会加载，PDF 要 PyMuPDF）。pywin32 驱动不用，不装。
+  # 单列一组：服务代码本身不用这些（R15 不许服务依赖 PyYAML），打包时随客户端 Python 一起装（pip install .[retainer]）。
+  "onnxruntime>=1.24.4,<1.25",
+  "opencv-python-headless>=5.0,<6",
+  "pyclipper>=1.4,<2",
+  "shapely>=2.1,<3",
+  "six>=1.17,<2",
+  "PyYAML>=6.0,<7",
+  "tqdm>=4.70,<5",
+  "colorlog>=6.12,<7",
+  "requests>=2.34,<3",
+  "PyMuPDF>=1.28,<2",
+]
 
 [tool.setuptools.packages.find]
 include = ["lawbench*"]

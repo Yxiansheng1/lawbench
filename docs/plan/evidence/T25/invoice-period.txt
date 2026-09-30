@@ -1,0 +1,123 @@
+# T25 一期（虚构样本 invoices-01，经服务的 InvoiceRunner，2026-09-30）
+
+## env_check：exit 0，attention False，32.7 秒
+[ENV] 校验并展开到外部缓存 ...
+期望指纹：c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189
+缓存：\\?\<临时>\ad\ivc\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-215e77f02fc84a73aff5c5dd40e87d5e
+[OCR] Windows 已安装语言：en-US, zh-Hans-CN
+[结论] 环境健康（只读诊断通过）
+
+## plan：exit 0，attention False，2.7 秒
+{
+  "period": "2026-09",
+  "channel": "local",
+  "mail_start": null,
+  "mail_end_exclusive": null,
+  "history": "exclude",
+  "history_numbers": []
+}
+
+## run：exit 2，attention True，12.1 秒
+{
+  "total_objects": 8,
+  "statuses": {
+    "已下载": 7,
+    "已展开": 1
+  },
+  "count_discrepancies": [],
+  "processing_complete": false,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "0",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "0",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [],
+  "historical_unpaid_not_automatically_selected": true
+}
+{
+  "total_objects": 8,
+  "statuses": {
+    "待核": 2,
+    "历史未报": 2,
+    "抬头错误": 1,
+    "已展开": 1,
+    "重复": 2
+  },
+  "count_discrepancies": [],
+  "processing_complete": false,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "1366.50",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "1366.50",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [
+    "26999000000000410002",
+    "26999000000000410003"
+  ],
+  "historical_unpaid_not_automatically_selected": true
+}
+
+## analyze：exit 2，attention True，4.0 秒
+{
+  "total_objects": 8,
+  "statuses": {
+    "待核": 2,
+    "历史未报": 2,
+    "抬头错误": 1,
+    "已展开": 1,
+    "重复": 2
+  },
+  "count_discrepancies": [],
+  "processing_complete": false,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "1366.50",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "1366.50",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [
+    "26999000000000410002",
+    "26999000000000410003"
+  ],
+  "historical_unpaid_not_automatically_selected": true
+}
+
+## prepare：ENGINE_FAILED（blocked），4.1 秒
+（失败体不带引擎输出，见致ORCH-C-注记-T25两条待定 A）
+
+## report：exit 0，attention False，3.4 秒
+
+==================================================
+发票主台账统计
+==================================================
+  总记录：2
+  金额合计（筛选，不含冲突/已取代）：1,366.50 元
+
+  状态分布：
+    未报: 2
+
+  批次分布：
+    2026-09_九月: 2
+
+  冲突记录：待裁 0 条 / 已归档 0 条
+
