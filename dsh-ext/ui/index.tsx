@@ -15,8 +15,7 @@ import { TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { makeIntakeHook, type IntakeHook } from './intake.ts'
-import { installCitationClick } from './citation-click.ts'
-import type { MaterialLite, OpenDeps } from './citation.ts'
+import { citationMark, type CitationMark, type MaterialLite, type OpenDeps } from './citation.ts'
 import { installDropGuard } from './drop-guard.ts'
 
 export const inject = ['slots', 'remote']
@@ -42,6 +41,8 @@ type Ctx = {
   sidebarRightTabs: { register(def: Record<string, unknown>): Disposer }
   /** P-5 源码补丁提供；没打补丁时不存在。 */
   conversationFileIntake: { register(hook: IntakeHook): Disposer }
+  /** P-16 源码补丁提供（ui-chat）；没打补丁时不存在，出处就不成按钮。 */
+  chatInlineMarks: { register(mark: CitationMark): Disposer }
 }
 
 type DesktopWindow = Window & {
@@ -95,8 +96,6 @@ function registerCore(ctx: Ctx): void {
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'lawbench', order: -10 }, ComposerDock))
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)
-  // 点草稿正文里的出处打开原文（T13 后续项，走 A：插件内命中测试）
-  ctx.effect(() => installCitationClick(citationDeps), '律师工作台界面：出处点击')
   // 拖文件进对话区、往对话框粘贴文件：给中文提示，不生成发不出去的引用标签（T17 第一步补，P-5 落地前的过渡做法）
   ctx.effect(() => installDropGuard({ notice, intakeActive: () => intakeActive }), '律师工作台界面：对话区拖入提示')
 }
@@ -149,6 +148,11 @@ function registerIntake(ctx: Ctx): void {
   ctx.effect(() => { intakeActive = true; return () => { intakeActive = false } }, '律师工作台界面：对话框导入接上')
 }
 
+/** P-16：草稿正文里的出处由 DSH 画成真按钮（键盘、读屏可用）；点了核对后打开原文。 */
+function registerCitationMarks(ctx: Ctx): void {
+  ctx.effect(() => ctx.chatInlineMarks.register(citationMark(citationDeps)), '律师工作台界面：出处按钮')
+}
+
 /** 右侧栏三个标签：材料、成果、原文查看。 */
 function registerTabs(ctx: Ctx): void {
   const tabs: Array<[string, string, string, number, unknown]> = [
@@ -190,6 +194,7 @@ export async function apply(ctx: Ctx): Promise<() => Promise<void>> {
     ctx.inject(['sessions', 'uiSession'], registerSessionTracking), // ui-words: 标识符（DSH 服务名）
     ctx.inject(['slots', 'sidebarRight', 'sidebarRightTabs'], registerTabs),
     ctx.inject(['conversationFileIntake', 'sessions'], registerIntake), // ui-words: 标识符（DSH 服务名）
+    ctx.inject(['chatInlineMarks'], registerCitationMarks), // ui-words: 标识符（DSH 服务名）
   ]
   return async () => {
     for (const o of others) await o.dispose()

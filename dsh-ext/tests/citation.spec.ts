@@ -1,7 +1,7 @@
-// 点草稿正文里的出处打开原文（T13 后续项，走 A）：识别、定位、核对的纯逻辑，以及对 DSH 标记结构的依赖守护。
+// 点草稿正文里的出处打开原文：识别、拆出每一处、核对的纯逻辑；T17 P-16 起出处由 DSH 画成按钮，这里守着交给 DSH 的标记和 DSH 那一侧的服务。
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CITATION_PATTERN, citationAt, citationRanges, DSH_ASSISTANT_KIND, DSH_FLOW_ATTR, joinedOffset, openCitation, resolveCitation, shouldHandleClick, type ClickFacts, type MaterialLite } from '../ui/citation.ts'
+import { CITATION_PATTERN, citationItem, citationItemRanges, citationMark, citationScanner, openCitation, resolveCitation, type MaterialLite } from '../ui/citation.ts'
 
 const repo = join(__dirname, '..', '..')
 
@@ -13,46 +13,39 @@ describe('出处写法以契约为准', () => {
 
   it('比契约宽的写法不认', () => {
     for (const s of ['见〔借款合同 第二页〕', '见〔借款合同〕', '见〔借款 合同 第2页〕', '见[借款合同 第2页]', '见〔借款合同 第2张〕']) {
-      expect(citationRanges(s), s).toEqual([])
+      expect([...s.matchAll(citationScanner())], s).toEqual([])
     }
   })
 })
 
-describe('点中的是哪一处', () => {
-  const text = '依据〔借款合同 第2页、银行流水 流水!B12:D12、借条 第1-3页〕可知'
-  const at = (needle: string, d = 0) => text.indexOf(needle) + d
+describe('一个出处括号里拆出每一处（交给 DSH 画按钮，P-16）', () => {
+  const match = (text: string) => [...text.matchAll(citationScanner())].map((m) => m[0])
 
-  it('一个括号多处：点到哪一处开哪一处', () => {
-    expect(citationAt(text, at('借款合同', 1))).toMatchObject({ kind: 'item', item: { name: '借款合同', loc: '第2页', text: '借款合同 第2页' } })
-    expect(citationAt(text, at('流水!B12', 2))).toMatchObject({ kind: 'item', item: { name: '银行流水', loc: '流水!B12:D12' } })
-    expect(citationAt(text, at('借条', 0))).toMatchObject({ kind: 'item', item: { name: '借条', loc: '第1-3页' } })
+  it('一个括号多处：每一处一个范围，括号和顿号留在外面', () => {
+    const m = match('依据〔借款合同 第2页、银行流水 流水!B12:D12、借条 第1-3页〕可知')[0]!
+    const items = citationItemRanges(m).map(([a, b]) => m.slice(a, b))
+    expect(items).toEqual(['借款合同 第2页', '银行流水 流水!B12:D12', '借条 第1-3页'])
+    expect(citationItem(items[1]!)).toEqual({ text: '银行流水 流水!B12:D12', name: '银行流水', loc: '流水!B12:D12' })
   })
 
-  it('点在括号或顿号上分不清：开第一处', () => {
-    expect(citationAt(text, at('〔'))).toMatchObject({ kind: 'item', item: { name: '借款合同' } })
-    expect(citationAt(text, at('、银行'))).toMatchObject({ kind: 'item', item: { name: '借款合同' } })
-    expect(citationAt(text, at('〕'))).toMatchObject({ kind: 'item', item: { name: '借款合同' } })
+  it('〔未找到依据〕〔推断〕不是出处：不成按钮', () => {
+    for (const m of match('金额〔未找到依据〕，日期〔推断〕')) expect(citationItemRanges(m), m).toEqual([])
   })
 
-  it('括号外、普通文字：不是出处', () => {
-    expect(citationAt(text, 0)).toEqual({ kind: 'none' })
-    expect(citationAt(text, text.length - 1)).toEqual({ kind: 'none' })
-  })
-
-  it('〔未找到依据〕〔推断〕不是出处，点了不反应；下划线也不画', () => {
-    const t = '金额〔未找到依据〕，日期〔推断〕'
-    expect(citationAt(t, t.indexOf('未找到') + 1)).toEqual({ kind: 'fixed' })
-    expect(citationAt(t, t.indexOf('推断'))).toEqual({ kind: 'fixed' })
-    expect(citationRanges(t)).toEqual([])
-  })
-
-  it('出处跨了加粗等行内元素：按段落整体文字换算后照样认', () => {
-    // <p>证据见<strong>〔借款</strong>合同 第2页〕。</p> 的三个文字节点
-    const segments = ['证据见', '〔借款', '合同 第2页〕', '。']
-    const whole = segments.join('')
-    expect(citationAt(whole, joinedOffset(segments, 1, 1))).toMatchObject({ kind: 'item', item: { name: '借款合同', loc: '第2页' } })
-    expect(citationAt(whole, joinedOffset(segments, 2, 4))).toMatchObject({ kind: 'item', item: { name: '借款合同' } })
-    expect(citationAt(whole, joinedOffset(segments, 3, 0))).toEqual({ kind: 'none' })
+  it('交给 DSH 的只有正则、范围、标签和打开函数；打开时核对后开原文', async () => {
+    const opened: string[] = []
+    const mark = citationMark({
+      caseId: () => 'c1',
+      materials: async () => [{ material_id: 'M0001', name: '借款合同', unit: 'page', unit_count: 6, status: 'parsed' }],
+      notice: () => {},
+      openSource: (id, cite) => { opened.push(`${id} ${cite}`) },
+    })
+    expect(Object.keys(mark).sort()).toEqual(['label', 'open', 'pattern', 'ranges'])
+    expect(mark.pattern.source).toBe(CITATION_PATTERN.slice(1, -1))
+    expect(mark.label('借款合同 第2页')).toBe('打开原文：借款合同 第2页')
+    mark.open('借款合同 第2页')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(opened).toEqual(['M0001 〔借款合同 第2页〕'])
   })
 })
 
@@ -98,42 +91,13 @@ describe('按材料列表核对（找不到、超出范围、原件没了都给�
   })
 })
 
-describe('依赖的 DSH 对话区标记结构还在（DSH 升级时这里会先变红）', () => {
-  const chat = join(repo, 'dsh', 'packages', 'client', 'ui-chat', 'src', 'client', 'chat')
-  // 返修 B3：找不到 DSH 源码时给出中文原因，而不是原始的文件读取错误
-  const source = (file: string) => {
-    const p = join(chat, file)
-    if (!existsSync(p)) throw new Error(`找不到 DSH 源码 ${p}：dsh 子模块没有初始化或换了目录结构。这条测试守着出处点击依赖的对话区标记，请先检出 dsh 子模块再跑`)
-    return readFileSync(p, 'utf8')
-  }
-  it(`节点属性 ${DSH_FLOW_ATTR} 仍按节点种类取值，助手回答节点的 key 仍是 ${DSH_ASSISTANT_KIND}`, () => {
-    expect(source('ChatNodeSeat.tsx')).toContain(`${DSH_FLOW_ATTR}={routedNode.kind}`)
-    expect(source('register-node-renderers.ts')).toContain(`key: '${DSH_ASSISTANT_KIND}'`)
-  })
-})
-
-describe('这次点击要不要接手（返修 B1）', () => {
-  const base: ClickFacts = { button: 0, modifier: false, inAnswer: true, inSkipped: false, selectionCollapsed: true, detail: 1 }
-  it('回答块里、左键、没选文字、单击：接手', () => {
-    expect(shouldHandleClick(base)).toBe(true)
-  })
-  it('回答块以外（用户消息、原文查看、wiki 建议里同样的写法）不接手', () => {
-    expect(shouldHandleClick({ ...base, inAnswer: false })).toBe(false)
-  })
-  it('链接、按钮、代码、输入框里不接手', () => {
-    expect(shouldHandleClick({ ...base, inSkipped: true })).toBe(false)
-  })
-  it('正在选文字不接手', () => {
-    expect(shouldHandleClick({ ...base, selectionCollapsed: false })).toBe(false)
-  })
-  it('右键、中键、带修饰键不接手', () => {
-    expect(shouldHandleClick({ ...base, button: 2 })).toBe(false)
-    expect(shouldHandleClick({ ...base, button: 1 })).toBe(false)
-    expect(shouldHandleClick({ ...base, modifier: true })).toBe(false)
-  })
-  it('双击、三击的后几下不接手（返修 B2）', () => {
-    expect(shouldHandleClick({ ...base, detail: 2 })).toBe(false)
-    expect(shouldHandleClick({ ...base, detail: 3 })).toBe(false)
+describe('DSH 那一侧的出处按钮服务还在（P-16 补丁；DSH 升级时这里会先变红）', () => {
+  const file = join(repo, 'dsh', 'packages', 'client', 'ui-chat', 'src', 'client', 'inline-marks.ts')
+  it('ui-chat 提供 chatInlineMarks，登记接口收正则、范围、标签、打开函数', () => {
+    // 返修 B3 的做法：找不到 DSH 源码时给出中文原因
+    if (!existsSync(file)) throw new Error(`找不到 DSH 源码 ${file}：dsh 子模块没有初始化、没有打 P-16 补丁，或换了目录结构`)
+    const src = readFileSync(file, 'utf8')
+    for (const word of ['register(mark: ChatInlineMark)', 'readonly pattern: RegExp', 'readonly ranges?:', 'readonly label:', 'readonly open:']) expect(src, word).toContain(word)
   })
 })
 

@@ -1,11 +1,9 @@
-// 草稿正文里的出处（T13 后续项"点出处打开原文"，主编排 06:34 注记裁决走 A）的纯逻辑：识别、定位到点中的那一处、核对。
+// 草稿正文里的出处（T13 后续项"点出处打开原文"）的纯逻辑：识别、拆出每一处、核对后打开。
+// T17 第二步 P-16 起，出处由 DSH 的 Markdown 渲染画成真按钮（ui-chat 的 chatInlineMarks 服务，我方只给正则、每处的范围和打开函数），
+// 原来在 document 捕获阶段做命中测试的 citation-click.ts 撤掉。
 // 出处写法以契约为准（contracts\common.schema.json 的 citation_text，formats.md 第 3 节），不另写更宽的规则；
 // tests\citation.spec.ts 守着下面的 CITATION_PATTERN 与契约逐字一致。
 // 出处文字来自模型的回答，当成不可信的输入：只拿去和材料列表比对，不拼进路径、不当成标记渲染。
-
-/** DSH 对话区给每个节点标的属性和助手回答节点的取值（ui-chat/src/client/chat/ChatNodeSeat.tsx、register-node-renderers.ts）。 */
-export const DSH_FLOW_ATTR = 'data-chat-flow-kind'
-export const DSH_ASSISTANT_KIND = 'assistant-step'
 
 /** 契约 citation_text 的 pattern 原文（带 ^…$）。 */
 export const CITATION_PATTERN =
@@ -24,53 +22,26 @@ export interface CitationItem {
   loc: string
 }
 
-export type Hit =
-  | { kind: 'none' }
-  /** 〔未找到依据〕〔推断〕：不是出处，点了不反应。 */
-  | { kind: 'fixed' }
-  | { kind: 'item'; item: CitationItem; start: number; end: number }
-
 /**
- * 点在 text 的第 offset 个字符上时，点中的是哪一处出处。
- * 一个括号里多处（顿号分隔）时点到哪一处算哪一处；点在括号或顿号上分不清时算第一处。
+ * 一个出处括号（契约写法的整段匹配，如"〔借款合同 第2页、流水!B12〕"）里每一处的起止（相对这段匹配）。
+ * 〔未找到依据〕〔推断〕不是出处，返回空（不成按钮）。
  */
-export function citationAt(text: string, offset: number): Hit {
-  for (const m of text.matchAll(citationScanner())) {
-    const start = m.index!
-    const end = start + m[0].length
-    if (offset < start || offset >= end) continue
-    const inner = m[0].slice(1, -1)
-    if (FIXED.has(inner)) return { kind: 'fixed' }
-    const parts = inner.split('、')
-    let pos = start + 1
-    let chosen = 0
-    for (let i = 0; i < parts.length; i++) {
-      const pStart = pos
-      const pEnd = pos + parts[i]!.length
-      if (offset >= pStart && offset < pEnd) { chosen = i; break }
-      pos = pEnd + 1
-    }
-    const part = parts[chosen]!
-    const sp = part.indexOf(' ')
-    return { kind: 'item', item: { text: part, name: part.slice(0, sp), loc: part.slice(sp + 1) }, start, end }
-  }
-  return { kind: 'none' }
-}
-
-/** 全部出处在 text 里的起止（给下划线用），不含〔未找到依据〕〔推断〕。 */
-export function citationRanges(text: string): Array<[number, number]> {
+export function citationItemRanges(match: string): Array<[number, number]> {
+  const inner = match.slice(1, -1)
+  if (FIXED.has(inner)) return []
   const out: Array<[number, number]> = []
-  for (const m of text.matchAll(citationScanner())) {
-    if (!FIXED.has(m[0].slice(1, -1))) out.push([m.index!, m.index! + m[0].length])
+  let at = 1
+  for (const part of inner.split('、')) {
+    out.push([at, at + part.length])
+    at += part.length + 1
   }
   return out
 }
 
-/** 多个文字节点拼成的整段里，第 index 个节点的第 offset 个字符在整段中的位置（出处跨加粗等行内元素时用）。 */
-export function joinedOffset(segments: readonly string[], index: number, offset: number): number {
-  let n = 0
-  for (let i = 0; i < index; i++) n += segments[i]!.length
-  return n + offset
+/** 一处出处的原文（如"借款合同 第2页"）拆成材料名和位置。 */
+export function citationItem(text: string): CitationItem {
+  const sp = text.indexOf(' ')
+  return { text, name: text.slice(0, sp), loc: text.slice(sp + 1) }
 }
 
 export interface MaterialLite { material_id: string; name: string; unit: 'page' | 'para' | 'cell' | 'line'; unit_count: number; status: string }
@@ -99,25 +70,6 @@ export function resolveCitation(item: CitationItem, materials: readonly Material
   return { ok: true, material: m }
 }
 
-/** 一次点击的情形（从 DOM 取出，交给 shouldHandleClick 判断；返修 B1：判断抽成纯函数以便测试）。 */
-export interface ClickFacts {
-  button: number
-  modifier: boolean
-  /** 点击目标在 DSH 的助手回答块（`[data-chat-flow-kind="assistant-step"]`）里。 */
-  inAnswer: boolean
-  /** 点击目标在链接、按钮、代码、输入框等里（这些各有各的用途）。 */
-  inSkipped: boolean
-  /** 当前选区是折叠的（没在选文字）。 */
-  selectionCollapsed: boolean
-  /** 连击次数（MouseEvent.detail）：双击、三击选字时第二下起不接手（返修 B2）。 */
-  detail: number
-}
-
-/** 这次点击要不要接手去认出处：只看回答块里、不在跳过的元素里、没在选文字、左键、不带修饰键、不是连击的后几下。 */
-export function shouldHandleClick(f: ClickFacts): boolean {
-  return f.button === 0 && !f.modifier && f.inAnswer && !f.inSkipped && f.selectionCollapsed && f.detail <= 1
-}
-
 export interface OpenDeps {
   caseId(): string | undefined
   materials(caseId: string): Promise<MaterialLite[] | undefined>
@@ -135,4 +87,22 @@ export async function openCitation(item: CitationItem, deps: OpenDeps): Promise<
   const v = resolveCitation(item, ms)
   if (!v.ok) { deps.notice('没有打开原文', v.message); return }
   deps.openSource(v.material.material_id, `〔${item.text}〕`)
+}
+
+/** 登记给 DSH 的出处标记（ui-chat 的 chatInlineMarks，P-16）：只给正则、每处的范围、读屏标签和打开函数，不给 HTML。 */
+export interface CitationMark {
+  pattern: RegExp
+  ranges(match: string): Array<[number, number]>
+  label(text: string): string
+  open(text: string): void
+}
+
+/** 出处标记：点按钮（或 Tab 到后按 Enter）核对后打开原文，核对不过给中文提示。 */
+export function citationMark(deps: OpenDeps): CitationMark {
+  return {
+    pattern: citationScanner(),
+    ranges: citationItemRanges,
+    label: (text) => `打开原文：${text}`,
+    open: (text) => { void openCitation(citationItem(text), deps) },
+  }
 }
