@@ -13,6 +13,9 @@ def ref(name):
     return {"$ref": C + name}
 
 
+BATCH_PATTERN = "^[A-Za-z0-9_\\u4e00-\\u9fff-]{1,40}$"  # 批次名：字母数字下划线连字符与中文，1–40（1.3 起，引擎要求 [\\w-]{1,80}）
+
+
 def obj(props, required=None, extra=False, desc=None):
     o = {"type": "object", "properties": props, "additionalProperties": extra}
     o["required"] = list(props.keys()) if required is None else required
@@ -408,15 +411,18 @@ api = [
          obj({"action": {"const": "history"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$")}),
          obj({"action": {"const": "plan"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$"),
               "channel": enum("local", "eml"), "history": enum("exclude", "selected"),
-              "history_numbers": arr(s(pattern="^[0-9]{8,20}$"))}),
+              "history_numbers": arr(s(pattern="^[0-9]{18,20}$", desc="发票号码 18–20 位数字（1.3 起与引擎一致，原 8–20）")),
+              "start": nullable(s("邮件搜索起始日期 YYYY-MM-DD；channel=eml 时必填（1.3 起）", pattern="^[0-9]{4}-[0-9]{2}-[0-9]{2}$")),
+              "end": nullable(s("邮件搜索截止日期 YYYY-MM-DD；channel=eml 时必填（1.3 起）", pattern="^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))},
+             required=["action", "period", "channel", "history", "history_numbers"]),
          obj({"action": {"const": "run"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$"),
-              "batch": s(minLength=1, maxLength=40), "src": ref("abs_path"), "channel": enum("local", "eml")}),
+              "batch": s(pattern=BATCH_PATTERN, minLength=1, maxLength=40), "src": ref("abs_path"), "channel": enum("local", "eml")}),
          obj({"action": enum("analyze", "import"), "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$")}),
          obj({"action": {"const": "prepare"}, "period": s(pattern="^[0-9]{4}-(0[1-9]|1[0-2])$"),
-              "batch": s(minLength=1, maxLength=40), "replace": b()}),
-         obj({"action": {"const": "reprint"}, "batch": s(minLength=1, maxLength=40)}),
-         obj({"action": enum("cancel", "reimburse"), "batch": s(minLength=1, maxLength=40),
-              "apply": b("false 时只预览")}),
+              "batch": s(pattern=BATCH_PATTERN, minLength=1, maxLength=40), "replace": b()}),
+         obj({"action": {"const": "reprint"}, "batch": s(pattern=BATCH_PATTERN, minLength=1, maxLength=40)}),
+         obj({"action": enum("cancel", "reimburse"), "batch": s(pattern=BATCH_PATTERN, minLength=1, maxLength=40),
+              "apply": b("false 时只预览；cancel 引擎不支持预览，服务对 cancel 忽略 false、由界面先展示批次内容再确认（1.3 说明）")}),
          obj({"action": {"const": "review"}, "sha256": ref("sha256"), "reviewer": s(minLength=1), "confirm": b()})]},
      obj({"exit_code": i(), "attention": b("引擎退出码 2：有重复、冲突、待核或部分失败，须看明细"),
           "output": s("引擎输出原文，只在界面显示，不写日志"), "files": arr(ref("abs_path"))})),
@@ -577,7 +583,7 @@ def main():
         p = OUT / path
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(sch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (OUT / "VERSION").write_text("1.2\n", encoding="utf-8")
+    (OUT / "VERSION").write_text("1.3\n", encoding="utf-8")
     print(len(FILES), "schemas")
 
 

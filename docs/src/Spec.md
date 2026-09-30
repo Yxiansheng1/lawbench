@@ -1155,6 +1155,8 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 - 日常办公文件夹未设置时返回 `OFFICE_DIR_NOT_SET`；设置时按 SEC-14 的规则拒绝云同步目录。
 - 发票不是案卷：台账和原票在日常办公文件夹，不进案件检索，不进 AI 上下文。
 
+**2026-09-30 T25 调研后回写（主编排定）**：①引擎缓存路径超过 259 字符会失败（`LongPathsEnabled=0` 时 `%LOCALAPPDATA%` 长过约 59 字符即触发）：服务另传 `INVOICE_RUNTIME_CACHE=<应用数据>\ivc`（加入上面"只传"名单），T20 安装时检查该路径长度并提示；②引擎所有异常都退出 2 且输出以 `[BLOCKED]` 开头——服务见 `[BLOCKED]` 判 `ENGINE_FAILED`，不当"待核"；③`cancel` 引擎不支持预览：界面先用 `report`/`reprint` 展示批次内容再确认，服务对 `cancel` 一律带 `--apply`；④本地渠道不处理图片发票（引擎记"未选取"）：第一版界面写明"图片发票请先转成 PDF（可用小工具）"，`import --img` 不进白名单；⑤`invoke.py` 接受任意脚本路径、`run` 自带 `--download-links`、`collect` 可直接调用、子进程继承全部环境变量：服务把脚本名和参数写死、启动引擎时清空环境只传名单内变量，并断言测试；⑥缓存日常启动只核大小不核 sha256：本机信任边界内的已知风险；⑦`check_schema`、`import` 会往台账目录 `_日志\`、`运行日志\` 和 `%TEMP%\invoice-ocr-*` 写文件：列入第 14 节数据落点表；⑧引擎贴票清单写死了律所名（`reimbursement.py:86`）：候 owner N50。契约 1.3 相应改动见 20.12。
+
 ### 13.4 刑期计算（`calc/sentence.py`，工具 `case_calc_sentence`）
 
 纯日期计算，不调用模型。规则表写在代码里，每条带一句依据文字（返回的 `basis`），文字由责任律师核对后定稿，未核对前每条后面加"（待律师核实）"。
@@ -1501,4 +1503,4 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | 1.0 | 2026-09-28 | 首版 |
 | 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹；`settings.servers` 增加所外地址 `llm_alt_base_url`、`prep_alt_base_url`，`connection_test` 返回增加 `route`（2026-09-29） |
 | 1.2 | 2026-09-30 | 用户当日拍板的一批（候 owner 清单 N37、N21、N26、N28、N31、N32、N35）：①任务单改为"管到律师改掉为止"——`POST /api/task` 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 `GET /api/task/current?session_id=`；`/core/task/begin` 按当前选择新建执行中的任务；②`case_read_material` 加可选参数 `offset`、返回加 `next_offset`，单元超过 `max_chars` 时能接着读同一单元；`start`/`end` 的 Excel 编号改为整份材料连续（`formats.md` 第 2 节）；③`tasks_list` 任务项加 `coverage`、`citation_check`，并写明不列待执行的任务单；④新增 `GET /api/outputs?case_id=` 成果列表；⑤胶囊项加可缺省字段 `new`（升级新补进来的胶囊，首页据此提示"有新功能"）；⑥材料索引 `note` 枚举加"有外部链接，未重算公式"；⑦材料文本 Source 行加取值"待识别"；⑧`unit_count` 写明 cell 时为工作表个数；⑨`case_db.sql` 新增 `material_ids` 表（材料编号留底，schema_version 仍为 1）。`contract_version` 升 1.2 |
-| 1.3（待办，未开版） | — | 用户 2026-09-30 定（N45）：出处格式的材料名正则允许全角方括号 `〔〕`（如"京政发〔2024〕1号.pdf"）。等下一次必须改契约时一并做，不单独开版 |
+| 1.3 | 2026-09-30 | T25 调研（线 C）发现契约与发票引擎不一致，随 T25 开工前一并改：①`invoice_run` plan 的 `history_numbers` 票号改 18–20 位（引擎 `[0-9]{18,20}`）；②`batch` 加正则 `^[A-Za-z0-9_\u4e00-\u9fff-]{1,40}$`（引擎 `[\w-]{1,80}`）；③plan 加可缺省的 `start`/`end`（YYYY-MM-DD），`channel=eml` 时必填（引擎 `period_plan` 要求邮件来源必须给起止日期）；④`cancel` 的 `apply=false` 说明：引擎不支持取消预览，服务忽略、界面先展示批次再确认。`exclude` 动作是否加入白名单待线 C 给出引擎参数后并入本版。**未纳入**：N45（出处正则允许材料名含 `〔〕`）——材料名内含括号会让出处解析二义，要先定解析规则，留待 1.4。`contract_version` 升 1.3；395 与工作台服务的 `/health` 读 `contracts\VERSION` |
