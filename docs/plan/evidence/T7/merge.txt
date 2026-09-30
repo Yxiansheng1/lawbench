@@ -1,0 +1,26 @@
+T7 合流记录（主编排，2026-09-30 10:44 (+08:00)；用户在场，N34 已定"按推荐、T7 先合并"）
+
+复核：三轮 + 小项。第一轮 AMEND（review-REVIEW.md），第二轮 AMEND（review-REVIEW-第二轮.md），第三轮：冻结清单全部关闭、测试进行中进程被结束的路径按止损线上报（review-REVIEW-第三轮.md）；两个小项 PASS（review-小项.md）。用户 2026-09-30 10:44 (+08:00) 定 N34 选 ②（测试进行中标记，随第二次交回做）并同意先合并。
+合并方式：git merge --no-ff 150cd83（line-A 上 T7 三轮复核通过的提交；其后的 T13 提交和 T7 两个小项提交 64e3796、7955010 夹在 T13 之间，随 T13 一起合并）
+合并前 main：a8dca2c
+合并后 main：82b56ca569210377545557a715c6a0b5984b95c2
+合并基点：f57f309；merge-tree 预检无冲突；150cd83 未碰 contracts、skills、engines、docs/src、service、prep395、tools
+
+== 1. pytest 全量（main 上，prep395；解释器用线 C 的 .venv，导入指向 D:\lawbench\prep395）==
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+83 passed, 1 warning in 79.92s (0:01:19)
+退出码=0
+service 尚未合并进 main（T3 + T5 + T8 返修中），不适用。dsh-ext 的测试（64 项通过、5 项跳过）由第三轮复核员在克隆里独立跑过，见 review-REVIEW-第三轮.md；main 上没有 node 依赖，未重跑。
+
+== 2. 契约自检 ==
+rc=0（[对] 全部样例）
+
+== 3. build_skills --check ==
+结果：✔ 通过，rc=0
+
+== 4. 未随本次合并的 ==
+- 第二次交回（对真服务复测）：等 line-B 的 T3、T5、T8 合并。
+- N34 ②（测试进行中标记）、P3-6（进度与结束排队）、转发端口被占的处理：随第二次交回。
+- Spec 回写：见本次合并的下一个提交。

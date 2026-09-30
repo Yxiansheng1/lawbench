@@ -110,6 +110,8 @@
 ### 1.3 工作台服务的启动和看护
 
 - Host 插件启动时用 `ctx.subprocess.spawn` 拉起工作台服务，传入随机端口和 32 字节随机令牌（`LB_PORT`、`LB_TOKEN`）。DSH 会清掉子进程继承的环境变量，所以服务需要的变量（端口、令牌、应用数据目录、Key 文件位置）都要在 `env` 里显式传；另外把 Windows 的 `SYSTEMROOT`、`LOCALAPPDATA`、`APPDATA`、`USERPROFILE`、`TEMP`、`TMP` 原样传入（Python、Word / WPS 调用和发票引擎都需要，第 12.3、13.3 节）。
+
+**2026-09-30 T7 合并时回写**：DSH 只清掉名字含 KEY / PASSWORD / SECRET / TOKEN 的变量和 `DSH_*`；Host 显式传 `LB_PORT`、`LB_TOKEN`、`LB_APPDATA`、`LB_FORWARD_PORT`、系统变量、全部 `OneDrive*` 和配置里给的其余变量；端口由 Host 挑（服务的 `--port 0` 不可用）；退出码 2 = 端口绑定失败，Host 换端口重启且不计次；退出码 3 = 被信号停止，Host 自己发起的停止不重启，不是 Host 发起的照常重启并计次；启动后比对 `contract_version`。转发端口被占时服务同样以退出码 2 退出，Host 换服务端口无济于事，处理办法随 T7 第二次交回定。
 - DSH 没有现成的进程看护，由 Host 插件自己做：每 5 秒探测一次服务的 `/health`；进程退出或连续 3 次没有响应就重启，1 分钟内重启超过 3 次就停止重启，界面提示"工作台服务异常"。Host 退出时一起结束服务。
 - 服务只监听 `127.0.0.1`；每个请求必须带 `Authorization: Bearer <LB_TOKEN>`，否则返回 401，防止本机其他程序调用。
 - 关闭窗口时桌面端默认留在托盘，Host 和工作台服务继续运行，后台识别不中断（第 7.2 节）。
@@ -252,6 +254,8 @@ lawbench/                 我方仓库
 | `credentials`（插件名 `@deepseek-ai/dsh-credentials-local`；本文其他地方说的 `credentials-local` 指这一行） | 整行替换为我方凭据插件 `lawbench-dsh/credentials`（第 8.1 节） |
 | `session-persistence-jsonl` | 整行替换为我方会话记录插件，按案件存储（第 3.3 节，P-8） |
 
+**2026-09-30 T7 合并时回写**：实际做法是原行 `disabled: true`，另插一行 `legal-credentials` 提供同名服务（不整行替换；DSH 连接插件启动时要写浏览器会话密钥，见第 8.1 节）。
+
 **G-2 补充核对**：除 AGENTS.md 和 `.dsh/skills` 外，逐一列出 DSH 在打开工作区时会从 `cwd` 读取的所有内容（项目级配置、插件、忽略文件等），写进 `dsh/PATCHES.md`，确认律师工作台 preset 下都不生效。
 
 **3. 律师工作台 preset**（新增行 `preset-lawbench`，插件 `@deepseek-ai/dsh-agent-preset`，写法参照官方 `packages/bundle/web-app/presets/standard.patch.yml`）：
@@ -318,6 +322,8 @@ lawbench/                 我方仓库
 | P-12 | 桌面端自带的 Office 组合 | `apps/desktop-host/src/index.ts` | 去掉 `desktop-office` 的挂载（Office Skill 和 `load_workspace_dependencies` 工具）。桌面端 Host 在补丁行之外直接挂载它，配置补丁关不掉；不去掉模型会多出白名单外的工具（2026-09-29 T4 抓包发现） |
 | P-13 | 设置页的"打开配置文件"按钮 | `packages/client/ui-settings-general/src/client/index.ts` | 桌面端不注册 `open-document` 动作。这个按钮会用系统文本编辑器打开 profile 自己的 `cordis.patch.yml`，它叠在我方补丁之后、改了即时生效，律师可以借它改模型地址、重新打开已关掉的插件（2026-09-29 T4 第二轮复核发现）。设置接口的远程写入由 P-7 地址白名单兜底 |
 | P-03a | 欢迎窗口读账号状态（临时） | `apps/desktop/src/welcome-backend.ts` | 账号服务调用失败按"未登录"处理，否则关掉账号相关行后进不了工作区。P-3 落地时整体替换、删掉本条 |
+
+**2026-09-30 T7 合并时回写**：P-3 已落地（`dsh-patches\P-3-first-run-page.patch`，删去临时的 P-03a）；"测试连接"先保存再测、失败恢复，见第 8.1 节；"是否配置过"由 Host 自己看 `<应用数据>\settings.json` 是否存在并问凭据插件有没有 Key，不经服务。P-6 不需要改 DSH 源码：界面插件启动时自己 `` 一份手写的远程描述（T13），`PATCHES.md` 已写明。
 
 完成后用抓包核对（第 14.3 节）。
 
@@ -742,6 +748,8 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 - 温度：流水线用 0.2；Agent 用 Skill 推荐值，默认 0.3。
 
 **律师 Key 的存放**（D9，PRD F-ACC-01a）：DSH 从 `ctx.credentials` 取 Key，默认实现 `credentials-local` 把 Key 明文存在 `$DSH_HOME/.credentials.yaml`，本项目不用它。
+
+**2026-09-30 T7 合并时回写**：我方凭据插件只认 `LAWFIRM_KEY`，不读环境变量；DSH 自己要写的授权记录（目前只有连接插件的 `client-connection/browser-session` 一种）只放进程内存、不落盘、不进凭据管理器，其他记录名一律拒绝并在插件日志记记录名；崩溃转储可能带出这条内存记录，归 T17 数据落点核对。首次配置页的"测试连接"：服务只能按已保存的设置测，所以先保存再测，没通过就恢复成测试前的地址和 Key（之前没有的就删掉），恢复失败明确提示"未能恢复原配置"；测试进行中程序被结束会留下未验证的配置，第一版用应用数据目录里的"测试进行中"标记兜住（候 owner 清单 N34 ②，随 T7 第二次交回）。
 - **我方凭据插件** `lawbench-dsh/credentials`：实现与 `credentials-local` 相同的服务接口，通过组合包补丁替换 `credentials-local` 行（第 3.1 节）。Key 存在 Windows 凭据管理器的"普通凭据"中，目标名固定为 `lawbench/LAWFIRM_KEY`，用户名字段写 `lawbench`。Node 侧用 Windows 的 `CredWriteW` / `CredReadW`（经 N-API 原生模块或 PowerShell 调用均可，由开发工单选定并在安装包中内置，不在运行时下载）。
 - **首次配置页**写入 Key；设置页可以更换 Key。
 - **工作台服务**用 Python `keyring`（Windows 后端）读同一条目：`keyring.get_password("lawbench/LAWFIRM_KEY", "lawbench")`〔待验证：keyring 的 Windows 后端与 `CredWriteW` 写入的目标名、用户名能否对上；对不上时两边统一改用 keyring 约定的格式〕。只读，不缓存到文件。
@@ -755,6 +763,8 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 | 思考：低 / 中 / 高 | `reasoningEffort: low / medium / high`（Agent 插件在 `agent/request` 中按任务单设置）；路由配置把 `high` 映射为发给网关的 `xhigh` | `chat_template_kwargs: {"enable_thinking": true, "reasoning_effort": "low" / "medium" / "xhigh"}` |
 | 窗口 32K / 64K / 128K | 插件在 `agent/request` 中按任务单选择对应窗口的模型条目（`LlmCallConfig.model`）；控制 L1 长度；DSH 按该条目的 `contextWindow` 压缩历史（见下） | 客户端按窗口控制"输入 token + max_tokens" |
 | 最大生成量 | `maxTokens`（插件设置） | `max_tokens` |
+
+**2026-09-30 T7 合并时回写**：`agent/request` 不切换 `model`，"窗口"只控制输入长度和 `maxTokens`。
 
 **"高"档发 `xhigh`**（2026-09-29 实测，T4 发现、主编排复测）：6000D 对 `reasoning_effort: "high"` 返回 400（`Unexpected reasoning effort high. Supported types are xhigh (default), medium, and low.`），放在请求体顶层或 `chat_template_kwargs` 里都一样；`xhigh`、`medium`、`low` 和关闭思考都返回 200。界面、任务单、契约里仍叫"高"（`high`），只在发给 6000D 的那一步换成 `xhigh`：Agent 由路由配置的 `reasoningEfforts` 映射，流水线（T16）和 395 的 Key 校验、抽取（T6）在拼请求体时映射。网关把 `xhigh` 标为默认值，不带 `reasoning_effort` 时可能等同最高档，G-7 比较三档差异时要每档都显式带上。
 
@@ -846,6 +856,8 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
   - **L1 任务输入**：任务单选用的前序成果和 wiki 分节，按窗口控制长度（不超过窗口的 40%，按 token 计，第 8.2 节）；超出的只列目录，由 AI 用 `case_read_input` 分段读取。
 - **后续**：AI 按"看 L0 / wiki → `case_search` 定位 → `case_read_material` 回读原文"的顺序调用工具（F-SRCH-02），写在通用规则里。
 - **预算**（F-RUN-05）：模型调用 8 次、工具调用 24 次、45 分钟，按任务计算（一个任务 = 律师发起的一次请求）。由 Agent 插件实现：`agent/pre-step` 超限时拒绝，最后一次调用前注入"立即收尾"；`tools/pre-execute` 超限时拒绝工具调用，**但 `case_save_draft` 不计入、也不受工具预算限制**，保证模型总有机会保存。
+
+**2026-09-30 T7 合并时回写**：工具预算只数 `case_*`（`case_save_draft` 除外），被拒绝的不计；碰到过上限的任务结束原因报 `budget`。进度保存传的是本任务到目前为止全部回复的拼接，空文本不传。`task/begin` 或 `context` 失败时插件拒绝整轮（DSH 的拒绝不能附带消息，界面提示归 T13）；工具在没有任务时返回"工作台服务未启动"。
 - **结果清单**（`result.json`，执行后）：状态（完成 / 取消 / 预算停止 / 输出上限 / 失败）、实际用量、草稿、出处核对结果、覆盖清单。覆盖清单按 `reads.json` 的实际读取记录计算，不采信模型自报。
 - 正常完成前应调用 `case_save_draft`；返回有 A–E、G 类问题或有未读完的材料时，修正后用同一标题再保存（最多 2 轮）。
 - **中断时由程序保存**（F-RUN-04）：不依赖模型调用工具。
@@ -1385,6 +1397,8 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | `GET /health` | — | Host 插件每 5 秒 | `{"status":"ok","contract_version":"1.1"}`，不需要令牌 |
 
 ### 20.4 AI 工具（`contracts/tools/`）
+
+**2026-09-30 T7 合并时回写**：DSH 工具定义的 `output.schema` 用宽松写法 `{type: object}`，结果由我方插件按契约 `/result` 校验，失败抛错并把中文 `message` 给模型；参数展开 `` 后逐字来自契约 `/args`；`render` 输出 JSON 文本。
 
 11 个工具，每个文件的 `$defs/args` 直接用作 DSH `ToolDefinition.parameters`，`$defs/result` 是 `/core/tool` 成功时 `value` 的结构。Skill 正文里引用的返回字段（`has_more`、`next_start`、`citation_check.problems`、`not_fully_read` 等）必须和这里一致，`build_skills.py` 校验工具名，契约自检校验 Skill 头部。
 

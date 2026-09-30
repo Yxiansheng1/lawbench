@@ -254,6 +254,9 @@ li{margin:3px 0}
 <h3 id="1-3-工作台服务的启动和看护">1.3 工作台服务的启动和看护</h3>
 <ul>
 <li>Host 插件启动时用 <code>ctx.subprocess.spawn</code> 拉起工作台服务，传入随机端口和 32 字节随机令牌（<code>LB_PORT</code>、<code>LB_TOKEN</code>）。DSH 会清掉子进程继承的环境变量，所以服务需要的变量（端口、令牌、应用数据目录、Key 文件位置）都要在 <code>env</code> 里显式传；另外把 Windows 的 <code>SYSTEMROOT</code>、<code>LOCALAPPDATA</code>、<code>APPDATA</code>、<code>USERPROFILE</code>、<code>TEMP</code>、<code>TMP</code> 原样传入（Python、Word / WPS 调用和发票引擎都需要，第 12.3、13.3 节）。</li>
+</ul>
+<p><strong>2026-09-30 T7 合并时回写</strong>：DSH 只清掉名字含 KEY / PASSWORD / SECRET / TOKEN 的变量和 <code>DSH_*</code>；Host 显式传 <code>LB_PORT</code>、<code>LB_TOKEN</code>、<code>LB_APPDATA</code>、<code>LB_FORWARD_PORT</code>、系统变量、全部 <code>OneDrive*</code> 和配置里给的其余变量；端口由 Host 挑（服务的 <code>--port 0</code> 不可用）；退出码 2 = 端口绑定失败，Host 换端口重启且不计次；退出码 3 = 被信号停止，Host 自己发起的停止不重启，不是 Host 发起的照常重启并计次；启动后比对 <code>contract_version</code>。转发端口被占时服务同样以退出码 2 退出，Host 换服务端口无济于事，处理办法随 T7 第二次交回定。</p>
+<ul>
 <li>DSH 没有现成的进程看护，由 Host 插件自己做：每 5 秒探测一次服务的 <code>/health</code>；进程退出或连续 3 次没有响应就重启，1 分钟内重启超过 3 次就停止重启，界面提示&quot;工作台服务异常&quot;。Host 退出时一起结束服务。</li>
 <li>服务只监听 <code>127.0.0.1</code>；每个请求必须带 <code>Authorization: Bearer &lt;LB_TOKEN&gt;</code>，否则返回 401，防止本机其他程序调用。</li>
 <li>关闭窗口时桌面端默认留在托盘，Host 和工作台服务继续运行，后台识别不中断（第 7.2 节）。</li>
@@ -641,6 +644,7 @@ li{margin:3px 0}
 </tr>
 </tbody>
 </table>
+<p><strong>2026-09-30 T7 合并时回写</strong>：实际做法是原行 <code>disabled: true</code>，另插一行 <code>legal-credentials</code> 提供同名服务（不整行替换；DSH 连接插件启动时要写浏览器会话密钥，见第 8.1 节）。</p>
 <p><strong>G-2 补充核对</strong>：除 AGENTS.md 和 <code>.dsh/skills</code> 外，逐一列出 DSH 在打开工作区时会从 <code>cwd</code> 读取的所有内容（项目级配置、插件、忽略文件等），写进 <code>dsh/PATCHES.md</code>，确认律师工作台 preset 下都不生效。</p>
 <p><strong>3. 律师工作台 preset</strong>（新增行 <code>preset-lawbench</code>，插件 <code>@deepseek-ai/dsh-agent-preset</code>，写法参照官方 <code>packages/bundle/web-app/presets/standard.patch.yml</code>）：</p>
 <pre><code class="language-yaml">- insert:
@@ -784,6 +788,7 @@ li{margin:3px 0}
 </tr>
 </tbody>
 </table>
+<p><strong>2026-09-30 T7 合并时回写</strong>：P-3 已落地（<code>dsh-patches\P-3-first-run-page.patch</code>，删去临时的 P-03a）；&quot;测试连接&quot;先保存再测、失败恢复，见第 8.1 节；&quot;是否配置过&quot;由 Host 自己看 <code>&lt;应用数据&gt;\settings.json</code> 是否存在并问凭据插件有没有 Key，不经服务。P-6 不需要改 DSH 源码：界面插件启动时自己 `` 一份手写的远程描述（T13），<code>PATCHES.md</code> 已写明。</p>
 <p>完成后用抓包核对（第 14.3 节）。</p>
 <h3 id="3-3-数据落点-SEC-01-SEC-11；G-4">3.3 数据落点（SEC-01、SEC-11；G-4）</h3>
 <p>DSH 默认把以下数据写在 <code>$DSH_HOME</code> 或系统临时目录，其中几项含案卷内容：</p>
@@ -1572,6 +1577,7 @@ li{margin:3px 0}
 <li>温度：流水线用 0.2；Agent 用 Skill 推荐值，默认 0.3。</li>
 </ul>
 <p><strong>律师 Key 的存放</strong>（D9，PRD F-ACC-01a）：DSH 从 <code>ctx.credentials</code> 取 Key，默认实现 <code>credentials-local</code> 把 Key 明文存在 <code>$DSH_HOME/.credentials.yaml</code>，本项目不用它。</p>
+<p><strong>2026-09-30 T7 合并时回写</strong>：我方凭据插件只认 <code>LAWFIRM_KEY</code>，不读环境变量；DSH 自己要写的授权记录（目前只有连接插件的 <code>client-connection/browser-session</code> 一种）只放进程内存、不落盘、不进凭据管理器，其他记录名一律拒绝并在插件日志记记录名；崩溃转储可能带出这条内存记录，归 T17 数据落点核对。首次配置页的&quot;测试连接&quot;：服务只能按已保存的设置测，所以先保存再测，没通过就恢复成测试前的地址和 Key（之前没有的就删掉），恢复失败明确提示&quot;未能恢复原配置&quot;；测试进行中程序被结束会留下未验证的配置，第一版用应用数据目录里的&quot;测试进行中&quot;标记兜住（候 owner 清单 N34 ②，随 T7 第二次交回）。</p>
 <ul>
 <li><strong>我方凭据插件</strong> <code>lawbench-dsh/credentials</code>：实现与 <code>credentials-local</code> 相同的服务接口，通过组合包补丁替换 <code>credentials-local</code> 行（第 3.1 节）。Key 存在 Windows 凭据管理器的&quot;普通凭据&quot;中，目标名固定为 <code>lawbench/LAWFIRM_KEY</code>，用户名字段写 <code>lawbench</code>。Node 侧用 Windows 的 <code>CredWriteW</code> / <code>CredReadW</code>（经 N-API 原生模块或 PowerShell 调用均可，由开发工单选定并在安装包中内置，不在运行时下载）。</li>
 <li><strong>首次配置页</strong>写入 Key；设置页可以更换 Key。</li>
@@ -1610,6 +1616,7 @@ li{margin:3px 0}
 </tr>
 </tbody>
 </table>
+<p><strong>2026-09-30 T7 合并时回写</strong>：<code>agent/request</code> 不切换 <code>model</code>，&quot;窗口&quot;只控制输入长度和 <code>maxTokens</code>。</p>
 <p><strong>&quot;高&quot;档发 <code>xhigh</code></strong>（2026-09-29 实测，T4 发现、主编排复测）：6000D 对 <code>reasoning_effort: &quot;high&quot;</code> 返回 400（<code>Unexpected reasoning effort high. Supported types are xhigh (default), medium, and low.</code>），放在请求体顶层或 <code>chat_template_kwargs</code> 里都一样；<code>xhigh</code>、<code>medium</code>、<code>low</code> 和关闭思考都返回 200。界面、任务单、契约里仍叫&quot;高&quot;（<code>high</code>），只在发给 6000D 的那一步换成 <code>xhigh</code>：Agent 由路由配置的 <code>reasoningEfforts</code> 映射，流水线（T16）和 395 的 Key 校验、抽取（T6）在拼请求体时映射。网关把 <code>xhigh</code> 标为默认值，不带 <code>reasoning_effort</code> 时可能等同最高档，G-7 比较三档差异时要每档都显式带上。</p>
 <p>思考三档是否有实际差异<span class="wait">〔待 G-7〕</span>；没有差异就合并为&quot;开&quot;。服务器上限是 262144。</p>
 <ul>
@@ -1734,6 +1741,9 @@ li{margin:3px 0}
 </li>
 <li><strong>后续</strong>：AI 按&quot;看 L0 / wiki → <code>case_search</code> 定位 → <code>case_read_material</code> 回读原文&quot;的顺序调用工具（F-SRCH-02），写在通用规则里。</li>
 <li><strong>预算</strong>（F-RUN-05）：模型调用 8 次、工具调用 24 次、45 分钟，按任务计算（一个任务 = 律师发起的一次请求）。由 Agent 插件实现：<code>agent/pre-step</code> 超限时拒绝，最后一次调用前注入&quot;立即收尾&quot;；<code>tools/pre-execute</code> 超限时拒绝工具调用，<strong>但 <code>case_save_draft</code> 不计入、也不受工具预算限制</strong>，保证模型总有机会保存。</li>
+</ul>
+<p><strong>2026-09-30 T7 合并时回写</strong>：工具预算只数 <code>case_*</code>（<code>case_save_draft</code> 除外），被拒绝的不计；碰到过上限的任务结束原因报 <code>budget</code>。进度保存传的是本任务到目前为止全部回复的拼接，空文本不传。<code>task/begin</code> 或 <code>context</code> 失败时插件拒绝整轮（DSH 的拒绝不能附带消息，界面提示归 T13）；工具在没有任务时返回&quot;工作台服务未启动&quot;。</p>
+<ul>
 <li><strong>结果清单</strong>（<code>result.json</code>，执行后）：状态（完成 / 取消 / 预算停止 / 输出上限 / 失败）、实际用量、草稿、出处核对结果、覆盖清单。覆盖清单按 <code>reads.json</code> 的实际读取记录计算，不采信模型自报。</li>
 <li>正常完成前应调用 <code>case_save_draft</code>；返回有 A–E、G 类问题或有未读完的材料时，修正后用同一标题再保存（最多 2 轮）。</li>
 <li><strong>中断时由程序保存</strong>（F-RUN-04）：不依赖模型调用工具。
@@ -2825,6 +2835,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 </tbody>
 </table>
 <h3 id="20-4-AI-工具-contracts-tools">20.4 AI 工具（<a href="../contracts/tools/"><code>contracts/tools/</code></a>）</h3>
+<p><strong>2026-09-30 T7 合并时回写</strong>：DSH 工具定义的 <code>output.schema</code> 用宽松写法 <code>{type: object}</code>，结果由我方插件按契约 <code>/result</code> 校验，失败抛错并把中文 <code>message</code> 给模型；参数展开 `` 后逐字来自契约 <code>/args</code>；<code>render</code> 输出 JSON 文本。</p>
 <p>11 个工具，每个文件的 <code>$defs/args</code> 直接用作 DSH <code>ToolDefinition.parameters</code>，<code>$defs/result</code> 是 <code>/core/tool</code> 成功时 <code>value</code> 的结构。Skill 正文里引用的返回字段（<code>has_more</code>、<code>next_start</code>、<code>citation_check.problems</code>、<code>not_fully_read</code> 等）必须和这里一致，<code>build_skills.py</code> 校验工具名，契约自检校验 Skill 头部。</p>
 <table>
 <thead>
