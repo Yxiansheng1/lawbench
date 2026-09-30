@@ -26,6 +26,7 @@ END_STATUS = {  # core/task_end 的 reason → result.json 的 status
     "max-tokens": "output_limit", "budget": "budget_stopped", "error": "failed", "blocked": "failed",
 }
 IN_PROGRESS = "进行中.md"
+OUTPUTS_REL = "成果/索引.json"
 _VERSIONED = re.compile(r"^(?P<title>.+)-v(?P<n>\d+)\.(md|docx)$")
 
 
@@ -56,6 +57,8 @@ class TaskStore:
         self._begun: dict[str, datetime] = {}
         self._task_locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+        # 分段读的进度（N31）：(任务, 材料, 版本, 单元号) → 从 0 起连续读到了第几个字
+        self._parts: dict[tuple, int] = {}
 
     def task_lock(self, task_id: str) -> threading.Lock:
         """按任务的锁：result.json、草稿版本号的读-改-写都在这把锁里（P1-3、P2-2）。"""
@@ -146,6 +149,34 @@ class TaskStore:
         logs.event("task", "create", case_id=d["case_id"])
         return {"task_id": task_id}
 
+    def outputs(self, case_id: str) -> dict:
+        """GET /api/outputs（契约 1.2，N35⑥）：成果/索引.json 的内容；还没有成果时是空列表。"""
+        root = self.cases.root_of(case_id)
+        p = gate.resolve_internal(root, OUTPUTS_REL, op="outputs")
+        if not p.is_file():
+            return {"v": 1, "outputs": []}
+        data = contracts.read_json(p)
+        contracts.validate("files/outputs_index.schema.json", "", data)
+        return data
+
+    def current(self, session_id: str) -> dict:
+        """GET /api/task/current（契约 1.2）：该会话当前的选择。会话属于哪个案件请求里没有，按最近打开的案件找。"""
+        with self._lock:
+            best = None
+            for c in self.cases.recent():
+                try:
+                    root = self.cases.root_of(c["case_id"])
+                    t = self._pending_for(root, session_id)
+                except ApiError:
+                    continue
+                if t is not None and (best is None or t["created_at"] > best["created_at"]):
+                    best = t
+        if best is None:
+            return {"selection": None}
+        return {"selection": {"task_id": best["task_id"], "entry": best["entry"], "skill": best["skill"],
+                              "inputs": [r["path"] for r in best["inputs"]], "params": best["params"],
+                              "updated_at": best["created_at"]}}
+
     def list(self, case_id: str) -> dict:
         root = self.cases.root_of(case_id)
         base = gate.resolve_internal(root, TASK_DIR, op="task")
@@ -160,7 +191,8 @@ class TaskStore:
                 cc = res["citation_check"]
                 out.append({"task_id": task["task_id"], "skill": task["skill"], "status": res["status"],
                             "drafts": res["drafts"], "citation_passed": cc["passed"] if cc else None,
-                            "finished_at": res["finished_at"]})
+                            "finished_at": res["finished_at"], "coverage": res["coverage"],
+                            "citation_check": cc})
         return {"tasks": out}
 
     def _void_pending(self, root: str, case_id: str, session_id: str) -> None:
@@ -197,15 +229,19 @@ class TaskStore:
     def begin(self, session_id: str, cwd: str) -> dict:
         case_id, root = self.cases.find_by_root(cwd)
         with self._lock:
-            task = self._pending_for(root, session_id)
-            if task is None:
-                task_id = new_task_id("T")
-                task = {"v": 1, "task_id": task_id, "case_id": case_id, "kind": "agent", "session_id": session_id,
+            # 契约 1.2（N37）：按该会话当前的选择（待执行的任务单）复制出一个新的执行中任务，
+            # 选择本身不消耗、不删除；没有选择就按自由对话默认值新建
+            sel = self._pending_for(root, session_id)
+            tid = new_task_id("T")
+            if sel is not None:
+                task = copy.deepcopy(sel)
+                task.update(task_id=tid, created_at=now_iso())
+            else:
+                task = {"v": 1, "task_id": tid, "case_id": case_id, "kind": "agent", "session_id": session_id,
                         "entry": None, "skill": None, "step": None, "inputs": [],
                         "params": self.default_params(None), "budget": copy.deepcopy(DEFAULT_BUDGET),
-                        "state": "pending", "created_at": now_iso()}
+                        "created_at": now_iso()}
             task["state"] = "running"
-            tid = task["task_id"]
             self._write(root, self.rel(tid, "task.json"), task, "files/task.schema.json")
             self._write(root, self.rel(tid, "result.json"), {
                 "v": 1, "task_id": tid, "status": "running",
@@ -273,6 +309,21 @@ class TaskStore:
             data = self._read(root, self.rel(task_id, "reads.json"), "files/reads.schema.json")
             data["reads"].append(rec)
             self._write(root, self.rel(task_id, "reads.json"), data, "files/reads.schema.json")
+
+    def read_part(self, task_id: str, m: dict, no: int, start: int, end: int, length: int) -> bool:
+        """记下读了单元的 [start, end)；从 0 起连续读到单元末尾时返回 True（只返回一次）。"""
+        key = (task_id, m["material_id"], m["sha256"], no)
+        with self._guard:
+            got = self._parts.get(key, 0)
+            if got < 0:
+                return False           # 已经算读完、记过了
+            if start <= got:
+                got = max(got, end)
+            if got >= length:
+                self._parts[key] = -1
+                return True
+            self._parts[key] = got
+            return False
 
     def coverage(self, root: str, case_id: str, task_id: str) -> dict:
         """按 reads.json 的实际读取记录计算，不采信模型自报（Spec 9.2）。只认当前版本（sha256）的读取。"""

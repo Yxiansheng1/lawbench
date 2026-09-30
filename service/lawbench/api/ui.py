@@ -68,6 +68,12 @@ def routes(st) -> list[Route]:
     def tasks_list(d: dict) -> dict:
         return st.tasks.list(d["case_id"])
 
+    def task_current(d: dict) -> dict:
+        return st.tasks.current(d["session_id"])
+
+    def outputs_list(d: dict) -> dict:
+        return st.tasks.outputs(d["case_id"])
+
     def case_recent(d: dict) -> dict:
         return {"cases": st.cases.recent()}
 
@@ -114,6 +120,8 @@ def routes(st) -> list[Route]:
         Route("/api/connection/test", E("connection_test", connection_test), methods=["POST"]),
         Route("/api/task", E("task_create", task_create), methods=["POST"]),
         Route("/api/tasks", E("tasks_list", tasks_list, query=True), methods=["GET"]),
+        Route("/api/task/current", E("task_current", task_current, query=True), methods=["GET"]),
+        Route("/api/outputs", E("outputs_list", outputs_list, query=True), methods=["GET"]),
     ]
 
 

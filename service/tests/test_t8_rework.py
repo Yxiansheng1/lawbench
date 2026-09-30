@@ -65,37 +65,61 @@ def create(env, session, skill="contract-review"):
     return ok(env.client.post("/api/task", json=req), "api/task_create.schema.json")["task_id"]
 
 
-# ---------- P1-1：截断的单元不算已读 ----------
+# ---------- P1-1（按契约 1.2 N31）：单元超长时用 offset 接着读；没读全的单元不算已读 ----------
+
+def _reads(e, tid):
+    return [(r["from"], r["to"]) for r in e.read_json(tid, "reads.json", "files/reads.schema.json")["reads"]]
+
 
 @pytest.mark.parametrize("max_chars", [500, None])
-def test_p1_1_truncated_unit_not_recorded(small, max_chars):
+def test_p1_1_long_unit_read_in_parts(small, max_chars):
     if max_chars is None:  # 默认 8000：把第 2 行做得比 8000 还长
-        p = small.root / "长行说明.txt"
-        p.write_text("第一行\n" + "长" * 9000 + "\n第三行\n", encoding="utf-8")
+        (small.root / "长行说明.txt").write_text("第一行\n" + "长" * 9000 + "\n第三行\n", encoding="utf-8")
         ok(small.client.post("/api/materials/scan", json={"case_id": small.case_id}), "api/materials_scan.schema.json")
+    limit = max_chars or 8000
     tid = small.begin("sess-trunc")["task_id"]
     args = {"name": "长行说明", "start": 2}
     if max_chars:
         args["max_chars"] = max_chars
     v = small.tool_ok(tid, "case_read_material", args)
-    assert "已截断" in v["text"] and len(v["text"]) <= (max_chars or 8000)
-    assert v["next_start"] == 3
-    reads = small.read_json(tid, "reads.json", "files/reads.schema.json")["reads"]
-    assert all(not (r["from"] <= 2 <= r["to"]) for r in reads)          # 第 2 行没记成已读
+    assert len(v["text"]) <= limit and v["start"] == v["end"] == 2
+    assert v["next_offset"] and v["next_start"] == 2 and v["has_more"]
+    assert _reads(small, tid) == []                                    # 第 2 行没读全：不记
+    got = v["text"]
+    while v["next_offset"] is not None:
+        v = small.tool_ok(tid, "case_read_material", dict(args, offset=v["next_offset"]))
+        assert len(v["text"]) <= limit
+        got += v["text"]
+    assert got.count("长") == (9000 if max_chars is None else 3360)    # 分段接起来一个字不少
+    assert v["next_start"] == 3 and _reads(small, tid) == [(2, 2)]     # 读到单元末尾：这时才记
     small.tool_ok(tid, "case_read_material", {"name": "长行说明", "start": 1, "max_chars": 500})
     small.tool_ok(tid, "case_read_material", {"name": "长行说明", "start": 3})
-    cov = ok(end(small, tid), "core/task_end.schema.json") and \
-        small.read_json(tid, "result.json", "files/result.schema.json")["coverage"]
-    assert cov["fully_read"] == []
-    assert cov["partially_read"] == [{"name": "长行说明", "read_units": 2, "total_units": 3}]
+    ok(end(small, tid), "core/task_end.schema.json")
+    cov = small.read_json(tid, "result.json", "files/result.schema.json")["coverage"]
+    assert cov["fully_read"] == ["长行说明"]
+
+
+def test_p1_1_skipping_part_not_counted(small):
+    """只读了开头一段、跳过中间直接读末尾：不算读完。"""
+    tid = small.begin("sess-skip")["task_id"]
+    v = small.tool_ok(tid, "case_read_material", {"name": "长行说明", "start": 2, "max_chars": 500})
+    small.tool_ok(tid, "case_read_material", {"name": "长行说明", "start": 2, "max_chars": 500, "offset": 3000})
+    assert v["next_offset"] < 3000 and _reads(small, tid) == []
+    ok(end(small, tid), "core/task_end.schema.json")
+    cov = small.read_json(tid, "result.json", "files/result.schema.json")["coverage"]
+    assert "长行说明" not in cov["fully_read"]
+
+
+def test_p1_1_offset_out_of_range(small):
+    tid = small.begin("sess-off")["task_id"]
+    fail(small.tool(tid, "case_read_material", {"name": "长行说明", "start": 2, "offset": 99999}), "INVALID_ARGUMENT")
 
 
 def test_p1_1_whole_units_still_recorded(small):
     tid = small.begin("sess-whole")["task_id"]
     v = small.tool_ok(tid, "case_read_material", {"name": "长行说明", "start": 1, "max_chars": 500})
-    assert v["end"] == 1 and "已截断" not in v["text"]
-    reads = small.read_json(tid, "reads.json", "files/reads.schema.json")["reads"]
-    assert [(r["from"], r["to"]) for r in reads] == [(1, 1)]
+    assert v["end"] == 1 and v["next_offset"] is None
+    assert _reads(small, tid) == [(1, 1)]
 
 
 # ---------- P1-2：执行中重开同一案件 ----------
@@ -291,15 +315,46 @@ def test_p2_6_mkdirs_still_rejects_file(tmp_path, monkeypatch):
         gate._mkdirs(root, pathlib.Path(root) / "工作区" / "任务" / "a", "t")
 
 
-# ---------- P2-7：新建任务单作废同一会话里更早的待执行任务单 ----------
+# ---------- P2-7（按契约 1.2 N37）：设置当前选择；begin 按选择复制，选择不消耗 ----------
 
-def test_p2_7_newer_pending_replaces_older(env):
+def current(env, session):
+    return ok(env.client.get("/api/task/current", params={"session_id": session}),
+              "api/task_current.schema.json")["selection"]
+
+
+def test_p2_7_selection_not_consumed(env):
     a = create(env, "sess-p27", "contract-review")
     b = create(env, "sess-p27", "case-summary")
-    assert not env.task_dir(a).exists()
-    assert env.begin("sess-p27")["task_id"] == b
-    v = env.begin("sess-p27")
-    assert v["task_id"] not in (a, b) and v["skill"] is None        # 取不到 A，按自由对话新建
+    assert not env.task_dir(a).exists()                              # 新的顶掉旧的
+    v1 = env.begin("sess-p27")
+    v2 = env.begin("sess-p27")
+    assert v1["skill"] == v2["skill"] == "case-summary"             # 每条消息都按当前选择跑
+    assert len({v1["task_id"], v2["task_id"], b}) == 3              # 复制出新的执行中任务
+    assert env.read_json(b, "task.json", "files/task.schema.json")["state"] == "pending"   # 选择不消耗
+    assert env.read_json(v1["task_id"], "task.json", "files/task.schema.json")["state"] == "running"
+
+
+def test_p2_7_switch_back_to_free(env):
+    create(env, "sess-p27f", "contract-review")
+    req = {"case_id": env.case_id, "session_id": "sess-p27f", "entry": None, "skill": None, "inputs": [],
+           "params": {"thinking": "低", "window": "32K", "max_tokens": 2048}}
+    ok(env.client.post("/api/task", json=req), "api/task_create.schema.json")
+    v = env.begin("sess-p27f")
+    assert v["skill"] is None and v["params"]["thinking"] == "低"
+
+
+def test_p2_7_task_current_three_forms(env):
+    assert current(env, "sess-p27-none") is None
+    b = create(env, "sess-p27c", "case-summary")
+    sel = current(env, "sess-p27c")
+    assert sel["task_id"] == b and sel["skill"] == "case-summary" and sel["inputs"] == []
+    req = {"case_id": env.case_id, "session_id": "sess-p27c", "entry": None, "skill": None, "inputs": [],
+           "params": {"thinking": "中", "window": "64K", "max_tokens": 4096}}
+    ok(env.client.post("/api/task", json=req), "api/task_create.schema.json")
+    sel = current(env, "sess-p27c")
+    assert sel["entry"] is None and sel["skill"] is None             # 自由对话
+    env.begin("sess-p27c")
+    assert current(env, "sess-p27c") is not None                     # begin 之后选择还在
 
 
 def test_p2_7_same_second_later_wins(env, monkeypatch):
@@ -309,7 +364,7 @@ def test_p2_7_same_second_later_wins(env, monkeypatch):
     b = create(env, "sess-p27s", "case-summary")
     monkeypatch.undo()
     assert not env.task_dir(a).exists()
-    assert env.begin("sess-p27s")["task_id"] == b
+    assert env.begin("sess-p27s")["skill"] == "case-summary" and current(env, "sess-p27s")["task_id"] == b
 
 
 def test_p2_7_other_session_untouched(env):
@@ -341,7 +396,7 @@ def test_p2_7_voided_not_listed(env):
     listed = {t["task_id"] for t in ok(env.client.get("/api/tasks", params={"case_id": env.case_id}),
                                         "api/tasks_list.schema.json")["tasks"]}
     assert a not in listed and b not in listed                     # 注记 0651：待执行的不列
-    assert not (env.task_dir(a) / "result.json").exists()           # 注记 0805：作废的不留 result.json
+    assert not env.task_dir(a).exists()                              # 注记 0805：被顶掉的不留 result.json
 
 
 # ---------- 注记 0651：/api/tasks 不列待执行 ----------
@@ -351,10 +406,12 @@ def test_tasks_list_excludes_pending(env):
     listed = {t["task_id"] for t in ok(env.client.get("/api/tasks", params={"case_id": env.case_id}),
                                         "api/tasks_list.schema.json")["tasks"]}
     assert a not in listed
-    env.begin("sess-0651")
-    listed = {t["task_id"] for t in ok(env.client.get("/api/tasks", params={"case_id": env.case_id}),
-                                        "api/tasks_list.schema.json")["tasks"]}
-    assert a in listed
+    run = env.begin("sess-0651")["task_id"]
+    tasks = ok(env.client.get("/api/tasks", params={"case_id": env.case_id}), "api/tasks_list.schema.json")["tasks"]
+    listed = {t["task_id"] for t in tasks}
+    assert run in listed and a not in listed                          # 1.2：选择不消耗，也不列
+    item = next(t for t in tasks if t["task_id"] == run)
+    assert item["coverage"] is None and item["citation_check"] is None  # N35①：还没保存过，都是 null
 
 
 # ---------- P3-1：目录那几行计入预算 ----------
@@ -386,10 +443,9 @@ def test_p3_2_progress_end_on_pending(env):
 def test_p3_3_elapsed_from_begin(env, monkeypatch):
     from lawbench.case import task as task_mod
     monkeypatch.setattr(task_mod, "now_iso", lambda: "2020-01-01T00:00:00+08:00")
-    a = create(env, "sess-p33")                     # 建单时间在很久以前
+    create(env, "sess-p33")
+    tid = env.begin("sess-p33")["task_id"]          # task.json 的建单时间写成很久以前
     monkeypatch.undo()
-    tid = env.begin("sess-p33")["task_id"]
-    assert tid == a
     ok(progress(env, tid), "core/progress.schema.json")
     assert env.read_json(tid, "result.json", "files/result.schema.json")["usage"]["elapsed_s"] < 60
 
@@ -427,3 +483,36 @@ def test_gap_add_read_is_locked(small, monkeypatch):
         t.join(30)
     monkeypatch.undo()
     assert len(small.read_json(tid, "reads.json", "files/reads.schema.json")["reads"]) == 3
+
+
+# ---------- 契约 1.2 N35①：tasks_list 带 coverage、citation_check ----------
+
+def test_n35_tasks_list_has_coverage_and_check(env):
+    tid = env.begin("sess-n35")["task_id"]
+    env.tool_ok(tid, "case_save_draft", {"title": "带覆盖", "content": "x"})
+    tasks = ok(env.client.get("/api/tasks", params={"case_id": env.case_id}), "api/tasks_list.schema.json")["tasks"]
+    item = next(t for t in tasks if t["task_id"] == tid)
+    assert item["coverage"]["total"] > 0 and item["citation_check"]["passed"] is True
+
+
+# ---------- 契约 1.2 N35⑥：GET /api/outputs ----------
+
+def test_n35_outputs_empty_and_filled(env):
+    idx = env.root / "成果" / "索引.json"
+    assert ok(env.client.get("/api/outputs", params={"case_id": env.case_id}),
+              "api/outputs_list.schema.json") == {"v": 1, "outputs": []}
+    data = {"v": 1, "outputs": [{"title": "审查意见", "version": 1, "files": [{"format": "md", "path": "成果/审查意见-v1.md"}],
+                                 "task_id": "T-20260930100000-abcd", "inputs": [], "citation_passed": True,
+                                 "confirmed_at": "2026-09-30T10:00:00+08:00"}]}
+    idx.parent.mkdir(exist_ok=True)
+    idx.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    try:
+        assert ok(env.client.get("/api/outputs", params={"case_id": env.case_id}),
+                  "api/outputs_list.schema.json") == data
+    finally:
+        idx.unlink()
+
+
+def test_n35_outputs_unknown_case(env):
+    other = env.case_id[:-1] + ("0" if env.case_id[-1] != "0" else "1")   # 格式对、但没登记过
+    fail(env.client.get("/api/outputs", params={"case_id": other}), "CASE_NOT_FOUND")

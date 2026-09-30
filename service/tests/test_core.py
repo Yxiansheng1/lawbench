@@ -51,9 +51,11 @@ def test_begin_uses_pending_task(env):
     tid = ok(env.client.post("/api/task", json=req), "api/task_create.schema.json")["task_id"]
     assert env.read_json(tid, "task.json", "files/task.schema.json")["state"] == "pending"
     v = env.begin("sess-pend")
-    assert v["task_id"] == tid and v["skill"] == "contract-review" and v["params"]["window"] == "32K"
-    assert env.begin("sess-pend")["task_id"] != tid   # 用过一次就不再是待执行
-    assert env.begin("sess-other")["skill"] is None    # 别的会话不会拿走它
+    # 契约 1.2：按当前选择复制出新的执行中任务，选择本身不消耗，下一条消息仍按它跑
+    assert v["task_id"] != tid and v["skill"] == "contract-review" and v["params"]["window"] == "32K"
+    assert env.begin("sess-pend")["skill"] == "contract-review"
+    assert env.read_json(tid, "task.json", "files/task.schema.json")["state"] == "pending"
+    assert env.begin("sess-other")["skill"] is None    # 别的会话不受影响
 
 
 def test_begin_bad_request(env):
