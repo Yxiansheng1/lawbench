@@ -1,0 +1,11 @@
+# 本开发机实测：每种转换一次的耗时与转换后残留进程（soffice.exe/soffice.bin、pandoc.exe 个数）  2026-09-29 19:30:16 +0800
+soffice: Program Files\LibreOffice
+pandoc : %LOCALAPPDATA%\Pandoc
+doc / wps → docx             借条.doc              7.5 秒  残留进程 soffice/pandoc=(0, 0)
+doc / wps → docx             借条-wps.wps          8.0 秒  残留进程 soffice/pandoc=(0, 0)
+xls → xlsx                   银行流水.xls            6.7 秒  残留进程 soffice/pandoc=(0, 0)
+Word → PDF                   借条.docx             8.3 秒  残留进程 soffice/pandoc=(0, 0)
+PDF → Word（只保留文字和段落）         起诉意见书.pdf           0.5 秒  残留进程 soffice/pandoc=(0, 0)
+Markdown → Word              案情摘要.md             0.2 秒  残留进程 soffice/pandoc=(0, 0)
+Word → Markdown              借条.docx             0.1 秒  残留进程 soffice/pandoc=(0, 0)
+图片 → PDF                     转账截图.jpg            0.2 秒  残留进程 soffice/pandoc=(0, 0)

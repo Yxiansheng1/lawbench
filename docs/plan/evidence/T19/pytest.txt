@@ -1,0 +1,73 @@
+# cd tools; python -m pytest -q tests（T19 第五步后）    2026-09-30 11:59:43 +0800
+...............................................................          [100%]
+=================================== PASSES ====================================
+_________________ test_batch_errors_are_chinese_and_isolated __________________
+---------------------------- Captured stderr call -----------------------------
+D:\lawbench-C\.venv\Lib\site-packages\PIL\Image.py:3578: DecompressionBombWarning: Image size (3900000 pixels) exceeds limit of 2000000 pixels, could be decompression bomb DOS attack.
+  warnings.warn(
+=========================== short test summary info ===========================
+PASSED tests/test_convert.py::test_each_conversion[doc\u2192docx]
+PASSED tests/test_convert.py::test_each_conversion[wps\u2192docx]
+PASSED tests/test_convert.py::test_each_conversion[xls\u2192xlsx]
+PASSED tests/test_convert.py::test_each_conversion[docx\u2192pdf]
+PASSED tests/test_convert.py::test_each_conversion[doc\u2192pdf]
+PASSED tests/test_convert.py::test_each_conversion[pdf\u2192docx]
+PASSED tests/test_convert.py::test_each_conversion[md\u2192docx]
+PASSED tests/test_convert.py::test_each_conversion[docx\u2192md]
+PASSED tests/test_convert.py::test_each_conversion[jpg\u2192pdf]
+PASSED tests/test_convert.py::test_pdf_to_word_keeps_text_and_paragraphs
+PASSED tests/test_convert.py::test_scanned_pdf_refused
+PASSED tests/test_convert.py::test_same_name_gets_suffix
+PASSED tests/test_convert.py::test_wrong_extension_and_batch
+PASSED tests/test_convert.py::test_missing_programs_chinese_message
+PASSED tests/test_convert.py::test_hung_converter_killed_with_children
+PASSED tests/test_convert.py::test_no_print_calls_in_converter
+PASSED tests/test_convert.py::test_finder_order
+PASSED tests/test_convert.py::test_gui_builds
+PASSED tests/test_convert.py::test_conversions_do_not_fetch_remote_resources
+PASSED tests/test_convert.py::test_doc_with_external_image_refused_without_fetch
+PASSED tests/test_convert.py::test_extlinks_ignores_hyperlink_and_plain_url
+PASSED tests/test_convert.py::test_disguised_rtf_or_html_named_doc_refused
+PASSED tests/test_convert.py::test_xls_external_references_do_not_fetch
+PASSED tests/test_convert.py::test_batch_survives_unexpected_errors
+PASSED tests/test_convert.py::test_unexpected_exception_becomes_chinese_reason
+PASSED tests/test_convert.py::test_failure_and_timeout_leave_no_workdir
+PASSED tests/test_convert.py::test_cleanup_stale_only_old_own_dirs
+PASSED tests/test_convert.py::test_mixed_pdf_reports_scan_pages
+PASSED tests/test_convert.py::test_gui_notes_and_close_guard
+PASSED tests/test_convert.py::test_extlinks_field_check_switch_first_and_no_data_address
+PASSED tests/test_convert.py::test_extlinks_plain_english_link_text
+PASSED tests/test_convert.py::test_readonly_source_dir_reason
+PASSED tests/test_convert.py::test_corrupt_doc_refused_as_legacy
+PASSED tests/test_convert.py::test_profile_path_too_long_refused
+PASSED tests/test_convert.py::test_soffice_crash_code_message
+PASSED tests/test_convert.py::test_profile_dir_short_and_removed
+PASSED tests/test_convert.py::test_long_form_shapes
+PASSED tests/test_convert.py::test_convert_from_network_share[jpg\u2192pdf]
+PASSED tests/test_convert.py::test_convert_from_network_share[md\u2192docx]
+PASSED tests/test_convert.py::test_convert_from_network_share[docx\u2192pdf]
+PASSED tests/test_convert.py::test_profile_left_behind_is_reported
+PASSED tests/test_convert.py::test_left_behind_notice_survives_convert_error
+PASSED tests/test_convert.py::test_left_behind_notice_survives_timeout
+PASSED tests/test_convert.py::test_left_behind_notice_survives_other_exception
+PASSED tests/test_convert.py::test_left_behind_notice_on_success_stays_in_notes
+PASSED tests/test_convert.py::test_no_test_writes_real_profile_root
+PASSED tests/test_convert.py::test_legacy_word_by_file_header[doc]
+PASSED tests/test_convert.py::test_legacy_word_by_file_header[wps]
+PASSED tests/test_convert.py::test_legacy_word_by_file_header[docx\u6539\u540ddoc]
+PASSED tests/test_convert.py::test_legacy_word_by_file_header[doc\u6539\u540ddocx]
+PASSED tests/test_convert.py::test_batch_with_legacy_word_not_interrupted
+PASSED tests/test_convert.py::test_xls_still_converts_with_ole_header
+PASSED tests/test_convert.py::test_legacy_word_note_in_gui
+PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u7eaf\u8272\u80cc\u666f.png]
+PASSED tests/test_splitter.py::test_cuts_only_on_blank_rows[\u804a\u5929-\u5f69\u8272\u80cc\u666f.png]
+PASSED tests/test_splitter.py::test_no_blank_overlaps_and_warns
+PASSED tests/test_splitter.py::test_merge_pdf
+PASSED tests/test_splitter.py::test_custom_height_and_batch
+PASSED tests/test_splitter.py::test_plan_picks_longest_run_in_window
+PASSED tests/test_splitter.py::test_plan_ignores_short_runs
+PASSED tests/test_splitter.py::test_rerun_does_not_overwrite
+PASSED tests/test_splitter.py::test_batch_errors_are_chinese_and_isolated
+PASSED tests/test_splitter.py::test_gui_builds
+63 passed in 215.09s (0:03:35)
+exit=0
