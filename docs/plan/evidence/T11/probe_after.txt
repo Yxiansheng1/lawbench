@@ -48,3 +48,8 @@ Get-NetFirewallRule -Group lawbench-prep395 | Get-NetFirewallAddressFilter（重
 lawbench prep395 9000 in | Allow | 远端 192.168.8.0/255.255.255.0,10.126.126.0/255.255.255.0
 lawbench prep395 block 9101 in | Block | 远端 Any
 lawbench prep395 block 9102 in | Block | 远端 Any
+
+## T11 小项重部署（087cd0c，源码 zip 6b0bea980ef9bae7c8a8f95ac67ea0e507cd04a372349ea7bcbc1ae4b6af7471），2026-09-30 20:2x
+第一次重跑 install 时新 zip 已下载（哈希对）但没解压到位，/health 仍报 1.2；补 Expand-Archive 后核对 pyproject 的 uvicorn>=0.54,<0.55 与 FALLBACK "1.3"，再重跑 install。
+所外 curl http://10.126.126.3:9000/health → {"status":"ok","ocr":"ok","llm9b":"ok","queue":0,"version":"1.0.0","contract_version":"1.3"}
+（重装前一次的 9000 监听：192.168.8.124 与 10.126.126.3 同一进程 12232）
