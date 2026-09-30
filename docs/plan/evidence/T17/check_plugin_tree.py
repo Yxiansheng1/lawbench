@@ -65,12 +65,16 @@ T17_N41 = {
 }
 assert len(T17_N41) == 9, f"N41 名单应为 9 行，现为 {len(T17_N41)} 行"
 MUST_OFF |= T17_N41
+# T17 第三步（执行令 2026-09-30 15:16）：会话记录改由我方 legal-session-store 按案件存；原存储行关掉；
+# 会话投影缓存会把律师原话存进 $DSH_HOME\storages，一并关掉
+T17_STEP3 = {"session-persistence-jsonl", "session-projection-cache"}
+MUST_OFF |= T17_STEP3
 # 取证期允许临时启用的行（见文件头）
 OVERLAY_ROW = "plugin-inventory"
 # 启用但起不来、已上报主编排待裁决的行（单列显示，不隐藏；裁决后按结论改）
 # （ui-deliverables 曾列于此，主编排 09:39 裁决显式关掉，已移入"必须关"；现为空）
 PENDING_DECISION = {}
-OURS_REQUIRED = ["legal-ui", "legal-host", "legal-credentials", "preset-lawbench"]
+OURS_REQUIRED = ["legal-ui", "legal-host", "legal-credentials", "legal-session-store", "preset-lawbench"]
 
 # 必须关的行在运行时清单里不存在时一律计入失败（可能是 id 写错或换了 DSH 提交），
 # 除非列在这里并写明原因。固定提交 477b4f4 下"必须关"的各行全部存在，所以目前为空。
@@ -108,7 +112,6 @@ ALLOWED = {
     "storage": (CORE, "存储服务"),
     "storage-json": (CORE, "JSON 存储后端"),
     "storage-domain": (CORE, "存储分域"),
-    "session-projection-cache": (CORE, "会话列表缓存；Spec 3.3 要求抽查不含正文（T17）"),
     "subprocess": (CORE, "子进程服务；T7 的 Host 插件用它拉起工作台服务"),
     "sandbox": (CORE, "沙箱服务；命令工具已关，只作基础设施"),
     "sandbox-policy": (CORE, "沙箱策略"),
@@ -182,12 +185,13 @@ ALLOWED = {
     # T13：界面插件，行名即包名 lawbench-dsh（DSH 的 modules 行据此加载 ./client）
     "legal-ui": (OURS, "我方界面插件：首页、胶囊管理、右侧栏材料 / 成果 / 原文查看、输入区上方选择、设置页一节；一切数据经 lawbench 远程接口（Host 转 127.0.0.1 的工作台服务），不读写案件文件"),
     "legal-credentials": (OURS, "我方凭据插件：只认 LAWFIRM_KEY、读写 Windows 凭据管理器；授权记录只在内存；不读环境变量"),
+    # T17 第三步
+    "legal-session-store": (OURS, "我方会话存储：顶替 session-persistence-jsonl，案件里的会话存 <案件>\\工作区\\会话，其余存 $DSH_HOME\\sessions；内部用原版 JSONL 包"),
     # 后续工单处理（不是 AI 工具、不外连；归 T17 / T13 / T7 加固，本轮不关）
     "workspace": (LATER, "工作区服务与\"默认工作区\"入口（T13）"),
     "ui-workspace": (LATER, "\"默认工作区\"入口界面（T13）"),
     "attachment-local": (LATER, "附件存 $DSH_HOME，改为导入（P-5，T17）"),
     "ui-attachment": (LATER, "附件界面（P-5，T17）"),
-    "session-persistence-jsonl": (LATER, "会话记录存 $DSH_HOME，改为按案件存（P-8，T17）"),
 }
 
 # directory-picker 运行时自动挂载的子项没有固定 id（每次启动随机 8 位十六进制），按模块名放行
@@ -284,8 +288,8 @@ def main(inv_path, tree_path, overlay=False):
     class L(yaml.SafeLoader): pass
     L.add_constructor("tag:yaml.org,2002:js", lambda l, n: "!!js " + l.construct_scalar(n))
     rows = {r.get("id"): r for r in yaml.load(open(tree_path, encoding="utf-8-sig"), Loader=L) if isinstance(r, dict)}
-    out += ["", f"## 2d. 静态树里 T17 第一步这 {len(T17_STEP1)} 行、第二步 N41 这 {len(T17_N41)} 行都写着 disabled: true（产品配置，不含取证叠加层）"]
-    for i in sorted(T17_STEP1 | T17_N41):
+    out += ["", f"## 2d. 静态树里 T17 第一步这 {len(T17_STEP1)} 行、第二步 N41 这 {len(T17_N41)} 行、第三步 {len(T17_STEP3)} 行都写着 disabled: true（产品配置，不含取证叠加层）"]
+    for i in sorted(T17_STEP1 | T17_N41 | T17_STEP3):
         r = rows.get(i)
         ok = bool(r) and r.get("disabled") is True
         if not ok:

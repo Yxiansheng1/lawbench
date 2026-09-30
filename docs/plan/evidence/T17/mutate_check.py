@@ -94,6 +94,9 @@ CASES = [
     ("N41：静态树里 ui-model-selection 没有关", inv_src, tree_enable("ui-model-selection"), 1, "静态树里没有关：ui-model-selection"),
     ("N41：静态树里 command-feedback 没有关", inv_src, tree_enable("command-feedback"), 1, "静态树里没有关：command-feedback"),
     ("N41：ui-agent-preset 从清单里消失", drop_entry("include:ui-agent-preset"), tree_src, 1, "必须关的行在清单里不存在（id 写错或 DSH 提交变了）：ui-agent-preset"),
+    # 第三步：我方会话存储没加载；会话投影缓存被改回启用
+    ("第三步：legal-session-store 缺失", drop_entry("include:legal-session-store"), tree_src, 1, "我方行没有加载或没有激活：legal-session-store"),
+    ("第三步：session-projection-cache 被改回启用", enable_entry("include:session-projection-cache"), tree_src, 1, "必须关的行仍启用：session-projection-cache"),
 ]
 
 failed = 0

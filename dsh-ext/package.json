@@ -9,6 +9,7 @@
     "./agent": "./lib/agent.js",
     "./host": "./lib/host.js",
     "./credentials": "./lib/credentials.js",
+    "./session-store": "./lib/session-store.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./persona.md": "./persona.md",
     "./package.json": "./package.json"
@@ -20,7 +21,8 @@
     "lib/client.js",
     "lib/agent.js",
     "lib/host.js",
-    "lib/credentials.js"
+    "lib/credentials.js",
+    "lib/session-store.js"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",

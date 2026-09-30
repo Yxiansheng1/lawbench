@@ -1,0 +1,6 @@
+﻿## 案件目录（全部文件）：检查 6 个文件，命中 0 个
+## $DSH_HOME（全部文件）：检查 38 个文件，命中 0 个
+## %TEMP%（开始后改过的）：检查 2742 个文件，命中 2 个
+  claude\D--lawbench-A\83a515fe-3091-4d1d-bb29-68b2364c0be5\scratchpad\s3-reply.md（raw）
+  claude\D--lawbench-A\83a515fe-3091-4d1d-bb29-68b2364c0be5\scratchpad\s3-token.txt（raw）
+## %LOCALAPPDATA%（开始后改过的，除上面两处）：检查 166 个文件，命中 0 个

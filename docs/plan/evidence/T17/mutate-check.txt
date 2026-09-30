@@ -20,4 +20,6 @@ OK   N41：workspace-changes 被改回启用：退出码 1（期望 1），输�
 OK   N41：静态树里 ui-model-selection 没有关：退出码 1（期望 1），输出含「静态树里没有关：ui-model-selection」
 OK   N41：静态树里 command-feedback 没有关：退出码 1（期望 1），输出含「静态树里没有关：command-feedback」
 OK   N41：ui-agent-preset 从清单里消失：退出码 1（期望 1），输出含「必须关的行在清单里不存在（id 写错或 DSH 提交变了）：ui-agent-preset」
+OK   第三步：legal-session-store 缺失：退出码 1（期望 1），输出含「我方行没有加载或没有激活：legal-session-store」
+OK   第三步：session-projection-cache 被改回启用：退出码 1（期望 1），输出含「必须关的行仍启用：session-projection-cache」
 结论： 变异全部被报出，基线通过

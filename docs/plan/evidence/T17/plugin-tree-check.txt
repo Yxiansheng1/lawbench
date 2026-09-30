@@ -1,6 +1,6 @@
 ﻿# 桌面端运行时插件核对（pluginInventory/list，enabled 为桌面端语境下的实际状态）
 
-## 1. 必须关的行（80 行）
+## 1. 必须关的行（82 行）
   account-controller                   关
   agent-instructions                   关
   command-feedback                     关
@@ -29,6 +29,8 @@
   ptc-runtime                          关
   session-log-deepseek                 关
   session-log-download                 关
+  session-persistence-jsonl            关
+  session-projection-cache             关
   session-reference                    关
   session-telemetry-otel               关
   session-title-llm                    关
@@ -82,8 +84,8 @@
   workspace-changes                    关
   workspace-files                      关
 
-## 2. 反向检查：启用的行 101 个，逐条对白名单
-### 核心运行时（62）
+## 2. 反向检查：启用的行 100 个，逐条对白名单
+### 核心运行时（61）
   agent                                Agent 运行服务
   agent-default-model                  新会话默认模型，已改成律所路由
   agent-loop                           Agent 循环
@@ -114,7 +116,6 @@
   session-checkpoint-policy            会话检查点
   session-controller                   会话命令远程接口
   session-projection                   会话投影（界面显示用）
-  session-projection-cache             会话列表缓存；Spec 3.3 要求抽查不含正文（T17）
   session-query-sqlite                 会话检索，内存库且不开启
   session-stats                        会话统计（界面）
   session-title                        会话标题服务；LLM 生成标题的行已关，T7 由我方插件设标题
@@ -147,11 +148,11 @@
   webserver                            本机 Web 服务，绑定 127.0.0.1
   workspace-controller                 工作区远程接口，documentsDirectory 已改
 ### 界面框架（28）
-  89212866（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
   api-remotes                          远程接口装配
   client-hmr                           界面热更新（开发期）
   connection                           界面到 Host 的连接
-  f713b9f1（随机 id）                      桌面端原生目录选择器（界面半边）
+  d4218efe（随机 id）                      桌面端原生目录选择器（界面半边）
+  f571ea8f（随机 id）                      桌面端原生目录选择器（directory-picker 自动挂载的子项，Host 半边）
   file-upload                          界面上传通道（附件改导入归 P-5 / T17）
   locale                               语言，固定中文
   modules                              界面插件模块表
@@ -178,14 +179,14 @@
 ### 设置（2）
   ui-settings                          设置页外壳；enabled: false 即开发者模式关
   ui-settings-general                  通用设置页（语言、外观、字号等）；"打开配置文件"按钮已由 P-13 在桌面端去掉，开发者模式开关由 P-18 去掉，权限一行随 ui-permission 关掉
-### 我方（4）
+### 我方（5）
   legal-credentials                    我方凭据插件：只认 LAWFIRM_KEY、读写 Windows 凭据管理器；授权记录只在内存；不读环境变量
   legal-host                           我方 Host 插件：启动并看护工作台服务（只监听 127.0.0.1），提供 lawbenchCore 服务和 lawbench 远程接口（首次配置页用）；不对模型暴露工具
+  legal-session-store                  我方会话存储：顶替 session-persistence-jsonl，案件里的会话存 <案件>\工作区\会话，其余存 $DSH_HOME\sessions；内部用原版 JSONL 包
   legal-ui                             我方界面插件：首页、胶囊管理、右侧栏材料 / 成果 / 原文查看、输入区上方选择、设置页一节；一切数据经 lawbench 远程接口（Host 转 127.0.0.1 的工作台服务），不读写案件文件
   preset-lawbench                      律师工作台 preset
-### 后续工单处理（5）
+### 后续工单处理（4）
   attachment-local                     附件存 $DSH_HOME，改为导入（P-5，T17）
-  session-persistence-jsonl            会话记录存 $DSH_HOME，改为按案件存（P-8，T17）
   ui-attachment                        附件界面（P-5，T17）
   ui-workspace                         "默认工作区"入口界面（T13）
   workspace                            工作区服务与"默认工作区"入口（T13）
@@ -196,9 +197,10 @@
   legal-ui                             已激活
   legal-host                           已激活
   legal-credentials                    已激活
+  legal-session-store                  已激活
   preset-lawbench                      已激活
 
-## 2d. 静态树里 T17 第一步这 22 行、第二步 N41 这 9 行都写着 disabled: true（产品配置，不含取证叠加层）
+## 2d. 静态树里 T17 第一步这 22 行、第二步 N41 这 9 行、第三步 2 行都写着 disabled: true（产品配置，不含取证叠加层）
   command-feedback                     disabled: true
   cordis-client-runner                 disabled: true
   cordis-host-runner                   disabled: true
@@ -208,6 +210,8 @@
   permission                           disabled: true
   plugin-inventory                     disabled: true
   session-log-download                 disabled: true
+  session-persistence-jsonl            disabled: true
+  session-projection-cache             disabled: true
   session-reference                    disabled: true
   terminal-controller                  disabled: true
   ui-agent-preset                      disabled: true

@@ -42,7 +42,7 @@ await esbuild.build({
 
 await esbuild.build({
   absWorkingDir: root,
-  entryPoints: { agent: 'agent/index.ts', host: 'host/index.ts', credentials: 'credentials/index.ts', index: 'ui/host.ts' },
+  entryPoints: { agent: 'agent/index.ts', host: 'host/index.ts', credentials: 'credentials/index.ts', 'session-store': 'session-store/index.ts', index: 'ui/host.ts' },
   outdir: 'lib',
   bundle: true,
   format: 'esm',
@@ -57,7 +57,7 @@ await esbuild.build({
 })
 
 // 构建后在纯 ESM 进程里逐个导入（不能用 node -e：那是 CommonJS，有全局 require，会掩盖上面这类问题）
-for (const name of ['agent', 'host', 'credentials', 'index']) {
+for (const name of ['agent', 'host', 'credentials', 'session-store', 'index']) {
   const url = pathToFileURL(join(root, 'lib', `${name}.js`)).href
   const { spawnSync } = await import('node:child_process')
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(url)})`], { encoding: 'utf8' })

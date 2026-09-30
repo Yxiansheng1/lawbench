@@ -350,3 +350,24 @@
         env: !!js "JSON.parse(process.env.LAWBENCH_SERVICE_ENV ?? '{}')"
         # listSkills 读的 Skill 目录（T13 执行令 Q4），与上面 preset 的 skill-filesystem 同一写法、同一顺序（管理员目录在前）
         skillDirs: !!js "[process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+
+# ── 5. 会话记录进案件文件夹（T17 第三步，执行令 2026-09-30 15:16）─────────────────
+# 原行把所有会话记录存进 $DSH_HOME\sessions；换成我方路由：案件里的会话存 <案件>\工作区\会话，
+# 不在案件里的仍存 $DSH_HOME\sessions。路由内部用的仍是原版 JSONL 包（按 DSH 的模块解析取它的入口文件）。
+- id: session-persistence-jsonl
+  disabled: true
+
+# 会话投影缓存：把每个会话的投影（含律师发的原话）存进 $DSH_HOME\storages\session_projcache，不跟案件走
+# （第三步验收全盘搜特征串时发现）。它只是冷读加速，用它的地方都是可选的（ctx.get），关掉只是列会话时多重放一遍记录
+- id: session-projection-cache
+  disabled: true
+
+- insert:
+    - id: legal-session-store
+      name: 'lawbench-dsh/session-store'
+      config:
+        backendModule: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-persistence-jsonl')"
+        defaultRoot: !!js dshHomePath('sessions')
+        appData: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
+        # 不在案件里的会话是否允许新建：N46 候用户定，暂按允许；定了"不允许"改为 false
+        allowOutsideCase: true
