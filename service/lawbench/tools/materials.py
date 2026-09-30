@@ -50,13 +50,16 @@ def read_material(ctx: ToolContext, a: dict) -> dict:
             break
         picked.append(u)
     text = texts.render(picked, m["unit"])
-    if len(text) > limit:  # 一个单元就超过上限：截断，下次从下一个单元读
+    truncated = len(text) > limit
+    if truncated:  # 一个单元就超过上限：截断，下次从下一个单元读
         tail = "\n…（本单元过长，已截断）"
         text = text[:limit - len(tail)] + tail
     nxt = next((u.no for u in rest if u.no > picked[-1].no), None)
-    ctx.tasks.add_read(ctx.root, ctx.task["task_id"], {
-        "material_id": m["material_id"], "material_version": m["sha256"], "unit": m["unit"],
-        "from": picked[0].no, "to": picked[-1].no, "at": datetime.now().astimezone().isoformat(timespec="seconds")})
+    if not truncated:  # 截断的单元没读全，不记进 reads.json，材料归入"没读全"（P1-1；读余下部分要改契约，N31）
+        ctx.tasks.add_read(ctx.root, ctx.task["task_id"], {
+            "material_id": m["material_id"], "material_version": m["sha256"], "unit": m["unit"],
+            "from": picked[0].no, "to": picked[-1].no,
+            "at": datetime.now().astimezone().isoformat(timespec="seconds")})
     return {"name": m["name"], "material_id": m["material_id"], "unit": m["unit"], "start": picked[0].no,
             "end": picked[-1].no, "text": text, "has_more": nxt is not None, "next_start": nxt}
 

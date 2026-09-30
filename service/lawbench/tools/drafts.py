@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from datetime import datetime
 
 from .. import contracts
@@ -12,6 +13,7 @@ from . import ToolContext
 
 PENDING_REL = "工作区/wiki/待确认.json"
 PENDING_SCHEMA = "files/wiki_pending.schema.json"
+_WIKI_LOCK = threading.Lock()  # 待确认.json 的读-改-写（P2-3）；只是本地读写，跨案件共用一把也不会久等
 
 
 def empty_citation_check() -> dict:
@@ -25,23 +27,32 @@ def save_draft(ctx: ToolContext, a: dict) -> dict:
         raise ApiError("INVALID_ARGUMENT", "empty_title")
     tid = ctx.task["task_id"]
     drafts_rel = ctx.tasks.rel(tid, "草稿")
-    folder = gate.resolve_internal(ctx.root, drafts_rel, op="save_draft")
-    pat = re.compile(re.escape(title) + r"-v(\d+)\.md$")
-    existing = [int(m.group(1)) for p in (folder.iterdir() if folder.is_dir() else []) if (m := pat.match(p.name))]
-    version = max(existing, default=0) + 1
-    rel = f"{drafts_rel}/{title}-v{version}.md"
-    gate.write_bytes(ctx.root, rel, a["content"].encode("utf-8"), op="save_draft")  # 标题是设备名等：闸门拒绝
-    check = empty_citation_check()
-    cov = ctx.tasks.coverage(ctx.root, ctx.case_id, tid)
-    res = ctx.tasks.result(ctx.root, tid)
-    res["drafts"].append({"title": title, "path": rel, "version": version})
-    res.update(citation_check=check, coverage=cov)
-    ctx.tasks.save_result(ctx.root, res)
+    # 取版本号、写文件、改 result.json 都在这个任务的锁里（P1-3、P2-2）；
+    # 匹配已有版本不分大小写：NTFS 上 Report-v1.md 和 report-v1.md 是同一个文件
+    with ctx.tasks.task_lock(tid):
+        folder = gate.resolve_internal(ctx.root, drafts_rel, op="save_draft")
+        pat = re.compile(re.escape(title.casefold()) + r"-v(\d+)\.md$")
+        existing = [int(m.group(1)) for p in (folder.iterdir() if folder.is_dir() else [])
+                    if (m := pat.match(p.name.casefold()))]
+        version = max(existing, default=0) + 1
+        rel = f"{drafts_rel}/{title}-v{version}.md"
+        gate.write_bytes(ctx.root, rel, a["content"].encode("utf-8"), op="save_draft")  # 标题是设备名等：闸门拒绝
+        check = empty_citation_check()
+        cov = ctx.tasks.coverage(ctx.root, ctx.case_id, tid)
+        res = ctx.tasks.result(ctx.root, tid)
+        res["drafts"].append({"title": title, "path": rel, "version": version})
+        res.update(citation_check=check, coverage=cov)
+        ctx.tasks.save_result(ctx.root, res)
     not_fully = [p["name"] for p in cov["partially_read"]] + cov["not_read"]
     return {"path": rel, "version": version, "citation_check": check, "coverage": cov, "not_fully_read": not_fully}
 
 
 def suggest_wiki(ctx: ToolContext, a: dict) -> dict:
+    with _WIKI_LOCK:
+        return _suggest_wiki(ctx, a)
+
+
+def _suggest_wiki(ctx: ToolContext, a: dict) -> dict:
     p = gate.resolve_internal(ctx.root, PENDING_REL, op="suggest_wiki")
     data = contracts.read_json(p) if p.is_file() else {"v": 1, "suggestions": []}
     contracts.validate(PENDING_SCHEMA, "", data)

@@ -16,6 +16,7 @@ _spec.loader.exec_module(rg)
 CORE = "tests/test_core.py"
 TOOLS = "tests/test_tools.py"
 
+rg.TITLE = "T8 红绿验证"
 rg.MUTATIONS = [
     ("材料文本路径：先把 index.json 的 rel_path 过闸门再拼", "case/texts.py", [
         ('    gate.check_ai_rel(material["rel_path"], op="material_text")\n', ""),

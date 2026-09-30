@@ -1,4 +1,4 @@
-﻿T3 红绿验证：14 类防护
+﻿T8 红绿验证：14 类防护（标题原来误写成 T3，返修 P3-4 更正；其余内容是 4699510 时的原始输出）
 
 [01] 材料文本路径：先把 index.json 的 rel_path 过闸门再拼
   改坏 case/texts.py → 红：1 failed, 44 deselected in 10.11s

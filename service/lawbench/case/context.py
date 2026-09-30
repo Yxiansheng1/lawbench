@@ -65,22 +65,30 @@ def build_l0(root: str, index: dict) -> str:
 def build_l1(root: str, task: dict, read_input) -> dict:
     """read_input(root, ref) → 文本；选用后被改过的报 INPUT_CHANGED。"""
     budget = tokens.l1_budget(task["params"]["window"])
-    used = 0
-    parts: list[str] = []
-    toc: list[dict] = []
+    blocks: list[tuple[dict, str, int]] = []
     for ref in task["inputs"]:
         text = read_input(root, ref)
         block = f"## 输入 {ref['index']}：{ref['title']}\n\n{text.rstrip()}\n"
-        n = tokens.count(block)
-        if not toc and used + n <= budget:
-            parts.append(block)
-            used += n
-        else:  # 一旦有放不下的，其后的都只列目录，保持顺序
-            toc.append({"index": ref["index"], "title": ref["title"], "tokens": n})
-    if toc:
-        parts.append("以下输入没有放进来，需要时用 case_read_input 按序号分段读取：\n"
-                     + "\n".join(f"- 输入 {t['index']}：{t['title']}（约 {t['tokens']} token）" for t in toc) + "\n")
-    text = "\n".join(parts)
+        blocks.append((ref, block, tokens.count(block)))
+
+    def assemble(k: int) -> tuple[str, list[dict]]:
+        """前 k 份放全文，其后的只列目录（保持顺序）。"""
+        toc = [{"index": ref["index"], "title": ref["title"], "tokens": n} for ref, _, n in blocks[k:]]
+        parts = [b for _, b, _ in blocks[:k]]
+        if toc:
+            parts.append("以下输入没有放进来，需要时用 case_read_input 按序号分段读取：\n"
+                         + "\n".join(f"- 输入 {t['index']}：{t['title']}（约 {t['tokens']} token）" for t in toc)
+                         + "\n")
+        return "\n".join(parts), toc
+
+    k, used = 0, 0
+    while k < len(blocks) and used + blocks[k][2] <= budget:
+        used += blocks[k][2]
+        k += 1
+    text, toc = assemble(k)
+    while k > 0 and tokens.count(text) > budget:  # 目录那几行也计入预算（P3-1）：放不下就再少放一份全文
+        k -= 1
+        text, toc = assemble(k)
     return {"text": text, "tokens": tokens.count(text) if text else 0, "truncated": bool(toc), "toc": toc}
 
 

@@ -399,6 +399,9 @@ def _mkdirs(root: str, path: pathlib.Path, op: str) -> None:
     for p in rel_parts:
         cur = os.path.join(cur, p)
         if not os.path.lexists(cur):
-            os.mkdir(cur)
+            try:
+                os.mkdir(cur)
+            except FileExistsError:
+                pass  # 并发请求抢先建好了（T8 返修 P2-6）：照常做下面的复查
         if is_link(cur) or not os.path.isdir(cur) or not is_within(root, os.path.realpath(cur)):
             raise _deny(op, "mkdir_escape")

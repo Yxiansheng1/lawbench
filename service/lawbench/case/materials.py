@@ -430,10 +430,10 @@ class Materials:
         gate.write_bytes(root, STATUS_REL, "\n".join(lines).encode("utf-8"), op="materials_status")
 
     def index(self, case_id: str) -> dict:
-        """材料索引（只读，给工具和覆盖清单用）。"""
+        """材料索引（只读，给工具和覆盖清单用）。不拿案件锁（T8 返修 P2-5）：扫描、导入要持锁很久，
+        index.json 是原子替换写入的，不加锁读到的一定是完整的旧版或新版。"""
         root = self.cases.root_of(case_id)
-        with self._lock(case_id):
-            return self._load_index(root, case_id)
+        return self._load_index(root, case_id)
 
     # ---------- 列表 ----------
 

@@ -204,6 +204,7 @@ def test_end_status_mapping(env, reason, status):
 
 def test_reopen_marks_running_abnormal(env):
     tid = env.begin("sess-crash")["task_id"]
+    env.client.app.state.lb.tasks._begun.pop(tid)   # 当成上一个进程留下的（T8 返修 P1-2：本进程的不标）
     ok(env.client.post("/api/case/open", json={"path": str(env.root)}), "api/case_open.schema.json")
     assert env.read_json(tid, "task.json", "files/task.schema.json")["state"] == "abnormal"
     assert env.read_json(tid, "result.json", "files/result.schema.json")["status"] == "abnormal"

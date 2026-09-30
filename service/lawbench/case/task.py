@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import secrets
 import threading
@@ -49,8 +50,17 @@ class TaskStore:
         self.cases = cases
         self.settings = settings
         self.materials = materials
-        self._lock = threading.Lock()
+        self._lock = threading.Lock()      # 建单、取单（begin）、作废、add_read
         self._where: dict[str, str] = {}  # task_id → case_id
+        # 本进程 begin 过的任务 → begin 的时刻（P1-2：重开案件时不把它们当成上次硬退出留下的；P3-3：用时从这里算）
+        self._begun: dict[str, datetime] = {}
+        self._task_locks: dict[str, threading.Lock] = {}
+        self._guard = threading.Lock()
+
+    def task_lock(self, task_id: str) -> threading.Lock:
+        """按任务的锁：result.json、草稿版本号的读-改-写都在这把锁里（P1-3、P2-2）。"""
+        with self._guard:
+            return self._task_locks.setdefault(task_id, threading.Lock())
 
     # ---------- 路径与读写 ----------
 
@@ -129,8 +139,10 @@ class TaskStore:
                 "entry": d["entry"], "skill": d["skill"], "step": None,
                 "inputs": self.input_refs(root, d["inputs"]), "params": d["params"],
                 "budget": copy.deepcopy(DEFAULT_BUDGET), "state": "pending", "created_at": now_iso()}
-        self._write(root, self.rel(task_id, "task.json"), task, "files/task.schema.json")
-        self._where[task_id] = d["case_id"]
+        with self._lock:
+            self._void_pending(root, d["case_id"], d["session_id"])
+            self._write(root, self.rel(task_id, "task.json"), task, "files/task.schema.json")
+            self._where[task_id] = d["case_id"]
         logs.event("task", "create", case_id=d["case_id"])
         return {"task_id": task_id}
 
@@ -150,6 +162,35 @@ class TaskStore:
                             "drafts": res["drafts"], "citation_passed": cc["passed"] if cc else None,
                             "finished_at": res["finished_at"]})
         return {"tasks": out}
+
+    def _void_pending(self, root: str, case_id: str, session_id: str) -> None:
+        """同一会话里更早的待执行任务单一律作废（执行令 0608，P2-7；调用方持 self._lock）。
+
+        契约没有"已作废"状态，不改契约：把那张还没执行过的任务单目录删掉。删之前核对它确实是待执行、属于同一会话、
+        目录里只有 task.json（没有草稿、读取记录、结果清单）；不满足就不删，记一条日志（只记任务编号和原因代号）。
+        被删的不会留下 result.json，也就不会出现在 /api/tasks 里（注记 0805）。"""
+        base = gate.resolve_internal(root, TASK_DIR, op="task")
+        if not base.is_dir():
+            return
+        for d in base.iterdir():
+            try:
+                t = self._read(root, self.rel(d.name, "task.json"), "files/task.schema.json")
+            except (ApiError, FileNotFoundError, contracts.ContractError, ValueError):
+                continue
+            if t["state"] != "pending" or t["session_id"] != session_id or t["kind"] != "agent":
+                continue
+            tid = t["task_id"]
+            folder = gate.resolve_internal(root, self.rel(tid), op="task_void")
+            if sorted(p.name for p in folder.iterdir()) != ["task.json"]:
+                logs.event("task", "void", status="denied", case_id=case_id, error=f"NOT_EMPTY:{tid}")
+                continue
+            gate.delete_work_file(root, self.rel(tid, "task.json"), op="task_void")
+            try:
+                os.rmdir(folder)  # 空目录；闸门已核对它在 工作区/任务/ 下、不是链接
+            except OSError as e:
+                logs.event("task", "void", status="fail", case_id=case_id, error=f"{type(e).__name__}:{tid}")
+            self._where.pop(tid, None)
+            logs.event("task", "void", case_id=case_id)
 
     # ---------- /core/task/begin ----------
 
@@ -173,6 +214,7 @@ class TaskStore:
             self._write(root, self.rel(tid, "reads.json"), {"v": 1, "task_id": tid, "reads": []},
                         "files/reads.schema.json")
             self._where[tid] = case_id
+            self._begun[tid] = datetime.now().astimezone()
         logs.event("task", "begin", case_id=case_id)
         return {"task_id": tid, "case_id": case_id, "skill": task["skill"], "params": task["params"],
                 "budget": task["budget"]}
@@ -205,8 +247,8 @@ class TaskStore:
                 t = self._read(root, self.rel(d.name, "task.json"), "files/task.schema.json")
             except (ApiError, FileNotFoundError, contracts.ContractError, ValueError):
                 continue
-            if t["state"] != "running":
-                continue
+            if t["state"] != "running" or t["task_id"] in self._begun:
+                continue  # 本进程 begin 过的正在执行，不是上次硬退出留下的（P1-2）
             t["state"] = "abnormal"
             self._write(root, self.rel(t["task_id"], "task.json"), t, "files/task.schema.json")
             try:
@@ -245,7 +287,7 @@ class TaskStore:
                 cov["unreadable"].append({"name": m["name"], "reason": m["error"] or "无法处理"})
                 continue
             try:
-                total = texts.total_units(texts.split_units(texts.read_text(root, m), m["unit"]))
+                units = texts.split_units(texts.read_text(root, m), m["unit"])
             except ApiError:
                 cov["unreadable"].append({"name": m["name"], "reason": "材料文本不存在"})
                 continue
@@ -253,7 +295,9 @@ class TaskStore:
             for r in reads:
                 if r["material_id"] == m["material_id"] and r["material_version"] == m["sha256"]:
                     got.update(range(r["from"], r["to"] + 1))
+            total = texts.total_units(units)
             got &= set(range(1, total + 1))
+            got -= {u.no for u in units if u.text.strip() == texts.PENDING_OCR}  # "本页需识别"的占位不算读过（P2-1）
             if total and len(got) >= total:
                 cov["fully_read"].append(m["name"])
             elif got:
@@ -265,15 +309,32 @@ class TaskStore:
     # ---------- /core/progress、/core/task/end ----------
 
     def progress(self, task_id: str, text: str, model_calls: int, tool_calls: int) -> dict:
-        case_id, root, task = self.locate(task_id)
-        gate.write_bytes(root, self.rel(task_id, f"草稿/{IN_PROGRESS}"), text.encode("utf-8"), op="task_progress")
-        res = self.result(root, task_id)
-        res["usage"].update(model_calls=model_calls, tool_calls=tool_calls, elapsed_s=_elapsed(task))
-        self.save_result(root, res)
+        """还没 begin 的报 TASK_NOT_FOUND（P3-2）；已结束或异常中断的不写文件、不改用量（P2-4）。"""
+        with self.task_lock(task_id):
+            case_id, root, task = self.locate(task_id)
+            if task["state"] == "pending":
+                raise ApiError("TASK_NOT_FOUND", "not_begun")
+            if task["state"] != "running":
+                return {}
+            gate.write_bytes(root, self.rel(task_id, f"草稿/{IN_PROGRESS}"), text.encode("utf-8"), op="task_progress")
+            res = self.result(root, task_id)
+            res["usage"].update(model_calls=model_calls, tool_calls=tool_calls,
+                                elapsed_s=_elapsed(task, self._begun.get(task_id)))
+            self.save_result(root, res)
         return {}
 
     def end(self, task_id: str, reason: str, model_calls: int, tool_calls: int, elapsed_s: int) -> dict:
+        """已结束的直接返回已写的状态，不改写（P2-4）；还没 begin 的、已标异常中断的报 TASK_NOT_FOUND
+        （契约的返回状态里没有"异常中断"）。"""
+        with self.task_lock(task_id):
+            return self._end(task_id, reason, model_calls, tool_calls, elapsed_s)
+
+    def _end(self, task_id: str, reason: str, model_calls: int, tool_calls: int, elapsed_s: int) -> dict:
         case_id, root, task = self.locate(task_id)
+        if task["state"] == "finished":
+            return {"status": self.result(root, task_id)["status"]}
+        if task["state"] != "running":
+            raise ApiError("TASK_NOT_FOUND", "not_running")
         status = END_STATUS[reason]
         res = self.result(root, task_id)
         res.update(status=status, finished_at=now_iso())
@@ -294,8 +355,10 @@ class TaskStore:
         return {"status": status}
 
 
-def _elapsed(task: dict) -> int:
+def _elapsed(task: dict, begun: datetime | None) -> int:
+    """从 begin 算起（P3-3）；本进程没记下 begin 时刻的（不会发生在执行中的任务上）退回建单时间。"""
     try:
-        return max(0, int((datetime.now().astimezone() - datetime.fromisoformat(task["created_at"])).total_seconds()))
+        start = begun or datetime.fromisoformat(task["created_at"])
+        return max(0, int((datetime.now().astimezone() - start).total_seconds()))
     except ValueError:
         return 0
