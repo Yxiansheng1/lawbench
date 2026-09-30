@@ -38,6 +38,11 @@ foreach ($p in @($llama, $py, $winsw, (Join-Path $src "pyproject.toml"), (Join-P
 }
 if ($OcrMmproj -and -not (Test-Path (Join-Path $models $OcrMmproj))) { throw "Missing: $OcrMmproj" }
 
+# Re-run: stop the running services first, or copying over services\<id>.exe and upgrading the package fails.
+foreach ($id in "prep395", "prep395-llm9b", "prep395-ocr") {
+  if (Get-Service -Name $id -ErrorAction SilentlyContinue) { Stop-Service -Name $id -Force -ErrorAction SilentlyContinue }
+}
+
 Step "Install prep395 into the bundled Python"
 & $py -m pip install --no-warn-script-location --upgrade $src
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
