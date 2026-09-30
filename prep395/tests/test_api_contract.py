@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -28,7 +29,8 @@ def test_health_contract(client):
     r = client.get("/health")
     assert r.status_code == 200
     assert_valid(validator("prep395/health.schema.json"), r.json())
-    assert r.json()["contract_version"] == "1.1"
+    repo_version = (Path(__file__).resolve().parents[2] / "contracts" / "VERSION").read_text(encoding="utf-8").strip()
+    assert r.json()["contract_version"] == repo_version
     assert r.json()["status"] == "degraded"         # 测试后端（fake）不能报 ok，防部署漏配
 
 
@@ -258,3 +260,10 @@ def test_loc_with_trailing_newline_dropped(settings):
     with TestClient(create_app(settings, Trailing())) as c:
         r = c.post("/v1/extract", json={"task": "fields", "text": "x", "fields": ["金额"]}, headers=auth())
     assert r.json()["result"] == [{"field": "金额", "value": "2.00", "loc": "第4页"}]
+
+
+def test_contract_version_fallback_matches_repo():
+    """395 上读不到 contracts/VERSION 时退回写死值：写死值必须与仓库当前契约版本一致，改契约时一起改。"""
+    import prep395
+    repo_version = (Path(__file__).resolve().parents[2] / "contracts" / "VERSION").read_text(encoding="utf-8").strip()
+    assert prep395.CONTRACT_VERSION_FALLBACK == repo_version

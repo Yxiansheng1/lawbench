@@ -56,16 +56,18 @@ if (Get-LocalUser -Name $Account -ErrorAction SilentlyContinue) {
 } else {
   New-LocalUser -Name $Account -Password $sec -PasswordNeverExpires -UserMayNotChangePassword -Description "prep395 service (low privilege)" | Out-Null
 }
+# External programs do not honour $ErrorActionPreference in PowerShell 5.1: check every exit code.
+function Assert-Exit($what) { if ($LASTEXITCODE -ne 0) { throw "$what failed (exit $LASTEXITCODE)" } }
 # Grant "Log on as a service" (SeServiceLogonRight) via secedit
 $sid = (New-Object System.Security.Principal.NTAccount($Account)).Translate([System.Security.Principal.SecurityIdentifier]).Value
 $tmpInf = Join-Path $env:TEMP "lb395-secedit.inf"; $tmpDb = Join-Path $env:TEMP "lb395-secedit.sdb"
-secedit /export /cfg $tmpInf /areas USER_RIGHTS | Out-Null
+secedit /export /cfg $tmpInf /areas USER_RIGHTS | Out-Null; Assert-Exit "secedit /export"
 $lines = Get-Content $tmpInf
 $line = $lines | Where-Object { $_ -like "SeServiceLogonRight*" }
 if (-not $line) { $lines = $lines -replace "^\[Privilege Rights\]$", "[Privilege Rights]`r`nSeServiceLogonRight = *$sid" }
 elseif ($line -notmatch [regex]::Escape($sid)) { $lines = $lines -replace "^SeServiceLogonRight = (.*)$", "SeServiceLogonRight = `$1,*$sid" }
 $lines | Set-Content $tmpInf -Encoding Unicode
-secedit /configure /db $tmpDb /cfg $tmpInf /areas USER_RIGHTS | Out-Null
+secedit /configure /db $tmpDb /cfg $tmpInf /areas USER_RIGHTS | Out-Null; Assert-Exit "secedit /configure"
 Remove-Item $tmpInf, $tmpDb -Force -ErrorAction SilentlyContinue
 
 Step "Directories and permissions"
@@ -123,9 +125,9 @@ Step "Register services"
 foreach ($d in $defs) {
   $exe = Join-Path $svcDir "$($d.id).exe"
   if (Get-Service -Name $d.id -ErrorAction SilentlyContinue) { & $exe stop | Out-Null; & $exe uninstall | Out-Null }
-  & $exe install | Out-Null
-  sc.exe config $d.id obj= ".\$Account" password= $pw | Out-Null
-  sc.exe failure $d.id reset= 3600 actions= restart/10000/restart/30000/restart/60000 | Out-Null
+  & $exe install | Out-Null; Assert-Exit "$($d.id) install"
+  sc.exe config $d.id obj= ".\$Account" password= $pw | Out-Null; Assert-Exit "sc.exe config $($d.id)"
+  sc.exe failure $d.id reset= 3600 actions= restart/10000/restart/30000/restart/60000 | Out-Null; Assert-Exit "sc.exe failure $($d.id)"
 }
 $pw = $null; $sec = $null
 

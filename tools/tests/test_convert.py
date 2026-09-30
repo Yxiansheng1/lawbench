@@ -762,7 +762,7 @@ def test_xls_still_converts_with_ole_header(samples):
 def test_rtf_reason_says_maybe_not_word(tmp_path):
     """RTF 改名 .docx：提示里带"或文件不是 Word 文档"。"""
     f = tmp_path / "其实是rtf.docx"
-    f.write_bytes(b"{\rtf1 hello}")
+    f.write_bytes(rb"{\rtf1 hello}")
     with pytest.raises(core.ConvertError, match="或文件不是 Word 文档"):
         core.convert_file("word2pdf", f)
 
