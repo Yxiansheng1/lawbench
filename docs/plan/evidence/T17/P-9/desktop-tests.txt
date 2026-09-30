@@ -1,0 +1,306 @@
+﻿node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:459
++ ... cratchpad'; node node_modules/vitest/vitest.mjs run apps/desktop/test ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+fixture failurewarning: could not open directory 'apps/desktop/tests/cache-test-5acVa4/': No such file or directory
+
+DSH_DESKTOP_PACKAGING_FATAL
+
+DSH_DESKTOP_PACKAGING_FATAL
+
+DSH_DESKTOP_PACKAGING_FATAL
+[REDACTED]v24.21.0
+ ❯ |thread-safe| apps/desktop/tests/profile-mcp.spec.ts (1 test | 1 failed) 162ms
+   × retains one shared resource consumer in the Desktop Web profile 156ms
+
+DSH_DESKTOP_PACKAGING_FATAL
+
+DSH_DESKTOP_PACKAGING_FATAL
+
+DSH_DESKTOP_PACKAGING_FATAL
+app [REDACTED]dmg [REDACTED] ❯ |thread-safe| apps/desktop/tests/windows-signature-batch.spec.ts (11 tests | 1 failed) 5043ms
+   × Unicode paths retain the same Windows trust result as individual inspection 5027ms
+
+DSH_DESKTOP_PACKAGING_FATAL
+
+DSH_DESKTOP_PACKAGING_FATAL
+
+DSH_DESKTOP_PACKAGING_FATAL
+ ❯ |thread-safe| apps/desktop/tests/windows-signature-cache-directory.spec.ts (11 tests | 1 failed) 6728ms
+   × creates private storage and rejects linked or publicly readable cache roots 5022ms
+desktop package: mac-x64 publishes 0.1.7-rc.2
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-jXyPvg\records\test-win-x64-264lw0
+desktop upload: uploaded bin/package.exe
+desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:25.075Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:25.077Z
+desktop macOS packaging: App notarization and ZIP completed in 0.03s
+desktop upload: uploaded feeds/nightly.yml
+desktop macOS packaging: DMG creation and notarization completed in 0.04s
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-62iAW5\records\production-win-x64-EV97sg
+desktop upload: uploaded bin/package.exe
+desktop upload: uploaded feeds/nightly.yml
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-VU62NT\records\test-win-x64-35FkS0
+desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:25.313Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:25.313Z
+desktop macOS packaging: App notarization and ZIP completed in 0.02s
+desktop macOS packaging: DMG creation and notarization completed in 0.02s
+desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:25.530Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:25.531Z
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-GXfLRh\records\test-win-x64-44AqnC
+desktop package: mac-x64 publishes 0.1.7-rc.2
+desktop upload: uploaded bin/package.exe
+[REDACTED]desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:25.932Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:25.932Z
+desktop macOS packaging: DMG creation and notarization completed in 0.01s
+desktop macOS packaging: App notarization and ZIP completed in 0.01s
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-qRTWE1\records\test-win-x64-E2P73l
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-a77j4d\records\test-win-x64-1QfAlG
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-vk4ZuE\records\test-win-x64-TwD4FJ
+desktop upload: uploaded bin/package.exe
+[REDACTED] ❯ |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts (9 tests | 7 failed) 394ms
+     × checks production credentials without uploading or changing the parent 61ms
+     × checks test credentials without uploading or changing the parent 36ms
+     × rejects plaintext credentials without printing values 32ms
+     × rejects blank credentials without printing values 38ms
+     × rejects missing credentials without printing values 31ms
+     × isolates the upload child and sanitizes both output streams 93ms
+     × isolates the upload-failure child and sanitizes both output streams 89ms
+desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:26.351Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:26.351Z
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-AIt8Dt\records\test-win-x64-LmZMAS
+desktop macOS packaging: DMG creation and notarization completed in 0.01s
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-Gre18d\records\test-win-x64-76Z3NA
+desktop upload: uploaded bin/package.exe
+desktop upload: uploaded feeds/nightly.yml
+desktop upload: record %USERPROFILE%\AppData\Local\Temp\dsh-upload-audit-Gre18d\records\test-win-x64-ghexjU
+desktop upload: uploaded bin/package.exe
+desktop upload: uploaded feeds/nightly.yml
+desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:26.553Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:26.553Z
+desktop macOS packaging: DMG creation and notarization completed in 0.02s
+desktop macOS packaging: App notarization and ZIP completed in 0.03s
+desktop macOS packaging: App notarization and ZIP started at 2026-09-30T04:29:26.722Z
+desktop macOS packaging: DMG creation and notarization started at 2026-09-30T04:29:26.723Z
+desktop macOS packaging: DMG creation and notarization completed in 0.01s
+desktop macOS packaging: App notarization and ZIP completed in 0.01s
+desktop macOS notarization: verified disk image /tmp/release.dmg
+ ❯ |thread-safe| apps/desktop/tests/packaged-runtime-verification.spec.ts (3 tests | 1 failed) 11891ms
+     × requires the product version when the target tree supplies the runtime 11872ms
+ ❯ |thread-safe| apps/desktop/tests/package-target-errors.spec.ts (2 tests | 2 failed) 11469ms
+   × records and prints redacted parent failures on win32 9453ms
+   × records and prints redacted parent failures on darwin 2009ms
+ ❯ |thread-safe| apps/desktop/tests/macos-signature.spec.ts (12 tests | 1 failed) 6367ms
+     × validates Windows signing without requiring macOS identifiers for a Windows target 6220ms
+desktop package: numbering 0.1.6-alpha.2.20260921.1 after 0 local artifacts for 0.1.6-alpha.2.20260921.*
+desktop package: numbering 0.1.6-test.20260921.5 after 1 local artifact for 0.1.6-test.20260921.*
+desktop package: numbering 0.1.6-alpha.2.20260921.11 after 3 local artifacts for 0.1.6-alpha.2.20260921.*
+desktop package: numbering 0.1.6-alpha.2.20260921.1 after 0 local artifacts for 0.1.6-alpha.2.20260921.*
+desktop package: numbering 0.1.6-alpha.2.20260921.4 after 2 local artifacts for 0.1.6-alpha.2.20260921.*
+desktop package: numbering 0.1.6-alpha.2.20260921.3 after 1 local artifact for 0.1.6-alpha.2.20260921.*
+ ❯ |thread-safe| apps/desktop/tests/installed-update-builder.spec.ts (9 tests | 1 failed) 11267ms
+     × keeps signed NSIS hooks and one isolated identity/feed while selecting each private runtime and output 5942ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/installed-update-builder.spec.ts > installed-update application inputs and buil
+der configuration > keeps signed NSIS hooks and one isolated identity/feed while selecting each private runtime and out
+put
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/desktop/tests/installed-update-builder.spec.ts:115:30
+    113|   it.each([
+    114|     { DSH_DESKTOP_AUTO_UPDATE_ENV: 'production' },
+    115|     { DSH_DESKTOP_UNSIGNED: '1' },
+       |                              ^
+    116|     { DOWNLOAD_TEST_ORIGIN: 'https://download.deepseek.com' },
+    117|   ])('rejects incompatible qualification settings %j', async (override…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/macos-signature.spec.ts > desktop macOS release signature > validates Windows s
+igning without requiring macOS identifiers for a Windows target
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/desktop/tests/macos-signature.spec.ts:92:30
+     90|       '/App.app/Contents/Resources/runtime/node/node',
+     91|       '/App.app/Contents/Resources/runtime/pnpm/addon.node',
+     92|       '/App.app/Contents/Frameworks/Electron.framework/Versions/A/libr…
+       |                              ^
+     93|       '/App.app/Contents/Frameworks/Electron.framework',
+     94|       '/App.app',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/package-target-errors.spec.ts > records and prints redacted parent failures on 
+win32
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/desktop/tests/package-target-errors.spec.ts:39:51
+     38|   const savedDirectory = process.env.DSH_DESKTOP_PACKAGING_RUN_DIR
+     39|   try {
+     40|     Object.defineProperty(process, 'platform', { ...savedPlatform, val…
+       |                                           ^
+     41|     Object.defineProperty(process, 'arch', { ...savedArch, value: 'x64…
+     42|     process.argv = [process.execPath, fileURLToPath(new URL('../script…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/package-target-errors.spec.ts > records and prints redacted parent failures on 
+darwin
+AssertionError: expected '%USERPROFILE%\AppData\Local\Temp\pac…' to be undefined // Object.is equality
+
+- Expected:
+undefined
+
++ Received:
+"C:\\Users\\<用户名>\\AppData\\Local\\Temp\\package-errors-DkH7eK\\2026-09-30T04-29-25.566Z-rE96DV"
+
+ ❯ apps/desktop/tests/package-target-errors.spec.ts:89:79
+     70|     await rm(state.root, { recursive: true, force: true })
+     71|   }
+     72| })
+       |   ^
+     73|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/packaged-runtime-verification.spec.ts > packaged runtime verification > require
+s the product version when the target tree supplies the runtime
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/desktop/tests/packaged-runtime-verification.spec.ts:36:30
+     36| }
+     37|
+     38| describe('packaged runtime verification', () => {
+       |                           ^
+     39|   it('requires the product version when the target tree supplies the r…
+     40|     const productVersion = (JSON.parse(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/profile-mcp.spec.ts > retains one shared resource consumer in the Desktop Web p
+rofile
+AssertionError: expected [ { id: 'mcp-resources', …(2) } ] to deeply equal [ { id: 'mcp-resources', …(1) } ]
+
+- Expected
++ Received
+
+  [
+    {
++     "disabled": true,
+      "id": "mcp-resources",
+      "name": "@deepseek-ai/dsh-mcp-resources",
+    },
+  ]
+
+ ❯ apps/desktop/tests/profile-mcp.spec.ts:24:79
+     22|     ], message => warnings.push(message))
+     23|
+     24|     expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-resou…
+       |                                                                               ^
+     25|       { id: 'mcp-resources', name: '@deepseek-ai/dsh-mcp-resources' },
+     26|     ])
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > checks productio
+n credentials without uploading or changing the parent
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > checks test cred
+entials without uploading or changing the parent
+AssertionError: expected 'string' to be 'number' // Object.is equality
+
+Expected: "number"
+Received: "string"
+
+ ❯ check apps/desktop/tests/upload-with-credentials.spec.ts:90:56
+     88|   const fileEnvironment = {
+     89|     DSH_DESKTOP_AUTO_UPDATE_ENV: 'test', DOWNLOAD_TEST_ORIGIN: 'https:…
+     90|     DOWNLOAD_TEST_COS_BUCKET: 'test-bucket', DOWNLOAD_TEST_COS_SECRET_…
+       |                                                        ^
+     91|   }
+     92|   const injectedEnvironment = {
+ ❯ apps/desktop/tests/upload-with-credentials.spec.ts:140:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > rejects plaintex
+t credentials without printing values
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > rejects blank cr
+edentials without printing values
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > rejects missing 
+credentials without printing values
+AssertionError: expected 'string' to be 'number' // Object.is equality
+
+Expected: "number"
+Received: "string"
+
+ ❯ check apps/desktop/tests/upload-with-credentials.spec.ts:90:56
+     88|   const fileEnvironment = {
+     89|     DSH_DESKTOP_AUTO_UPDATE_ENV: 'test', DOWNLOAD_TEST_ORIGIN: 'https:…
+     90|     DOWNLOAD_TEST_COS_BUCKET: 'test-bucket', DOWNLOAD_TEST_COS_SECRET_…
+       |                                                        ^
+     91|   }
+     92|   const injectedEnvironment = {
+ ❯ apps/desktop/tests/upload-with-credentials.spec.ts:153:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > isolates the upl
+oad child and sanitizes both output streams
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > isolates the upl
+oad-failure child and sanitizes both output streams
+AssertionError: expected 'string' to be 'number' // Object.is equality
+
+Expected: "number"
+Received: "string"
+
+ ❯ check apps/desktop/tests/upload-with-credentials.spec.ts:90:56
+     88|   const fileEnvironment = {
+     89|     DSH_DESKTOP_AUTO_UPDATE_ENV: 'test', DOWNLOAD_TEST_ORIGIN: 'https:…
+     90|     DOWNLOAD_TEST_COS_BUCKET: 'test-bucket', DOWNLOAD_TEST_COS_SECRET_…
+       |                                                        ^
+     91|   }
+     92|   const injectedEnvironment = {
+ ❯ apps/desktop/tests/upload-with-credentials.spec.ts:161:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/windows-signature-batch.spec.ts > Unicode paths retain the same Windows trust r
+esult as individual inspection
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/desktop/tests/windows-signature-batch.spec.ts:57:62
+     48|   })
+     49|   await verifyWindowsCode(root)
+     50| })
+       |   ^
+     51|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯
+
+ FAIL  |thread-safe| apps/desktop/tests/windows-signature-cache-directory.spec.ts > creates private storage and rejects
+ linked or publicly readable cache roots
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/desktop/tests/windows-signature-cache-directory.spec.ts:45:62
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯
+
+
+ Test Files  8 failed | 102 passed | 4 skipped (114)
+      Tests  15 failed | 1231 passed | 29 skipped (1275)
+   Start at  12:29:12
+   Duration  30.33s (transform 72.05s, setup 47.78s, import 196.66s, tests 196.40s, environment 15.19s)
+

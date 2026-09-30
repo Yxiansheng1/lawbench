@@ -6,6 +6,8 @@
 //   --fixtures（T13：其余 /api/* 按 ui/fixtures/<契约>.json 回答，供界面开发和截图；胶囊配置存在 LB_APPDATA 里，重启后保持）、
 //   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）、
 //   --case-root <目录>（T13：假数据里第一个案件的文件夹改成这个真实存在的空目录，桌面端才能把它当工作区打开）
+//   --llm-reply <文件>（T17：在本机转发端口 LB_FORWARD_PORT 上假扮模型网关，POST /v1/chat/completions 以流式返回这个文件的内容，
+//     让 DSH 用真实的 Markdown 渲染一段回答；只监听 127.0.0.1，不连外网）
 import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
 import { API_ROUTES } from '../shared/api-routes.ts'
@@ -213,3 +215,25 @@ createServer((req, res) => {
     send(200, payload)
   })
 }).listen(PORT, '127.0.0.1', () => process.stdout.write(`fake service on 127.0.0.1:${PORT} contract ${version}\n`))
+
+// T17 --llm-reply：假模型网关（OpenAI 兼容的流式 chat/completions），回答固定为文件内容
+const LLM_REPLY = arg('--llm-reply', null)
+if (LLM_REPLY) {
+  const FORWARD = Number(process.env.LB_FORWARD_PORT ?? '18765')
+  createServer((req, res) => {
+    let body = ''
+    req.on('data', (c) => { body += c })
+    req.on('end', () => {
+      if (req.method !== 'POST' || !req.url.endsWith('/chat/completions')) { res.writeHead(404); res.end(); return }
+      const text = readFileSync(LLM_REPLY, 'utf8')
+      const id = 'chatcmpl-fake'
+      const chunk = (delta, finish = null) => `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+      res.write(chunk({ role: 'assistant', content: '' }))
+      for (let i = 0; i < text.length; i += 40) res.write(chunk({ content: text.slice(i, i + 40) }))
+      res.write(chunk({}, 'stop'))
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [], usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 } })}\n\n`)
+      res.end('data: [DONE]\n\n')
+    })
+  }).listen(FORWARD, '127.0.0.1', () => process.stdout.write(`fake llm on 127.0.0.1:${FORWARD}\n`))
+}
