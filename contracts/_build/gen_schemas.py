@@ -1,4 +1,4 @@
-"""生成 contracts/ 下的全部 JSON Schema（契约 1.1）。
+"""生成 contracts/ 下的全部 JSON Schema（契约 1.2；1.2 只改了任务单的语义并新增 task_current，见 Spec 20.12）。
 改契约只改这个脚本，再运行一次；不要手改生成的 .schema.json。
 """
 import json, pathlib, shutil
@@ -568,7 +568,7 @@ def main():
         p = OUT / path
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(sch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (OUT / "VERSION").write_text("1.1\n", encoding="utf-8")
+    (OUT / "VERSION").write_text("1.2\n", encoding="utf-8")
     print(len(FILES), "schemas")
 
 
