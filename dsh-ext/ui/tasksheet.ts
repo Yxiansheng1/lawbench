@@ -1,138 +1,92 @@
-// 任务单（/api/task）的写入与"被取走"判断（T13 返修 P2-1、P2-3，第二次返修 F1、F4）。
-// 不变量：输入区显示的选择 = 下一条消息实际会用的任务单。
-// 服务的语义（线 B service/lawbench/case/task.py）：每条消息开始时取该会话 created_at 最新的一张待执行任务单（精确到秒），
-// 没有就按自由对话新建；其余待执行的留着；/api/tasks 只列出已开始执行的任务（有 result.json 的）。
-// 所以界面要保证：它最后写的那张始终等于当前显示的选择，并且是该会话最新的一张待执行任务单。做法：
-// - 选择一变就写一张（同一选择不重复写）；
-// - "不知道服务那边有没有待执行的"（刚建立：软件重启、插件重载之后；或我们最后写的那张刚被取走）时选"自由对话"，也写一张
-//   entry、skill 为空的，把服务那边可能残留的旧任务单压在下面（F1）；
-// - 两次写入至少隔 1.1 秒，避免同一秒两张、服务取哪张不确定；
-// - 怎么知道被取走：我们写的某张的 task_id 出现在 /api/tasks 里。取走的是最后写的那张，就回到"不知道"；
-//   取走的是更早的那张（同一秒打平、或查询途中律师已改选），最后写的那张还是最新的，显示不变（F4）。
-// 写入和查询排成一队，互不交错。
+// 输入区选择与服务端"当前选择"的同步（契约 1.2，N37 用户定；执行令 2026-09-30 10:54）。
+// 服务的语义：POST /api/task 设置该会话当前的选择（新的顶掉旧的），执行时不消耗，之后每条消息都按它运行，直到下一次设置或清除；
+// GET /api/task/current 读回。界面不再自己记"写过哪张""被取走没有"：显示之前从服务读，律师改动时写，写成功之前显示"正在保存"。
+// 本文件只放不碰界面的逻辑（dock.tsx 用），便于按操作顺序测试。
 
 export interface SheetRequest { entry: string | null; skill: string | null; inputs: string[]; params: unknown }
-export type WriteResult = { ok: true; value: { task_id: string } } | { ok: false; error: { code: string; message: string } }
+export type ApiError = { code: string; message: string }
+export type WriteResult = { ok: true; value: { task_id: string } } | { ok: false; error: ApiError }
+export interface ServerSelection { task_id: string; entry: string | null; skill: string | null; inputs: string[]; params: unknown; updated_at: string }
+export type CurrentResult = { ok: true; value: { selection: ServerSelection | null } } | { ok: false; error: ApiError }
 
 export interface SheetDeps {
   write(req: SheetRequest): Promise<WriteResult>
-  /** 已开始执行的任务编号；读不到时 undefined（下次再查）。 */
-  started(): Promise<string[] | undefined>
-  /** 当前毫秒数、等待（测试里替换）。 */
-  now?: () => number
-  wait?: (ms: number) => Promise<void>
+  current(): Promise<CurrentResult>
+}
+
+/** 输入区里的一份选择（胶囊为 null 且没有选用成果即自由对话）。 */
+export interface UiSelection { capsuleId: string | null; skill: string | null; inputs: string[]; params: unknown }
+
+export const isFree = (s: Pick<UiSelection, 'capsuleId' | 'inputs'>): boolean => s.capsuleId === null && s.inputs.length === 0
+
+/** 比较用的键：自由对话不看 Skill，但看参数（1.2 起选择一直生效，自由对话里改"思考""窗口"也要写，复核 A6）。 */
+export const selectionKey = (s: UiSelection): string =>
+  isFree(s) ? JSON.stringify(['free', s.params]) : JSON.stringify([s.capsuleId, s.skill, s.params, s.inputs])
+
+/** 界面选择 → 写给服务的请求（自由对话：entry、skill 都为 null）。 */
+export function toRequest(s: UiSelection): SheetRequest {
+  const free = isFree(s)
+  return { entry: s.capsuleId, skill: free ? null : s.skill, inputs: s.inputs, params: s.params }
+}
+
+/** 服务返回的当前选择 → 界面选择（null：自由对话或还没设置过）。 */
+export function fromServer(sel: ServerSelection | null): UiSelection {
+  if (!sel) return { capsuleId: null, skill: null, inputs: [], params: null }
+  return { capsuleId: sel.entry, skill: sel.skill, inputs: sel.inputs, params: sel.params }
 }
 
 export type SheetStatus =
-  | { kind: 'none' }
+  | { kind: 'loading' }
+  | { kind: 'saving' }
+  | { kind: 'error'; error: ApiError }
+  | { kind: 'free' }
   | { kind: 'ready'; label: string }
-  | { kind: 'error'; error: { code: string; message: string } }
 
-export interface Selection { capsuleId: string | null; skill: string | null; inputs: string[]; params: unknown; label: string }
-
-/** label 为 null 表示"自由对话"单。 */
-export interface Written { taskId: string; label: string | null; key: string }
-
-export interface Consumed {
-  /** 被一条消息用掉的那张（有多张时取最后写的）。 */
-  used: Written
-  /** 用掉的是不是我们最后写的那张（是：界面该回到自由对话；否：最后写的那张仍是下一条要用的）。 */
-  latestConsumed: boolean
+/**
+ * 状态行显示什么。
+ * @param saved - 当前显示的选择是否已经和服务一致（刚读回，或写成功且之后没再改）。
+ * @param error - 最近一次写入或读取失败的错误，且失败的就是当前显示的这份选择。
+ */
+export function statusOf(sel: UiSelection | undefined, saved: boolean, error: ApiError | null, label: string): SheetStatus {
+  if (error) return { kind: 'error', error }
+  if (!sel) return { kind: 'loading' }
+  if (!saved) return { kind: 'saving' }
+  return isFree(sel) ? { kind: 'free' } : { kind: 'ready', label }
 }
 
-export const MIN_WRITE_GAP_MS = 1100
-
-export const selectionKey = (sel: Pick<Selection, 'capsuleId' | 'skill' | 'inputs' | 'params'>): string =>
-  JSON.stringify([sel.capsuleId, sel.skill, sel.params, sel.inputs])
-
-export class TaskSheet {
-  /** 本次运行里写过、还没见到被取走的（按写入先后）。 */
-  private written: Written[] = []
-  /** 最后写的那张；null 且 known 为 false 时表示"不知道服务那边有什么"。 */
-  private latest: Written | null = null
-  private known = false
-  private lastWriteAt: number
-  private queue: Promise<unknown> = Promise.resolve()
-  private readonly now: () => number
-  private readonly wait: (ms: number) => Promise<void>
-
-  constructor(private readonly deps: SheetDeps) {
-    this.now = deps.now ?? Date.now
-    this.wait = deps.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
-    // 上一次运行（重启、重载之前）可能刚写过一张：把"刚建立"当作刚写过，第一次写也隔开 1.1 秒，免得和它同一秒
-    this.lastWriteAt = this.now()
+export function statusText(st: SheetStatus): string {
+  switch (st.kind) {
+    case 'loading': return '正在读取当前选择…'
+    case 'saving': return '正在保存选择…'
+    case 'error': return st.error.message
+    case 'free': return '自由对话'
+    case 'ready': return `下一条消息按「${st.label}」运行（直到你改掉）`
   }
+}
 
-  /** 下一条消息会用的、我们写的那张（没有或不知道时 null）。 */
-  get pending(): Written | null { return this.latest }
+/**
+ * 会话列表变化时找出"一轮刚结束"的会话（running 由真变假），并更新记录（index.tsx 用）。
+ * @param running - 上一次看到的各会话 running（原地更新）。
+ */
+export function turnEnds(running: Map<string, boolean>, byId: Record<string, { running?: boolean } | undefined>): string[] {
+  const ended: string[] = []
+  for (const [id, s] of Object.entries(byId)) {
+    const now = s?.running === true
+    if (running.get(id) === true && !now) ended.push(id)
+    running.set(id, now)
+  }
+  return ended
+}
 
+/** 读和写排成一队，互不交错：读总是看到在它之前排队的写的结果。 */
+export class SelectionSync {
+  private queue: Promise<unknown> = Promise.resolve()
+  constructor(private readonly deps: SheetDeps) {}
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const run = this.queue.then(fn, fn)
     this.queue = run.catch(() => undefined)
     return run
   }
-
-  /** 按当前选择写（或不写）任务单。 */
-  apply(sel: Selection): Promise<SheetStatus> { return this.enqueue(() => this.applyOnce(sel)) }
-
-  private async applyOnce(sel: Selection): Promise<SheetStatus> {
-    const free = sel.capsuleId === null && sel.inputs.length === 0
-    const key = free ? FREE_KEY : selectionKey(sel)
-    if (this.latest && this.latest.key === key) return free ? { kind: 'none' } : { kind: 'ready', label: sel.label }
-    // 自由对话：确知服务那边没有我们的待执行单（刚被取走后又写过自由对话单的情形已由上面的去重处理）才不写
-    if (free && this.known && this.latest === null) return { kind: 'none' }
-    const gap = this.now() - this.lastWriteAt
-    if (gap < MIN_WRITE_GAP_MS) await this.wait(MIN_WRITE_GAP_MS - gap)
-    const r = await this.deps.write({ entry: sel.capsuleId, skill: free ? null : sel.skill, inputs: sel.inputs, params: sel.params })
-    this.lastWriteAt = this.now()
-    if (!r.ok) return { kind: 'error', error: r.error }
-    const w: Written = { taskId: r.value.task_id, label: free ? null : sel.label, key }
-    this.written.push(w)
-    this.latest = w
-    this.known = true
-    return free ? { kind: 'none' } : { kind: 'ready', label: sel.label }
-  }
-
-  /** 查一次有没有我们写的任务单被取走。 */
-  poll(): Promise<Consumed | null> { return this.enqueue(() => this.pollOnce()) }
-
-  private async pollOnce(): Promise<Consumed | null> {
-    if (this.written.length === 0) return null
-    const ids = await this.deps.started()
-    if (!ids) return null
-    const gone = this.written.filter((w) => ids.includes(w.taskId))
-    if (gone.length === 0) return null
-    this.written = this.written.filter((w) => !ids.includes(w.taskId))
-    const used = gone[gone.length - 1]!
-    const latestConsumed = this.latest !== null && gone.includes(this.latest)
-    if (latestConsumed) {
-      this.latest = null
-      this.known = false // 服务那边可能还有更早的待执行单（本次或上次运行留下的），下次选自由对话要再写一张压住
-    }
-    return { used, latestConsumed }
-  }
+  save(s: UiSelection): Promise<WriteResult> { return this.enqueue(() => this.deps.write(toRequest(s))) }
+  current(): Promise<CurrentResult> { return this.enqueue(() => this.deps.current()) }
 }
-
-/** 按会话各一份（会话之间互不影响）。 */
-const sheets = new Map<string, TaskSheet>()
-export function sheetFor(sessionId: string, deps: SheetDeps): TaskSheet {
-  let s = sheets.get(sessionId)
-  if (!s) { s = new TaskSheet(deps); sheets.set(sessionId, s) }
-  return s
-}
-
-/**
- * 任务单被取走后界面怎么办（输入区用；抽出来便于按操作顺序测试）。
- * @param currentKey - 此刻输入区显示的选择的 key（selectionKey，自由对话用规整后的 key）。
- * @param currentLabel - 此刻显示的选择的名称。
- */
-export function afterConsumed(c: Consumed, currentKey: string, currentLabel: string): { resetToFree: boolean; writeFree: boolean; text: string | null } {
-  const ran = c.used.label ?? '自由对话'
-  if (!c.latestConsumed) return { resetToFree: false, writeFree: false, text: `上一条已按「${ran}」运行；下一条按「${currentLabel}」` }
-  if (c.used.key !== currentKey) return { resetToFree: false, writeFree: false, text: `上一条已按「${ran}」运行` }
-  if (c.used.label === null) return { resetToFree: false, writeFree: true, text: null }
-  return { resetToFree: true, writeFree: true, text: `上一条已按「${ran}」运行；下一条按自由对话，要继续用请重新选择` }
-}
-
-/** 自由对话选择的 key（规整：自由对话不看参数）。 */
-export const FREE_KEY = selectionKey({ capsuleId: null, skill: null, inputs: [], params: null })

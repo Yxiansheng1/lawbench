@@ -33,6 +33,8 @@ export const API_ROUTES: readonly ApiRoute[] = [
   { method: 'ocrList', http: 'GET', path: '/api/ocr/jobs', contract: 'ocr_list' },
   { method: 'ocrCancel', http: 'POST', path: '/api/ocr/jobs/{job_id}/cancel', contract: 'ocr_cancel' },
   { method: 'taskCreate', http: 'POST', path: '/api/task', contract: 'task_create' },
+  // 契约 1.2：读该会话当前的选择（界面每次显示之前读，不在本地记）
+  { method: 'taskCurrent', http: 'GET', path: '/api/task/current', contract: 'task_current' },
   { method: 'pipelineRun', http: 'POST', path: '/api/pipeline/run', contract: 'pipeline_run' },
   { method: 'pipelineStatus', http: 'GET', path: '/api/pipeline/{task_id}', contract: 'pipeline_status' },
   { method: 'pipelineCancel', http: 'POST', path: '/api/pipeline/{task_id}/cancel', contract: 'pipeline_cancel' },

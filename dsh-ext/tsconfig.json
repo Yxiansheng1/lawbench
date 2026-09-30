@@ -15,7 +15,8 @@
     "types": ["node"],
     "paths": {
       "react": ["../dsh/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/index.d.ts"],
-      "react/jsx-runtime": ["../dsh/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/jsx-runtime.d.ts"]
+      "react/jsx-runtime": ["../dsh/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/jsx-runtime.d.ts"],
+      "react-dom/client": ["../dsh/node_modules/.pnpm/@types+react-dom@18.3.7_@types+react@18.3.31/node_modules/@types/react-dom/client.d.ts"]
     }
   },
   "include": ["shared/**/*.ts", "agent/**/*.ts", "host/**/*.ts", "credentials/**/*.ts", "ui/**/*.ts", "ui/**/*.tsx", "tests/**/*.ts"]

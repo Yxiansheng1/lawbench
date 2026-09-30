@@ -1,20 +1,22 @@
 // 会话输入区上方（DSH 插槽 conversation.input.dock）：当前胶囊和 Skill 选择、必问问题、参数、选用的前序成果（PRD 7.9）。
-// 选定后写任务单 /api/task（Spec 9.2：界面事先为该会话写待执行的任务单，Agent 插件在该会话下一次请求时使用）。
-// entry 填胶囊 id（T13 执行令 Q5）。一张任务单管一条消息，写入与复位规则见 tasksheet.ts（返修 P2-1、P2-3，第二次返修 F1、F4）。
+// 契约 1.2（N37）：服务管该会话"当前的选择"，管到律师改掉为止（执行时不消耗）。界面不在本地记：
+// 挂上、切换会话、每轮结束之后从 GET /api/task/current 读，下拉框和状态行都设成服务返回的；律师改动时 POST /api/task，
+// 写成功之前状态行显示"正在保存选择…"，写失败显示错误并保留下拉框的值。entry 填胶囊 id（T13 执行令 Q5）。
 // 运行状态和停止沿用 DSH 对话区自带的。
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
 import { errorText } from './format.ts'
 import { Badge, Button, C, S } from './kit.tsx'
-import { app, call, lb, MODE_AGENT, setSelection, type CaseRef, type Params, type Selection, type SkillInfo } from './state.ts'
+import { app, applyServerSelection, call, lb, markSelectionSaved, MODE_AGENT, setSelection, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
-import { afterConsumed, FREE_KEY, selectionKey, sheetFor, type Selection as TaskSelection, type SheetStatus } from './tasksheet.ts'
+import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
 
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
 const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 const WRITE_DELAY_MS = 500
-const POLL_MS = 3000
+/** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */
+export const TURN_ENDED = 'lawbench:turn-ended'
 
 let capsCache: Promise<Capsules | undefined> | undefined
 let skillsCache: Promise<SkillInfo[]> | undefined
@@ -33,9 +35,13 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   const [caps, setCaps] = useState<Capsules | undefined>()
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [open, setOpen] = useState(false)
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  const [error, setError] = useState<{ key: string; op: 'read' | 'write'; error: ApiError } | null>(null)
+  const [reload, setReload] = useState(0)
+  /** 服务那边此刻的选择（刚读回或刚写成功的）的键；律师选回同一份时不必再写。 */
+  const serverKey = useRef<string | null>(null)
   useEffect(() => { void loadCaps().then(setCaps); void loadSkills().then(setSkills) }, [])
-  const sel: Selection = useStore(app, (s) => s.selections[caseRef.case_id]) ?? { capsuleId: null, skill: null, params: null, inputs: [] }
+  const stored = useStore(app, (s) => s.selections[caseRef.case_id])
+  const sel = stored ?? { capsuleId: null, skill: null, params: null, inputs: [], saved: false }
   const defaults = useStore(app, (s) => s.defaults)
   const presets = useStore(app, (s) => s.presets)
 
@@ -46,49 +52,57 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
   const skill = agentSkills.find((s) => s.name === sel.skill)
   const params: Params = sel.params ?? (skill ? presets[skill.name] ?? skill.params : defaults) ?? { thinking: '中', window: '128K', max_tokens: 16384 }
 
-  // 任务单：一张管一条消息（返修 P2-1、P2-3，见 tasksheet.ts）
-  const sheet = useMemo(() => sheetFor(sessionId, {
-    write: (req) => call<{ task_id: string }>('taskCreate', { case_id: caseRef.case_id, session_id: sessionId, ...req }),
-    started: async () => {
-      const r = await call<{ tasks: Array<{ task_id: string }> }>('tasksList', { case_id: caseRef.case_id })
-      return r.ok ? r.value.tasks.map((t) => t.task_id) : undefined
-    },
+  // 同一会话的读、写排成一队（tasksheet.ts）
+  const sync = useMemo(() => new SelectionSync({
+    write: (req) => call<{ task_id: string }>('taskCreate', { case_id: caseRef.case_id, session_id: sessionId, ...req }) as Promise<WriteResult>,
+    current: () => call<{ selection: ServerSelection | null }>('taskCurrent', { session_id: sessionId }) as Promise<CurrentResult>,
   }), [sessionId, caseRef.case_id])
   const label = capsule ? capsule.name : sel.inputs.length ? '自由对话（带选用的成果）' : '自由对话'
-  const current: TaskSelection = { capsuleId: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params, label }
-  const free = sel.capsuleId === null && sel.inputs.length === 0
-  const key = free ? FREE_KEY : selectionKey(current)
-  const latest = useRef({ current, key })
-  latest.current = { current, key }
+  const ui: UiSelection = { capsuleId: sel.capsuleId, skill: sel.skill, inputs: sel.inputs, params }
+  const key = selectionKey(ui)
 
-  const showApplied = (s: SheetStatus) => {
-    if (s.kind === 'ready') setStatus({ ok: true, text: `已就绪：下一条消息按「${s.label}」运行（只管这一条）` })
-    else if (s.kind === 'error') setStatus({ ok: false, text: errorText(s.error) })
-    else setStatus((cur) => (cur?.ok && cur.text.startsWith('上一条已按') ? cur : null))
-  }
-
-  // 选择一变就按新选择写（防抖；同一选择不重复写）；刚挂上时也按当前选择走一遍（重启、重载后"不知道"时会写自由对话单）
+  // 读服务的当前选择：挂上（含切换会话）、每轮结束之后。律师有还没写成功的改动时不覆盖（写完会再读到同样的值）
   useEffect(() => {
-    const t = setTimeout(() => { void sheet.apply(latest.current.current).then(showApplied) }, WRITE_DELAY_MS)
-    return () => clearTimeout(t)
-  }, [key, sheet]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 任务单被一条消息取走后（界面显示 = 下一条实际会用的）：
-  // - 用掉的是最后写的那张、且律师还没改选：输入区回到"自由对话"，并写一张自由对话单压住服务那边可能残留的旧单；
-  // - 律师已经改选了：保持新的选择（它会照常写）；
-  // - 用掉的是更早的一张：最后写的那张仍是下一条要用的，显示不变，只说明上一条按什么跑的。
-  useEffect(() => {
-    const t = setInterval(() => {
-      void sheet.poll().then((c) => {
-        if (!c) return
-        const d = afterConsumed(c, latest.current.key, latest.current.current.label)
-        if (d.resetToFree) setSelection(caseRef.case_id, { capsuleId: null, skill: null, params: null, inputs: [] })
-        if (d.writeFree) void sheet.apply({ capsuleId: null, skill: null, inputs: [], params: latest.current.current.params, label: '自由对话' })
-        if (d.text) setStatus({ ok: true, text: d.text })
+    let alive = true
+    const load = () => {
+      void sync.current().then((r) => {
+        if (!alive) return
+        if (!r.ok) { setError({ key: selectionKey(ui), op: 'read', error: { code: r.error.code, message: errorText(r.error) } }); return }
+        const cur = app.get().selections[caseRef.case_id]
+        if (cur && !cur.saved) return
+        const s = fromServer(r.value.selection)
+        serverKey.current = selectionKey(s.params ? s : { ...s, params })
+        applyServerSelection(caseRef.case_id, { capsuleId: s.capsuleId, skill: s.skill, inputs: s.inputs, params: (s.params as Params | null) ?? null })
+        setError(null)
       })
-    }, POLL_MS)
-    return () => clearInterval(t)
-  }, [sheet, caseRef.case_id])
+    }
+    load()
+    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sessionId) load() }
+    window.addEventListener(TURN_ENDED, onTurn)
+    return () => { alive = false; window.removeEventListener(TURN_ENDED, onTurn) }
+  }, [sync, sessionId, caseRef.case_id, reload]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 律师改动了（saved 为 false）：防抖后写给服务；写成功且途中没再改才记为已保存；写失败显示错误、保留下拉框的值。
+  // 依赖整份 stored：律师再选一次、或点"重试"（setSelection 生成新的一份）都会重新写
+  useEffect(() => {
+    if (!stored || stored.saved) return
+    if (key === serverKey.current) { markSelectionSaved(caseRef.case_id, () => true); setError(null); return }
+    const t = setTimeout(() => {
+      const writing = ui
+      const writingKey = key
+      void sync.save(writing).then((r) => {
+        if (r.ok) {
+          serverKey.current = writingKey
+          markSelectionSaved(caseRef.case_id, (cur) => selectionKey({ capsuleId: cur.capsuleId, skill: cur.skill, inputs: cur.inputs, params: cur.params ?? writing.params }) === writingKey)
+          setError((e) => (e?.key === writingKey ? null : e))
+        } else setError({ key: writingKey, op: 'write', error: { code: r.error.code, message: errorText(r.error) } })
+      })
+    }, WRITE_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [stored, sync]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const status = statusOf(stored ? ui : undefined, sel.saved, error && error.key === key ? error.error : null, label)
+  const statusColor = status.kind === 'error' ? C.err : status.kind === 'ready' ? C.ok : C.sub
 
   const pickCapsule = (id: string) => {
     const c = capsules.find((x) => x.id === id)
@@ -120,7 +134,8 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
               style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', padding: 0 }}>×</button>
           </span>
         ))}
-        {status ? <span style={{ fontSize: 12, color: status.ok ? C.ok : C.err }}>{status.text}</span> : null}
+        <span role="status" style={{ fontSize: 12, color: statusColor }}>{statusText(status)}</span>
+        {status.kind === 'error' ? <Button size="sm" variant="ghost" onClick={() => (error?.op === 'write' ? setSelection(caseRef.case_id, {}) : setReload((n) => n + 1))}>重试</Button> : null}
       </div>
       {open ? (
         <div style={{ ...S.row, flexWrap: 'wrap' }}>

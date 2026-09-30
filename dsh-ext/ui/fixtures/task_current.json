@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "value": {
+    "selection": {
+      "task_id": "T-20260929141500-b2e8",
+      "entry": "contract-review",
+      "skill": "contract-review",
+      "inputs": [],
+      "params": {
+        "thinking": "中",
+        "window": "64K",
+        "max_tokens": 16384
+      },
+      "updated_at": "2026-09-29T14:15:00+08:00"
+    }
+  }
+}

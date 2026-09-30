@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { Supervisor, type ChildHandle } from '../host/supervisor.ts'
+import { CONTRACT_VERSION } from '../shared/contracts.ts'
 
 const FAKE = join(__dirname, '..', 'dev', 'fake-service.mjs')
 
@@ -24,7 +25,7 @@ function realDeps(ports: number[], extra: { version?: string } = {}) {
     },
     pickPort: async () => ports[i++ % ports.length],
     newToken: () => randomBytes(16).toString('hex'),
-    expectedVersion: extra.version ?? '1.1',
+    expectedVersion: extra.version ?? CONTRACT_VERSION, // 跟契约走（1.2 起），不写死
     log: (_l: string, event: string, meta?: Record<string, unknown>) => { events.push({ event, meta }) },
   }
   return { deps, events, children }

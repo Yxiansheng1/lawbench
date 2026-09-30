@@ -8,8 +8,11 @@ export interface CaseRef { case_id: string; name: string; root: string; exists?:
 
 export interface Params { thinking: '关闭' | '低' | '中' | '高'; window: '32K' | '64K' | '128K'; max_tokens: number; temperature?: number }
 
-/** 会话输入区上方的选择（写任务单 /api/task 用）。capsuleId 为 null 表示自由对话。 */
-export interface Selection { capsuleId: string | null; skill: string | null; params: Params | null; inputs: string[] }
+/**
+ * 会话输入区上方的选择（契约 1.2：服务管"当前选择"，界面显示前读、改动时写）。capsuleId 为 null 表示自由对话。
+ * saved：这份选择是否已经和服务一致（刚从服务读回，或写成功之后没再改）；律师改动后为 false，直到写成功。
+ */
+export interface Selection { capsuleId: string | null; skill: string | null; params: Params | null; inputs: string[]; saved: boolean }
 
 export type Dialog =
   | { kind: 'confirm'; title: string; text: string; ok: string; resolve: (yes: boolean) => void }
@@ -46,10 +49,27 @@ export function rememberCase(c: CaseRef): void {
   app.set((s) => ({ ...s, cases: [c, ...s.cases.filter((x) => x.case_id !== c.case_id && !samePath(x.root, c.root))] }))
 }
 
-export function setSelection(caseId: string, patch: Partial<Selection>): void {
+const EMPTY_SELECTION: Selection = { capsuleId: null, skill: null, params: null, inputs: [], saved: false }
+
+/** 律师改动选择（输入区、首页胶囊、成果区"选用"）：记为未保存，输入区随后写给服务。 */
+export function setSelection(caseId: string, patch: Partial<Omit<Selection, 'saved'>>): void {
   app.set((s) => {
-    const cur = s.selections[caseId] ?? { capsuleId: null, skill: null, params: null, inputs: [] }
-    return { ...s, selections: { ...s.selections, [caseId]: { ...cur, ...patch } } }
+    const cur = s.selections[caseId] ?? EMPTY_SELECTION
+    return { ...s, selections: { ...s.selections, [caseId]: { ...cur, ...patch, saved: false } } }
+  })
+}
+
+/** 从服务读回的当前选择：原样显示，记为已保存。 */
+export function applyServerSelection(caseId: string, sel: Omit<Selection, 'saved'>): void {
+  app.set((s) => ({ ...s, selections: { ...s.selections, [caseId]: { ...sel, saved: true } } }))
+}
+
+/** 写成功：只有写的就是此刻显示的那份（写的途中没再改）才记为已保存。 */
+export function markSelectionSaved(caseId: string, isSame: (cur: Selection) => boolean): void {
+  app.set((s) => {
+    const cur = s.selections[caseId]
+    if (!cur || cur.saved || !isSame(cur)) return s
+    return { ...s, selections: { ...s.selections, [caseId]: { ...cur, saved: true } } }
   })
 }
 

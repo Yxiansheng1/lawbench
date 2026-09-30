@@ -8,7 +8,8 @@ import { HomePage } from './home.tsx'
 import { MaterialsTab } from './materials.tsx'
 import { ResultsTab } from './results.tsx'
 import { SourceTab } from './source.tsx'
-import { ComposerDock } from './dock.tsx'
+import { ComposerDock, TURN_ENDED } from './dock.tsx'
+import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
@@ -33,7 +34,7 @@ type Ctx = {
   effect(fn: () => unknown, label?: string): void
   inject(deps: string[], apply: (ctx: Ctx) => void): Promise<void> & { dispose(): Promise<void> }
   layout: { selectPanel(id: string | null): void }
-  sessions: { list: Observable<{ byId: Record<string, { cwd?: string } | undefined> }> }
+  sessions: { list: Observable<{ byId: Record<string, { cwd?: string; running?: boolean } | undefined> }> }
   uiSession: { adapter: { current: Observable<{ key?: string } | undefined> } }
   uiWorkspace: { openWorkspace(id: string): Promise<unknown>; pickDirectory?(): Promise<string | null | undefined> }
   workspaces: { create(req: { path: string }): Promise<{ workspaceId: string }> }
@@ -131,9 +132,15 @@ function registerSessionTracking(ctx: Ctx): void {
     const cwd = id ? ctx.sessions.list.getSnapshot().byId[id]?.cwd ?? null : null
     if (app.get().currentRoot !== cwd) app.set((s) => ({ ...s, currentRoot: cwd }))
   }
+  // 一轮结束（会话的 running 由真变假）：通知输入区重新读服务的当前选择（契约 1.2，界面不在本地记）
+  const running = new Map<string, boolean>()
+  const watchTurns = () => {
+    for (const id of turnEnds(running, ctx.sessions.list.getSnapshot().byId)) window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: id }))
+  }
   update()
+  watchTurns()
   ctx.effect(() => ctx.uiSession.adapter.current.subscribe(update), '律师工作台界面：当前会话')
-  ctx.effect(() => ctx.sessions.list.subscribe(update), '律师工作台界面：会话列表')
+  ctx.effect(() => ctx.sessions.list.subscribe(() => { update(); watchTurns() }), '律师工作台界面：会话列表')
 }
 
 /** P-5：拖入、粘贴、选择到对话框的文件导入案件文件夹（要 DSH 源码补丁提供的 conversationFileIntake）。 */

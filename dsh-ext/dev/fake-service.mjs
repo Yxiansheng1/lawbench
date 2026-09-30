@@ -29,22 +29,14 @@ const FAIL_BEGIN = flag('--fail-begin')
 const BAD_RESPONSE = flag('--bad-response')
 const FIXTURES = flag('--fixtures')
 const CASE_ROOT = arg('--case-root', null)
-// T13 第二次返修：任务单按线 B 的语义模拟——/api/task 每次给新编号；/api/tasks 只列已开始执行的；
-// --consume-after-ms N：模拟"选了胶囊后发一条消息"——该会话最新的一张是胶囊任务单、且写入满 N 毫秒时取走它（created_at 精确到秒）。不给就不取走
-const CONSUME_AFTER = Number(arg('--consume-after-ms', '0')) || 0
-const created = []
+// 契约 1.2（N37）：任务单按"管到律师改掉为止"模拟——/api/task 设置该会话当前的选择（新的顶掉旧的）；
+// /api/task/current 读回；/core/task/begin 按当前选择复制一份新建执行中的任务，当前选择不消耗、不删除；
+// /api/tasks 只列已开始执行的。--fail-task-create：写选择一律返回 SERVICE_UNAVAILABLE（测"写入失败保留下拉框"）
+const FAIL_TASK_CREATE = flag('--fail-task-create')
+const selections = new Map() // session_id → { task_id, entry, skill, inputs, params, updated_at }
+const started = [] // 已开始执行的：{ task_id, skill }
 const taskIdNow = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomBytes(2).toString('hex')}` }
-function consumeDue() {
-  if (!CONSUME_AFTER) return
-  for (const session of new Set(created.map((c) => c.session_id))) {
-    const pending = created.filter((c) => c.session_id === session && !c.started)
-    if (!pending.length) continue
-    const maxSec = Math.max(...pending.map((c) => Math.floor(c.at / 1000)))
-    const latest = pending.filter((c) => Math.floor(c.at / 1000) === maxSec).at(-1)
-    // 只模拟"选了胶囊之后发了一条"：最新的那张是自由对话单时不取（界面截图用，免得自由对话单也被不停取走）
-    if (latest.skill != null && Date.now() - latest.at >= CONSUME_AFTER) latest.started = true
-  }
-}
+const isoNow = () => { const d = new Date(); const off = -d.getTimezoneOffset(); const p = (n) => String(Math.abs(n)).padStart(2, '0'); return new Date(d.getTime() + off * 60000).toISOString().slice(0, 19) + (off >= 0 ? '+' : '-') + p(Math.trunc(off / 60)) + ':' + p(off % 60) }
 const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'fixtures')
 if (PORT < 18801 || PORT > 18809) throw new Error('假服务端口限 18801–18809')
@@ -86,6 +78,9 @@ function handle(method, path, body) {
       if (FAIL_BEGIN) return [fail('CASE_NOT_FOUND', '找不到该案件，请重新打开')]
       const res = example('core_task_begin.res.json'); res.value.task_id = taskId()
       tasks.set(res.value.task_id, { tools: 0 })
+      // 1.2：按该会话当前的选择新建（复制一份），当前选择留着
+      const sel = selections.get(body.session_id)
+      started.push({ task_id: res.value.task_id, skill: sel?.skill ?? null })
       return [res]
     }
     case 'POST /core/context': {
@@ -158,17 +153,20 @@ function fromFixtures(method, path, query, body) {
   }
   if (r.method === 'capsulesReset') rmSync(saved, { force: true })
   if (r.method === 'taskCreate') {
-    const t = { task_id: taskIdNow(), session_id: request.session_id, skill: request.skill, at: Date.now(), started: false }
-    created.push(t)
+    if (FAIL_TASK_CREATE) return [fail('SERVICE_UNAVAILABLE', '工作台服务未启动，请稍后重试')]
+    const t = { task_id: taskIdNow(), entry: request.entry, skill: request.skill, inputs: request.inputs, params: request.params, updated_at: isoNow() }
+    selections.set(request.session_id, t) // 新的顶掉旧的
     return [ok({ task_id: t.task_id })]
   }
+  if (r.method === 'taskCurrent') {
+    const sel = selections.get(request.session_id)
+    // entry、skill 都为 null 的自由对话选择也原样返回；从没设置过返回 null
+    return [ok({ selection: sel ?? null })]
+  }
   if (r.method === 'tasksList') {
-    consumeDue()
     const base = fixture('tasks_list.json')
-    const mine = created.filter((c) => c.started).map((c) => ({ task_id: c.task_id, skill: c.skill, status: 'running', drafts: [], citation_passed: null, finished_at: null }))
-    // 假数据里那张运行中的任务编号与 task_create 假数据相同，去掉，免得界面误判为"刚写的被取走了"
-    const fixed = base.value.tasks.filter((t) => t.task_id !== fixture('task_create.json').value.task_id)
-    return [ok({ tasks: [...mine, ...fixed] })]
+    const mine = started.map((c) => ({ task_id: c.task_id, skill: c.skill, status: 'running', drafts: [], citation_passed: null, finished_at: null, coverage: null, citation_check: null }))
+    return [ok({ tasks: [...mine, ...base.value.tasks] })]
   }
   if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
   const out = fixture(`${r.contract}.json`)
