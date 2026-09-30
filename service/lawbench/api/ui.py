@@ -124,6 +124,8 @@ def routes(st) -> list[Route]:
     def wiki_suggestions(d: dict) -> dict:
         from ..wiki import suggestions
         return suggestions.handle(st.cases.root_of(d["case_id"]), d.get("id"), d.get("accept"))
+    def invoice_run(d: dict) -> dict:
+        return st.invoice.run(d)
 
     E = lambda name, fn, **kw: _endpoint(st, name, fn, **kw)  # noqa: E731
     return [
@@ -148,6 +150,7 @@ def routes(st) -> list[Route]:
         Route("/api/pipeline/{task_id}/cancel", E("pipeline_cancel", pipeline_cancel), methods=["POST"]),
         Route("/api/wiki/suggestions", E("wiki_suggestions", wiki_suggestions, query=True), methods=["GET"]),
         Route("/api/wiki/suggestions/{id}", E("wiki_suggestions", wiki_suggestions), methods=["POST"]),
+        Route("/api/invoice/run", E("invoice_run", invoice_run), methods=["POST"]),
     ]
 
 

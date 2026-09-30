@@ -17,6 +17,7 @@ from .api import core, ui
 from .capsules import CapsuleStore
 from .case.materials import Materials
 from .ingest import libreoffice
+from .invoice.runner import InvoiceRunner
 from .case.registry import CaseRegistry
 from .case.task import TaskStore
 from .config import Config
@@ -52,6 +53,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st.settings = SettingsStore(config.appdata)
     st.tasks = TaskStore(st.cases, st.settings, st.materials)
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
+    st.invoice = InvoiceRunner(st.settings, config.appdata)
     try:
         servers = st.settings.get()["servers"]
     except Exception as e:  # noqa: BLE001 settings.json 损坏：服务照常起来，先用默认地址，设置接口返回错误
