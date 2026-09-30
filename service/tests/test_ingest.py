@@ -22,6 +22,7 @@ from lawbench.ingest import REASONS, libreoffice
 from lawbench.ingest import pdf as pdf_mod
 
 from conftest import IS_WIN, make_junction
+from fakes import minimal_ole
 
 sys.path.insert(0, str(REPO_ROOT / "contracts"))
 from check_examples import validator  # noqa: E402
@@ -431,11 +432,11 @@ def test_lines_marked_every_50(make_client, cases_dir):
 # ---------- doc / xls：LibreOffice 转换 ----------
 
 @needs_lo
-def test_doc_and_xls_converted(make_client, cases_dir, tmp_path):
+def test_doc_and_xls_converted(make_client, cases_dir, tmp_path, lo_base):
     work = tmp_path / "conv"
     work.mkdir()
     # 样本用产品自己的转换器生成（配置目录在短路径下；测试放在很深的目录里也能跑）
-    with libreoffice.Converter(tmp_path / "gen").session() as s:
+    with libreoffice.Converter(tmp_path / "gen", lo_base=lo_base).session() as s:
         (work / "通知.doc").write_bytes(s.convert(FIXTURES / "tender-01" / "补充通知.docx", "doc").read_bytes())
         (work / "流水.xls").write_bytes(s.convert(FIXTURES / "civil-01" / "银行流水.xlsx", "xls").read_bytes())
     client = make_client()
@@ -459,9 +460,9 @@ def test_converter_missing(make_client, cases_dir, monkeypatch):
     client = make_client()
     root = cases_dir / "无转换器"
     root.mkdir()
-    (root / "旧.doc").write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 600)
+    minimal_ole(root / "旧.doc", {"WordDocument": b"LBFX"})
     cid = open_case(client, root)
     scan(client, cid)
     m = by_name(root)["旧"]
-    assert m["status"] == "failed" and m["error"] in (REASONS["convert_failed"], REASONS["corrupt"])
+    assert m["status"] == "failed" and m["error"] == REASONS["no_converter"]
     assert list((root / "工作区" / "临时").iterdir()) == []

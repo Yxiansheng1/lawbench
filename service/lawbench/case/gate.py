@@ -1,4 +1,4 @@
-"""路径闸门（Spec 4.2）。所有读写案件文件的代码都必须经过这里，没有其他写文件的途径。
+"""路径闸门（Spec 4.2）。所有读写案件文件的代码都必须经过这里；例外只有下面列出的"工作区/临时"几条途径。
 
 六条规则：
 1. 案件根目录只从注册表取，realpath 保存为 ROOT；根目录本身是链接或 junction 拒绝登记（CASE_ROOT_IS_LINK）；
@@ -8,6 +8,15 @@
 4. 最终校验：realpath 必须以 ROOT + 分隔符开头；Windows 下比较前统一大小写。
 5. 写权限：只允许写 工作区/ 和 成果/；原件区只允许界面触发的"补建空文件夹"和"导入复制（不覆盖）"。
 6. 拒绝时返回"超出当前案件范围"（OUT_OF_CASE），本机日志只记操作名和原因，不记参数内容。
+
+写入案件 工作区/临时/ 的途径（T5 返修 Y2 如实列出；目标都在本案件内，前缀各自固定，扫描开始时按前缀清残留）：
+- 导入复制原件（copy_original）：先写 工作区/临时/imp-<8 位>，写完改名移到原件区目标位置——经本模块。
+- 导入 ZIP（materials._import_zip）：解压到 工作区/临时/unzip-<8 位>/，经本模块的 mkdir_work、write_bytes 写入；
+  用完由 materials 用 shutil.rmtree 删除——删除不经本模块，删不掉记日志。
+- LibreOffice 转换（ingest/libreoffice.py）：在 工作区/临时/lo-<8 位>/ 下建目录、复制原件副本、由 soffice 写出结果——
+  不经本模块（目录由 materials 经 resolve_internal 取得后交给转换器）；会话结束删除，删不掉记日志。
+- 扫描开始时的残留清理（materials._clean_temp）：只删上面三种前缀的项，不经本模块。
+- 界面粘贴的截图、委托材料窗口的下载也放在 工作区/临时/，但不是本服务写的，本服务不清理它们。
 """
 from __future__ import annotations
 
@@ -317,19 +326,30 @@ def mkdir_original(root: str, rel: str, op: str = "case_template") -> bool:
     return True
 
 
+TEMP_REL = f"{WORK}/临时"
+IMPORT_TMP_PREFIX = "imp-"
+
+
 def copy_original(root: str, rel: str, src: str | os.PathLike, op: str = "import") -> pathlib.Path:
-    """原件区新建文件（仅 /api/materials/import）：复制，从不覆盖。目标已存在抛 FileExistsError。"""
+    """原件区新建文件（仅 /api/materials/import）：复制，从不覆盖。目标已存在抛 FileExistsError。
+
+    先完整写到 工作区/临时/imp-<8 位>，再改名移到目标位置（同一个卷上的改名，一步到位）：复制到一半进程被结束，
+    原件区里不会留下半截文件（T5 返修 X5）；残留的 imp-* 由下次扫描清掉。
+    """
     parts = check_ai_rel(rel, op)
     path = _resolve(root, parts, op)
     if os.path.lexists(path):
         raise FileExistsError(rel)
-    _mkdirs(root, path.parent, op)
-    tmp, fd = _exclusive_tmp(path.parent)
+    tmp_dir = resolve_write(root, TEMP_REL, op)
+    _mkdirs(root, tmp_dir, op)
+    tmp, fd = _exclusive_tmp(tmp_dir, IMPORT_TMP_PREFIX)
     try:
         with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
             shutil.copyfileobj(inp, out)
         shutil.copystat(src, tmp)
-        os.rename(tmp, path)  # Windows 上目标已存在时 rename 失败，不会覆盖
+        _mkdirs(root, path.parent, op)
+        path = _resolve(root, parts, op)  # 建完上级目录再查一遍：中途被换成链接的拒绝
+        _move_no_replace(tmp, path)
     finally:
         if os.path.lexists(tmp):
             os.unlink(tmp)
@@ -338,14 +358,21 @@ def copy_original(root: str, rel: str, src: str | os.PathLike, op: str = "import
     return path
 
 
-def _exclusive_tmp(parent: pathlib.Path) -> tuple[pathlib.Path, int]:
-    """在 parent 下独占新建一个临时文件（O_EXCL）：名字撞上别人正在用的，换一个名字重试，绝不覆盖。
+def _move_no_replace(src: pathlib.Path, dst: pathlib.Path) -> None:
+    """改名移过去，目标已存在时失败（FileExistsError），不覆盖。Windows 的 rename 本身不覆盖；
+    其他系统的 rename 会覆盖，改用硬链接再删源。"""
+    if os.name == "nt":
+        os.rename(src, dst)
+    else:
+        os.link(src, dst)
+        os.unlink(src)
 
-    以 . 开头，扫描原件区时不会当成材料；名字要短（12 字符）：比目标文件名还长时，深路径下会先于目标超过 260 字符。
-    """
+
+def _exclusive_tmp(parent: pathlib.Path, prefix: str) -> tuple[pathlib.Path, int]:
+    """在 parent 下独占新建一个临时文件（O_EXCL）：名字撞上别人正在用的，换一个名字重试，绝不覆盖。"""
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
     for _ in range(10):
-        tmp = parent / f".~lb{uuid.uuid4().hex[:8]}"
+        tmp = parent / f"{prefix}{uuid.uuid4().hex[:8]}"
         try:
             return tmp, os.open(tmp, flags, 0o600)
         except FileExistsError:

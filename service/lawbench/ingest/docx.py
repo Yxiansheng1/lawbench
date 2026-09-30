@@ -3,6 +3,8 @@
 - 段 = 正文中非空段落的顺序号，从 1 开始；表格整体算一段，内部转成 md 表格。
 - 修订：保留 w:ins / w:moveTo 的内容，去掉 w:del / w:moveFrom 的内容；有修订时 note 为"含修订，已按修订后文本"。
 - 页眉页脚、脚注、尾注附在文末，另成一段。
+- 文本框等在 mc:AlternateContent 里 Choice、Fallback 各存一份，只取 Choice（T5 返修 Y5）。
+- 带 DOCTYPE 的部件按损坏处理（实体不展开，照常读会丢字；Y5）；单个部件解压后超过 300 MB 按过大（X4）。
 """
 from __future__ import annotations
 
@@ -13,11 +15,14 @@ from lxml import etree
 
 from . import Block, Parsed, ParseError
 from .detect import is_ole, ole_encrypted
+from .links import open_zip
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 NS = {"w": W}
 _P, _TBL, _SDT, _R, _T, _TAB, _BR, _CR = (f"{{{W}}}{t}" for t in ("p", "tbl", "sdt", "r", "t", "tab", "br", "cr"))
-_SKIP = {f"{{{W}}}{t}" for t in ("del", "moveFrom", "delText", "instrText", "delInstrText")}
+_FALLBACK = f"{{{MC}}}Fallback"
+_SKIP = {f"{{{W}}}{t}" for t in ("del", "moveFrom", "delText", "instrText", "delInstrText")} | {_FALLBACK}
 _REVISION = {f"{{{W}}}{t}" for t in ("ins", "del", "moveFrom", "moveTo")}
 NOTE_REVISED = "含修订，已按修订后文本"
 
@@ -47,8 +52,18 @@ def _text(el) -> str:
     return "".join(out)
 
 
+def _paras(el):
+    """el 下的段落，不含嵌在别的段落里（文本框）和 mc:Fallback 里的：它们的文字已由外层段落的 _text 带上。"""
+    for p in el.iter(_P):
+        anc = p.getparent()
+        while anc is not None and anc is not el and anc.tag != _P and anc.tag != _FALLBACK:
+            anc = anc.getparent()
+        if anc is None or anc is el:
+            yield p
+
+
 def _cell(tc) -> str:
-    paras = [_text(p).strip() for p in tc.iter(_P)]
+    paras = [_text(p).strip() for p in _paras(tc)]
     return "<br>".join(p for p in paras if p).replace("|", "\\|")
 
 
@@ -80,8 +95,11 @@ def _body_items(body):
 
 
 def _parse_xml(data: bytes):
-    parser = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=False)
-    return etree.fromstring(data, parser)
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False)
+    root = etree.fromstring(data, parser)
+    if root.getroottree().docinfo.doctype:
+        raise ParseError("corrupt")
+    return root
 
 
 def _extras(z: zipfile.ZipFile) -> list[str]:
@@ -92,7 +110,7 @@ def _extras(z: zipfile.ZipFile) -> list[str]:
         for n in names:
             if n.startswith(prefix) and n.endswith(".xml"):
                 root = _parse_xml(z.read(n))
-                t = " ".join(s for s in (_text(p).strip() for p in root.iter(_P)) if s)
+                t = " ".join(s for s in (_text(p).strip() for p in _paras(root)) if s)
                 if t and (label, t) not in seen:
                     seen.add((label, t))
                     lines.append(f"{label}：{t}")
@@ -102,7 +120,7 @@ def _extras(z: zipfile.ZipFile) -> list[str]:
             for note in root.iterfind(f"w:{tag}", NS):
                 if note.get(f"{{{W}}}type") in ("separator", "continuationSeparator", "continuationNotice"):
                     continue
-                t = " ".join(s for s in (_text(p).strip() for p in note.iter(_P)) if s)
+                t = " ".join(s for s in (_text(p).strip() for p in _paras(note)) if s)
                 if t:
                     lines.append(f"{label}{note.get(f'{{{W}}}id')}：{t}")
     return lines
@@ -112,7 +130,7 @@ def parse(path: pathlib.Path, note: str | None = None) -> Parsed:
     if is_ole(path):
         raise ParseError("encrypted" if ole_encrypted(path) else "corrupt")
     try:
-        with zipfile.ZipFile(path) as z:
+        with open_zip(path) as z:
             root = _parse_xml(z.read("word/document.xml"))
             extras = _extras(z)
     except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, OSError):

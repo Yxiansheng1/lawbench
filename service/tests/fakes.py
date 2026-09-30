@@ -155,3 +155,91 @@ def linked_image_docx(path, url: str, text: str = "正文里有一张外链图�
         z.writestr("_rels/.rels", root_rels)
         z.writestr("word/document.xml", doc)
         z.writestr("word/_rels/document.xml.rels", rels)
+
+
+def linked_image_xlsx(path, url: str) -> None:
+    """一份 xlsx：工作表里一张图片以外部链接引用（绘图部件的关系 TargetMode=External），不内嵌。
+    LibreOffice Calc 打开时会去取这张图（BlockUntrustedRefererLinks 拦不住，Spec 14.3 ②b）。
+    另有一个没有缓存值的公式，产品会想交给 LibreOffice 重算。"""
+    import io
+    import zipfile
+
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "流水"
+    ws["A1"], ws["B1"], ws["B2"] = "金额", 100, "=B1*2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    drawing = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="{R}">
+<xdr:oneCellAnchor><xdr:from><xdr:col>3</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+<xdr:ext cx="914400" cy="914400"/>
+<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="p"/><xdr:cNvPicPr/></xdr:nvPicPr>
+<xdr:blipFill><a:blip r:link="rIdImg"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
+<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></xdr:spPr>
+</xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>'''
+    drawing_rels = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rIdImg" Type="{R}/image" Target="{url}/sheet.png" TargetMode="External"/>
+</Relationships>'''
+    sheet_rels = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rIdDr" Type="{R}/drawing" Target="../drawings/drawing1.xml"/>
+</Relationships>'''
+    src = zipfile.ZipFile(io.BytesIO(buf.getvalue()))
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                data = data.decode("utf-8")
+                if "xmlns:r=" not in data:
+                    data = data.replace("<worksheet ", f'<worksheet xmlns:r="{R}" ', 1)
+                data = data.replace("</worksheet>", '<drawing r:id="rIdDr"/></worksheet>').encode("utf-8")
+            elif info.filename == "[Content_Types].xml":
+                data = data.replace(b"</Types>", b'<Override PartName="/xl/drawings/drawing1.xml" ContentType='
+                                    b'"application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>')
+            z.writestr(info.filename, data)
+        z.writestr("xl/worksheets/_rels/sheet1.xml.rels", sheet_rels)
+        z.writestr("xl/drawings/drawing1.xml", drawing)
+        z.writestr("xl/drawings/_rels/drawing1.xml.rels", drawing_rels)
+
+
+def minimal_ole(path, streams: dict[str, bytes]) -> None:
+    """最小的 OLE 复合文档（CFB v3，512 字节扇区）：每个流补齐到 4096 字节以上，不用迷你流。
+    给"扩展名 .doc、内容是 OLE"的分流测试用；内容不是真的 Word 文档，转换程序打开会失败。"""
+    import struct
+    END, FREE, FATSECT, NOSTREAM = 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFD, 0xFFFFFFFF
+    datas = [(n, d.ljust(max(4096, len(d)), b"\0")) for n, d in streams.items()]
+    fat = [FATSECT, END]
+    body = b""
+    starts = []
+    for _, d in datas:
+        d = d.ljust(-(-len(d) // 512) * 512, b"\0")
+        n = len(d) // 512
+        first = len(fat)
+        starts.append(first)
+        fat += [first + i + 1 for i in range(n - 1)] + [END]
+        body += d
+    assert len(fat) <= 128
+    fat_sector = struct.pack("<128I", *(fat + [FREE] * (128 - len(fat))))
+
+    def entry(name, typ, child, right, start, size):
+        raw = name.encode("utf-16-le") + b"\0\0"
+        return (raw.ljust(64, b"\0") + struct.pack("<HBB3I", len(raw), typ, 1, NOSTREAM, right, child)
+                + b"\0" * 16 + b"\0" * 4 + b"\0" * 16 + struct.pack("<IIi", start, size, 0))
+
+    entries = [entry("Root Entry", 5, 1 if datas else NOSTREAM, NOSTREAM, END, 0)]
+    for i, ((name, d), st) in enumerate(zip(datas, starts)):
+        entries.append(entry(name, 2, NOSTREAM, i + 2 if i + 1 < len(datas) else NOSTREAM, st, len(d)))
+    while len(entries) % 4:
+        entries.append(b"\0" * 64 + struct.pack("<HBB3I", 0, 0, 0, NOSTREAM, NOSTREAM, NOSTREAM) + b"\0" * 48)
+    assert len(entries) == 4
+    header = (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 16 + struct.pack("<HHHHH", 0x3E, 3, 0xFFFE, 9, 6)
+              + b"\0" * 6 + struct.pack("<IIIIIIIII", 0, 1, 1, 0, 4096, END, 0, END, 0)
+              + struct.pack("<109I", 0, *([FREE] * 108)))
+    assert len(header) == 512
+    with open(path, "wb") as f:
+        f.write(header + fat_sector + b"".join(entries) + body)

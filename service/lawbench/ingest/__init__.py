@@ -27,7 +27,25 @@ REASONS = {
     "converter_crashed": "转换程序异常退出，没有完成转换；请重试，多次出现请在 Word 或 WPS 中另存为 docx / xlsx 后放入案件文件夹",
     # Spec 14.3 ②a；措辞按注记 致B-ORCH-注记-doc外链图片要拒绝-20260929-2106
     "external_link": "文档里有指向外部地址的图片，为避免联网没有解析；请在 Word 或 WPS 里断开链接（或另存为 docx）后再导入",
+    # T5 第一轮返修 X2：外链检查、加密判断出错时不放行
+    "unchecked": "无法检查文件里有没有指向外部的链接，为避免联网没有解析；请在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
+    # X8：被占用、没有读取权限
+    "unreadable": "文件无法读取（可能正被其他程序占用，或没有读取权限）；关闭占用它的程序后重新打开案件会自动重试",
+    # X9：超时、找不到转换程序原来都报 convert_failed，拆开后才能分出"跟环境有关、要重试"的
+    "convert_timeout": "转换超时，没有完成转换；重新打开案件会自动重试，多次出现请在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
+    "no_converter": "本机没有可用的转换程序，无法转换该文件；请联系技术支持，或在 Word、WPS 或 Excel 中另存为 docx / xlsx 后放入案件文件夹",
 }
+
+# X9：跟环境有关的失败，每次扫描都重试；其余（加密、过大、损坏、有外链被拒、无法检查、转换不出结果）
+# 跟文件本身有关，原件没变就不重试
+RETRY_REASONS = frozenset({"converter_crashed", "convert_timeout", "no_converter", "path_too_long",
+                           "appdata_too_long", "unreadable"})
+RETRY_MESSAGES = frozenset(REASONS[r] for r in RETRY_REASONS)
+
+# X4：压缩包里单个部件解压后超过这个大小按"文件过大"，不解压（沿用 Spec 5.2"超大"的数）
+MAX_PART_BYTES = MAX_BYTES
+# X4：一个工作表写进材料文本的格子数上限（有内容的行数 × 列宽），超过按"文件过大"
+MAX_SHEET_CELLS = 2_000_000
 
 
 class ParseError(Exception):

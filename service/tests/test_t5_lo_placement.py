@@ -17,7 +17,8 @@ from lawbench.config import REPO_ROOT
 from lawbench.ingest import REASONS, links
 from lawbench.ingest import libreoffice as lo
 
-from fakes import CountingListener
+from conftest import short_dir
+from fakes import CountingListener, linked_image_xlsx, minimal_ole
 
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 needs_lo = pytest.mark.skipif(lo.find_soffice() is None, reason="本机没有 LibreOffice")
@@ -36,7 +37,7 @@ def samples(tmp_path_factory):
     if lo.find_soffice() is None:
         pytest.skip("本机没有 LibreOffice")
     base = tmp_path_factory.mktemp("s")
-    with lo.Converter(base / "t").session() as s:
+    with short_dir("lblo-") as lb, lo.Converter(base / "t", lo_base=lb).session() as s:
         (base / "通知.doc").write_bytes(s.convert(FIXTURES / "tender-01" / "补充通知.docx", "doc").read_bytes())
         (base / "流水.xls").write_bytes(s.convert(FIXTURES / "civil-01" / "银行流水.xlsx", "xls").read_bytes())
     shutil.copy(FIXTURES / "civil-01" / "银行流水.xlsx", base / "银行流水.xlsx")  # 汇总!B4 无缓存值
@@ -105,7 +106,7 @@ def test_crash_exit_code_reason(make_client, cases_dir, tmp_path, monkeypatch):
     monkeypatch.setattr(lo, "find_soffice", lambda: str(cmd))
     root = cases_dir / "崩溃"
     root.mkdir()
-    shutil.copy(FIXTURES / "civil-01" / "借条.docx", root / "旧.doc")
+    minimal_ole(root / "旧.doc", {"WordDocument": b"LBFX"})  # 内容是 OLE 才走 LibreOffice（X1）
     m = scan(make_client(), root)["旧"]
     assert m["status"] == "failed" and m["error"] == REASONS["converter_crashed"]
     assert "损坏" not in m["error"] and "加密" not in m["error"]
@@ -163,16 +164,31 @@ def test_xlsx_detector(tmp_path):
 
 
 def test_xlsx_external_not_recalculated(make_client, cases_dir, monkeypatch):
+    """Y8：样本换成转换程序打开时确实会去取图的（红测见下一个）。"""
     started = []
     real_popen = lo.subprocess.Popen
     monkeypatch.setattr(lo.subprocess, "Popen", lambda *a, **k: started.append(a) or real_popen(*a, **k))
     with CountingListener() as lis:
         root = cases_dir / "外链xlsx"
         root.mkdir()
-        _xlsx_with_external_image(root / "对方报表.xlsx", lis.url)
+        linked_image_xlsx(root / "对方报表.xlsx", lis.url)
         m = scan(make_client(), root)["对方报表"]
         assert lis.count == 0
     assert started == []                                   # 没有起 soffice
     assert m["status"] == "parsed"
     text = (root / m["text_path"]).read_text(encoding="utf-8")
-    assert "| 3 | =SUM(A1:A2) |" in text                   # 没有缓存值的单元格只写公式
+    assert "| 2 |  | =B1*2 |" in text                     # 没有缓存值的单元格只写公式
+
+
+@needs_lo
+def test_xlsx_external_would_fetch_if_recalculated(make_client, cases_dir, monkeypatch):
+    """红测：同一个样本去掉外链检查、交给 LibreOffice 重算，监听收到请求——上一个测试的 0 次才有区分力。"""
+    monkeypatch.setattr(links, "xlsx_has_external_rels", lambda p: False)
+    with CountingListener() as lis:
+        root = cases_dir / "去掉检查"
+        root.mkdir()
+        linked_image_xlsx(root / "对方报表.xlsx", lis.url)
+        scan(make_client(), root)
+        import time
+        time.sleep(0.5)
+        assert lis.count > 0

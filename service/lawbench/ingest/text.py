@@ -1,4 +1,4 @@
-"""csv / md / txt：编码识别（先 utf-8-sig，再 gb18030），按行，每 50 行标一次【第N行】（Spec 5.2、formats 第 2 节）。"""
+"""csv / md / txt：编码识别（带 UTF-16 字节顺序标记的按 UTF-16；否则先 utf-8-sig，再 gb18030），按行，每 50 行标一次【第N行】（Spec 5.2、formats 第 2 节）。"""
 from __future__ import annotations
 
 import pathlib
@@ -23,9 +23,16 @@ def parse(path: pathlib.Path) -> Parsed:
         data = path.read_bytes()
     except OSError:
         raise ParseError("corrupt")
-    if b"\x00" in data[:4096]:
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        try:
+            content = data.decode("utf-16")  # 记事本的"Unicode"格式：按标记定字节序，并去掉标记（Y6）
+        except UnicodeDecodeError:
+            raise ParseError("corrupt")
+    elif b"\x00" in data[:4096]:
         raise ParseError("corrupt")  # 二进制文件冒充文本
-    lines = decode(data).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    else:
+        content = decode(data)
+    lines = content.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if lines and lines[-1] == "":
         lines.pop()
     out = Parsed(unit="line", unit_count=len(lines), count_word="行")

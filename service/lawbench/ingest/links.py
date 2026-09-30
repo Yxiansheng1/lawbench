@@ -11,7 +11,11 @@ LibreOffice 的 BlockUntrustedRefererLinks 拦不住两类联网：旧版二进�
 - 另查 OLE 容器的 Data 流：图片链接的地址以单字节存放在这里；超链接的地址是 UTF-16，不会误伤。
 - 正文里普通的网址文字（包括 "see the link http://…"）不在域指令里，不触发；HYPERLINK 域不是链接类域名，不触发。
 
-xlsx：压缩包里 xl/**/_rels/*.rels 有 TargetMode="External" 的关系（超链接和外部工作簿引用除外）即算外链。
+xlsx：压缩包里任何位置的 *.rels（不分大小写）有 TargetMode="External" 的关系（超链接和外部工作簿引用除外）
+即算外链。
+
+出错即拒绝（T5 第一轮返修 X2）：关系文件、Data 流读不了或解析出错，报"无法检查"（unchecked），不当成没有外链；
+不在第一个出错的文件就停下后放行。带 DOCTYPE 的关系文件同样按"无法检查"。
 """
 from __future__ import annotations
 
@@ -20,6 +24,8 @@ import re
 import zipfile
 
 from lxml import etree
+
+from . import MAX_PART_BYTES, ParseError
 
 _FIELD_NAMES = r"(?:INCLUDEPICTURE|INCLUDETEXT|LINK|IMPORT|DDEAUTO|DDE)"
 # 域指令：0x13 之后到 0x14 / 0x15（或再遇到 0x13，嵌套域）为止
@@ -49,16 +55,16 @@ def _field_has_link(text: str) -> bool:
 
 
 def _data_stream_has_url(path: pathlib.Path) -> bool:
+    import olefile
     try:
-        import olefile
         if not olefile.isOleFile(str(path)):
-            return False
+            return False  # 不是 OLE 容器就没有 Data 流；调用方已按文件头分流，只有 OLE 的才会来
         with olefile.OleFileIO(str(path)) as ole:
             if not ole.exists("Data"):
                 return False
             data = ole.openstream("Data").read()
-    except Exception:  # noqa: BLE001 容器坏了：交给后面的解析去报损坏
-        return False
+    except Exception:  # noqa: BLE001 容器坏了、流读不了：查不了就不放行（X2）
+        raise ParseError("unchecked")
     return data_bytes_have_url(data)
 
 
@@ -83,19 +89,41 @@ def has_external_picture(path: pathlib.Path) -> bool:
 _XLSX_HARMLESS = ("/hyperlink", "/externalLinkPath")
 
 
-def xlsx_has_external_rels(path: pathlib.Path) -> bool:
-    """xlsx 压缩包里有没有指向外部的图片或对象关系。确定性检查：读关系文件，不猜。"""
+def open_zip(path: pathlib.Path) -> zipfile.ZipFile:
+    """打开压缩包格式的文档，先看每个部件解压后的大小（X4）：单个部件超过 300 MB 按"文件过大"，不解压。
+    部件头里写的大小是解压时的上限（zipfile 读到这个长度就停、再核对校验和），谎报小了只会读出错，不会多解压。"""
     try:
-        with zipfile.ZipFile(path) as z:
-            names = [n for n in z.namelist() if n.startswith("xl/") and "/_rels/" in n and n.endswith(".rels")]
-            parser = etree.XMLParser(resolve_entities=False, no_network=True)
-            for n in names:
-                root = etree.fromstring(z.read(n), parser)
-                for rel in root:
-                    if not isinstance(rel.tag, str) or rel.get("TargetMode") != "External":
-                        continue
-                    if not rel.get("Type", "").endswith(_XLSX_HARMLESS):
-                        return True
-    except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, OSError):
-        return False  # 压缩包坏了：交给后面的解析去报损坏
-    return False
+        z = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError, ValueError):
+        raise ParseError("corrupt")
+    if any(i.file_size > MAX_PART_BYTES for i in z.infolist()):
+        z.close()
+        raise ParseError("too_large")
+    return z
+
+
+def _rels_root(z: zipfile.ZipFile, name: str):
+    try:
+        data = z.read(name)
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False)
+        root = etree.fromstring(data, parser)
+    except Exception:  # noqa: BLE001 读不了、解析出错（X2）
+        raise ParseError("unchecked")
+    if root.getroottree().docinfo.doctype:
+        raise ParseError("unchecked")
+    return root
+
+
+def xlsx_has_external_rels(path: pathlib.Path) -> bool:
+    """压缩包里有没有指向外部的图片或对象关系。确定性检查：读全部关系文件，不猜；
+    任何一个关系文件读不了或解析出错就报"无法检查"（X2），不跳过它去看下一个。"""
+    with open_zip(path) as z:
+        names = [n for n in z.namelist() if n.lower().endswith(".rels")]
+        found = False
+        for n in names:
+            for rel in _rels_root(z, n).iter():
+                if not isinstance(rel.tag, str) or (rel.get("TargetMode") or "").lower() != "external":
+                    continue
+                if not rel.get("Type", "").endswith(_XLSX_HARMLESS):
+                    found = True
+        return found

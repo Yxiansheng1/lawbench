@@ -1,6 +1,7 @@
 """共用夹具：临时应用数据目录、带令牌的测试客户端、跑在 127.0.0.1 随机端口上的假服务器。"""
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
 import shutil
@@ -9,6 +10,7 @@ import tempfile
 import sys
 import threading
 import time
+import warnings
 
 import pytest
 import uvicorn
@@ -36,14 +38,37 @@ def _no_real_sync_folders(monkeypatch):
     logs.close()
 
 
+def remove_reported(p: pathlib.Path) -> None:
+    """删测试建的目录；删不干净时发警告报出来，不静默（T5 返修 Y3）。"""
+    failed: list[str] = []
+    shutil.rmtree(p, onexc=lambda _f, path, _e: failed.append(path))
+    if failed or p.exists():
+        warnings.warn(f"测试目录没删干净：{p}（{len(failed)} 处删除失败）", stacklevel=2)
+
+
+@contextlib.contextmanager
+def short_dir(prefix: str):
+    """系统临时目录下的短路径目录（每次新建、用完删除并报告删除失败）。LibreOffice 配置目录路径不能超过 100 字符，
+    测试在很深的 --basetemp 下跑时只能放这里（真实环境是 %APPDATA%\\lawbench，也很短）。"""
+    p = pathlib.Path(tempfile.mkdtemp(prefix=prefix))
+    try:
+        yield p
+    finally:
+        logs.close()
+        remove_reported(p)
+
+
 @pytest.fixture
 def appdata() -> pathlib.Path:
-    """应用数据目录放在系统临时目录下的短路径里（真实环境是 %APPDATA%\\lawbench，也很短）：
-    测试在很深的 --basetemp 下跑时，LibreOffice 配置目录（<应用数据>\\临时\\lo\\…）仍不超过 100 字符。"""
-    p = pathlib.Path(tempfile.mkdtemp(prefix="lbad-"))
-    yield p
-    logs.close()
-    shutil.rmtree(p, ignore_errors=True)
+    """应用数据目录放在系统临时目录下的短路径里：LibreOffice 配置目录（<应用数据>\\临时\\lo\\…）仍不超过 100 字符。"""
+    with short_dir("lbad-") as p:
+        yield p
+
+
+@pytest.fixture
+def lo_base(appdata) -> pathlib.Path:
+    """直接用 Converter 的测试：配置目录的上级和产品一样放在 <应用数据>/临时/lo（lo_base 必填，Y1）。"""
+    return appdata / "临时" / "lo"
 
 
 @pytest.fixture

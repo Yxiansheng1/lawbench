@@ -17,7 +17,6 @@ import os
 import pathlib
 import shutil
 import subprocess
-import tempfile
 import threading
 import time
 import uuid
@@ -38,10 +37,7 @@ CANDIDATES = [
 
 
 def find_soffice() -> str | None:
-    """查找顺序：环境变量 LB_SOFFICE → PATH → 默认安装位置。"""
-    env = os.environ.get("LB_SOFFICE")
-    if env and os.path.isfile(env):
-        return env
+    """查找顺序：PATH → 默认安装位置。"""
     found = shutil.which("soffice")
     if found:
         return found
@@ -49,11 +45,6 @@ def find_soffice() -> str | None:
         if os.path.isfile(c):
             return c
     return None
-
-
-def default_lo_base() -> pathlib.Path:
-    """没有指定应用数据目录时（只在测试和调试里直接用 Converter）：系统临时目录下的固定子目录。"""
-    return pathlib.Path(tempfile.gettempdir()) / "lawbench-lo"
 
 
 def _long(path: pathlib.Path) -> str:
@@ -91,10 +82,11 @@ def cleanup_base(lo_base: pathlib.Path) -> int:
 class Converter:
     """绑定一个案件的 工作区/临时/。convert() 返回的文件在 session() 结束时删除。"""
 
-    def __init__(self, temp_dir: pathlib.Path, soffice: str | None = None, lo_base: pathlib.Path | None = None):
+    def __init__(self, temp_dir: pathlib.Path, lo_base: pathlib.Path, soffice: str | None = None):
+        """lo_base 必填：<应用数据>/临时/lo（Spec 5.2）；不再有"系统临时目录"兜底（T5 返修 Y1）。"""
         self.temp_dir = pathlib.Path(temp_dir)
         self.soffice = soffice or find_soffice()
-        self.lo_base = pathlib.Path(lo_base) if lo_base is not None else default_lo_base()
+        self.lo_base = pathlib.Path(lo_base)
 
     @contextmanager
     def session(self):
@@ -160,15 +152,16 @@ class _Session:
                 raise ParseError("path_too_long")  # 案件临时目录都建不出来：多半是案件路径太深
             self.work = work
 
-    def convert(self, src: pathlib.Path, fmt: str) -> pathlib.Path:
-        """只用 --convert-to 导出，不走任何打印接口，不改系统默认打印机（Spec 12.3）。"""
+    def convert(self, src: pathlib.Path, fmt: str, suffix: str | None = None) -> pathlib.Path:
+        """只用 --convert-to 导出，不走任何打印接口，不改系统默认打印机（Spec 12.3）。
+        suffix：副本用的扩展名，按文件头定的真实格式（X1）；不给就用原件的扩展名。"""
         if not self.conv.soffice:
-            raise ParseError("convert_failed")
+            raise ParseError("no_converter")
         self._ensure_dirs()
         self.n += 1
         job = self.work / str(self.n)
         (job / "out").mkdir(parents=True)
-        local = job / ("in" + src.suffix.lower())
+        local = job / ("in" + (suffix or src.suffix.lower()))
         shutil.copyfile(src, local)
         profile_dir = (self.profile_root / "p").resolve()
         write_profile(profile_dir)
@@ -184,12 +177,12 @@ class _Session:
                 proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             except OSError:
-                raise ParseError("convert_failed")
+                raise ParseError("no_converter")
             try:
                 code = proc.wait(timeout=TIMEOUT)
             except subprocess.TimeoutExpired:
                 kill_tree(proc)
-                raise ParseError("convert_failed")
+                raise ParseError("convert_timeout")
         if code in CRASH_EXIT_CODES:
             logs.event("libreoffice", "convert", status="fail", error="CRASH_0xC0000409")
             raise ParseError("converter_crashed")

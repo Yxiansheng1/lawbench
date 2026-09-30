@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import sqlite3
 import stat
@@ -25,9 +26,9 @@ from datetime import datetime
 
 from .. import contracts, logs
 from ..errors import ApiError
-from ..ingest import MAX_BYTES, REASONS, Parsed, ParseError
+from ..ingest import MAX_BYTES, REASONS, RETRY_MESSAGES, Parsed, ParseError
 from ..ingest import detect, docx, image, links, pdf, text, xlsx
-from ..ingest.libreoffice import Converter
+from ..ingest.libreoffice import Converter, remove_tree
 from . import gate
 from .registry import TEMPLATES, CaseRegistry
 
@@ -41,6 +42,8 @@ SOURCE_KIND = {"none": "文字版", "partial": "部分识别", "full": "识别�
 CONVERTED_NOTE = {"doc": "由 doc 转换", "wps": "由 wps 转换", "xls": "由 xls 转换"}
 SHORTCUT_EXT = {".lnk", ".url"}
 ZIP_MAX_FILES = 500
+# 本服务在 工作区/临时/ 下自己建的项的前缀（X6 按前缀清残留）
+TEMP_PREFIXES = ("lo-", "unzip-", gate.IMPORT_TMP_PREFIX)
 STANDARD_TOPS = {rel for t in TEMPLATES.values() for rel in t if "/" not in rel}
 _FILE_ATTRIBUTE_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 
@@ -76,7 +79,11 @@ def _clean(name: str) -> str:
 
 
 def assign_names(rels: list[str]) -> dict[str, str]:
-    """① 文件名去扩展名；② 重复时用去扩展名的相对路径；③ 仍重复时用带扩展名的相对路径。"""
+    """① 文件名去扩展名；② 重复时用去扩展名的相对路径；③ 仍重复时用带扩展名的相对路径。
+
+    ③ 之后仍重名（空格、顿号换成下划线后撞上等）按主编排的临时裁决（T5 返修 X10，候 owner N25）：排在前面的名字不变，
+    后来者在末尾加 _2、_3……直到不重名。rels 的顺序就是先后：index.json 里已有的材料按原顺序在前，
+    同一次扫描新增的按原件相对路径排序接在后面。比较不分大小写。"""
     def stem_path(r: str) -> str:
         p = pathlib.PurePosixPath(r)
         return str(p.with_suffix("")) if p.suffix else r
@@ -91,8 +98,16 @@ def assign_names(rels: list[str]) -> dict[str, str]:
             counts[n.casefold()] = counts.get(n.casefold(), 0) + 1
         taken = {n.casefold() for n in names.values()}
         nxt = []
+        last = i == len(levels) - 1
         for r, n in cand.items():
-            if (counts[n.casefold()] == 1 and n.casefold() not in taken) or i == len(levels) - 1:
+            if last:
+                base, k = n, 2
+                while n.casefold() in taken:
+                    n = f"{base}_{k}"
+                    k += 1
+                names[r] = n
+                taken.add(n.casefold())
+            elif counts[n.casefold()] == 1 and n.casefold() not in taken:
                 names[r] = n
             else:
                 nxt.append(r)
@@ -117,7 +132,7 @@ def render(name: str, entry: dict, parsed: Parsed) -> str:
 
 
 class Materials:
-    def __init__(self, cases: CaseRegistry, lo_base: pathlib.Path | None = None):
+    def __init__(self, cases: CaseRegistry, lo_base: pathlib.Path):
         self.lo_base = lo_base  # LibreOffice 配置目录的上级：<应用数据>/临时/lo（Spec 5.2）
         self.cases = cases
         self._locks: dict[str, threading.Lock] = {}
@@ -132,7 +147,7 @@ class Materials:
     def _load_index(self, root: str, case_id: str) -> dict:
         p = gate.resolve_internal(root, INDEX_REL, op="materials_index")
         if not p.exists():
-            return {"v": 1, "case_id": case_id, "next_seq": 1, "materials": []}
+            return {"v": 1, "case_id": case_id, "next_seq": _recover_next_seq(root), "materials": []}
         data = contracts.read_json(p)
         if data.get("v") != 1:
             raise ApiError("INTERNAL", "index_unknown_v")
@@ -147,15 +162,25 @@ class Materials:
     # ---------- 原件区遍历 ----------
 
     @staticmethod
-    def walk(root: str) -> dict[str, tuple[str, os.stat_result]]:
+    def walk(root: str) -> dict[str, tuple[str, os.stat_result | None]]:
         """{rel_path: (绝对路径, stat)}；不跟随链接，跳过 工作区、成果、以 . 开头的项和锁文件。"""
-        found: dict[str, tuple[str, os.stat_result]] = {}
-        stack: list[tuple[str, str]] = [(root, "")]
+        return Materials.walk_all(root)[0]
+
+    @staticmethod
+    def walk_all(root: str) -> tuple[dict[str, tuple[str, os.stat_result | None]], list[str]]:
+        """同 walk，另返回读不了的子文件夹（相对路径，以 / 结尾）。
+
+        用长路径前缀（\\\\?\\）遍历：路径超过 259 字符的原件也要列出来，登记为失败而不是静默消失（T5 返修 X8）；
+        它们的材料文本路径更长，解析时按 path_too_long 失败。stat 取不到的，stat 为 None，按"无法读取"登记。"""
+        found: dict[str, tuple[str, os.stat_result | None]] = {}
+        unreadable: list[str] = []
+        stack: list[tuple[str, str]] = [(_long_path(root), "")]
         while stack:
             d, prefix = stack.pop()
             try:
                 entries = list(os.scandir(d))
             except OSError:
+                unreadable.append(prefix)
                 continue
             for e in entries:
                 name = e.name
@@ -163,56 +188,70 @@ class Materials:
                     continue
                 if not prefix and name in gate.WRITABLE_TOP:
                     continue
+                rel = f"{prefix}{name}"
                 try:
                     st = e.stat(follow_symlinks=False)
                 except OSError:
+                    if detect.material_type(pathlib.Path(name)):
+                        found[rel] = (e.path, None)
                     continue
                 if _is_link_entry(st):
                     continue
-                rel = f"{prefix}{name}"
                 if stat.S_ISDIR(st.st_mode):
                     stack.append((e.path, rel + "/"))
                 elif stat.S_ISREG(st.st_mode) and detect.material_type(pathlib.Path(name)):
                     found[rel] = (e.path, st)
-        return found
+        return found, sorted(unreadable)
 
     # ---------- 解析一份 ----------
 
     def _parse(self, root: str, rel: str, mtype: str, conv: Converter) -> Parsed:
+        """扩展名定"哪一类材料"，文件头定"走哪条解析、过哪道检查"（T5 返修 X1）：
+        - Word 类（docx / doc / wps）：压缩包 → 直接读 XML（不经 LibreOffice）；OLE → 查加密、查外链后交给
+          LibreOffice 转 docx；其他（RTF、HTML 冒充 .doc 等）→ 查不了外链，不交给 LibreOffice（unchecked）。
+        - Excel 类（xlsx / xls）：压缩包 → 查全部关系文件后直接读，只有没有外链才交给 LibreOffice 重算；
+          OLE → 查加密后转 xlsx，转出来的再查关系文件；其他 → 同上不交给 LibreOffice。
+        - PDF、文本、图片不经 LibreOffice，按扩展名解析，内容不符的由各自的解析器报损坏。"""
         path = gate.resolve_read(root, rel, op="materials_read")
         if path.stat().st_size > MAX_BYTES:
             raise ParseError("too_large")
         with conv.session() as s:
             if mtype == "pdf":
                 return pdf.parse(path)
-            if mtype == "docx":
-                return docx.parse(path)
-            if mtype in ("doc", "wps"):
-                if detect.is_ole(path) and detect.ole_encrypted(path):
-                    raise ParseError("encrypted")
-                if links.has_external_picture(path):
-                    raise ParseError("external_link")  # 不交给 LibreOffice（Spec 14.3 ②a）
-                return docx.parse(s.convert(path, "docx"), note=CONVERTED_NOTE[mtype])
-            if mtype == "xlsx":
-                return xlsx.parse(path, recalc=self._recalc(path, s))
-            if mtype == "xls":
-                if detect.is_ole(path) and detect.ole_encrypted(path):
-                    raise ParseError("encrypted")
-                converted = s.convert(path, "xlsx")
-                return xlsx.parse(converted, recalc=self._recalc(converted, s), note=CONVERTED_NOTE["xls"])
             if mtype in ("csv", "md", "txt"):
                 return text.parse(path)
             if mtype == "image":
                 return image.parse(path)
+            kind = detect.content_kind(path)
+            if mtype in ("docx", "doc", "wps"):
+                if kind == "zip":
+                    return docx.parse(path)
+                if kind != "ole":
+                    raise ParseError("corrupt" if mtype == "docx" else "unchecked")
+                if detect.ole_encrypted(path):
+                    raise ParseError("encrypted")
+                if links.has_external_picture(path):
+                    raise ParseError("external_link")  # 不交给 LibreOffice（Spec 14.3 ②a）
+                return docx.parse(s.convert(path, "docx", suffix=".doc" if mtype == "docx" else None),
+                                  note=CONVERTED_NOTE.get(mtype))
+            if mtype in ("xlsx", "xls"):
+                if kind == "zip":
+                    return xlsx.parse(path, recalc=self._recalc(path, s))
+                if kind != "ole":
+                    raise ParseError("corrupt" if mtype == "xlsx" else "unchecked")
+                if detect.ole_encrypted(path):
+                    raise ParseError("encrypted")
+                converted = s.convert(path, "xlsx", suffix=".xls")
+                return xlsx.parse(converted, recalc=self._recalc(converted, s), note=CONVERTED_NOTE["xls"])
         raise ParseError("corrupt")
 
     @staticmethod
     def _recalc(path: pathlib.Path, s):
         """有外链图片或对象的 xlsx 不交给 LibreOffice 重算（Calc 导入时会去取，设置拦不住；Spec 14.3 ②b）：
-        返回 None，没有缓存值的单元格只写公式。"""
+        返回 None，没有缓存值的单元格只写公式。关系文件查不了的报 unchecked（X2），整份不解析。"""
         if links.xlsx_has_external_rels(path):
             return None
-        return lambda p: s.convert(p, "xlsx")
+        return lambda p: s.convert(p, "xlsx", suffix=".xlsx")
 
     # ---------- 扫描 ----------
 
@@ -229,24 +268,28 @@ class Materials:
             raise ApiError("CASE_NOT_FOUND", "root_missing")
         for rel in ("工作区/材料", TEXT_DIR, TEMP_REL):
             gate.mkdir_work(root, rel, op="materials_scan")
+        self._clean_temp(root)
         index = self._load_index(root, case_id)
         by_key = {_key(m["rel_path"]): m for m in index["materials"]}
-        found = self.walk(root)
+        found, unreadable_dirs = self.walk_all(root)
         conv = Converter(gate.resolve_internal(root, TEMP_REL), lo_base=self.lo_base)
-        added = changed = removed = failed = 0
+        added = changed = removed = failed = recovered = 0
         parsed_now: dict[str, Parsed | None] = {}
         now = now_iso()
 
         for rel, (abspath, st) in sorted(found.items()):
             entry = by_key.get(_key(rel))
-            mt = mtime_iso(st)
-            if entry and entry["status"] != "source_deleted" and entry["size"] == st.st_size and entry["mtime"] == mt:
+            live = entry is not None and entry["status"] != "source_deleted"
+            # 跟环境有关的失败（转换程序异常、超时、路径太长、无法读取等）每次扫描都重试（X9）
+            retry = live and entry["status"] == "failed" and entry["error"] in RETRY_MESSAGES
+            mt = mtime_iso(st) if st is not None else None
+            if live and not retry and st is not None and entry["size"] == st.st_size and entry["mtime"] == mt:
                 continue
             try:
-                digest = sha256_file(abspath)
+                digest = sha256_file(abspath) if st is not None else None
             except OSError:
-                continue  # 读不了（被占用等）：下次再扫
-            if entry and entry["status"] != "source_deleted" and entry["sha256"] == digest:
+                digest = None  # 被占用、没有权限：登记为失败（X8），下次扫描重试
+            if live and not retry and digest is not None and entry["sha256"] == digest:
                 entry["size"], entry["mtime"] = st.st_size, mt
                 continue
             mtype = detect.material_type(pathlib.Path(rel))
@@ -257,11 +300,17 @@ class Materials:
                 index["materials"].append(entry)
                 by_key[_key(rel)] = entry
                 added += 1
+            elif retry and (digest is None or digest == entry["sha256"]):
+                pass  # 原件没变，只是重试
             else:
                 changed += 1
-            entry.update(type=mtype, size=st.st_size, mtime=mt, sha256=digest, updated_at=now,
-                         text_path=f"{TEXT_DIR}/{rel}.md", is_ocr="none")
+            # 读不了的原件没有哈希：沿用上次的；第一次就读不了的先填 64 个 0（契约要求 sha256 格式），下次重试时更正
+            entry.update(type=mtype, size=st.st_size if st is not None else entry.get("size", 0),
+                         mtime=mt or entry.get("mtime", now), sha256=digest or entry.get("sha256", "0" * 64),
+                         updated_at=now, text_path=f"{TEXT_DIR}/{rel}.md", is_ocr="none")
             try:
+                if digest is None:
+                    raise ParseError("unreadable")
                 if _too_long(root, entry["text_path"]) or (
                         mtype in ("xlsx", "xls") and _too_long(root, f"{FORMULA_DIR}/{rel}.txt")):
                     raise ParseError("path_too_long")  # 文本写不下去：只让这一份失败，不中断整次扫描
@@ -284,14 +333,19 @@ class Materials:
                 entry.update(status="needs_ocr" if p.pages_need_ocr else "parsed", unit=p.unit,
                              unit_count=p.unit_count, pages_need_ocr=p.pages_need_ocr, pages_mixed=p.pages_mixed,
                              note=p.note, error=None)
+                if retry:
+                    recovered += 1
             parsed_now[entry["material_id"]] = p
 
         seen = {_key(r) for r in found}
         for m in index["materials"]:
-            if _key(m["rel_path"]) not in seen and m["status"] != "source_deleted":
-                m["status"] = "source_deleted"
-                m["updated_at"] = now
-                removed += 1
+            if _key(m["rel_path"]) in seen or m["status"] == "source_deleted":
+                continue
+            if any(m["rel_path"].startswith(d) for d in unreadable_dirs):
+                continue  # 所在文件夹这次读不了：不知道原件还在不在，不标"原件已删除"（X8）
+            m["status"] = "source_deleted"
+            m["updated_at"] = now
+            removed += 1
 
         # 材料名：新材料导致重名时，已有材料的名字也改长
         names = assign_names([m["rel_path"] for m in index["materials"]])
@@ -318,9 +372,32 @@ class Materials:
             self._retitle(root, m)
 
         self._save_index(root, index)
-        self._write_status(root, index)
+        self._write_status(root, index, unreadable_dirs)
         return {"added": added, "changed": changed, "removed": removed, "failed": failed,
-                "review_needed": bool(added or changed or removed)}
+                "review_needed": bool(added or changed or removed or recovered)}
+
+    @staticmethod
+    def _clean_temp(root: str) -> None:
+        """扫描开始时（已在该案件的锁内）清掉本服务自己前缀的残留：转换的 lo-*、解压的 unzip-*、导入复制的 imp-*
+        （T5 返修 X6）。只认这几个前缀：工作区/临时/ 里粘贴的截图、委托材料窗口的下载不能动。链接一律不碰。"""
+        tdir = gate.resolve_internal(root, TEMP_REL, op="materials_scan")
+        try:
+            entries = list(os.scandir(tdir))
+        except OSError:
+            return
+        for e in entries:
+            if not e.name.startswith(TEMP_PREFIXES):
+                continue
+            try:
+                st = e.stat(follow_symlinks=False)
+                if _is_link_entry(st):
+                    logs.event("materials", "temp_cleanup", status="denied", error="LINK")
+                elif stat.S_ISDIR(st.st_mode):
+                    remove_tree(pathlib.Path(e.path))  # 删不掉会记日志
+                else:
+                    os.unlink(e.path)
+            except OSError as err:
+                logs.event("materials", "temp_cleanup", status="fail", error=type(err).__name__)
 
     def _retitle(self, root: str, m: dict) -> None:
         p = gate.resolve_internal(root, m["text_path"], op="materials_text")
@@ -330,7 +407,7 @@ class Materials:
         body = lines[1] if len(lines) > 1 else ""
         gate.write_bytes(root, m["text_path"], f"# {m['name']}\n{body}".encode("utf-8"), op="materials_text")
 
-    def _write_status(self, root: str, index: dict) -> None:
+    def _write_status(self, root: str, index: dict, unreadable_dirs: list[str] = ()) -> None:
         mats = index["materials"]
         count = {s: sum(1 for m in mats if m["status"] == s) for s in
                  ("parsed", "needs_ocr", "failed", "source_deleted")}
@@ -346,6 +423,10 @@ class Materials:
                         "第 " + "、".join(map(str, m["pages_need_ocr"])) + " 页" if st == "needs_ocr" else "保留原有文本")
                     lines.append(f"- {m['name']}：{extra}")
                 lines.append("")
+        if unreadable_dirs:
+            lines.append(f"## 无法读取的文件夹（{len(unreadable_dirs)} 个，其中的文件这次没有列入，以前列入的保持原状）")
+            lines += [f"- {d.rstrip('/') or '（案件文件夹本身）'}" for d in unreadable_dirs]
+            lines.append("")
         gate.write_bytes(root, STATUS_REL, "\n".join(lines).encode("utf-8"), op="materials_status")
 
     def index(self, case_id: str) -> dict:
@@ -420,13 +501,18 @@ class Materials:
                 skipped.append({"path": src, "reason": "链接或快捷方式"})
                 continue
             real = os.path.realpath(p)
+            if _same_path(real, root):
+                continue  # 导入源就是案件根目录：按"已在案件内"处理，只扫描（X3）
             if gate.is_within(root, real):
-                rel = os.path.relpath(real, root).replace("\\", "/")
-                top = rel.split("/")[0]
-                if top == gate.WORK and stat.S_ISREG(st.st_mode):
-                    # 工作区 下的临时文件（粘贴的截图、委托材料下载）：复制到目标后删除临时文件
-                    self._import_file(root, p, target, os.path.basename(p), copied, skipped, unzip)
-                    gate.delete_work_file(root, rel, op="import")
+                parts = os.path.relpath(real, root).replace("\\", "/").split("/")
+                if parts[0] == gate.WORK:
+                    # 只有 工作区/临时/ 下的文件（粘贴的截图、委托材料下载）按临时文件导入：复制成功或判定
+                    # "同名同内容已存在"之后才删；工作区 下其他位置的不接受导入（X7）
+                    if len(parts) > 2 and parts[1] == "临时" and stat.S_ISREG(st.st_mode):
+                        if self._import_file(root, p, target, os.path.basename(p), copied, skipped, unzip):
+                            gate.delete_work_file(root, "/".join(parts), op="import")
+                    else:
+                        skipped.append({"path": src, "reason": "无法读取"})
                 continue  # 已在案件文件夹内：不复制，直接解析
             if gate.in_sync_folder(p) or gate.in_sync_folder(real):
                 skipped.append({"path": src, "reason": "云同步目录"})
@@ -440,6 +526,8 @@ class Materials:
         return copied, skipped
 
     def _import_dir(self, root: str, src_dir: str, target: str, copied, skipped) -> None:
+        """案件根目录在导入源之内（拖进来的是案件的上级文件夹）：跳过案件根目录那一支，不复制也不计入跳过（X3）。
+        任何层级以 . 开头的项都跳过，计入"跳过"（X12，与扫描一致）。"""
         base = _join(target, os.path.basename(src_dir.rstrip("\\/")))
         stack = [(src_dir, base)]
         while stack:
@@ -450,6 +538,9 @@ class Materials:
                 skipped.append({"path": d, "reason": "无法读取"})
                 continue
             for e in entries:
+                if e.name.startswith("."):
+                    skipped.append({"path": e.path, "reason": "无法读取"})
+                    continue
                 try:
                     st = e.stat(follow_symlinks=False)
                 except OSError:
@@ -458,31 +549,32 @@ class Materials:
                 if _is_link_entry(st) or os.path.splitext(e.name)[1].lower() in SHORTCUT_EXT:
                     skipped.append({"path": e.path, "reason": "链接或快捷方式"})
                 elif stat.S_ISDIR(st.st_mode):
-                    stack.append((e.path, _join(dest, e.name)))
+                    if not _same_path(os.path.realpath(e.path), root):
+                        stack.append((e.path, _join(dest, e.name)))
                 elif stat.S_ISREG(st.st_mode):
                     self._copy_one(root, e.path, _join(dest, e.name), copied, skipped)
 
-    def _import_file(self, root: str, src: str, target: str, name: str, copied, skipped, unzip: bool) -> None:
+    def _import_file(self, root: str, src: str, target: str, name: str, copied, skipped, unzip: bool) -> bool:
+        """返回是否全部落位（复制成功或同名同内容已存在）：导入临时文件时只有这样才删源文件（X7）。"""
         if unzip and name.lower().endswith(".zip"):
-            self._import_zip(root, src, target, copied, skipped)
-        else:
-            self._copy_one(root, src, _join(target, name), copied, skipped)
+            return self._import_zip(root, src, target, copied, skipped)
+        return self._copy_one(root, src, _join(target, name), copied, skipped)
 
-    def _copy_one(self, root: str, src: str, dest_rel: str, copied, skipped, from_label: str | None = None) -> None:
+    def _copy_one(self, root: str, src: str, dest_rel: str, copied, skipped, from_label: str | None = None) -> bool:
         label = from_label or src
         try:
             size = os.path.getsize(src)
         except OSError:
             skipped.append({"path": label, "reason": "无法读取"})
-            return
+            return False
         if size > MAX_BYTES:
             skipped.append({"path": label, "reason": "超过大小上限"})
-            return
+            return False
         try:
             digest = sha256_file(src)
         except OSError:
             skipped.append({"path": label, "reason": "无法读取"})
-            return
+            return False
         stem, ext = os.path.splitext(dest_rel)
         n = 1
         while True:
@@ -492,11 +584,11 @@ class Materials:
             except ApiError:
                 # 文件名是设备名（con.txt）或以 . 开头（.env）等闸门不收的名字：只跳过这一个，不中止整次导入
                 skipped.append({"path": label, "reason": "无法读取"})
-                return
+                return False
             if os.path.lexists(existing):
                 if os.path.isfile(existing) and not gate.is_link(existing) and sha256_file(existing) == digest:
                     skipped.append({"path": label, "reason": "同名同内容已存在"})
-                    return
+                    return True
                 n += 1
                 continue
             try:
@@ -505,37 +597,46 @@ class Materials:
                 continue  # 并发下被别人抢先建了同名文件：重新比对
             except OSError:
                 skipped.append({"path": label, "reason": "无法读取"})
-                return
+                return False
             copied.append({"from": label, "to": cand})
-            return
+            return True
 
-    def _import_zip(self, root: str, src: str, target: str, copied, skipped) -> None:
-        """ZIP 先解压到 工作区/临时/（拒绝越界、链接、超过 500 个文件），再按普通文件复制。"""
+    def _import_zip(self, root: str, src: str, target: str, copied, skipped) -> bool:
+        """ZIP 先解压到 工作区/临时/（拒绝越界、链接、超过 500 个文件），再按普通文件复制。
+        任何层级以 . 开头的成员跳过（X12）。返回是否每个成员都已落位。"""
         try:
             zf = zipfile.ZipFile(src)
         except (zipfile.BadZipFile, OSError):
             skipped.append({"path": src, "reason": "无法读取"})
-            return
+            return False
         with zf:
             members = [i for i in zf.infolist() if not i.is_dir()]
             if len(members) > ZIP_MAX_FILES or any(_zip_bad(i) for i in zf.infolist()):
                 skipped.append({"path": src, "reason": "无法读取"})
-                return
+                return False
             tops = {i.filename.replace("\\", "/").split("/")[0] for i in members}
             dest_base = "" if tops & STANDARD_TOPS else target
             work_rel = f"{TEMP_REL}/unzip-{uuid.uuid4().hex[:8]}"
             work = gate.mkdir_work(root, work_rel, op="import")
+            done = True
             try:
                 for i, info in enumerate(members):
                     name = info.filename.replace("\\", "/")
                     label = src + os.sep + name.replace("/", os.sep)
+                    if any(part.startswith(".") for part in name.split("/")):
+                        skipped.append({"path": label, "reason": "无法读取"})
+                        done = False
+                        continue
                     if info.file_size > MAX_BYTES:
                         skipped.append({"path": label, "reason": "超过大小上限"})
+                        done = False
                         continue
                     tmp = gate.write_bytes(root, f"{work_rel}/{i}", zf.read(info), op="import")
-                    self._copy_one(root, str(tmp), _join(dest_base, name), copied, skipped, from_label=label)
+                    done = self._copy_one(root, str(tmp), _join(dest_base, name), copied, skipped,
+                                          from_label=label) and done
             finally:
-                shutil.rmtree(work, ignore_errors=True)
+                remove_tree(work)  # 删不掉记日志（Y2），下次扫描按 unzip- 前缀再清
+            return done
 
 
 def _zip_bad(info: zipfile.ZipInfo) -> bool:
@@ -560,6 +661,60 @@ def _too_long(root: str, rel: str) -> bool:
     parent = os.path.dirname(full)
     return (len(full) > _MAX_FILE or len(parent) > _MAX_DIR
             or len(parent) + 1 + _ATOMIC_TMP_NAME > _MAX_FILE)
+
+
+def _long_path(path: str) -> str:
+    """Windows 上加长路径前缀，遍历、读取不受 260 字符上限影响（X8）。"""
+    if os.name != "nt" or path.startswith("\\\\?\\"):
+        return path
+    path = os.path.abspath(path)
+    if path.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + path[2:]
+    return "\\\\?\\" + path
+
+
+_MID = re.compile(r"^M(\d{4,})$")
+
+
+def _recover_next_seq(root: str) -> int:
+    """index.json 不在了（被删）时的起始编号（T5 返修 X11，裁决 2）：从"案件里还能找到的最大编号"加 1 起，
+    来源是 case.db 里出现过的材料编号、工作区/材料/识别页/ 下的目录名、工作区/wiki/材料/ 下的文件名，旧编号不再复用。
+    根治要在 case.db 里留底（改契约，候 owner N26）。"""
+    seen: list[int] = []
+
+    def take(mid) -> None:
+        m = _MID.match(str(mid))
+        if m:
+            seen.append(int(m.group(1)))
+
+    for rel, strip_suffix in (("工作区/材料/识别页", False), ("工作区/wiki/材料", True)):
+        try:
+            d = gate.resolve_internal(root, rel, op="materials_index")
+            names = [e.name for e in os.scandir(d)] if d.is_dir() else []
+        except (ApiError, OSError):
+            names = []
+        for n in names:
+            take(os.path.splitext(n)[0] if strip_suffix else n)
+    try:
+        db = gate.resolve_internal(root, "工作区/case.db", op="materials_index")
+        if db.is_file():
+            con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+            try:
+                for table in ("ocr_jobs", "search_units"):
+                    try:
+                        for (mid,) in con.execute(f"SELECT DISTINCT material_id FROM {table}"):
+                            take(mid)
+                    except sqlite3.Error:
+                        pass
+            finally:
+                con.close()
+    except (ApiError, OSError, sqlite3.Error):
+        pass
+    return max(seen, default=0) + 1
+
+
+def _same_path(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
 
 
 def _join(a: str, b: str) -> str:

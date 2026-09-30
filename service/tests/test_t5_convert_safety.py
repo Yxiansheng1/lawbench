@@ -20,7 +20,8 @@ from lawbench.config import REPO_ROOT
 from lawbench.ingest import REASONS, links
 from lawbench.ingest import libreoffice as lo
 
-from fakes import CountingListener, linked_image_docx
+from conftest import short_dir
+from fakes import CountingListener, linked_image_docx, linked_image_xlsx, minimal_ole
 
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 needs_lo = pytest.mark.skipif(lo.find_soffice() is None, reason="本机没有 LibreOffice")
@@ -55,19 +56,19 @@ def test_docx_linked_image_no_request(make_client, cases_dir):
 # ---------- LibreOffice：独立配置目录里关掉按链接取图（先红后绿） ----------
 
 @needs_lo
-def test_libreoffice_block_setting_red_then_green(tmp_path, monkeypatch):
+def test_libreoffice_block_setting_red_then_green(tmp_path, monkeypatch, lo_base):
     with CountingListener() as lis:
         src = tmp_path / "外链.docx"
         linked_image_docx(src, lis.url)
         # 红：不写 BlockUntrustedRefererLinks，LibreOffice 会去取图
         monkeypatch.setattr(lo, "write_profile", lambda p: (p / "user").mkdir(parents=True, exist_ok=True))
-        with lo.Converter(tmp_path / "t-red").session() as s:
+        with lo.Converter(tmp_path / "t-red", lo_base=lo_base).session() as s:
             s.convert(src, "odt")
         red = lis.count
         monkeypatch.undo()
         lis.count = 0
         # 绿：写了设置，转换照常成功，监听收到 0 次请求
-        with lo.Converter(tmp_path / "t-green").session() as s:
+        with lo.Converter(tmp_path / "t-green", lo_base=lo_base).session() as s:
             assert s.convert(src, "odt").stat().st_size > 0
         green = lis.count
     assert red > 0 and green == 0, (red, green)
@@ -85,7 +86,7 @@ def doc_samples(tmp_path_factory):
     linked_image_docx(base / "linked.docx", lis.url)
     shutil.copy(FIXTURES / "tender-01" / "补充通知.docx", base / "plain.docx")
     out = {}
-    with lo.Converter(base / "t").session() as s:
+    with short_dir("lblo-") as lb, lo.Converter(base / "t", lo_base=lb).session() as s:
         for n in ("linked", "plain"):
             out[n] = base / f"{n}.doc"
             out[n].write_bytes(s.convert(base / f"{n}.docx", "doc").read_bytes())
@@ -173,7 +174,7 @@ FIELD_CASES = [
 
 def _field_doc(path: pathlib.Path, instr: str, enc: str, pad: int = 64) -> None:
     body = ("正文 see the link http://example.invalid/ 开头" + "\x13" + instr + "\x14结果\x15" + "结尾").encode(enc)
-    path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * pad + body)
+    minimal_ole(path, {"WordDocument": b"\x00" * pad + body})  # 真的 OLE 容器：打不开的容器按"无法检查"拒绝（X2）
 
 
 @pytest.mark.parametrize("instr,expect", FIELD_CASES, ids=range(len(FIELD_CASES)))
@@ -193,7 +194,7 @@ def test_detector_field_forms(tmp_path, instr, expect):
 def test_detector_plain_text_not_triggered(tmp_path, text):
     for enc in ("utf-16-le", "gb18030"):
         p = tmp_path / f"plain-{enc}.doc"
-        p.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64 + text.encode(enc))
+        minimal_ole(p, {"WordDocument": b"\x00" * 64 + text.encode(enc)})
         assert links.has_external_picture(p) is False, (text, enc)
 
 
@@ -229,17 +230,32 @@ def test_linked_doc_would_fetch_without_detector(make_client, cases_dir, doc_sam
 
 
 @needs_lo
-def test_xls_no_request(make_client, cases_dir, tmp_path):
+def test_xls_no_request(make_client, cases_dir):
+    """扩展名 .xls、内容是带外链图片的 xlsx（Y8：换成有区分力的样本——关掉检查时转换程序确实会去取图，
+    见 test_xls_disguised_would_fetch_without_check）：按文件头走 xlsx 的检查，不交给 LibreOffice，0 次请求。"""
     with CountingListener() as lis:
-        with lo.Converter(tmp_path / "t").session() as s:
-            xls = s.convert(FIXTURES / "civil-01" / "银行流水.xlsx", "xls").read_bytes()
         root = cases_dir / "xls"
         root.mkdir()
-        (root / "流水.xls").write_bytes(xls)
-        lis.count = 0
+        linked_image_xlsx(root / "流水.xls", lis.url)
         mats = open_scan(make_client(), root)
         assert lis.count == 0
-    assert mats["流水"]["status"] == "parsed"
+    m = mats["流水"]
+    assert m["status"] == "parsed" and m["note"] is None     # 没经过转换
+    text = (root / m["text_path"]).read_text(encoding="utf-8")
+    assert "| 2 |  | =B1*2 |" in text                         # 没有缓存值：只写公式，没有交给 LibreOffice 重算
+
+
+@needs_lo
+def test_xls_disguised_would_fetch_without_check(make_client, cases_dir, monkeypatch):
+    """红测（X1 的依据）：同一个样本，去掉外链检查后交给 LibreOffice，监听收到请求。"""
+    monkeypatch.setattr(links, "xlsx_has_external_rels", lambda p: False)
+    with CountingListener() as lis:
+        root = cases_dir / "去掉检查"
+        root.mkdir()
+        linked_image_xlsx(root / "流水.xls", lis.url)
+        open_scan(make_client(), root)
+        time.sleep(0.5)
+        assert lis.count > 0
 
 
 # ---------- 超时：只结束本次启动的进程树；不留材料副本 ----------
@@ -274,12 +290,12 @@ def test_timeout_kills_own_tree_and_cleans(make_client, cases_dir, tmp_path, mon
     try:
         root = cases_dir / "卡住"
         root.mkdir()
-        shutil.copy(FIXTURES / "civil-01" / "借条.docx", root / "旧格式.doc")  # 扩展名 .doc 即走 LibreOffice
+        minimal_ole(root / "旧格式.doc", {"WordDocument": b"LBFX"})  # 内容是 OLE 才走 LibreOffice（X1 按文件头分流）
         t0 = time.monotonic()
         mats = open_scan(make_client(), root)
         assert time.monotonic() - t0 < 60
         m = mats["旧格式"]
-        assert m["status"] == "failed" and m["error"] == REASONS["convert_failed"]
+        assert m["status"] == "failed" and m["error"] == REASONS["convert_timeout"]
         pid = int(pid_file.read_text())
         assert not _alive(pid)                                           # 本次启动的进程树已结束
         assert bystander.poll() is None                                  # 别的进程不受影响
@@ -293,7 +309,7 @@ def test_convert_failure_cleans_temp(make_client, cases_dir, monkeypatch):
     monkeypatch.setattr(lo, "find_soffice", lambda: sys.executable)  # 能启动但不会产出文件
     root = cases_dir / "转换失败"
     root.mkdir()
-    shutil.copy(FIXTURES / "civil-01" / "借条.docx", root / "坏.doc")
+    minimal_ole(root / "坏.doc", {"WordDocument": b"LBFX"})
     mats = open_scan(make_client(), root)
     assert mats["坏"]["status"] == "failed"
     assert list((root / "工作区" / "临时").iterdir()) == []
