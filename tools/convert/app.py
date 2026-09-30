@@ -25,9 +25,9 @@ class ConvertApp:
         top = ttk.Frame(root, padding=10)
         top.pack(fill="x")
         ttk.Label(top, text="转换：").pack(side="left")
-        self.kind = tk.StringVar(value=core.KINDS[0].label)
+        self.kind = tk.StringVar(value=core.VISIBLE[0].label)
         box = ttk.Combobox(top, textvariable=self.kind, state="readonly", width=32,
-                           values=[k.label for k in core.KINDS])
+                           values=[k.label for k in core.VISIBLE])
         box.pack(side="left")
         box.bind("<<ComboboxSelected>>", lambda e: self._update_note())
         ttk.Button(top, text="选择文件…", command=self.choose).pack(side="left", padx=10)
@@ -54,7 +54,7 @@ class ConvertApp:
     def _update_note(self) -> None:
         key = self.current().key
         self.note["text"] = {"pdf2docx": core.PDF_TO_WORD_NOTE, "md2docx": core.IMAGES_NOTE,
-                             "docx2md": core.IMAGES_NOTE, "doc2docx": core.LEGACY_WORD_REASON,
+                             "docx2md": core.IMAGES_NOTE,
                              "word2pdf": core.LEGACY_WORD_REASON}.get(key, "")
 
     def on_close(self) -> None:
@@ -65,7 +65,7 @@ class ConvertApp:
 
     def choose(self) -> None:
         k = self.current()
-        pattern = " ".join(f"*{e}" for e in k.inputs)
+        pattern = " ".join(f"*{e}" for e in k.listed)
         names = filedialog.askopenfilenames(title="选择文件", filetypes=[(k.label, pattern), ("所有文件", "*.*")])
         if names:
             self.files = [Path(n) for n in names]

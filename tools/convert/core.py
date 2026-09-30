@@ -40,7 +40,7 @@ INTERNAL = "处理失败（程序内部错误），其余文件不受影响。"
 # 第一版小工具不转换旧版 Word / WPS 文件（用户 2026-09-30 拍板 N24 ②；主编排 1137 令）。
 # 按文件头判断：OLE 复合文档（旧版 .doc / .wps 的格式）一律不交给转换程序；改了扩展名的 docx 照常按 docx 处理。
 # .xls（也是 OLE）走 xls → xlsx，不受影响。extlinks.py 留档，小工具不再调用。
-LEGACY_WORD_REASON = "暂不支持旧版 Word / WPS 文件。请用 Word 或 WPS 打开后另存为 .docx，再来转换。"
+LEGACY_WORD_REASON = "暂不支持旧版 Word / WPS 文件（或文件不是 Word 文档）。请用 Word 或 WPS 打开后另存为 .docx，再来转换。"
 WORD_KINDS = ("doc2docx", "word2pdf", "docx2md")
 
 
@@ -48,18 +48,11 @@ def is_zip(path: Path) -> bool:
     """文件头是 zip（docx 的容器格式）。"""
     try:
         with open(lp(path), "rb") as f:
-            return f.read(4) == b"PK"
+            return f.read(4) == b"PK\x03\x04"
     except OSError:
         return False
 
 
-def is_ole(path: Path) -> bool:
-    """文件头是 OLE 复合文档（旧版 .doc / .wps / .xls 的容器格式）。"""
-    try:
-        with open(lp(path), "rb") as f:
-            return f.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
-    except OSError:
-        return False
 MAX_PROFILE_PATH = 100          # LibreOffice 配置目录路径超过约 140 字符时 soffice 直接崩溃（实测），留足余量
 CRASH_CODES = (0xC0000409, 0xC0000409 - 2**32)   # STATUS_STACK_BUFFER_OVERRUN（无符号 / 有符号两种写法）
 LO_REGISTRY = (
@@ -100,18 +93,25 @@ class Kind:
     label: str
     inputs: tuple[str, ...]
     output: str
+    shown: tuple[str, ...] = ()      # 提示和选文件时列出的扩展名；空则同 inputs
+    hidden: bool = False             # 不在下拉框里出现（第一版不转换旧版 Word / WPS，N24 ②）
+
+    @property
+    def listed(self) -> tuple[str, ...]:
+        return self.shown or self.inputs
 
 
 KINDS = [
-    Kind("doc2docx", "doc / wps → docx", (".doc", ".wps"), ".docx"),
+    Kind("doc2docx", "doc / wps → docx", (".doc", ".wps"), ".docx", hidden=True),
     Kind("xls2xlsx", "xls → xlsx", (".xls",), ".xlsx"),
-    Kind("word2pdf", "Word → PDF", (".docx", ".doc", ".wps"), ".pdf"),
+    Kind("word2pdf", "Word → PDF", (".docx", ".doc", ".wps"), ".pdf", shown=(".docx",)),
     Kind("pdf2docx", "PDF → Word（只保留文字和段落）", (".pdf",), ".docx"),
     Kind("md2docx", "Markdown → Word", (".md", ".markdown"), ".docx"),
     Kind("docx2md", "Word → Markdown", (".docx",), ".md"),
     Kind("img2pdf", "图片 → PDF", (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"), ".pdf"),
 ]
 BY_KEY = {k.key: k for k in KINDS}
+VISIBLE = [k for k in KINDS if not k.hidden]
 
 
 def long_form(s: str) -> str:
@@ -276,7 +276,7 @@ def convert_file_ex(kind: str, src: Path) -> tuple[Path, list[str]]:
 def _convert_file(kind: str, src: Path, notes: list[str]) -> tuple[Path, list[str]]:
     k = BY_KEY[kind]
     if src.suffix.lower() not in k.inputs:
-        raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.inputs)}）。")
+        raise ConvertError(f"{src.name} 不是这种转换能处理的格式（{'、'.join(k.listed)}）。")
     if not src.is_file():
         raise ConvertError(f"{src.name} 不存在或无法读取。")
     if kind in WORD_KINDS and not is_zip(src):

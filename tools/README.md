@@ -15,4 +15,4 @@
 
 **测试**：`cd tools; python -m pytest -q tests`（需要 LibreOffice 和 pandoc；没有时相关用例跳过）。切分样本 `splitter\samples\` 的 3 张虚构聊天截图由 `make_samples.py` 生成。
 
-**第一版的限制**：格式互转不转换旧版 Word / WPS 文件（.doc、.wps）。按文件头判断，不是 docx（zip）的一律不交给转换程序，提示“暂不支持旧版 Word / WPS 文件。请用 Word 或 WPS 打开后另存为 .docx，再来转换。”改了扩展名的 docx 照常转换；.xls → .xlsx 不受影响。原因：旧版格式里以链接引用的图片，转换程序会联网去取，现有的外链检查没有经过独立验证（候 owner 清单 N24，用户 2026-09-30 选 ②）。`convert\extlinks.py` 和它的测试留档，工作台服务（T5）同一思路，小工具不调用。
+**第一版的限制**：格式互转不转换旧版 Word / WPS 文件（.doc、.wps）。按文件头判断，不是 docx（zip）的一律不交给转换程序，提示“暂不支持旧版 Word / WPS 文件（或文件不是 Word 文档）。请用 Word 或 WPS 打开后另存为 .docx，再来转换。”改了扩展名的 docx 照常转换；下拉框不再出现“doc / wps → docx”，Word → PDF 只列 .docx；.xls → .xlsx 不受影响。原因：旧版格式里以链接引用的图片，转换程序会联网去取，现有的外链检查没有经过独立验证（候 owner 清单 N24，用户 2026-09-30 选 ②）。`convert\extlinks.py` 和它的测试留档，工作台服务（T5）同一思路，小工具不调用。
