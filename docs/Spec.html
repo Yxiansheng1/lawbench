@@ -987,7 +987,7 @@ li{margin:3px 0}
 <p><strong>标准案件目录</strong>（可选）：新建案件时律师可选&quot;民商事&quot;或&quot;刑事&quot;，程序按 <a href="../contracts/formats.md"><code>contracts/formats.md</code></a> 第 1.1 节补建子文件夹（<code>01委托手续</code>、<code>02案件材料</code>、<code>03一审/我方证据</code> 等），与委托材料工具和归档目录一致；只补缺，不改已有文件夹。不选则不建。</p>
 </li>
 <li>
-<p><strong>材料编号</strong>（<code>material_id</code>）：<code>M</code> + 4 位序号，首次导入时按顺序分配，写入 <code>材料/index.json</code>，同一案件内不复用；原件改名或移动视为删除后新增。识别页、检索索引、出处记录都用它关联材料。</p>
+<p><strong>材料编号</strong>（<code>material_id</code>）：<code>M</code> + 4 位序号，首次导入时按顺序分配，写入 <code>材料/index.json</code>，同一案件内不复用；原件改名或移动视为删除后新增。识别页、检索索引、出处记录都用它关联材料。（2026-09-30 契约 1.2，N26：编号同时在 <code>case.db</code> 的 <code>material_ids</code> 表留底，<code>index.json</code> 丢失后重建时同一份原件拿回原来的编号、新编号不占用旧的）</p>
 </li>
 <li>
 <p><strong>材料名</strong>：给 AI 和律师看的名字，在案件内唯一，规则见第 20.2 节。</p>
@@ -1101,6 +1101,11 @@ li{margin:3px 0}
 <tr>
 <td><code>GET /api/task/current</code></td>
 <td>读该会话当前的选择（1.2 起；界面每次显示前读）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET /api/outputs</code></td>
+<td>本案已确认的成果列表（成果区；1.2 起）</td>
 <td>否</td>
 </tr>
 <tr>
@@ -1342,7 +1347,7 @@ li{margin:3px 0}
 <p>沿用 wiki 测试已验证的格式，完整规定见 <a href="../contracts/formats.md"><code>contracts/formats.md</code></a> 第 2 节：</p>
 <pre><code># &lt;材料名&gt;
 
-&gt; Source: &lt;原件相对路径&gt;（&lt;文字版 / 识别所得 / 部分识别&gt;，&lt;N&gt;页）
+&gt; Source: &lt;原件相对路径&gt;（&lt;文字版 / 识别所得 / 部分识别 / 待识别&gt;，&lt;N&gt;页）
 &gt; Collected: &lt;导入日期&gt;
 
 【第1页】
@@ -1740,6 +1745,7 @@ li{margin:3px 0}
 <li><strong>任务单</strong>（<code>task.json</code>，执行前）：所属会话、胶囊 id（字段名 <code>entry</code>）、Skill、律师的指令、选用的前序成果（路径、版本、哈希）、wiki 分节、参数、预算。律师每发起一次请求，插件在第一步向工作台服务申请新任务：界面事先为该会话写了待执行的任务单（<code>POST /api/task</code>），就用它；没有就按&quot;自由对话&quot;默认值新建。
 <ul>
 <li><strong>2026-09-30 契约 1.2（N37）</strong>：输入区上方的选择管到律师改掉为止。界面在律师改动选择时调 <code>POST /api/task</code>（entry、skill 都为 null 表示自由对话）；同一会话只保留最新一张待执行的任务单；每条消息执行时按它新建一个执行中的任务，待执行的那张不消耗、不删除；界面每次显示之前从 <code>GET /api/task/current</code> 读，不在本地记，不靠轮询猜。</li>
+<li><strong>2026-09-30 契约 1.2（N31）</strong>：单个页、段、行、表格行超过一次能读的字数时，AI 用 <code>offset</code> 接着读同一单元；只读了一部分的单元不计入&quot;已读&quot;，覆盖清单里归&quot;没读全&quot;。</li>
 </ul>
 </li>
 <li><strong>首轮注入</strong>（<code>agent/pre-step</code> 第一步，插件向工作台服务要）：
@@ -1881,7 +1887,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <p>律所提供的发票整理、委托材料两个工具不是 Skill，放在 <code>engines/</code>（第 13.3、13.5 节）；原归档 Skill 只作参考，放在 <code>docs/reference/client-skills/</code>。律师此前提供的 11 个参考 Skill 仍不放进仓库、不被加载（第 2 节&quot;不用的组件&quot;）。</p>
 <p><strong>Skill 的工作流程</strong>：改了 Skill 或胶囊配置后，运行 <code>python skills/_scripts/build_skills.py</code>（同步共用规则并校验，发版时加 <code>--strict</code>），再由打包脚本运行 <code>install.py --out &lt;安装目录&gt;/skills</code>。</p>
 <h3 id="10-3-胶囊配置">10.3 胶囊配置</h3>
-<p><code>skills/capsules.default.json</code>（契约 <a href="../contracts/skill/capsules.schema.json"><code>contracts/skill/capsules.schema.json</code></a>）是首页的默认配置，随安装包复制到 <code>&lt;安装目录&gt;/skills/</code>。律师本机的配置在 <code>&lt;应用数据&gt;/capsules.json</code>，首次启动时从默认配置复制；胶囊管理（U-11）改的是本机配置，&quot;恢复默认&quot;再从默认配置复制一次。升级安装包不覆盖本机配置；默认配置新增的胶囊，在本机配置里以隐藏状态补进去，并在首页提示&quot;有新功能，可在管理胶囊中显示&quot;。</p>
+<p><code>skills/capsules.default.json</code>（契约 <a href="../contracts/skill/capsules.schema.json"><code>contracts/skill/capsules.schema.json</code></a>）是首页的默认配置，随安装包复制到 <code>&lt;安装目录&gt;/skills/</code>。律师本机的配置在 <code>&lt;应用数据&gt;/capsules.json</code>，首次启动时从默认配置复制；胶囊管理（U-11）改的是本机配置，&quot;恢复默认&quot;再从默认配置复制一次。升级安装包不覆盖本机配置；默认配置新增的胶囊，在本机配置里以隐藏状态补进去，并在首页提示&quot;有新功能，可在管理胶囊中显示&quot;。（2026-09-30 契约 1.2，N35：补进去的胶囊标 <code>new: true</code>，界面据此提示；律师显示或隐藏它一次后清掉）</p>
 <table>
 <thead>
 <tr>
@@ -3106,7 +3112,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <tr>
 <td>1.2</td>
 <td>2026-09-30</td>
-<td>输入区任务单改为&quot;管到律师改掉为止&quot;（候 owner 清单 N37，用户定）：<code>POST /api/task</code> 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 <code>GET /api/task/current?session_id=</code> 供界面读当前选择，界面不在本地记；<code>/core/task/begin</code> 按当前选择新建执行中的任务，不删待执行的那张。字段无增减，<code>contract_version</code> 升 1.2</td>
+<td>用户当日拍板的一批（候 owner 清单 N37、N21、N26、N28、N31、N32、N35）：①任务单改为&quot;管到律师改掉为止&quot;——<code>POST /api/task</code> 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 <code>GET /api/task/current?session_id=</code>；<code>/core/task/begin</code> 按当前选择新建执行中的任务；②<code>case_read_material</code> 加可选参数 <code>offset</code>、返回加 <code>next_offset</code>，单元超过 <code>max_chars</code> 时能接着读同一单元；<code>start</code>/<code>end</code> 的 Excel 编号改为整份材料连续（<code>formats.md</code> 第 2 节）；③<code>tasks_list</code> 任务项加 <code>coverage</code>、<code>citation_check</code>，并写明不列待执行的任务单；④新增 <code>GET /api/outputs?case_id=</code> 成果列表；⑤胶囊项加可缺省字段 <code>new</code>（升级新补进来的胶囊，首页据此提示&quot;有新功能&quot;）；⑥材料索引 <code>note</code> 枚举加&quot;有外部链接，未重算公式&quot;；⑦材料文本 Source 行加取值&quot;待识别&quot;；⑧<code>unit_count</code> 写明 cell 时为工作表个数；⑨<code>case_db.sql</code> 新增 <code>material_ids</code> 表（材料编号留底，schema_version 仍为 1）。<code>contract_version</code> 升 1.2</td>
 </tr>
 </tbody>
 </table>

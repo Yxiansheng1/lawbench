@@ -13,7 +13,12 @@
         "start": {
           "type": "integer",
           "minimum": 1,
-          "description": "起始位置号（页 / 段 / 行；Excel 为工作表内的行号），默认 1"
+          "description": "起始位置号（页 / 段 / 行；Excel 为整份材料里表格行的顺序号，跨工作表连续，1.2 起），默认 1"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "从起始位置号那个单元内的第几个字开始读（0 起），默认 0；单元本身超过 max_chars 时用它接着读同一单元（1.2 起）"
         },
         "max_chars": {
           "type": "integer",
@@ -63,6 +68,18 @@
               "type": "null"
             }
           ]
+        },
+        "next_offset": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "description": "同一单元没读完时给出：下次传 start=end、offset=next_offset 接着读；读到单元末尾为 null（1.2 起）"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -74,7 +91,8 @@
         "end",
         "text",
         "has_more",
-        "next_start"
+        "next_start",
+        "next_offset"
       ]
     }
   }

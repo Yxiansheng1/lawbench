@@ -6,5 +6,6 @@
   "end": 3,
   "text": "【第2页】\n…",
   "has_more": false,
-  "next_start": null
+  "next_start": null,
+  "next_offset": null
 }

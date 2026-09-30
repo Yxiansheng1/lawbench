@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "lawbench://contracts/api/tasks_list.schema.json",
   "title": "GET /api/tasks?case_id=",
-  "description": "本案任务列表（成果区用），数据来自各任务的 result.json",
+  "description": "本案任务列表（成果区用），数据来自各任务的 result.json；只列已开始执行的任务，还没执行的选择（待执行任务单）不列（1.2 写明）",
   "$defs": {
     "request": {
       "type": "object",
@@ -91,6 +91,26 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "coverage": {
+                        "anyOf": [
+                          {
+                            "$ref": "lawbench://contracts/common.schema.json#/$defs/coverage"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "citation_check": {
+                        "anyOf": [
+                          {
+                            "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_check"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false,
@@ -100,7 +120,9 @@
                       "status",
                       "drafts",
                       "citation_passed",
-                      "finished_at"
+                      "finished_at",
+                      "coverage",
+                      "citation_check"
                     ]
                   }
                 }
@@ -189,6 +211,26 @@
                     "type": "null"
                   }
                 ]
+              },
+              "coverage": {
+                "anyOf": [
+                  {
+                    "$ref": "lawbench://contracts/common.schema.json#/$defs/coverage"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "citation_check": {
+                "anyOf": [
+                  {
+                    "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_check"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "additionalProperties": false,
@@ -198,7 +240,9 @@
               "status",
               "drafts",
               "citation_passed",
-              "finished_at"
+              "finished_at",
+              "coverage",
+              "citation_check"
             ]
           }
         }

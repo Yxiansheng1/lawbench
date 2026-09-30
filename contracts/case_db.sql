@@ -1,4 +1,4 @@
--- 工作区/case.db 的表结构（契约 1.1，表结构与 1.0 相同）
+-- 工作区/case.db 的表结构（契约 1.2：新增 material_ids 表，见文末；schema_version 仍为 1——第一版尚未发布，用 CREATE TABLE IF NOT EXISTS 补建即可）
 -- 读写 case.db 的模块：案件（case/）、识别队列（ocr/）、检索（search/）。改表结构要升 schema_version，并在升级前备份为 case.db.bak-<旧版本>。
 -- 成果登记不在这里，在 成果/索引.json（避免两处各记一份）。
 
@@ -56,3 +56,14 @@ CREATE INDEX IF NOT EXISTS idx_units_material ON search_units(material_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
   text_norm, content='search_units', content_rowid='rowid', tokenize='trigram'
 );
+
+-- 1.2 新增：材料编号留底（候 owner 清单 N26）。index.json 是材料索引的主本；这张表只为 index.json 丢失后重建时让同一份原件拿回原来的编号、新编号不占用旧的。
+-- 写入时机：导入或扫描分配新编号时同步写一行；原件改名或移动视为删除后新增（Spec 4.1），旧行保留不删。
+CREATE TABLE IF NOT EXISTS material_ids (
+  material_id TEXT PRIMARY KEY,               -- M0001；同一案件内永不复用
+  rel_path    TEXT NOT NULL,                  -- 分配编号时的原件相对路径（Windows 反斜杠换成 /）
+  sha256      TEXT NOT NULL,                  -- 分配编号时原件的 sha256
+  first_seen  TEXT NOT NULL                   -- ISO 8601
+);
+CREATE INDEX IF NOT EXISTS material_ids_rel_path ON material_ids(rel_path);
+-- meta 里另存 next_material_seq（下一个可用序号），重建 index.json 时以 max(meta.next_material_seq, 表内最大编号+1) 为起点。

@@ -40,6 +40,10 @@
         "custom": {
           "type": "boolean",
           "description": "律师自己新增的胶囊"
+        },
+        "new": {
+          "type": "boolean",
+          "description": "升级时由默认配置新补进本机配置、律师还没处理过的胶囊（补进来时 hidden=true）；首页据此提示“有新功能”；律师在管理胶囊里显示或隐藏它一次后清掉（1.2 起，可缺省）"
         }
       },
       "additionalProperties": false,
@@ -80,6 +84,10 @@
         },
         "custom": {
           "type": "boolean"
+        },
+        "new": {
+          "type": "boolean",
+          "description": "同 skill 胶囊（1.2 起，可缺省）"
         }
       },
       "additionalProperties": false,

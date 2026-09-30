@@ -566,7 +566,8 @@
         },
         "unit_count": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "位置单位的数量；unit 为 cell 时是工作表的个数（1.2 写明）"
         },
         "is_ocr": {
           "$ref": "lawbench://contracts/common.schema.json#/$defs/ocr_state"

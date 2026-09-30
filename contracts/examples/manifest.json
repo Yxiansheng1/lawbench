@@ -322,5 +322,11 @@
   "schema": "api/task_current.schema.json",
   "pointer": "#/$defs/response",
   "expect": "valid"
+ },
+ {
+  "file": "skill_capsules.new_item.json",
+  "schema": "skill/capsules.schema.json",
+  "pointer": "",
+  "expect": "valid"
  }
 ]

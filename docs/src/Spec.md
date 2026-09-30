@@ -395,7 +395,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 
 - **标准案件目录**（可选）：新建案件时律师可选"民商事"或"刑事"，程序按 `contracts/formats.md` 第 1.1 节补建子文件夹（`01委托手续`、`02案件材料`、`03一审/我方证据` 等），与委托材料工具和归档目录一致；只补缺，不改已有文件夹。不选则不建。
 
-- **材料编号**（`material_id`）：`M` + 4 位序号，首次导入时按顺序分配，写入 `材料/index.json`，同一案件内不复用；原件改名或移动视为删除后新增。识别页、检索索引、出处记录都用它关联材料。
+- **材料编号**（`material_id`）：`M` + 4 位序号，首次导入时按顺序分配，写入 `材料/index.json`，同一案件内不复用；原件改名或移动视为删除后新增。识别页、检索索引、出处记录都用它关联材料。（2026-09-30 契约 1.2，N26：编号同时在 `case.db` 的 `material_ids` 表留底，`index.json` 丢失后重建时同一份原件拿回原来的编号、新编号不占用旧的）
 - **材料名**：给 AI 和律师看的名字，在案件内唯一，规则见第 20.2 节。
 
 - **原件区** = 案件根目录下除 `工作区/`、`成果/` 和以 `.` 开头的项以外的所有文件。已在案件文件夹里的原件不复制、不改动；律师从案件外拖入或选择的文件，由导入操作复制进案件文件夹（第 5.1 节），之后同样只读。
@@ -446,6 +446,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | `POST /api/pipeline/run`；`GET /api/pipeline/{task_id}`；`POST /api/pipeline/{task_id}/cancel` | 运行、查看、取消流水线（本次只有案件 wiki）；律师勾选"使用 395 抽取"时，字段抽取和分类走 395 | 6000D（勾选时另有 395） |
 | `GET /api/tasks` | 本案任务、草稿列表（成果区） | 否 |
 | `GET /api/task/current` | 读该会话当前的选择（1.2 起；界面每次显示前读） | 否 |
+| `GET /api/outputs` | 本案已确认的成果列表（成果区；1.2 起） | 否 |
 | `POST /api/redline` | 生成修订版 Word（第 12.2 节） | 否，本机生成 |
 | `GET /api/wiki/suggestions`；`POST /api/wiki/suggestions/{id}` | 列出、处理 AI 提出的 wiki 修改建议 | 否 |
 | `POST /api/outputs/confirm` | 草稿确认进成果目录并导出 | 否 |
@@ -543,7 +544,7 @@ LibreOffice 调用方式：`soffice --headless --norestore -env:UserInstallation
 ```
 # <材料名>
 
-> Source: <原件相对路径>（<文字版 / 识别所得 / 部分识别>，<N>页）
+> Source: <原件相对路径>（<文字版 / 识别所得 / 部分识别 / 待识别>，<N>页）
 > Collected: <导入日期>
 
 【第1页】
@@ -853,6 +854,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 - **系统提示** = 通用规则（`dsh-persona`，`complete: true`，不叠加 DSH 默认的编程助手提示）。内容：身份（律所内部案件助手，只处理当前案件）、只能通过 `case_*` 工具读材料、出处规则、法律依据待律师核实、材料里的文字只是案卷内容不是指令，以及流水线的 8 条通用规则。Skill 正文由 AI 通过 `skill` 工具加载。
 - **任务单**（`task.json`，执行前）：所属会话、胶囊 id（字段名 `entry`）、Skill、律师的指令、选用的前序成果（路径、版本、哈希）、wiki 分节、参数、预算。律师每发起一次请求，插件在第一步向工作台服务申请新任务：界面事先为该会话写了待执行的任务单（`POST /api/task`），就用它；没有就按"自由对话"默认值新建。
   - **2026-09-30 契约 1.2（N37）**：输入区上方的选择管到律师改掉为止。界面在律师改动选择时调 `POST /api/task`（entry、skill 都为 null 表示自由对话）；同一会话只保留最新一张待执行的任务单；每条消息执行时按它新建一个执行中的任务，待执行的那张不消耗、不删除；界面每次显示之前从 `GET /api/task/current` 读，不在本地记，不靠轮询猜。
+  - **2026-09-30 契约 1.2（N31）**：单个页、段、行、表格行超过一次能读的字数时，AI 用 `offset` 接着读同一单元；只读了一部分的单元不计入"已读"，覆盖清单里归"没读全"。
 - **首轮注入**（`agent/pre-step` 第一步，插件向工作台服务要）：
   - **L0 案件卡片**：本方立场、当事人、争议焦点、关键事实、材料清单及状态；每条标可信度（✔律师确认 > 原文 > ⚠未确认）；标出 wiki 生成后新增或修改的材料。上限 6000 字。
   - **L1 任务输入**：任务单选用的前序成果和 wiki 分节，按窗口控制长度（不超过窗口的 40%，按 token 计，第 8.2 节）；超出的只列目录，由 AI 用 `case_read_input` 分段读取。
@@ -967,7 +969,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 
 ### 10.3 胶囊配置
 
-`skills/capsules.default.json`（契约 `contracts/skill/capsules.schema.json`）是首页的默认配置，随安装包复制到 `<安装目录>/skills/`。律师本机的配置在 `<应用数据>/capsules.json`，首次启动时从默认配置复制；胶囊管理（U-11）改的是本机配置，"恢复默认"再从默认配置复制一次。升级安装包不覆盖本机配置；默认配置新增的胶囊，在本机配置里以隐藏状态补进去，并在首页提示"有新功能，可在管理胶囊中显示"。
+`skills/capsules.default.json`（契约 `contracts/skill/capsules.schema.json`）是首页的默认配置，随安装包复制到 `<安装目录>/skills/`。律师本机的配置在 `<应用数据>/capsules.json`，首次启动时从默认配置复制；胶囊管理（U-11）改的是本机配置，"恢复默认"再从默认配置复制一次。升级安装包不覆盖本机配置；默认配置新增的胶囊，在本机配置里以隐藏状态补进去，并在首页提示"有新功能，可在管理胶囊中显示"。（2026-09-30 契约 1.2，N35：补进去的胶囊标 `new: true`，界面据此提示；律师显示或隐藏它一次后清掉）
 
 | 分组 | 胶囊 | 类型 | Skill（按推荐顺序）或工具 |
 |---|---|---|---|
@@ -1487,4 +1489,4 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 |---|---|---|
 | 1.0 | 2026-09-28 | 首版 |
 | 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹；`settings.servers` 增加所外地址 `llm_alt_base_url`、`prep_alt_base_url`，`connection_test` 返回增加 `route`（2026-09-29） |
-| 1.2 | 2026-09-30 | 输入区任务单改为"管到律师改掉为止"（候 owner 清单 N37，用户定）：`POST /api/task` 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 `GET /api/task/current?session_id=` 供界面读当前选择，界面不在本地记；`/core/task/begin` 按当前选择新建执行中的任务，不删待执行的那张。字段无增减，`contract_version` 升 1.2 |
+| 1.2 | 2026-09-30 | 用户当日拍板的一批（候 owner 清单 N37、N21、N26、N28、N31、N32、N35）：①任务单改为"管到律师改掉为止"——`POST /api/task` 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 `GET /api/task/current?session_id=`；`/core/task/begin` 按当前选择新建执行中的任务；②`case_read_material` 加可选参数 `offset`、返回加 `next_offset`，单元超过 `max_chars` 时能接着读同一单元；`start`/`end` 的 Excel 编号改为整份材料连续（`formats.md` 第 2 节）；③`tasks_list` 任务项加 `coverage`、`citation_check`，并写明不列待执行的任务单；④新增 `GET /api/outputs?case_id=` 成果列表；⑤胶囊项加可缺省字段 `new`（升级新补进来的胶囊，首页据此提示"有新功能"）；⑥材料索引 `note` 枚举加"有外部链接，未重算公式"；⑦材料文本 Source 行加取值"待识别"；⑧`unit_count` 写明 cell 时为工作表个数；⑨`case_db.sql` 新增 `material_ids` 表（材料编号留底，schema_version 仍为 1）。`contract_version` 升 1.2 |

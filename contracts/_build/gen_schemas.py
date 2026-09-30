@@ -149,7 +149,7 @@ common = {
     "material_row": obj({
         "material_id": ref("material_id"), "name": s("案件内唯一，规则见 Spec 20.2"),
         "type": ref("material_type"), "status": ref("material_status"),
-        "unit": ref("unit"), "unit_count": i(minimum=0), "is_ocr": ref("ocr_state"),
+        "unit": ref("unit"), "unit_count": i("位置单位的数量；unit 为 cell 时是工作表的个数（1.2 写明）", minimum=0), "is_ocr": ref("ocr_state"),
         "stale_ocr": b("原件变了而识别结果还是旧版本"),
         "error": nullable(s("失败原因，中文"))},
         desc="材料在 AI 工具中暴露的字段（不含路径）"),
@@ -200,11 +200,14 @@ MAXC = i("单次最多返回的字数，默认且最大 8000", minimum=500, maxi
 tool("case_list_materials", "列出当前案件的材料。name 在案件内唯一，引用时照抄",
      obj({}), obj({"materials": arr(ref("material_row")), "total": i(minimum=0)}))
 tool("case_read_material", "读一份材料的解析文本（带位置标记）。每次读取记入 reads.json",
-     obj({"name": s(), "start": i("起始位置号（页 / 段 / 行；Excel 为工作表内的行号），默认 1", minimum=1), "max_chars": MAXC},
+     obj({"name": s(), "start": i("起始位置号（页 / 段 / 行；Excel 为整份材料里表格行的顺序号，跨工作表连续，1.2 起），默认 1", minimum=1),
+          "offset": i("从起始位置号那个单元内的第几个字开始读（0 起），默认 0；单元本身超过 max_chars 时用它接着读同一单元（1.2 起）", minimum=0),
+          "max_chars": MAXC},
          required=["name"]),
      obj({"name": s(), "material_id": ref("material_id"), "unit": ref("unit"),
           "start": i(minimum=1), "end": i(minimum=1), "text": s(),
-          "has_more": b(), "next_start": nullable(i(minimum=1))}))
+          "has_more": b(), "next_start": nullable(i(minimum=1)),
+          "next_offset": nullable(i("同一单元没读完时给出：下次传 start=end、offset=next_offset 接着读；读到单元末尾为 null（1.2 起）", minimum=0))}))
 tool("case_search", "全文检索（Spec 第 11 节）",
      obj({"query": s(minLength=1, maxLength=100), "max_hits": i("默认 20", minimum=1, maximum=50)}, required=["query"]),
      obj({"hits": arr(obj({"name": s(), "material_id": ref("material_id"),
@@ -313,7 +316,7 @@ api = [
      obj({"case_id": ref("case_id")}),
      obj({"materials": arr(obj({
          "material_id": ref("material_id"), "name": s(), "rel_path": ref("rel_path"), "type": ref("material_type"),
-         "status": ref("material_status"), "unit": ref("unit"), "unit_count": i(minimum=0),
+         "status": ref("material_status"), "unit": ref("unit"), "unit_count": i("位置单位的数量；unit 为 cell 时是工作表的个数（1.2 写明）", minimum=0),
          "is_ocr": ref("ocr_state"), "stale_ocr": b(), "error": nullable(s()),
          "pages_need_ocr": arr(i(minimum=1)), "pages_mixed": arr(i(minimum=1))}))})),
     ("ocr_submit", "POST /api/ocr/jobs", "提交识别（调用前界面已弹确认框，写明页数和发往 395）",
@@ -345,11 +348,14 @@ api = [
           "queue_wait_ms": nullable(i(minimum=0))})),
     ("pipeline_cancel", "POST /api/pipeline/{task_id}/cancel", "取消流水线；已完成的步骤存为草稿",
      obj({"task_id": ref("task_id")}), obj({})),
-    ("tasks_list", "GET /api/tasks?case_id=", "本案任务列表（成果区用），数据来自各任务的 result.json",
+    ("tasks_list", "GET /api/tasks?case_id=", "本案任务列表（成果区用），数据来自各任务的 result.json；只列已开始执行的任务，还没执行的选择（待执行任务单）不列（1.2 写明）",
      obj({"case_id": ref("case_id")}),
      obj({"tasks": arr(obj({"task_id": ref("task_id"), "skill": nullable(s()), "status": s(),
                             "drafts": arr(obj({"title": s(), "path": ref("rel_path"), "version": i(minimum=1)})),
-                            "citation_passed": nullable(b()), "finished_at": nullable(ref("time"))}))})),
+                            "citation_passed": nullable(b()), "finished_at": nullable(ref("time")),
+                            "coverage": nullable(ref("coverage")), "citation_check": nullable(ref("citation_check"))}))})),
+    ("outputs_list", "GET /api/outputs?case_id=", "本案已确认的成果列表（成果区用），数据来自 成果/索引.json（1.2 起）",
+     obj({"case_id": ref("case_id")}), {"$ref": BASE + "files/outputs_index.schema.json"}),
     ("redline", "POST /api/redline", "按修改清单在本机生成修订版 Word，存为该任务的草稿",
      obj({"case_id": ref("case_id"), "task_id": ref("task_id"), "edit_list": ref("rel_path")}),
      obj({"path": ref("rel_path"), "applied": i(minimum=0),
@@ -465,10 +471,10 @@ ffile("material_index", "工作区/材料/index.json", "原件索引；导入时
            "materials": arr(obj({
                "material_id": ref("material_id"), "rel_path": ref("rel_path"), "name": s(),
                "type": ref("material_type"), "size": i(minimum=0), "mtime": ref("time"), "sha256": ref("sha256"),
-               "status": ref("material_status"), "unit": ref("unit"), "unit_count": i(minimum=0),
+               "status": ref("material_status"), "unit": ref("unit"), "unit_count": i("位置单位的数量；unit 为 cell 时是工作表的个数（1.2 写明）", minimum=0),
                "is_ocr": ref("ocr_state"), "text_path": ref("rel_path"),
                "pages_need_ocr": arr(i(minimum=1)), "pages_mixed": arr(i(minimum=1)),
-               "note": nullable(enum("含修订，已按修订后文本", "由 doc 转换", "由 wps 转换", "由 xls 转换",
+               "note": nullable(enum("含修订，已按修订后文本", "由 doc 转换", "由 wps 转换", "由 xls 转换", "有外部链接，未重算公式",
                                      "摘要为筛选结果，非全量")),
                "error": nullable(s()), "imported_at": ref("time"), "updated_at": ref("time")}))}))
 ffile("task", "工作区/任务/<任务ID>/task.json", "任务单（执行前写）",
@@ -536,10 +542,13 @@ put("skill/frontmatter.schema.json", "SKILL.md 头部", "DSH 只读 name 和 des
 ID = s(pattern="^[a-z0-9]+(-[a-z0-9]+)*$")
 cap_skill = obj({"id": ID, "name": s(minLength=1, maxLength=12), "kind": {"const": "skill"},
                  "skills": arr(ID, minItems=1, description="按推荐顺序；第一个是点胶囊后默认选中的 Skill"),
-                 "outputs": arr(s()), "hidden": b(), "custom": b("律师自己新增的胶囊")})
+                 "outputs": arr(s()), "hidden": b(), "custom": b("律师自己新增的胶囊"),
+                 "new": b("升级时由默认配置新补进本机配置、律师还没处理过的胶囊（补进来时 hidden=true）；首页据此提示“有新功能”；律师在管理胶囊里显示或隐藏它一次后清掉（1.2 起，可缺省）")},
+                required=["id", "name", "kind", "skills", "outputs", "hidden", "custom"])
 cap_tool = obj({"id": ID, "name": s(minLength=1, maxLength=12), "kind": {"const": "tool"},
                 "tool": enum("invoice", "retainer", desc="invoice=发票整理面板；retainer=委托材料窗口"),
-                "hidden": b(), "custom": b()})
+                "hidden": b(), "custom": b(), "new": b("同 skill 胶囊（1.2 起，可缺省）")},
+               required=["id", "name", "kind", "tool", "hidden", "custom"])
 put("skill/capsules.schema.json", "skills/capsules.default.json 与 <应用数据>/capsules.json",
     "首页两级胶囊：一级为分组，二级为胶囊；胶囊打开一组 Skill（kind=skill）或一个内置工具（kind=tool）。律师只能排序、改名、隐藏和新增，不能删除；恢复默认用 capsules.default.json",
     defs={"skill_item": cap_skill, "tool_item": cap_tool},

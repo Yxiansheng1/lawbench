@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/outputs_list.schema.json",
+  "title": "GET /api/outputs?case_id=",
+  "description": "本案已确认的成果列表（成果区用），数据来自 成果/索引.json（1.2 起）",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "$ref": "lawbench://contracts/files/outputs_index.schema.json"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "$ref": "lawbench://contracts/files/outputs_index.schema.json"
+    }
+  }
+}

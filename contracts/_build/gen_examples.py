@@ -57,7 +57,7 @@ ex("tool_read.args_path.json", "tools/case_read_material.schema.json",
    {"name": "借条", "path": "D:/x"}, "#/$defs/args", "invalid")
 ex("tool_read.result.json", "tools/case_read_material.schema.json",
    {"name": "借条", "material_id": "M0001", "unit": "page", "start": 2, "end": 3, "text": "【第2页】\n…",
-    "has_more": False, "next_start": None}, "#/$defs/result")
+    "has_more": False, "next_start": None, "next_offset": None}, "#/$defs/result")
 ex("tool_search.result.json", "tools/case_search.schema.json",
    {"hits": [{"name": "银行流水", "material_id": "M0002", "citation": "〔银行流水 Sheet1!B12〕",
               "snippet": "…转账 80,000.00 …", "is_ocr": False, "match": "expanded"}], "total": 1, "truncated": False},
@@ -188,5 +188,15 @@ ex("skill_capsules.json", "skill/capsules.schema.json", CAPS)
 bad = json.loads(json.dumps(CAPS)); bad["groups"][0]["items"][0]["tool"] = "email"
 ex("skill_capsules.bad_tool.json", "skill/capsules.schema.json", bad, expect="invalid")
 
+# 1.2：任务单改为管到改掉为止（N37）；胶囊 new 字段可缺省；成果列表接口
+ex("api_task_current.req.json", "api/task_current.schema.json", {"session_id": "s_01HZX"}, "#/$defs/request")
+ex("api_task_current.res.json", "api/task_current.schema.json",
+   {"ok": True, "value": {"selection": {"task_id": T, "entry": "criminal-reading", "skill": "criminal-reading-notes",
+                                        "inputs": [], "params": {"thinking": "中", "window": "64K", "max_tokens": 16384},
+                                        "updated_at": NOW}}}, "#/$defs/response")
+ex("api_task_current.res_free.json", "api/task_current.schema.json",
+   {"ok": True, "value": {"selection": None}}, "#/$defs/response")
+newcap = json.loads(json.dumps(CAPS)); newcap["groups"][0]["items"][1]["new"] = True; newcap["groups"][0]["items"][1]["hidden"] = True
+ex("skill_capsules.new_item.json", "skill/capsules.schema.json", newcap)
 (EX / "manifest.json").write_text(json.dumps(M, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 print(len(M), "examples")
