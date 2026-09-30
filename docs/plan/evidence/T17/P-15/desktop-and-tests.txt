@@ -1,0 +1,18 @@
+﻿# P-15 桌面端实测（开发模式；案件文件夹为演示目录，测试文件都是 1x1 的 PNG，测后已删）
+在渲染进程里对 /api/file?path= 发请求（与回答里的本机图片同一条路），结果：
+  案件文件夹里的文件: 200
+  案件文件夹里、大写盘符路径: 200
+  附件目录（$DSH_HOME\attachments\v1\…）里的文件: 200
+  用户目录（临时目录）里的文件: 403 outside the allowed folders
+  系统目录（C:\Windows\win.ini）: 403 outside the allowed folders
+  用 .. 跳出案件文件夹: 403 outside the allowed folders
+  案件文件夹里的链接（目录联接）指向外面: 403 outside the allowed folders
+  长路径前缀 \\?\ 指向外面: 403 outside the allowed folders
+  案件文件夹里不存在的文件: 404 not found
+
+拒绝时的回应正文只有 'outside the allowed folders'，不带路径。
+日志：开发启动日志与 %LOCALAPPDATA%\lawbench\logs 最新插件日志里，secret.png、p15-outside、win.ini、案件外、证据图、api/file 都是 0 次。
+
+DSH 侧测试：packages/api/session-controller 全部——本补丁的 media-references.host.spec.ts 23 项通过、1 项跳过（FIFO，Windows 不跑）。
+另有 8 个 client 测试文件载入即失败（'cannot resolve plugin package @deepseek-ai/dsh-web-app'，测试环境问题）；换回补丁前的两个文件对照，同样这 8 个失败，另外原来那条符号链接用例在 Windows 上 EPERM 失败（没有建符号链接的权限）。本补丁没有新增失败，并把链接用例改成不需要权限的目录联接。
+红测：去掉根目录判断 → 2 项失败；不解析链接（不 realpath）→ 1 项失败；前缀不按整段比较 → 1 项失败；还原后全绿。tsc -b（host）通过；build:lib:host 通过。
