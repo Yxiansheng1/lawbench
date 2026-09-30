@@ -66,9 +66,14 @@ Step "Directories and permissions"
 $logs = Join-Path $Root "logs"; $tmp = Join-Path $Root "tmp"
 New-Item -ItemType Directory -Force $logs, $tmp, (Join-Path $Root "services") | Out-Null
 # Root: only Administrators/SYSTEM full, service account read+execute. Logs and tmp: service account modify.
-icacls $Root /inheritance:r /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "${Account}:(OI)(CI)RX" /T /C /Q | Out-Null
-icacls $logs /grant:r "${Account}:(OI)(CI)M" /C /Q | Out-Null
-icacls $tmp /grant:r "${Account}:(OI)(CI)M" /C /Q | Out-Null
+# Set the root only, then make everything below inherit from it. (OI)(CI) on a file is invalid: with /T the grant
+# failed on every file after /inheritance:r had already stripped it, leaving files with an empty ACL (395, 2026-09-30).
+# SIDs instead of names so localized Windows resolves them: *S-1-5-32-544 Administrators, *S-1-5-18 SYSTEM.
+function Icacls-Ok { & icacls @args | Out-Null; if ($LASTEXITCODE -ne 0) { throw "icacls failed: $($args -join ' ')" } }
+Icacls-Ok $Root /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*${sid}:(OI)(CI)RX" /Q
+Icacls-Ok "$Root\*" /reset /T /C /Q
+Icacls-Ok $logs /grant:r "*${sid}:(OI)(CI)M" /Q
+Icacls-Ok $tmp /grant:r "*${sid}:(OI)(CI)M" /Q
 
 Step "Write WinSW service definitions"
 $svcDir = Join-Path $Root "services"
