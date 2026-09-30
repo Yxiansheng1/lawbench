@@ -3,7 +3,7 @@
 from pathlib import Path
 
 __version__ = "1.0.0"
-CONTRACT_VERSION_FALLBACK = "1.2"   # 395 上只部署 prep395\，读不到仓库 contracts\VERSION 时用这个；改契约版本时同步改
+CONTRACT_VERSION_FALLBACK = "1.3"   # 395 上只部署 prep395\，读不到仓库 contracts\VERSION 时用这个；改契约版本时同步改
 
 
 def _contract_version() -> str:
