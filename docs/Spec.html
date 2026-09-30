@@ -729,7 +729,7 @@ li{margin:3px 0}
 <tr>
 <td>P-5</td>
 <td>聊天附件改为导入</td>
-<td><code>packages/client/ui-conversation/src/client/input/editor/apply.ts</code> 中 <code>addFiles</code>；输入区的&quot;+&quot;按钮</td>
+<td><code>packages/client/ui-conversation/src/client/apply.ts</code> 中 <code>addFiles</code>（2026-09-30 更正位置）；输入区的&quot;+&quot;按钮</td>
 <td><code>addFiles</code> 改为调用我方的导入处理：取出文件的本机路径（Electron <code>webUtils.getPathForFile</code>），调 <code>/api/materials/import</code>，不写附件；粘贴的截图（没有本机路径）先存为 <code>工作区/临时/</code> 下的图片再导入到 <code>02案件材料/粘贴图片/</code>。&quot;+&quot;按钮去掉，由我方&quot;导入&quot;按钮代替（D13）</td>
 </tr>
 <tr>
@@ -785,6 +785,36 @@ li{margin:3px 0}
 <td>欢迎窗口读账号状态（临时）</td>
 <td><code>apps/desktop/src/welcome-backend.ts</code></td>
 <td>账号服务调用失败按&quot;未登录&quot;处理，否则关掉账号相关行后进不了工作区。P-3 落地时整体替换、删掉本条</td>
+</tr>
+<tr>
+<td>P-14</td>
+<td>组合包缺失即不启动</td>
+<td><code>apps/desktop-host/src/index.ts</code>、新文件 <code>lawbench-bundle-guard.ts</code></td>
+<td>桌面端 Host 读完 profile 后，有组合包被跳过或组合包层里没有 <code>lawbench-dsh</code>，就抛中文错误、不启动（用户 2026-09-30 放行 N40 ①）。原来加载失败只记一行、照常以原版 DSH 启动</td>
+</tr>
+<tr>
+<td>P-15</td>
+<td><code>/api/file</code> 限定范围</td>
+<td><code>packages/api/session-controller/src/media-references.ts</code></td>
+<td>先 <code>realpath</code>（解析 <code>..</code>、链接、联接、长路径前缀），再要求落在已登记案件文件夹或本机附件库之内；否则 403，回应与日志不带路径（用户 2026-09-30 放行 N40 ②）。原来本机任何可读文件都能读到</td>
+</tr>
+<tr>
+<td>P-16</td>
+<td>出处做成正式按钮</td>
+<td><code>packages/client/ui-primitives/src/markdown/render.tsx</code>、<code>MarkdownText.tsx</code>；<code>packages/client/ui-chat</code>（新服务 <code>chatInlineMarks</code>）</td>
+<td>Markdown 定稿渲染时按插件登记的正则把出处片段画成 <code>&lt;button&gt;</code>（Tab 可到、Enter 打开原文、读屏可读）；流式帧与链接文字里不生效；不登记时渲染与原版逐字一致（用户 2026-09-30 放行 N36）。已知限制：出处被加粗切成两半、紧跟裸网址时不成按钮</td>
+</tr>
+<tr>
+<td>P-17</td>
+<td>回答里的链接不打开</td>
+<td><code>apps/desktop/src/main.ts</code>；<code>ui-primitives</code> 的 Markdown 渲染</td>
+<td>主窗口开新窗口一律拒绝、外部跳转只阻止、不交给系统浏览器或邮件程序；Markdown 里 <code>http(s)</code>、<code>mailto</code> 链接展开成纯文字（文字不是网址时用全角括号补上网址，便于复制）（用户 2026-09-30 放行 N15 ①）。与 P-9 互补：P-9 管渲染进程发出的请求，P-17 管交给系统程序的动作</td>
+</tr>
+<tr>
+<td>P-18</td>
+<td><code>@</code> 占位文字与开发者开关</td>
+<td><code>packages/client/ui-conversation/src/client/locales.ts</code>；<code>packages/client/ui-settings-general/src/client/index.ts</code></td>
+<td>输入框占位文字去掉&quot;@ 文件或对话&quot;；通用设置不再挂&quot;代码工作工具&quot;（开发者模式）开关（用户 2026-09-30 放行）。快捷键说明里的&quot;@ 打开引用菜单&quot;随返修去掉</td>
 </tr>
 </tbody>
 </table>

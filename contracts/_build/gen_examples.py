@@ -98,7 +98,7 @@ ex("prep_extract.res.json", "prep395/extract.schema.json",
    {"task": "fields", "result": [{"field": "金额", "value": "60,000.00", "loc": "第6页"}], "elapsed_ms": 3200},
    "#/$defs/response")
 ex("prep_health.json", "prep395/health.schema.json",
-   {"status": "ok", "ocr": "ok", "llm9b": "ok", "queue": 3, "version": "1.0.0", "contract_version": "1.1"})
+   {"status": "ok", "ocr": "ok", "llm9b": "ok", "queue": 3, "version": "1.0.0", "contract_version": "1.2"})
 
 # 落盘文件
 ex("file_material_index.json", "files/material_index.schema.json",

@@ -1,0 +1,9 @@
+﻿# line-B 合流记录（T3 / T5 / T8 / 契约 1.2 服务侧 / tokenizer）
+
+- 合并时刻：2026-09-30 16:10 (+08:00)
+- 合并提交：f8af413（main），来源 line-B `4bb0e40`；复核：T3 第五轮 PASS、T8 第三轮 PASS（`evidence\T8\review-REVIEW-第三轮.md`）、T5 第三轮 AMEND 一处（`evidence\T5\review-REVIEW-第三轮.md`，小修随后 cherry-pick）
+- 合流门（解释器 `D:\lawbench-B\service\.venv`，`PYTHONPATH=D:\lawbench\service`，导入路径已确认为 main 副本；应用数据目录/TEMP 指到临时目录）：
+  - `contracts\check_examples.py --skills skills`：退出码 0
+  - `skills\_scripts\build_skills.py --root skills --check`：通过
+  - `service\tests` 全量：**706 passed、6 skipped**（3 个符号链接权限、3 个本机无 tokenizer.json），558 秒，退出码 0
+- 遗留：T5 P2-1（常规格式 1e16 以上整数尾数）待线 B 独立提交后 cherry-pick 并窄核
