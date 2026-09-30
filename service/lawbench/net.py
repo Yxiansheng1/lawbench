@@ -9,7 +9,9 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import json
+import re
 import threading
 import time
 from urllib.parse import urlsplit
@@ -48,6 +50,48 @@ def _host_port(url: str) -> tuple[str, int] | None:
     except ValueError:
         return None
     return u.hostname.lower(), port
+
+
+# 设置里服务器地址的主机名：ASCII 字母、数字、连字符组成的点分标签
+_HOST_LABELS = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$")
+# 基础地址里不该出现的字符：用户信息、查询、片段、反斜杠、百分号编码（两个解析器对它们的处理不一致）
+_URL_FORBIDDEN = set("@?#%\\")
+
+
+def server_url_ok(url) -> bool:
+    """设置里的服务器地址（T3 S1 第三轮）：校验和发请求用同一个解析器（httpx.URL），两个解析器的结论还要一致。
+    拒绝：非字符串；含 0x20 及以下控制字符、0x7F 或任何非 ASCII 字符；含 @ ? # % 或反斜杠；不是 http；
+    主机名不是 ASCII 标签也不是 IP 字面量（全角字母、xn-- 解出非 ASCII 的都拒）；像数字却不是标准 IPv4 写法的
+    （如 0x7f.1、127.1）；端口不在 1–65535；httpx 解析失败或与 urlsplit 的主机、端口不一致。"""
+    if not isinstance(url, str) or not url:
+        return False
+    if any(not (0x20 < ord(c) < 0x7F) for c in url) or _URL_FORBIDDEN & set(url):
+        return False
+    try:
+        a = urlsplit(url)
+        a_port = a.port
+        b = httpx.URL(url)
+    except (ValueError, httpx.InvalidURL):
+        return False
+    if a.scheme != "http" or b.scheme != "http" or not a.hostname or not b.host:
+        return False
+    host = b.host.lower()
+    if host != a.hostname.lower():
+        return False
+    port = b.port if b.port is not None else 80
+    if port != (a_port if a_port is not None else 80) or not 0 < port < 65536:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        pass
+    if not _HOST_LABELS.match(host):
+        return False
+    last = host.rsplit(".", 1)[-1]
+    if last.isdigit() or last.startswith("0x"):  # 看着像 IPv4 却不是标准写法：系统解析器可能按数字地址解释
+        return False
+    return True
 
 
 class Allowlist:
@@ -104,7 +148,7 @@ class Net:
         """设置里的服务器地址：非空的必须能解析出主机和端口；6000D 地址不能是本机转发端口自己
         （否则会自己探测自己）。不合格报 INVALID_ARGUMENT。"""
         for key in SERVER_KEYS:
-            if servers.get(key) and _host_port(servers[key]) is None:
+            if servers.get(key) and (not server_url_ok(servers[key]) or _host_port(servers[key]) is None):
                 raise ApiError("INVALID_ARGUMENT", "server_url_invalid")
         if not self.forward_port:
             return
@@ -137,6 +181,9 @@ class Net:
         try:
             r = self.client.get(base + KINDS[kind][2], timeout=PROBE_TIMEOUT)
         except (httpx.TransportError, ApiError):
+            return False
+        except Exception as e:  # noqa: BLE001 如 httpx.InvalidURL（不是 TransportError）：按不通处理，不出 500
+            logs.event("net", "probe_" + kind, status="fail", error=type(e).__name__)
             return False
         return 200 <= r.status_code < 300
 
