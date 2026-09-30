@@ -29,6 +29,7 @@ from ..errors import ApiError
 from ..ingest import MAX_BYTES, REASONS, RETRY_MESSAGES, Parsed, ParseError
 from ..ingest import detect, docx, image, links, pdf, text, xlsx
 from ..ingest.libreoffice import Converter, remove_tree
+from ..search import fts as search_fts
 from . import gate
 from .registry import TEMPLATES, CaseRegistry
 
@@ -406,6 +407,7 @@ class Materials:
 
         self._save_index(root, index)
         self._write_status(root, index, unreadable_dirs)
+        search_fts.refresh_after_scan(root, case_id, index)  # T9：扫描完就建检索索引（自己兜住异常）
         return {"added": added, "changed": changed, "removed": removed, "failed": failed,
                 "review_needed": bool(added or changed or removed or recovered)}
 

@@ -32,11 +32,11 @@ class ToolContext:
 
 
 def _registry() -> dict[str, Callable[[ToolContext, dict], dict]]:
-    from . import drafts, edit_list, inputs, materials
+    from . import drafts, edit_list, inputs, materials, search
     return {
         "case_list_materials": materials.list_materials,
         "case_read_material": materials.read_material,
-        "case_search": materials.search,
+        "case_search": search.search,  # T9 替换 T8 的临时实现（裁决 1548 第 2 条）
         "case_read_input": inputs.read_input,
         "case_read_wiki": inputs.read_wiki,
         "case_save_draft": drafts.save_draft,

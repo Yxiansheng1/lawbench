@@ -60,8 +60,9 @@ def case_root(cases_dir) -> pathlib.Path:
 def test_health_without_token(client):
     r = client.get("/health", headers={"Authorization": ""})
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "contract_version": "1.2"}
-    assert contracts.version() == "1.2"
+    want = (REPO_ROOT / "contracts" / "VERSION").read_text(encoding="utf-8").strip()   # 不写死版本号（契约 1.3 起）
+    assert r.json() == {"status": "ok", "contract_version": want}
+    assert contracts.version() == want
 
 
 @pytest.mark.parametrize("hdr", [None, "", "Bearer", "Bearer wrong", "bearer " + "t" * 43, "Basic " + "t" * 43,
