@@ -59,8 +59,9 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
         servers = copy.deepcopy(DEFAULTS["servers"])
     try:
         st.net = Net(servers, transport=transport, forward_port=config.forward_port)
-    except ApiError as e:  # 设置里的 6000D 地址指向了转发端口自己：先用默认地址
-        logs.event("app", "settings_load", status="fail", error=f"{e.code}:{e.reason}")
+    except Exception as e:  # noqa: BLE001 设置里的地址不合格（指向转发端口自己、解析时出了没预料到的错）：先用默认地址（N43）
+        logs.event("app", "settings_load", status="fail",
+                   error=f"{e.code}:{e.reason}" if isinstance(e, ApiError) else type(e).__name__)
         st.net = Net(copy.deepcopy(DEFAULTS["servers"]), transport=transport, forward_port=config.forward_port)
     st.settings.on_change(lambda s: st.net.update(s["servers"]))
     st.key_getter = key_getter or keyring_key

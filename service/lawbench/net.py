@@ -71,11 +71,12 @@ def server_url_ok(url) -> bool:
         a = urlsplit(url)
         a_port = a.port
         b = httpx.URL(url)
-    except (ValueError, httpx.InvalidURL):
+        b_host = b.host  # xn-- 写法不合规时 idna 在这里才报错（UnicodeError），也算解析不了（N43）
+    except (ValueError, UnicodeError, httpx.InvalidURL):
         return False
-    if a.scheme != "http" or b.scheme != "http" or not a.hostname or not b.host:
+    if a.scheme != "http" or b.scheme != "http" or not a.hostname or not b_host:
         return False
-    host = b.host.lower()
+    host = b_host.lower()
     if host != a.hostname.lower():
         return False
     port = b.port if b.port is not None else 80

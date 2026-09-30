@@ -13,7 +13,11 @@ import pytest
 from lawbench.api.ui import probe_connection
 from lawbench.errors import ApiError
 from lawbench.net import Net, server_url_ok
+from lawbench.app import create_app
+from lawbench.config import REPO_ROOT, Config
 from lawbench.settings import DEFAULTS
+
+from conftest import AUTH, TOKEN
 
 # 复核员 B 的 F10 列的 4 个地址
 F10_URLS = [
@@ -62,6 +66,31 @@ GOOD = [
     "http://127.0.0.1/v1",
 ]
 KEYS = ["llm_base_url", "prep_base_url", "llm_alt_base_url", "prep_alt_base_url"]
+XN_URLS = ["http://xn--:8000/v1", "http://xn--a:8000", "http://xn--zz-:8000"]   # N43：写法不合规的 xn-- 主机名
+
+
+def _refuse(request):
+    raise httpx.ConnectError("测试里不连任何地址", request=request)
+
+
+@pytest.fixture
+def offline_client(appdata):
+    """和 make_client 一样，但出网请求走假传输层、一律连不上：测试连接不会真的向所内地址发 TCP（A-P3-7）。"""
+    from starlette.testclient import TestClient
+    made = []
+
+    def _make():
+        cfg = Config(token=TOKEN, appdata=appdata, skills_dirs=[REPO_ROOT / "skills"],
+                     contracts_dir=REPO_ROOT / "contracts")
+        c = TestClient(create_app(cfg, key_getter=lambda: None, transport=httpx.MockTransport(_refuse)),
+                       raise_server_exceptions=False)
+        c.headers.update(AUTH)
+        made.append(c)
+        return c
+
+    yield _make
+    for c in made:
+        c.close()
 
 
 @pytest.mark.parametrize("url", F10_URLS + MORE_BAD)
@@ -77,8 +106,8 @@ def test_s1_good_urls_accepted(url):
 
 @pytest.mark.parametrize("key", KEYS)
 @pytest.mark.parametrize("url", F10_URLS)
-def test_s1_put_f10_url_rejected_not_written(make_client, appdata, key, url):
-    c = make_client()
+def test_s1_put_f10_url_rejected_not_written(offline_client, appdata, key, url):
+    c = offline_client()
     s = c.get("/api/settings").json()["value"]
     s["servers"][key] = url
     r = c.put("/api/settings", json=s).json()
@@ -99,12 +128,12 @@ def test_s1_check_servers_rejects_f10(url):
 
 @pytest.mark.parametrize("key", KEYS)
 @pytest.mark.parametrize("url", F10_URLS)
-def test_s1_saved_f10_url_starts_with_defaults(make_client, appdata, key, url):
+def test_s1_saved_f10_url_starts_with_defaults(offline_client, appdata, key, url):
     """启动时设置文件里已经存着这种地址：改用默认地址启动，测试连接不出 500。"""
     s = json.loads(json.dumps(DEFAULTS))
     s["servers"][key] = url
     (appdata / "settings.json").write_text(json.dumps(s), encoding="utf-8")
-    c = make_client()
+    c = offline_client()
     assert c.get("/health").status_code == 200
     assert c.app.state.lb.net._servers == DEFAULTS["servers"]
     for server in ("llm", "prep"):
@@ -112,9 +141,9 @@ def test_s1_saved_f10_url_starts_with_defaults(make_client, appdata, key, url):
 
 
 @pytest.mark.parametrize("url", F10_URLS)
-def test_s1_probe_catches_invalid_url(make_client, url):
+def test_s1_probe_catches_invalid_url(offline_client, url):
     """即使坏地址绕过了校验进了内存（兜底），probe 也按不通处理，测试连接返回 200 而不是 500。"""
-    c = make_client()
+    c = offline_client()
     st = c.app.state.lb
     st.net._servers = dict(st.net._servers, llm_base_url=url, llm_alt_base_url=None)
     st.net._routes.clear()
@@ -134,3 +163,48 @@ def test_s1_parsers_must_agree_alone(monkeypatch):
     monkeypatch.setattr(net, "_HOST_LABELS", re.compile(r".*"))
     assert server_url_ok("http://xn--fsq.com:8000/v1") is False
     assert server_url_ok("http://gpu-6000d.lan:8000/v1") is True
+
+
+# ---------- N43 ①：写法不合规的 xn-- 主机名 ----------
+
+@pytest.mark.parametrize("url", XN_URLS)
+def test_n43_xn_rejected_not_500(url):
+    assert server_url_ok(url) is False
+
+
+@pytest.mark.parametrize("key", KEYS)
+@pytest.mark.parametrize("url", XN_URLS)
+def test_n43_put_xn_rejected_not_written(offline_client, appdata, key, url):
+    c = offline_client()
+    s = c.get("/api/settings").json()["value"]
+    s["servers"][key] = url
+    r = c.put("/api/settings", json=s)
+    assert r.status_code == 200 and r.json()["error"]["code"] == "INVALID_ARGUMENT"
+    assert not (appdata / "settings.json").exists()
+
+
+@pytest.mark.parametrize("url", XN_URLS)
+def test_n43_saved_xn_url_service_starts_with_defaults(offline_client, appdata, url):
+    s = json.loads(json.dumps(DEFAULTS))
+    s["servers"]["llm_base_url"] = url
+    (appdata / "settings.json").write_text(json.dumps(s), encoding="utf-8")
+    c = offline_client()
+    assert c.get("/health").status_code == 200
+    assert c.app.state.lb.net._servers == DEFAULTS["servers"]
+
+
+def test_n43_app_survives_unexpected_net_error(offline_client, monkeypatch):
+    """构造 Net 时出了没预料到的异常（不是 ApiError）：服务照常起来、退回默认地址。"""
+    from lawbench import app as app_mod
+    real = app_mod.Net
+    calls = {"n": 0}
+
+    def boom(servers, **kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise UnicodeError("idna")
+        return real(servers, **kw)
+
+    monkeypatch.setattr(app_mod, "Net", boom)
+    c = offline_client()
+    assert c.get("/health").status_code == 200 and calls["n"] == 2

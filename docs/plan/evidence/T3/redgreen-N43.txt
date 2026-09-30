@@ -1,0 +1,30 @@
+T3 N43 红绿验证：2 类防护
+
+[01] N43·读 b.host 放在 try 里（idna 的 UnicodeError 是 ValueError 的子类，挪进 try 才接得住）
+  改坏 net.py → 红：15 failed, 83 deselected in 1.27s
+      变红的用例：
+        tests/test_t3_rework3.py::test_n43_xn_rejected_not_500[http://xn--:8000/v1]
+        tests/test_t3_rework3.py::test_n43_xn_rejected_not_500[http://xn--a:8000]
+        tests/test_t3_rework3.py::test_n43_xn_rejected_not_500[http://xn--zz-:8000]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--:8000/v1-llm_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--:8000/v1-prep_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--:8000/v1-llm_alt_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--:8000/v1-prep_alt_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--a:8000-llm_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--a:8000-prep_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--a:8000-llm_alt_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--a:8000-prep_alt_base_url]
+        tests/test_t3_rework3.py::test_n43_put_xn_rejected_not_written[http://xn--zz-:8000-llm_base_url]
+        …共 15 个
+  复原 → 绿：15 passed, 83 deselected in 0.81s
+
+[02] N43·构造 Net 出任何异常都退回默认地址
+  改坏 app.py → 红：1 failed, 97 deselected in 0.30s
+      变红的用例：
+        tests/test_t3_rework3.py::test_n43_app_survives_unexpected_net_error
+  复原 → 绿：1 passed, 97 deselected in 0.10s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T5\pytest-返修第二轮*.txt）
+
+结论：2/2 类防护 改坏即红、复原即绿
