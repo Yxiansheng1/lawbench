@@ -30,6 +30,9 @@ def save_draft(ctx: ToolContext, a: dict) -> dict:
     # 取版本号、写文件、改 result.json 都在这个任务的锁里（P1-3、P2-2）；
     # 匹配已有版本不分大小写：NTFS 上 Report-v1.md 和 report-v1.md 是同一个文件
     with ctx.tasks.task_lock(tid):
+        # 在任务锁里再核一次状态：/core/tool 在锁外查过，这之间 end 可能已经插进来（F2）
+        if ctx.tasks.locate(tid)[2]["state"] != "running":
+            raise ApiError("TASK_NOT_FOUND", "not_running")
         folder = gate.resolve_internal(ctx.root, drafts_rel, op="save_draft")
         pat = re.compile(re.escape(title.casefold()) + r"-v(\d+)\.md$")
         existing = [int(m.group(1)) for p in (folder.iterdir() if folder.is_dir() else [])

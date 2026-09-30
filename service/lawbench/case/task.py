@@ -59,6 +59,8 @@ class TaskStore:
         self._guard = threading.Lock()
         # 分段读的进度（N31）：(任务, 材料, 版本, 单元号) → 从 0 起连续读到了第几个字
         self._parts: dict[tuple, int] = {}
+        # 每个会话最新写入的选择（F5：同一秒内建两张时以后写的为准）
+        self._latest: dict[str, str] = {}
 
     def task_lock(self, task_id: str) -> threading.Lock:
         """按任务的锁：result.json、草稿版本号的读-改-写都在这把锁里（P1-3、P2-2）。"""
@@ -146,6 +148,7 @@ class TaskStore:
             self._void_pending(root, d["case_id"], d["session_id"])
             self._write(root, self.rel(task_id, "task.json"), task, "files/task.schema.json")
             self._where[task_id] = d["case_id"]
+            self._latest[d["session_id"]] = task_id
         logs.event("task", "create", case_id=d["case_id"])
         return {"task_id": task_id}
 
@@ -242,6 +245,8 @@ class TaskStore:
                         "params": self.default_params(None), "budget": copy.deepcopy(DEFAULT_BUDGET),
                         "created_at": now_iso()}
             task["state"] = "running"
+            # 先记下"本进程 begin 过"，再写任何文件：重开案件的 mark_abnormal 不会在写到一半时把它当成遗留任务（F1）
+            self._begun[tid] = datetime.now().astimezone()
             self._write(root, self.rel(tid, "task.json"), task, "files/task.schema.json")
             self._write(root, self.rel(tid, "result.json"), {
                 "v": 1, "task_id": tid, "status": "running",
@@ -250,7 +255,6 @@ class TaskStore:
             self._write(root, self.rel(tid, "reads.json"), {"v": 1, "task_id": tid, "reads": []},
                         "files/reads.schema.json")
             self._where[tid] = case_id
-            self._begun[tid] = datetime.now().astimezone()
         logs.event("task", "begin", case_id=case_id)
         return {"task_id": tid, "case_id": case_id, "skill": task["skill"], "params": task["params"],
                 "budget": task["budget"]}
@@ -266,13 +270,19 @@ class TaskStore:
             except (ApiError, FileNotFoundError, contracts.ContractError, ValueError):
                 continue
             if t["state"] == "pending" and t["session_id"] == session_id and t["kind"] == "agent":
-                if best is None or t["created_at"] > best["created_at"]:
-                    best = t
+                if best is None or t["created_at"] > best["created_at"] or (
+                        t["created_at"] == best["created_at"] and t["task_id"] == self._latest.get(session_id)):
+                    best = t  # 同一秒平局：以本进程最后写入的为准（F5）
         return best
 
     # ---------- 打开案件：上次硬退出的任务标 abnormal ----------
 
     def mark_abnormal(self, case_id: str) -> int:
+        """上次硬退出留下的执行中任务标"异常中断"。整个过程拿 self._lock：和 begin 互斥（F1）。"""
+        with self._lock:
+            return self._mark_abnormal(case_id)
+
+    def _mark_abnormal(self, case_id: str) -> int:
         root = self.cases.root_of(case_id)
         base = gate.resolve_internal(root, TASK_DIR, op="task")
         n = 0

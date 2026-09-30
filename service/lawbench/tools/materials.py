@@ -78,6 +78,9 @@ def _read_part(ctx: ToolContext, m: dict, u: texts.Unit, offset: int, limit: int
     if offset > len(u.text) or (offset and offset == len(u.text)):
         raise ApiError("INVALID_ARGUMENT", "offset_out_of_range")
     overhead = len(texts.render([dataclasses.replace(u, text="x")], m["unit"])) - 1  # 位置标记、表头
+    if overhead + len(TRUNC_TAIL) + 1 > limit:  # 表头本身就放不下（很宽的表格）：不带列名表头（F4）
+        u = dataclasses.replace(u, header="")
+        overhead = len(texts.render([dataclasses.replace(u, text="x")], m["unit"])) - 1
     room = max(1, limit - overhead - len(TRUNC_TAIL))
     end = min(len(u.text), offset + room)
     text = texts.render([dataclasses.replace(u, text=u.text[offset:end])], m["unit"])

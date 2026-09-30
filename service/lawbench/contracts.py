@@ -109,4 +109,11 @@ def _replace_with_retry(tmp: str, path: pathlib.Path) -> None:
 
 
 def read_json(path: pathlib.Path):
-    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    """Windows 上文件正被原子替换（os.replace）的那一刻打开会抛 PermissionError：有上限地重试，与写侧对称（T8 F3）。"""
+    for attempt in range(REPLACE_RETRIES):
+        try:
+            return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+        except PermissionError:
+            if attempt == REPLACE_RETRIES - 1:
+                raise
+            time.sleep(REPLACE_WAIT)

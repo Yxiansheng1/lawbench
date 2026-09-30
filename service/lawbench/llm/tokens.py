@@ -1,8 +1,9 @@
 """token 计数（Spec 8.2：L1 按窗口的 40% 控制，按 token 计）。
 
 优先用 6000D 上 qwen38-27b 的 tokenizer.json（放在本目录，`tokenizers` 库可用时自动启用）。
-取 tokenizer 要 SSH 密码（工单 T8 第 1 步），还没取到时用近似计数：中日韩文字每字 1 token，
-其余按 UTF-8 字节数 / 4 向上取整。近似值偏大（宁可少装、不超窗口），换成真计数只需把文件放到位。
+取 tokenizer 要 SSH 密码（工单 T8 第 1 步），还没取到时用近似计数，刻意偏大（宁可少装、不超窗口），
+算法见 count()：中日韩文字和全角符号每字 1、数字每位 1、连续英文字母每 3 个 1、其他 ASCII 符号每个 1、
+连续空白 1、其余非 ASCII 字符每字 2。换成真计数只需把文件放到位并装上 tokenizers。
 """
 from __future__ import annotations
 
