@@ -41,9 +41,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\prep395\src\prep395\deplo
 `install.ps1` 做的事：
 
 1. 检查上面的文件都在；把 `prep395` 装进 `C:\prep395\python\`。
-2. 建本地低权限账号 `prep395svc`（密码由脚本随机生成、只用一次，不显示、不保存），授予"作为服务登录"。
+2. 建本地低权限账号 `prep395svc`（密码由脚本随机生成、只用一次，不显示、不保存），授予"作为服务登录"。密码经 `sc.exe config … password=` 的命令行传给服务管理器：如果 395 开了"进程创建"审核并记录命令行（安全日志事件 4688），这个密码会出现在安全日志里。它是随机密码、只给这个低权限账号用，但律所若开了该审核，装完应清理对应事件或重跑 install 换一个密码。
 3. 权限：`C:\prep395\` 去掉继承，只留 Administrators、SYSTEM 完全控制和 `prep395svc` 读取执行；`logs\`、`tmp\` 给 `prep395svc` 修改权限。
-4. 在 `C:\prep395\services\` 写三个 WinSW 服务定义并注册：`prep395-ocr`（llama-server，127.0.0.1:9101）、`prep395-llm9b`（llama-server，127.0.0.1:9102）、`prep395`（`python -m prep395`，监听 `<LanIp>:9000`，后端 `llama`，依赖前两个）。开机自启，崩溃后 10 / 30 / 60 秒重启；WinSW 自身不写日志（`<log mode="none"/>`）；llama-server 不开 `--verbose`、`--log-file`，加 `--log-disable`、`--no-webui`。
+4. 在 `C:\prep395\services\` 写三个 WinSW 服务定义并注册：`prep395-ocr`（llama-server，127.0.0.1:9101）、`prep395-llm9b`（llama-server，127.0.0.1:9102）、`prep395`（`python -m prep395`，监听 `<LanIp>:9000` 和 `<VpnIp>:9000`（EasyTier，默认 `10.126.126.3`；只听这两个地址，不听 0.0.0.0；开机时 EasyTier 网卡没起来就每 5 秒重试，用户 2026-09-30 选定），后端 `llama`，依赖前两个）。开机自启，崩溃后 10 / 30 / 60 秒重启；WinSW 运行时不写日志（`<log mode="none"/>`；只有执行 install / uninstall 命令时会在 `services\` 下留 `<id>.wrapper.log`，约 1 KB，只记安装、卸载事件）；llama-server 不开 `--verbose`、`--log-file`，加 `--log-disable`、`--no-webui`。
 5. 调 `firewall.ps1`：入站只放行 TCP 9000，来源 `192.168.8.0/24` 和 `10.126.126.0/24`；9101、9102 显式阻止。它只增删自己那组规则（组名 `lawbench-prep395`），**不改动 395 上已有的其他规则**。395 上现有的 80、8080 端口按用户 2026-09-30 的决定**先不动**，等问清是谁的什么服务再定；在此之前，验收脚本 `port_scan.py` 会把它们报为"不应开放"（SEC-13），这一项暂不能判通过。
 6. `powercfg /h off` 关闭休眠。
 7. 启动三个服务并访问 `/health`。
@@ -71,7 +71,7 @@ Restart-Computer                                     # 重启后 Get-Service pre
 G-5 / G-6 实测（选模型、定并发数 N 之后，或换模型时）：在开发机上运行
 
 ```powershell
-python prep395\deploy\bench_g5g6.py --base http://192.168.8.124:9000 --pages 20
+python prep395\deploy\bench_g5g6.py --base http://192.168.8.124:9000 --pages 20 --server-np 2
 ```
 
 它用讯问笔录的 3 页扫描件加现造的 20 页虚构扫描页（一半带水印），量每页耗时、并发 1 / 2 / 3 的吞吐、字符相似度、姓名 / 日期 / 金额 / 证件号的命中率，以及 9B 抽取的值能否在所标页原样找到；结果写 `docs\plan\evidence\T11\g5-g6.md`（只有数字，不含识别出的正文）。已在开发机上对测试后端跑通过。
@@ -81,3 +81,10 @@ python prep395\deploy\bench_g5g6.py --base http://192.168.8.124:9000 --pages 20
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\prep395\src\prep395\deploy\uninstall.ps1   # 加 -RemoveAccount 同时删账号
 ```
+
+`uninstall.ps1` 只停止并删除三个服务和 `lawbench-prep395` 组的防火墙规则（加 `-RemoveAccount` 再删账号）。**不会清掉的东西**，需要时手工处理：
+
+- `C:\prep395\` 整个目录：模型、Python、llama.cpp、日志（`logs\access.log`，只有元数据）；
+- `C:\prep395\services\` 下的 `<服务>.exe`、`<服务>.xml`（**xml 里有 `/admin` 口令的 SHA-256 摘要**）、`<服务>.wrapper.log`；
+- 本地安全策略"作为服务登录"里 `prep395svc` 的 SID（删了账号后会留一个无法解析的 SID，可在 `secpol.msc` → 本地策略 → 用户权限分配里删）；
+- 关掉的休眠（`powercfg /h on` 恢复）和改为"从不"的交流电自动睡眠。

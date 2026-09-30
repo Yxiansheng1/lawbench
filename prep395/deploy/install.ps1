@@ -8,6 +8,7 @@
 # Labels are English on purpose: Windows PowerShell 5.1 misreads non-ASCII in scripts saved without BOM.
 param(
   [Parameter(Mandatory = $true)][string]$LanIp,
+  [string]$VpnIp = "10.126.126.3",     # EasyTier; "" = LAN only
   [Parameter(Mandatory = $true)][string]$OcrModel,
   [string]$OcrMmproj = "",
   [Parameter(Mandatory = $true)][string]$LlmModel,
@@ -37,6 +38,11 @@ foreach ($p in @($llama, $py, $winsw, (Join-Path $src "pyproject.toml"), (Join-P
 }
 if ($OcrMmproj -and -not (Test-Path (Join-Path $models $OcrMmproj))) { throw "Missing: $OcrMmproj" }
 
+# Re-run: stop the running services first, or copying over services\<id>.exe and upgrading the package fails.
+foreach ($id in "prep395", "prep395-llm9b", "prep395-ocr") {
+  if (Get-Service -Name $id -ErrorAction SilentlyContinue) { Stop-Service -Name $id -Force -ErrorAction SilentlyContinue }
+}
+
 Step "Install prep395 into the bundled Python"
 & $py -m pip install --no-warn-script-location --upgrade $src
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
@@ -50,25 +56,32 @@ if (Get-LocalUser -Name $Account -ErrorAction SilentlyContinue) {
 } else {
   New-LocalUser -Name $Account -Password $sec -PasswordNeverExpires -UserMayNotChangePassword -Description "prep395 service (low privilege)" | Out-Null
 }
+# External programs do not honour $ErrorActionPreference in PowerShell 5.1: check every exit code.
+function Assert-Exit($what) { if ($LASTEXITCODE -ne 0) { throw "$what failed (exit $LASTEXITCODE)" } }
 # Grant "Log on as a service" (SeServiceLogonRight) via secedit
 $sid = (New-Object System.Security.Principal.NTAccount($Account)).Translate([System.Security.Principal.SecurityIdentifier]).Value
 $tmpInf = Join-Path $env:TEMP "lb395-secedit.inf"; $tmpDb = Join-Path $env:TEMP "lb395-secedit.sdb"
-secedit /export /cfg $tmpInf /areas USER_RIGHTS | Out-Null
+secedit /export /cfg $tmpInf /areas USER_RIGHTS | Out-Null; Assert-Exit "secedit /export"
 $lines = Get-Content $tmpInf
 $line = $lines | Where-Object { $_ -like "SeServiceLogonRight*" }
 if (-not $line) { $lines = $lines -replace "^\[Privilege Rights\]$", "[Privilege Rights]`r`nSeServiceLogonRight = *$sid" }
 elseif ($line -notmatch [regex]::Escape($sid)) { $lines = $lines -replace "^SeServiceLogonRight = (.*)$", "SeServiceLogonRight = `$1,*$sid" }
 $lines | Set-Content $tmpInf -Encoding Unicode
-secedit /configure /db $tmpDb /cfg $tmpInf /areas USER_RIGHTS | Out-Null
+secedit /configure /db $tmpDb /cfg $tmpInf /areas USER_RIGHTS | Out-Null; Assert-Exit "secedit /configure"
 Remove-Item $tmpInf, $tmpDb -Force -ErrorAction SilentlyContinue
 
 Step "Directories and permissions"
 $logs = Join-Path $Root "logs"; $tmp = Join-Path $Root "tmp"
 New-Item -ItemType Directory -Force $logs, $tmp, (Join-Path $Root "services") | Out-Null
 # Root: only Administrators/SYSTEM full, service account read+execute. Logs and tmp: service account modify.
-icacls $Root /inheritance:r /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "${Account}:(OI)(CI)RX" /T /C /Q | Out-Null
-icacls $logs /grant:r "${Account}:(OI)(CI)M" /C /Q | Out-Null
-icacls $tmp /grant:r "${Account}:(OI)(CI)M" /C /Q | Out-Null
+# Set the root only, then make everything below inherit from it. (OI)(CI) on a file is invalid: with /T the grant
+# failed on every file after /inheritance:r had already stripped it, leaving files with an empty ACL (395, 2026-09-30).
+# SIDs instead of names so localized Windows resolves them: *S-1-5-32-544 Administrators, *S-1-5-18 SYSTEM.
+function Icacls-Ok { & icacls @args | Out-Null; if ($LASTEXITCODE -ne 0) { throw "icacls failed: $($args -join ' ')" } }
+Icacls-Ok $Root /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*${sid}:(OI)(CI)RX" /Q
+Icacls-Ok "$Root\*" /reset /T /C /Q
+Icacls-Ok $logs /grant:r "*${sid}:(OI)(CI)M" /Q
+Icacls-Ok $tmp /grant:r "*${sid}:(OI)(CI)M" /Q
 
 Step "Write WinSW service definitions"
 $svcDir = Join-Path $Root "services"
@@ -80,7 +93,7 @@ $defs = @(
   @{ id = "prep395-llm9b"; name = "prep395 9B backend (llama-server)"; exe = $llama;
      args = "-m `"$(Join-Path $models $LlmModel)`" --port 9102 -np 1 -c $LlmCtx $common"; env = @{} },
   @{ id = "prep395"; name = "prep395 preprocessing service"; exe = $py; args = "-m prep395";
-     env = @{ PREP395_HOST = $LanIp; PREP395_PORT = "9000"; PREP395_BACKEND = "llama"; PREP395_LLM_BASE = $LlmBase;
+     env = @{ PREP395_HOST = (@($LanIp, $VpnIp) | Where-Object { $_ }) -join ","; PREP395_PORT = "9000"; PREP395_BACKEND = "llama"; PREP395_LLM_BASE = $LlmBase;
               PREP395_OCR_CONCURRENCY = "$OcrParallel"; PREP395_HOME = $Root;
               PREP395_ADMIN_USER = $AdminUser; PREP395_ADMIN_PASS_SHA256 = $AdminPassSha256 } }
 )
@@ -112,9 +125,9 @@ Step "Register services"
 foreach ($d in $defs) {
   $exe = Join-Path $svcDir "$($d.id).exe"
   if (Get-Service -Name $d.id -ErrorAction SilentlyContinue) { & $exe stop | Out-Null; & $exe uninstall | Out-Null }
-  & $exe install | Out-Null
-  sc.exe config $d.id obj= ".\$Account" password= $pw | Out-Null
-  sc.exe failure $d.id reset= 3600 actions= restart/10000/restart/30000/restart/60000 | Out-Null
+  & $exe install | Out-Null; Assert-Exit "$($d.id) install"
+  sc.exe config $d.id obj= ".\$Account" password= $pw | Out-Null; Assert-Exit "sc.exe config $($d.id)"
+  sc.exe failure $d.id reset= 3600 actions= restart/10000/restart/30000/restart/60000 | Out-Null; Assert-Exit "sc.exe failure $($d.id)"
 }
 $pw = $null; $sec = $null
 

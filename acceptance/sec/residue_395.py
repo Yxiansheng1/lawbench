@@ -30,7 +30,7 @@ foreach ($r in $roots) {{ if (Test-Path $r) {{
     }}
   }} }} }}
 "FILES: $n" | Out-File $out -Append -Encoding utf8
-"PREP395_TEMP_PREFIX: $((Get-ChildItem $roots -Recurse -Force -Filter 'prep395-*' -ErrorAction SilentlyContinue | Measure-Object).Count)" | Out-File $out -Append -Encoding utf8
+"PREP395_TEMP_PREFIX: $((Get-ChildItem $roots -Recurse -Force -Filter 'prep395-*' -ErrorAction SilentlyContinue | Where-Object {{ $_.FullName -notlike 'C:\prep395\services\*' -and $_.FullName -notlike 'C:\prep395\python\*' }} | Measure-Object).Count)" | Out-File $out -Append -Encoding utf8
 "DONE" | Out-File $out -Append -Encoding utf8
 Write-Host "已写入 $out"
 """

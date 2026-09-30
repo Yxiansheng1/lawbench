@@ -7,6 +7,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from conftest import FIXTURES, GOOD, auth, scan_pages, to_bytes

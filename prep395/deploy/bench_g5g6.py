@@ -111,13 +111,13 @@ def ocr_one(base, key, img, dewatermark):
 
 def g5(base, key, pages, lines):
     lines.append("## G-5 识别\n")
-    lines.append("| 页 | 耗时（秒） | 字符相似度 | 关键字段命中 | ■ / [看不清] |")
-    lines.append("|---|---|---|---|---|")
+    lines.append("| 页 | 水印 | 耗时（秒） | 应有字数 | 输出字数 | 字符相似度 | 关键字段命中 | ■ / [看不清] |")
+    lines.append("|---|---|---|---|---|---|---|---|")
     tot_sim, tot_hit, tot_key, times = 0.0, 0, 0, []
     for name, img, truth, wm in pages:
         st, body, dt = ocr_one(base, key, img, wm)
         if st != 200:
-            lines.append(f"| {name} | — | 请求失败 HTTP {st} | — | — |")
+            lines.append(f"| {name} | {'有' if wm else '无'} | — | {len(squash(truth))} | — | 请求失败 HTTP {st} | — | — |")
             continue
         md = body.get("markdown", "")
         sim = difflib.SequenceMatcher(None, squash(truth), squash(md)).ratio()
@@ -127,7 +127,8 @@ def g5(base, key, pages, lines):
         tot_sim += sim
         tot_hit += hit
         tot_key += len(kf)
-        lines.append(f"| {name} | {dt:.1f} | {sim:.3f} | {hit}/{len(kf)} | {body.get('unclear', 0)} |")
+        lines.append(f"| {name} | {'有' if wm else '无'} | {dt:.1f} | {len(squash(truth))} | {len(squash(md))} | {sim:.3f} | "
+                     f"{hit}/{len(kf)} | {body.get('unclear', 0)} |")
     if times:
         lines.append(f"\n单页平均 {sum(times) / len(times):.1f} 秒；平均字符相似度 {tot_sim / len(times):.3f}；"
                      f"关键字段命中率 {tot_hit}/{tot_key}（{tot_hit / max(tot_key, 1):.1%}）\n")
@@ -175,6 +176,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="G-5 / G-6 实测")
     ap.add_argument("--base", default="http://192.168.8.124:9000")
     ap.add_argument("--pages", type=int, default=20)
+    ap.add_argument("--server-np", type=int, required=True,
+                    help="395 上 OCR 后端的并行槽数（install.ps1 的 -OcrParallel），只记进报告")
     ap.add_argument("--out", type=Path, default=REPO / "docs" / "plan" / "evidence" / "T11" / "g5-g6.md")
     a = ap.parse_args()
     key = env_key()
@@ -182,7 +185,9 @@ def main() -> None:
         health = json.loads(r.read())
     lines = [f"# G-5 / G-6 实测（{time.strftime('%Y-%m-%d %H:%M')}）", "",
              f"- 目标：{a.base}；/health：{json.dumps(health, ensure_ascii=False)}",
-             f"- 样本：讯问笔录 3 页扫描件 + 现造 {a.pages} 页（一半带水印），全部虚构", ""]
+             f"- 样本：讯问笔录 3 页扫描件 + 现造 {a.pages} 页（一半带水印），全部虚构",
+             f"- 服务端 OCR 并行槽数 -np = {a.server_np}（install.ps1 -OcrParallel）；并发数超过它的那几行只是排队，不算测过",
+             "- 字数按去掉空白后的字符数计，只记数字，不含识别出的正文", ""]
     pages = make_pages(a.pages)
     g5(a.base, key, pages, lines)
     g6(a.base, key, lines)

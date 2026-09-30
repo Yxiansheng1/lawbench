@@ -1,0 +1,35 @@
+# versions.lock（草稿）· 395 部分 · T11 · 2026-09-30 在 395 上实测记录（T11 返修 P3-4：记发布包本身的 sha256）
+# 格式：组件  版本  文件  sha256  大小(字节)  来源  许可证
+
+[395]
+llama.cpp     b11269（0.5.0-dev, commit cee37ffea, Vulkan x64）  llama-b11269-bin-win-vulkan-x64.zip  34a27c239727047adc5aed80b656b13373ff136b27d28bd898a14b7b7283695a  33093265  github.com/ggml-org/llama.cpp releases  MIT
+python        3.12.14（python-build-standalone 20260929, install_only, x86_64-pc-windows-msvc）  python.tar.gz（原名 cpython-3.12.14+20260929-…-install_only.tar.gz）  28728baf30b65e263f0b25c5a85be8226e7ab0d212fbadd6a8f0f796139fa804  46425719  github.com/astral-sh/python-build-standalone releases  PSF-2.0
+winsw         2.12.0  WinSW-x64.exe（发布资产本身就是这个 exe）  05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da  18243033  github.com/winsw/winsw releases  MIT
+ocr-model     PaddleOCR-VL-1.6  PaddleOCR-VL-1.6-GGUF.gguf         f3ae46ec885050acf4b3d31944431e1fd90d50664fb09126af4a3c050ba14ee8  935769056  hf-mirror.com/PaddlePaddle/PaddleOCR-VL-1.6-GGUF（与站点 LFS sha256 一致，2026-09-30 核）  apache-2.0
+ocr-mmproj    PaddleOCR-VL-1.6  PaddleOCR-VL-1.6-GGUF-mmproj.gguf  204d757d7610d9b3faab10d506d69e5b244e32bf765e2bab2d0167e65e0a058a  881770560  同上（与站点 LFS sha256 一致）  apache-2.0
+llm9b-model   Qwen3-8B Q8_0  Qwen3-8B-Q8_0.gguf                   408b955510e196121c1c375201744783b5c9a43c7956d73fc78df54c66e883d6  8709518112  hf-mirror.com/Qwen/Qwen3-8B-GGUF（与站点 LFS sha256 一致）  apache-2.0
+prep395       1.0.0  line-C 3e75d67 的 prep395\ 目录（git archive）  a59e7bc6652c854ec8c1fa1d5a91ceae9d7c8d680d2df24128f45a2be43ec25c  60924  本仓库
+
+# 装好后的启动壳（参考，非锁定对象）：llama-server.exe 9d7ec1f038329210f6be353a89752ea4a762f9defa80560d37102ccce7b09a06；python.exe 4796bc182e858e4440f638fe5dab250d6172745ddec84e41c6afbc192a3198f9
+
+[395.pip]  # C:\prep395\python -m pip freeze
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+certifi==2026.7.22
+click==8.5.0
+fastapi==0.142.1
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.20
+numpy==2.5.3
+opentelemetry-api==1.45.0
+pillow==12.3.0
+prep395 @ file:///C:/prep395/src/prep395   # 1.0.0，见上
+pydantic==2.13.5
+pydantic_core==2.46.5
+starlette==1.7.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+uvicorn==0.54.0

@@ -1,0 +1,50 @@
+# 395 部署后核对（2026-09-30，用户在 395 管理员窗口执行，输出由用户贴回；未跑整份 probe_395.ps1——它不在 395 上，取了验收要的几项）
+
+## powercfg /a（摘）
+此系统上没有以下睡眠状态:
+    休眠
+        尚未启用休眠。
+    混合睡眠 / 快速启动：休眠不可用。
+（另：交流电自动睡眠 STANDBYIDLE 设为 0，即从不；用户同意）
+
+## 9000 端口占用（重装前）
+LocalAddress 192.168.8.124  LocalPort 9000  OwningProcess 16800 → python.exe  C:\prep395\python\python.exe
+（重装后所内、所外两地址均监听，/health 均 ok）
+
+## 重启后 Get-Service prep395*
+prep395       Running Automatic
+prep395-llm9b Running Automatic
+prep395-ocr   Running Automatic
+所外 curl http://10.126.126.3:9000/health → {"status":"ok","ocr":"ok","llm9b":"ok",...}
+
+## 其他
+- TPM Present/Ready True；BitLocker C: FullyDecrypted（用户 15:03 决定暂缓）。
+- 22 端口：C:\Windows\System32\OpenSSH\sshd.exe（部署前已有，未动；Get-Service sshd 无结果）。
+- 向日葵：开机自启已关（用户操作）。
+
+## T11 返修取证（2026-09-30 16:1x–16:3x，用户在 395 管理员窗口执行，输出原样贴回）
+
+### 重装前：服务运行账号（P2-1）
+Name          StartName
+prep395       .\prep395svc
+prep395-llm9b .\prep395svc
+prep395-ocr   .\prep395svc
+
+### 重部署 3e75d67（源码 zip a59e7bc6652c854ec8c1fa1d5a91ceae9d7c8d680d2df24128f45a2be43ec25c）后
+install.ps1 输出末行 /health：{"status":"ok","ocr":"ok","llm9b":"ok","queue":0,"version":"1.0.0","contract_version":"1.2"}
+所外 curl http://10.126.126.3:9000/health → {"status":"ok","ocr":"ok","llm9b":"ok","queue":0,"version":"1.0.0","contract_version":"1.2"}
+
+Get-NetTCPConnection -LocalPort 9000 -State Listen
+LocalAddress  LocalPort OwningProcess
+192.168.8.124      9000          7040
+10.126.126.3       9000          7040
+
+Get-CimInstance Win32_Service -Filter "Name like 'prep395%'" | Select Name,StartName
+prep395-ocr   .\prep395svc
+prep395-llm9b .\prep395svc
+prep395       .\prep395svc
+
+Get-NetFirewallRule -Group lawbench-prep395 | Get-NetFirewallAddressFilter（重部署前取；重部署只重建同样三条）
+lawbench prep395 9000 in | Allow | 远端 192.168.8.0/255.255.255.0,10.126.126.0/255.255.255.0
+lawbench prep395 block 9101 in | Block | 远端 Any
+lawbench prep395 block 9102 in | Block | 远端 Any

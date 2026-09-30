@@ -755,8 +755,27 @@ def test_xls_still_converts_with_ole_header(samples):
     """.xls 也是 OLE 文件头，但走 xls → xlsx，不受影响。"""
     if "xls" not in samples:
         pytest.skip("本机没有 LibreOffice")
-    assert core.is_ole(samples["xls"])
+    assert samples["xls"].read_bytes()[:8] == bytes.fromhex("d0cf11e0a1b11ae1")    # OLE 复合文档文件头
     assert core.convert_file("xls2xlsx", samples["xls"]).is_file()
+
+
+def test_rtf_reason_says_maybe_not_word(tmp_path):
+    """RTF 改名 .docx：提示里带"或文件不是 Word 文档"。"""
+    f = tmp_path / "其实是rtf.docx"
+    f.write_bytes(rb"{\rtf1 hello}")
+    with pytest.raises(core.ConvertError, match="或文件不是 Word 文档"):
+        core.convert_file("word2pdf", f)
+
+
+def test_legacy_word_hidden_in_gui_and_messages(tmp_path):
+    """下拉框不出现 doc / wps → docx；Word → PDF 的选文件筛选和扩展名提示只列 .docx。"""
+    assert "doc2docx" not in [k.key for k in core.VISIBLE]
+    assert core.BY_KEY["word2pdf"].listed == (".docx",)
+    f = tmp_path / "a.txt"
+    f.write_text("x", encoding="utf-8")
+    with pytest.raises(core.ConvertError) as e:
+        core.convert_file("word2pdf", f)
+    assert ".doc、" not in str(e.value) and ".wps" not in str(e.value)
 
 
 def test_legacy_word_note_in_gui():
@@ -768,8 +787,10 @@ def test_legacy_word_note_in_gui():
         pytest.skip("没有图形界面环境")
     root.withdraw()
     app = ConvertApp(root)
-    for key in ("doc2docx", "word2pdf"):
-        app.kind.set(core.BY_KEY[key].label)
-        app._update_note()
-        assert "另存为 .docx" in app.note["text"]
+    from tkinter import ttk
+    boxes = [w for f in root.winfo_children() for w in f.winfo_children() if isinstance(w, ttk.Combobox)]
+    assert boxes and "doc / wps → docx" not in boxes[0]["values"]
+    app.kind.set(core.BY_KEY["word2pdf"].label)
+    app._update_note()
+    assert "另存为 .docx" in app.note["text"]
     root.destroy()
