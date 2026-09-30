@@ -236,6 +236,48 @@
           "type": "object",
           "properties": {
             "action": {
+              "const": "exclude"
+            },
+            "period": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "item": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "收集对账表里的记录 ID（64 位小写十六进制）"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "人工排除理由"
+            },
+            "reviewer": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "description": "核验人"
+            },
+            "confirm": {
+              "const": true,
+              "description": "确认在界面做；服务一律带 --confirm（1.3 起，引擎 exclude 子命令：只改任务目录内的 collection.json 与对账表，不碰台账、不联网、不可逆）"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "period",
+            "item",
+            "reason",
+            "reviewer",
+            "confirm"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
               "const": "review"
             },
             "sha256": {
