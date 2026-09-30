@@ -11,10 +11,11 @@ import { SourceTab } from './source.tsx'
 import { ComposerDock } from './dock.tsx'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { TABS } from './cases.ts'
-import { setNav, type Nav } from './kit.tsx'
-import { app, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
+import { getNav, setNav, type Nav } from './kit.tsx'
+import { app, call, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { makeIntakeHook, type IntakeHook } from './intake.ts'
 import { installCitationClick } from './citation-click.ts'
+import type { MaterialLite, OpenDeps } from './citation.ts'
 
 export const inject = ['slots', 'remote']
 
@@ -69,6 +70,17 @@ function HomeIcon({ size = 16 }: { size?: number }) {
   )
 }
 
+/** 出处点击用到的工作台状态：当前案件、材料列表、打开原文标签。 */
+const citationDeps: OpenDeps = {
+  caseId: () => currentCase(app.get())?.case_id,
+  materials: async (caseId) => {
+    const r = await call<{ materials: MaterialLite[] }>('materialsList', { case_id: caseId })
+    return r.ok ? r.value.materials : undefined
+  },
+  notice,
+  openSource: (materialId, citation) => getNav().openTab(TABS.source, { material_id: materialId, citation }),
+}
+
 /** 设置页一节、弹框：只要 slots 和 remote.lawbench。 */
 function registerCore(ctx: Ctx): void {
   setApi(unwrapRemote(ctx.remote.lawbench as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>))
@@ -79,7 +91,7 @@ function registerCore(ctx: Ctx): void {
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'lawbench', order: -10 }, ComposerDock))
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)
   // 点草稿正文里的出处打开原文（T13 后续项，走 A：插件内命中测试）
-  ctx.effect(() => installCitationClick(), '律师工作台界面：出处点击')
+  ctx.effect(() => installCitationClick(citationDeps), '律师工作台界面：出处点击')
 }
 
 /** 首页：main 页面、侧栏入口，启动时显示首页。 */

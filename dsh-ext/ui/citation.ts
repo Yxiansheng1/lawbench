@@ -131,6 +131,7 @@ export async function openCitation(item: CitationItem, deps: OpenDeps): Promise<
   if (!caseId) { deps.notice('没有打开原文', '这个会话不在已打开的案件里。请从首页打开案件后再点出处。'); return }
   const ms = await deps.materials(caseId)
   if (!ms) { deps.notice('没有打开原文', '读不到本案材料列表，请稍后重试。'); return }
+  if (deps.caseId() !== caseId) return // 读列表期间换了案件：这份列表和出处都属于原来的案件，不打开
   const v = resolveCitation(item, ms)
   if (!v.ok) { deps.notice('没有打开原文', v.message); return }
   deps.openSource(v.material.material_id, `〔${item.text}〕`)

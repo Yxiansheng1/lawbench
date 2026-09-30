@@ -25,7 +25,7 @@ git -C dsh apply ..\dsh-patches\P-3-first-run-page.patch
 
 | 依赖 | 在哪里用 | 怎么核对 |
 |---|---|---|
-| 对话区节点属性 `data-chat-flow-kind`，助手回答节点取值 `assistant-step`（`packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx:155`、`register-node-renderers.ts:42`）；回答里的文字是普通文字节点（`packages/client/ui-primitives/src/markdown/render.tsx:273-277`） | 点草稿正文里的出处打开原文（`dsh-ext\ui\citation-click.ts`，T13 后续项 A：插件内命中测试，不改源码） | `dsh-ext\tests\citation.spec.ts` 最后一组会先变红；另在桌面端点一次出处实测 |
+| 对话区节点属性 `data-chat-flow-kind`，助手回答节点取值 `assistant-step`（`packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx:155`、`register-node-renderers.ts:42`）；回答里的文字是普通文字节点（`packages/client/ui-primitives/src/markdown/render.tsx:273-277`） | 点草稿正文里的出处打开原文（`dsh-ext\ui\citation-click.ts`，T13 后续项 A：插件内命中测试，不改源码） | `dsh-ext\tests\citation.spec.ts` “依赖的 DSH 对话区标记结构还在”一组会先变红；另在桌面端点一次出处实测 |
 
 ## 结论记录
 

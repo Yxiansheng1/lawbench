@@ -2,9 +2,8 @@
  RUN  v4.1.8 D:/lawbench-A/dsh-ext
 
 
- Test Files  15 passed (15)
-      Tests  178 passed | 5 skipped (183)
-   Start at  07:27:40
-   Duration  6.97s (transform 1.90s, setup 0ms, import 6.03s, tests 13.22s, environment 3ms)
+ Test Files  16 passed (16)
+      Tests  196 passed | 5 skipped (201)
+   Start at  08:50:46
+   Duration  6.97s (transform 1.89s, setup 0ms, import 6.16s, tests 13.95s, environment 1.74s)
 
-lib/*.js 纯 ESM 导入检查通过

@@ -3,11 +3,9 @@
 // - 在 document 的捕获阶段监听，用 caretPositionFromPoint 取点中的文字，按段落整体文字换算位置（出处跨加粗等行内元素也能认）；
 // - 不改对话区的内容：出处下划线用 CSS 自定义高亮（CSS.highlights），不包 span，不和 React 抢节点（只往页面头部加一个样式元素）；
 // - 依赖的 DSH 属性名、取值写在下面的常量里，tests\citation.spec.ts 核对 DSH 源码里仍有它们，PATCHES.md 升级核对清单里也记了一行。
-// 已知限制：键盘和读屏够不着（不是真按钮），见交付说明。
-import { citationAt, citationRanges, DSH_ASSISTANT_KIND, DSH_FLOW_ATTR, openCitation, shouldHandleClick, type MaterialLite, type OpenDeps } from './citation.ts'
-import { TABS } from './cases.ts'
-import { getNav } from './kit.tsx'
-import { app, call, currentCase, notice } from './state.ts'
+// - 取当前案件、读材料列表、打开原文都由调用方注入（index.tsx 接到工作台状态），本文件不接状态，测试可在 DOM 环境里直接装上。
+// 已知限制：键盘和读屏够不着（不是真按钮）；双击慢于 300 毫秒时第一下仍会打开原文。见交付说明。
+import { citationAt, citationRanges, DSH_ASSISTANT_KIND, DSH_FLOW_ATTR, joinedOffset, openCitation, shouldHandleClick, type OpenDeps } from './citation.ts'
 
 const ASSISTANT_SELECTOR = `[${DSH_FLOW_ATTR}="${DSH_ASSISTANT_KIND}"]`
 /** 这些元素里的点击不接手（链接、按钮、代码、输入框各有各的用途）。 */
@@ -50,47 +48,44 @@ function textNodesOf(block: Element): Text[] {
 }
 
 /** 双击、三击选字时第一下单击不立即打开：等这么久，期间有第二下或选中了文字就作罢（返修 B2）。 */
-const OPEN_DELAY_MS = 300
-let pendingOpen: ReturnType<typeof setTimeout> | undefined
+export const OPEN_DELAY_MS = 300
 
-const openDeps: OpenDeps = {
-  caseId: () => currentCase(app.get())?.case_id,
-  materials: async (caseId) => {
-    const r = await call<{ materials: MaterialLite[] }>('materialsList', { case_id: caseId })
-    return r.ok ? r.value.materials : undefined
-  },
-  notice,
-  openSource: (materialId, citation) => getNav().openTab(TABS.source, { material_id: materialId, citation }),
-}
-
-function onClick(e: MouseEvent): void {
-  const target = e.target instanceof Element ? e.target : null
-  if (e.detail > 1 && pendingOpen !== undefined) { clearTimeout(pendingOpen); pendingOpen = undefined }
-  const sel = window.getSelection()
-  if (!shouldHandleClick({
-    button: e.button, modifier: e.ctrlKey || e.metaKey || e.shiftKey || e.altKey,
-    inAnswer: !!target?.closest(ASSISTANT_SELECTOR), inSkipped: !!target?.closest(SKIP_SELECTOR),
-    selectionCollapsed: !sel || sel.isCollapsed, detail: e.detail,
-  })) return
-  const caret = caretAt(e.clientX, e.clientY)
-  if (!caret || !caret.node.parentElement?.closest(ASSISTANT_SELECTOR)) return
-  const ch = charUnderPointer(caret.node, caret.offset, e.clientX, e.clientY)
-  if (ch === undefined) return
-  const block = caret.node.parentElement.closest(BLOCK_SELECTOR) ?? caret.node.parentElement
-  const nodes = textNodesOf(block)
-  const index = nodes.indexOf(caret.node)
-  if (index < 0) return
-  const whole = nodes.map((n) => n.data).join('')
-  const offset = nodes.slice(0, index).reduce((n, t) => n + t.data.length, 0) + ch
-  const hit = citationAt(whole, offset)
-  if (hit.kind !== 'item') return // 不是出处，或是〔未找到依据〕〔推断〕：不反应
-  e.preventDefault()
-  e.stopPropagation()
-  pendingOpen = setTimeout(() => {
-    pendingOpen = undefined
-    if (window.getSelection()?.isCollapsed === false) return // 这期间选中了文字（双击、三击）：不打开
-    void openCitation(hit.item, openDeps)
-  }, OPEN_DELAY_MS)
+/** 一次装上的点击处理；pending 是等着打开的那一下（同一时刻至多一个）。 */
+function makeClickHandler(deps: OpenDeps): { onClick(e: MouseEvent): void; cancel(): void } {
+  let pendingOpen: ReturnType<typeof setTimeout> | undefined
+  const cancel = () => { if (pendingOpen !== undefined) { clearTimeout(pendingOpen); pendingOpen = undefined } }
+  const onClick = (e: MouseEvent): void => {
+    const target = e.target instanceof Element ? e.target : null
+    if (e.detail > 1) cancel()
+    const sel = window.getSelection()
+    if (!shouldHandleClick({
+      button: e.button, modifier: e.ctrlKey || e.metaKey || e.shiftKey || e.altKey,
+      inAnswer: !!target?.closest(ASSISTANT_SELECTOR), inSkipped: !!target?.closest(SKIP_SELECTOR),
+      selectionCollapsed: !sel || sel.isCollapsed, detail: e.detail,
+    })) return
+    const caret = caretAt(e.clientX, e.clientY)
+    if (!caret || !caret.node.parentElement?.closest(ASSISTANT_SELECTOR)) return
+    const ch = charUnderPointer(caret.node, caret.offset, e.clientX, e.clientY)
+    if (ch === undefined) return
+    const block = caret.node.parentElement.closest(BLOCK_SELECTOR) ?? caret.node.parentElement
+    const nodes = textNodesOf(block)
+    const index = nodes.indexOf(caret.node)
+    if (index < 0) return
+    const segments = nodes.map((n) => n.data)
+    const hit = citationAt(segments.join(''), joinedOffset(segments, index, ch))
+    if (hit.kind !== 'item') return // 不是出处，或是〔未找到依据〕〔推断〕：不反应
+    e.preventDefault()
+    e.stopPropagation()
+    const caseAtClick = deps.caseId()
+    cancel() // 前一下还在等：以这一下为准，不留两个定时器
+    pendingOpen = setTimeout(() => {
+      pendingOpen = undefined
+      if (window.getSelection()?.isCollapsed === false) return // 这期间选中了文字（双击、三击）：不打开
+      if (deps.caseId() !== caseAtClick) return // 这期间换了案件：出处属于原来的案件，不打开
+      void openCitation(hit.item, deps)
+    }, OPEN_DELAY_MS)
+  }
+  return { onClick, cancel }
 }
 
 /** 给出处加虚下划线（有 CSS.highlights 时）；DOM 有变化时重算，只读不改。 */
@@ -132,9 +127,10 @@ function startHighlights(): () => void {
   return () => { mo.disconnect(); if (timer) clearTimeout(timer); reg.delete(HIGHLIGHT); style.remove() }
 }
 
-/** 装上监听；返回卸载函数。 */
-export function installCitationClick(): () => void {
+/** 装上监听；返回卸载函数（卸下时等着打开的那一下也作废）。 */
+export function installCitationClick(deps: OpenDeps): () => void {
+  const { onClick, cancel } = makeClickHandler(deps)
   document.addEventListener('click', onClick, true)
   const stopHighlights = startHighlights()
-  return () => { document.removeEventListener('click', onClick, true); stopHighlights() }
+  return () => { document.removeEventListener('click', onClick, true); cancel(); stopHighlights() }
 }
