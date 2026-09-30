@@ -1,0 +1,107 @@
+T9 红绿验证：14 类防护
+
+[01] 1–2 字的查询在 text_norm 上 instr 扫描（改成也走 FTS）
+  改坏 search/fts.py → 红：8 failed, 17 passed, 23 deselected in 13.92s
+      变红的用例：
+        tests/test_search.py::test_g9[criminal-01:\u5434\u67d0]
+        tests/test_search.py::test_g9[criminal-01:\u90d1\u67d0]
+        tests/test_search.py::test_g9[criminal-01:\u738b\u67d0]
+        tests/test_search.py::test_g9[civil-01:\u5b59\u67d0]
+        tests/test_search.py::test_g9[contract-01:\u51af\u67d0]
+        tests/test_search.py::test_g9[closed-01:\u5b54\u67d0]
+        tests/test_search.py::test_g9[civil-01:8\u4e07]
+        tests/test_search.py::test_g9_report_and_speed
+  复原 → 绿：25 passed, 23 deselected in 13.60s
+
+[02] 日期扩展
+  改坏 search/expand.py → 红：3 failed, 22 passed, 23 deselected in 14.41s
+      变红的用例：
+        tests/test_search.py::test_g9[criminal-01:2025-03-10]
+        tests/test_search.py::test_g9[civil-01:2025.3.10_1]
+        tests/test_search.py::test_g9_report_and_speed
+  复原 → 绿：25 passed, 23 deselected in 12.83s
+
+[03] 金额扩展
+  改坏 search/expand.py → 红：2 failed, 23 passed, 23 deselected in 12.89s
+      变红的用例：
+        tests/test_search.py::test_g9[criminal-01:8\u4e07]
+        tests/test_search.py::test_g9_report_and_speed
+  复原 → 绿：25 passed, 23 deselected in 12.12s
+
+[04] 归一化：去千分位
+  改坏 search/normalize.py → 红：2 failed, 46 deselected in 1.28s
+      变红的用例：
+        tests/test_search.py::test_normalize_rules
+        tests/test_search.py::test_snippet_from_original_text
+  复原 → 绿：2 passed, 46 deselected in 0.91s
+
+[05] 归一化：全角转半角
+  改坏 search/normalize.py → 红：1 failed, 47 deselected in 0.40s
+      变红的用例：
+        tests/test_search.py::test_normalize_rules
+  复原 → 绿：1 passed, 47 deselected in 0.07s
+
+[06] 扩展出的数字要求前后不是数字
+  改坏 search/fts.py → 红：1 failed, 47 deselected in 1.37s
+      变红的用例：
+        tests/test_search.py::test_expanded_numbers_have_digit_boundaries
+  复原 → 绿：1 passed, 47 deselected in 0.94s
+
+[07] 完全匹配要原文逐字是同一种写法（80,000 与 80000 算扩展）
+  改坏 search/fts.py → 红：1 failed, 24 passed, 23 deselected in 13.71s
+      变红的用例：
+        tests/test_search.py::test_g9[civil-01:80000_1]
+  复原 → 绿：25 passed, 23 deselected in 12.21s
+
+[08] 按需建索引：材料文本变了重建这一份
+  改坏 search/fts.py → 红：1 failed, 47 deselected in 1.37s
+      变红的用例：
+        tests/test_search.py::test_index_follows_material_changes
+  复原 → 绿：1 passed, 47 deselected in 1.27s
+
+[09] 按需建索引：材料不在了删掉它的单元
+  改坏 search/fts.py → 红：1 failed, 47 deselected in 1.24s
+      变红的用例：
+        tests/test_search.py::test_material_leaving_index_is_removed
+  复原 → 绿：1 passed, 47 deselected in 0.94s
+
+[10] 片段取原文
+  改坏 search/fts.py → 红：1 failed, 47 deselected in 1.26s
+      变红的用例：
+        tests/test_search.py::test_snippet_from_original_text
+  复原 → 绿：1 passed, 47 deselected in 0.93s
+
+[11] 单元格出处的列
+  改坏 search/fts.py → 红：2 failed, 23 passed, 23 deselected in 13.49s
+      变红的用例：
+        tests/test_search.py::test_g9[civil-01:80,000]
+        tests/test_search.py::test_g9_report_and_speed
+  复原 → 绿：25 passed, 23 deselected in 13.04s
+
+[12] 行出处取块内第几行
+  改坏 search/fts.py → 红：6 failed, 19 passed, 23 deselected in 13.24s
+      变红的用例：
+        tests/test_search.py::test_g9[civil-01:\u5b59\u67d0]
+        tests/test_search.py::test_g9[civil-01:2025.3.10_0]
+        tests/test_search.py::test_g9[civil-01:8\u4e07]
+        tests/test_search.py::test_g9[civil-01:80000_0]
+        tests/test_search.py::test_g9[civil-01:\uff082026\uff09\u865a0103\u6c11\u521d2046\u53f7]
+        tests/test_search.py::test_g9_report_and_speed
+  复原 → 绿：25 passed, 23 deselected in 12.61s
+
+[13] 完全匹配排在扩展匹配前面
+  改坏 search/fts.py → 红：1 failed, 47 deselected in 1.22s
+      变红的用例：
+        tests/test_search.py::test_exact_ranked_before_expanded
+  复原 → 绿：1 passed, 47 deselected in 0.95s
+
+[14] 英文字母不分大小写
+  改坏 search/fts.py → 红：1 failed, 47 deselected in 1.24s
+      变红的用例：
+        tests/test_search.py::test_case_insensitive
+  复原 → 绿：1 passed, 47 deselected in 0.88s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T9\pytest.txt）
+
+结论：14/14 类防护 改坏即红、复原即绿

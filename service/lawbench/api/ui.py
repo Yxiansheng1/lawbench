@@ -74,6 +74,10 @@ def routes(st) -> list[Route]:
     def outputs_list(d: dict) -> dict:
         return st.tasks.outputs(d["case_id"])
 
+    def search(d: dict) -> dict:  # T9：律师检索，返回结构同 case_search
+        from ..search import fts
+        return fts.search(st.cases.root_of(d["case_id"]), d["case_id"], st.materials.index(d["case_id"]), d["q"])
+
     def case_recent(d: dict) -> dict:
         return {"cases": st.cases.recent()}
 
@@ -122,6 +126,7 @@ def routes(st) -> list[Route]:
         Route("/api/tasks", E("tasks_list", tasks_list, query=True), methods=["GET"]),
         Route("/api/task/current", E("task_current", task_current, query=True), methods=["GET"]),
         Route("/api/outputs", E("outputs_list", outputs_list, query=True), methods=["GET"]),
+        Route("/api/search", E("search", search, query=True), methods=["GET"]),
     ]
 
 
