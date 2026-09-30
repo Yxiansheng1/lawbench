@@ -8,6 +8,7 @@
 # Labels are English on purpose: Windows PowerShell 5.1 misreads non-ASCII in scripts saved without BOM.
 param(
   [Parameter(Mandatory = $true)][string]$LanIp,
+  [string]$VpnIp = "10.126.126.3",     # EasyTier; "" = LAN only
   [Parameter(Mandatory = $true)][string]$OcrModel,
   [string]$OcrMmproj = "",
   [Parameter(Mandatory = $true)][string]$LlmModel,
@@ -85,7 +86,7 @@ $defs = @(
   @{ id = "prep395-llm9b"; name = "prep395 9B backend (llama-server)"; exe = $llama;
      args = "-m `"$(Join-Path $models $LlmModel)`" --port 9102 -np 1 -c $LlmCtx $common"; env = @{} },
   @{ id = "prep395"; name = "prep395 preprocessing service"; exe = $py; args = "-m prep395";
-     env = @{ PREP395_HOST = $LanIp; PREP395_PORT = "9000"; PREP395_BACKEND = "llama"; PREP395_LLM_BASE = $LlmBase;
+     env = @{ PREP395_HOST = (@($LanIp, $VpnIp) | Where-Object { $_ }) -join ","; PREP395_PORT = "9000"; PREP395_BACKEND = "llama"; PREP395_LLM_BASE = $LlmBase;
               PREP395_OCR_CONCURRENCY = "$OcrParallel"; PREP395_HOME = $Root;
               PREP395_ADMIN_USER = $AdminUser; PREP395_ADMIN_PASS_SHA256 = $AdminPassSha256 } }
 )

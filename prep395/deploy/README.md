@@ -43,7 +43,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\prep395\src\prep395\deplo
 1. 检查上面的文件都在；把 `prep395` 装进 `C:\prep395\python\`。
 2. 建本地低权限账号 `prep395svc`（密码由脚本随机生成、只用一次，不显示、不保存），授予"作为服务登录"。
 3. 权限：`C:\prep395\` 去掉继承，只留 Administrators、SYSTEM 完全控制和 `prep395svc` 读取执行；`logs\`、`tmp\` 给 `prep395svc` 修改权限。
-4. 在 `C:\prep395\services\` 写三个 WinSW 服务定义并注册：`prep395-ocr`（llama-server，127.0.0.1:9101）、`prep395-llm9b`（llama-server，127.0.0.1:9102）、`prep395`（`python -m prep395`，监听 `<LanIp>:9000`，后端 `llama`，依赖前两个）。开机自启，崩溃后 10 / 30 / 60 秒重启；WinSW 自身不写日志（`<log mode="none"/>`）；llama-server 不开 `--verbose`、`--log-file`，加 `--log-disable`、`--no-webui`。
+4. 在 `C:\prep395\services\` 写三个 WinSW 服务定义并注册：`prep395-ocr`（llama-server，127.0.0.1:9101）、`prep395-llm9b`（llama-server，127.0.0.1:9102）、`prep395`（`python -m prep395`，监听 `<LanIp>:9000` 和 `<VpnIp>:9000`（EasyTier，默认 `10.126.126.3`；只听这两个地址，不听 0.0.0.0；开机时 EasyTier 网卡没起来就每 5 秒重试，用户 2026-09-30 选定），后端 `llama`，依赖前两个）。开机自启，崩溃后 10 / 30 / 60 秒重启；WinSW 自身不写日志（`<log mode="none"/>`）；llama-server 不开 `--verbose`、`--log-file`，加 `--log-disable`、`--no-webui`。
 5. 调 `firewall.ps1`：入站只放行 TCP 9000，来源 `192.168.8.0/24` 和 `10.126.126.0/24`；9101、9102 显式阻止。它只增删自己那组规则（组名 `lawbench-prep395`），**不改动 395 上已有的其他规则**。395 上现有的 80、8080 端口按用户 2026-09-30 的决定**先不动**，等问清是谁的什么服务再定；在此之前，验收脚本 `port_scan.py` 会把它们报为"不应开放"（SEC-13），这一项暂不能判通过。
 6. `powercfg /h off` 关闭休眠。
 7. 启动三个服务并访问 `/health`。

@@ -7,6 +7,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from conftest import FIXTURES, GOOD, auth, scan_pages, to_bytes
@@ -146,3 +148,27 @@ def test_uvicorn_access_log_off(monkeypatch, settings):
     monkeypatch.setenv("PREP395_HOME", str(settings.home))
     cfg = uvicorn_config()
     assert cfg.access_log is False
+
+
+def test_listen_on_each_listed_address_only(monkeypatch):
+    """PREP395_HOST 可写多个地址（所内、所外），逐个绑定，不退化成 0.0.0.0。"""
+    from prep395 import __main__ as m
+    monkeypatch.setenv("PREP395_HOST", " 127.0.0.1 , 127.0.0.2 ")
+    assert m.hosts() == ["127.0.0.1", "127.0.0.2"]
+    socks = m.bind_all(m.hosts(), 0, attempts=1)
+    try:
+        assert [s.getsockname()[0] for s in socks] == ["127.0.0.1", "127.0.0.2"]
+    finally:
+        for s in socks:
+            s.close()
+
+
+def test_missing_address_retried_then_gives_up():
+    """地址暂不存在（EasyTier 网卡未起）：按间隔重试；限定次数时最终报错，已绑上的口都释放。"""
+    from prep395 import __main__ as m
+    import socket
+    with pytest.raises(OSError):
+        m.bind_all(["127.0.0.1", "192.0.2.123"], 0, retry=0, attempts=2)   # 192.0.2.0/24 为文档保留地址，本机没有
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    s.close()
