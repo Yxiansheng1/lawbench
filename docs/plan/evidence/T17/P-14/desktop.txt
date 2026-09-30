@@ -1,0 +1,18 @@
+﻿# P-14 桌面端实测（开发模式，开发 profile 在 %LOCALAPPDATA%\lawbench-dev\dsh-home）
+
+## 情形 1：老 profile 不含 lawbench-dsh（临时把 profiles\desktop\package.json 的 bundles 里的 lawbench-dsh 去掉，测后按哈希恢复）
+启动日志里的 Host 致命错误：
+  DesktopHostFatalError: 律师工作台的组件（lawbench-dsh）没有加载，为安全起见不启动。请重新安装律师工作台。（日志由 PowerShell 按系统代码页记下，中文显示为乱码；此处按源码写出同一句，与对话框里显示的一致）
+界面：弹出 DSH 的'应用无法启动'对话框，正文是上面这句中文；主窗口停在'Loading plugins…'，不显示原版界面（截图 01、02）。
+
+## 情形 2：组合包缺失（临时把 dsh-ext\package.json 改名，组合包解析失败被跳过；测后改回）
+  DesktopHostFatalError: 律师工作台的组件没有全部加载（lawbench-dsh），为安全起见不启动。请重新安装律师工作台。（日志由 PowerShell 按系统代码页记下，中文显示为乱码；此处按源码写出同一句，与对话框里显示的一致）
+
+## 情形 3：恢复后正常启动（叠加层临时开 plugin-inventory 取证，测后恢复）
+运行时清单：
+  include:preset-lawbench enabled=True fiberPhase=active
+  include:legal-credentials enabled=True fiberPhase=active
+  include:legal-ui enabled=True fiberPhase=active
+  include:legal-host enabled=True fiberPhase=active
+
+对话框里'Diagnostic report'指向开发构建目录下的崩溃报告文件（crash-*.log），里面是这句错误和堆栈，没有案件内容。

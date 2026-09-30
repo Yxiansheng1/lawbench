@@ -1,0 +1,78 @@
+diff --git a/apps/desktop-host/src/index.ts b/apps/desktop-host/src/index.ts
+index e021ef69b8..59747ec860 100644
+--- a/apps/desktop-host/src/index.ts
++++ b/apps/desktop-host/src/index.ts
+@@ -14,6 +14,7 @@ import { installDesktopUpdateTaskControl } from './update-tasks.ts'
+ import { installDesktopQuitInspection } from './quit-inspection.ts'
+ import { installPlatformSessionPublisher } from './platform-session.ts'
+ import { installOfficeEngineResolution } from './office-engine.ts'
++import { assertLawbenchProfile } from './lawbench-bundle-guard.ts'
+ 
+ async function main(): Promise<void> {
+   const runtimeDir = process.argv[2] as string
+@@ -22,6 +23,8 @@ async function main(): Promise<void> {
+   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
+   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
+   reportSkippedBundles('dsh', profile)
++  // lawbench P-14 (N40 ①): without the workbench bundle, do not start as plain DSH
++  assertLawbenchProfile(profile)
+   const application = runProfile({
+     environment: loadLayeredEnv('dsh'),
+     profile: 'desktop',
+diff --git a/apps/desktop-host/src/lawbench-bundle-guard.ts b/apps/desktop-host/src/lawbench-bundle-guard.ts
+new file mode 100644
+index 0000000000..f30bfd0ed3
+--- /dev/null
++++ b/apps/desktop-host/src/lawbench-bundle-guard.ts
+@@ -0,0 +1,25 @@
++/**
++ * lawbench P-14 (owner decision N40 ①): the desktop Host refuses to start as plain DSH.
++ * When the lawyer workbench bundle (`lawbench-dsh`) did not load — the bundle was skipped, its
++ * package is missing, or an old profile never listed it — DSH would otherwise boot the stock
++ * web application with terminals, file browsing and the standard preset. Fail closed instead.
++ */
++import type { Profile } from '@deepseek-ai/dsh-app-boot'
++
++/** The lawyer workbench bundle package that must contribute a profile layer. */
++export const LAWBENCH_BUNDLE = 'lawbench-dsh'
++
++/**
++ * Throw a lawyer-readable error unless every selected bundle loaded and `lawbench-dsh` is among them.
++ * @param profile - the loaded Desktop profile.
++ * @throws {Error} naming the skipped bundles, or the missing workbench bundle.
++ */
++export function assertLawbenchProfile(profile: Pick<Profile, 'layers' | 'skippedBundles'>): void {
++  const skipped = profile.skippedBundles.map((s) => s.packageName)
++  if (skipped.length > 0) {
++    throw new Error(`律师工作台的组件没有全部加载（${skipped.join('、')}），为安全起见不启动。请重新安装律师工作台。`)
++  }
++  if (!profile.layers.some((layer) => layer.packageName === LAWBENCH_BUNDLE)) {
++    throw new Error('律师工作台的组件（lawbench-dsh）没有加载，为安全起见不启动。请重新安装律师工作台。')
++  }
++}
+diff --git a/apps/desktop-host/tests/lawbench-bundle-guard.spec.ts b/apps/desktop-host/tests/lawbench-bundle-guard.spec.ts
+new file mode 100644
+index 0000000000..6b5f630f20
+--- /dev/null
++++ b/apps/desktop-host/tests/lawbench-bundle-guard.spec.ts
+@@ -0,0 +1,20 @@
++import { describe, expect, it } from 'vitest'
++import { assertLawbenchProfile, LAWBENCH_BUNDLE } from '../src/lawbench-bundle-guard.ts'
++
++const layer = (packageName: string) => ({ packageName, packageDir: `/p/${packageName}`, patchPaths: [], patches: [] })
++
++describe('lawbench P-14 bundle guard', () => {
++  it('passes when every bundle loaded and the workbench bundle is present', () => {
++    expect(() => assertLawbenchProfile({ layers: [layer('@deepseek-ai/dsh-base'), layer('@deepseek-ai/dsh-web-app'), layer(LAWBENCH_BUNDLE)], skippedBundles: [] })).not.toThrow()
++  })
++  it('refuses to start when any selected bundle was skipped', () => {
++    expect(() => assertLawbenchProfile({
++      layers: [layer('@deepseek-ai/dsh-base'), layer('@deepseek-ai/dsh-web-app')],
++      skippedBundles: [{ packageName: LAWBENCH_BUNDLE, reason: 'package not found' } as never],
++    })).toThrow(/没有全部加载（lawbench-dsh）.*不启动/)
++  })
++  it('refuses to start when an old profile never listed the workbench bundle', () => {
++    expect(() => assertLawbenchProfile({ layers: [layer('@deepseek-ai/dsh-base'), layer('@deepseek-ai/dsh-web-app')], skippedBundles: [] }))
++      .toThrow(/lawbench-dsh）没有加载.*不启动/)
++  })
++})
