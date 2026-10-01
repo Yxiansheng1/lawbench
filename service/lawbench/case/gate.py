@@ -81,10 +81,22 @@ def _norm(p: str) -> str:
     return os.path.normcase(os.path.normpath(p))
 
 
+def _plain(path) -> str:
+    """os.path.realpath 偶尔带回 \\\\?\\ 前缀（两路并行第一次建目录时实测，T16 复核 P2-2）：只把盘符路径
+    （\\\\?\\C:\\x → C:\\x）和 UNC（\\\\?\\UNC\\s\\x → \\\\s\\x）两种归一成普通写法；其余（\\\\?\\Volume{…}、
+    \\\\?\\GLOBALROOT…）原样留着，后面照旧按越界拒绝。只是同一路径换个写法，不放宽任何判断。"""
+    p = os.fspath(path)
+    if p.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + p[8:]
+    if p.startswith("\\\\?\\") and _DRIVE.match(p[4:]) and p[6:7] == "\\":
+        return p[4:]
+    return p
+
+
 def is_within(root: str, target: str) -> bool:
-    """target 是否在 root 之内（不含 root 本身）。Windows 下大小写不敏感。"""
-    r = _norm(root)
-    t = _norm(target)
+    """target 是否在 root 之内（不含 root 本身）。Windows 下大小写不敏感；\\\\?\\ 前缀先归一（_plain）。"""
+    r = _norm(_plain(root))
+    t = _norm(_plain(target))
     return t.startswith(r.rstrip(os.sep) + os.sep)
 
 
@@ -261,7 +273,7 @@ def _relpath(path: str | os.PathLike, root: str, op: str) -> str:
 
 
 def _real_top(root: str, path: pathlib.Path, op: str = "internal") -> str:
-    rel = _relpath(os.path.realpath(path), root, op)
+    rel = _relpath(_plain(os.path.realpath(path)), _plain(root), op)
     return pathlib.Path(rel).parts[0].casefold()
 
 

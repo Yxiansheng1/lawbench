@@ -263,3 +263,36 @@ def test_denied_log_has_no_argument(case):
     assert "denied" in text
     for bad in ["案件外", "secret", "LBSECRETNAME", "借条", str(tmp_path)]:
         assert bad not in text
+
+
+# ---------- realpath 带回 \\?\ 前缀（T16 复核 P2-2 的根因） ----------
+
+def test_plain_only_drive_and_unc():
+    assert gate._plain("\\\\?\\C:\\T\\案件甲\\x") == "C:\\T\\案件甲\\x"
+    assert gate._plain("\\\\?\\UNC\\srv\\share\\x") == "\\\\srv\\share\\x"
+    for p in ("\\\\?\\Volume{0000}\\x", "\\\\?\\GLOBALROOT\\Device\\x", "\\\\?\\C:x", "C:\\a", "\\\\srv\\s\\x"):
+        assert gate._plain(p) == p                                      # 其余写法原样，照旧按越界拒绝
+    assert gate.is_within("C:\\T\\Case", "\\\\?\\c:\\t\\CASE\\x.txt")
+    assert not gate.is_within("C:\\T\\Case", "\\\\?\\C:\\T\\Case-evil\\x.txt")
+    assert not gate.is_within("C:\\T\\Case", "\\\\?\\Volume{0000}\\T\\Case\\x.txt")
+
+
+@win_only
+def test_realpath_with_long_prefix_still_inside(case, monkeypatch):
+    r"""realpath 返回带 \\?\ 前缀的写法时，案件内的读写照常放行，越界的照常拒绝。"""
+    root, outside, _ = case
+    real = os.path.realpath
+    monkeypatch.setattr(os.path, "realpath", lambda p, *a, **k: "\\\\?\\" + real(p, *a, **k))
+    assert gate.write_bytes(root, "工作区/草稿/新目录/a.md", b"ok").read_bytes() == b"ok"
+    assert gate.resolve_read(root, "证据/借条.txt").read_text(encoding="utf-8") == "LBTEST-IOU"
+    denied(gate.write_bytes, root, "证据/新文件.txt", b"x")
+    denied(gate.resolve_read, root, "工作区/材料/x.txt")
+    denied(gate.resolve_read, root, "../案件外/secret.txt")
+
+
+@win_only
+def test_realpath_volume_prefix_rejected(case, monkeypatch):
+    r"""\\?\Volume{…} 这类不能归一的写法：照旧按越界拒绝。"""
+    root, _, _ = case
+    monkeypatch.setattr(os.path, "realpath", lambda p, *a, **k: "\\\\?\\Volume{0000}\\x")
+    denied(gate.write_bytes, root, "工作区/草稿/b.md", b"x")

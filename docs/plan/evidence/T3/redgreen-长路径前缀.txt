@@ -1,0 +1,32 @@
+T3 小项·\\?\ 前缀归一 红绿验证：4 类防护
+
+[01] _real_top 先归一再算 relpath
+  改坏 case/gate.py → 红：1 failed, 67 deselected in 0.89s
+      变红的用例：
+        tests/test_gate.py::test_realpath_with_long_prefix_still_inside
+  复原 → 绿：1 passed, 67 deselected in 0.18s
+
+[02] is_within 先归一再比
+  改坏 case/gate.py → 红：2 failed, 66 deselected in 0.41s
+      变红的用例：
+        tests/test_gate.py::test_plain_only_drive_and_unc
+        tests/test_gate.py::test_realpath_with_long_prefix_still_inside
+  复原 → 绿：2 passed, 66 deselected in 0.15s
+
+[03] 盘符路径的前缀归一
+  改坏 case/gate.py → 红：2 failed, 66 deselected in 0.46s
+      变红的用例：
+        tests/test_gate.py::test_plain_only_drive_and_unc
+        tests/test_gate.py::test_realpath_with_long_prefix_still_inside
+  复原 → 绿：2 passed, 66 deselected in 0.16s
+
+[04] 不放宽：\\?\Volume 等写法不归一
+  改坏 case/gate.py → 红：1 failed, 1 passed, 66 deselected in 0.38s
+      变红的用例：
+        tests/test_gate.py::test_plain_only_drive_and_unc
+  复原 → 绿：2 passed, 66 deselected in 0.11s
+
+源码与开始时逐字节一致：是
+复原后全量：1011 passed, 3 skipped in 712.03s (0:11:52)
+
+结论：4/4 类防护 改坏即红、复原即绿
