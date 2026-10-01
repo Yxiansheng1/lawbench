@@ -23,6 +23,8 @@ from ..errors import ApiError
 CATALOGS = ("民事行政卷", "刑事卷", "常法卷", "其他非诉卷")
 _MESSY = re.compile(r"^(微信图片|IMG)_\d+", re.IGNORECASE)
 _UNREADABLE = ("failed", "source_deleted")
+# 能转成 PDF 放进卷宗的材料类型（md 不行：没有可靠的版式转换，按复核 P3-2 在保存方案时就拒）
+CONVERTIBLE = ("pdf", "docx", "doc", "wps", "xlsx", "xls", "csv", "txt", "image")
 
 
 def load_catalog(skills_dirs, name: str) -> dict:
@@ -137,8 +139,10 @@ def check_plan(catalog: dict, plan: dict, index: dict) -> tuple[list[dict], list
             m = materials.get(name)
             if m is None:
                 raise ApiError("MATERIAL_NOT_FOUND", "unknown_material")
+            if m["type"] not in CONVERTIBLE:
+                raise ApiError("INVALID_ARGUMENT", "not_convertible")     # 如 .md：生成时转不了 PDF，保存方案时就拒
             if m["status"] in _UNREADABLE:
-                warnings.append(f"「{name}」加密或无法读取，生成卷宗时转不了，请换成可读的版本或从方案中去掉")
+                warnings.append(f"「{name}」导入时没通过（加密、读不了或有外链），生成时会跳过，请换成可读的版本或从方案中去掉")
             if name in seen and seen[name] != it["code"]:
                 warnings.append(f"「{name}」同时放在第 {seen[name]} 项和第 {it['code']} 项，卷宗里会出现两次")
             seen.setdefault(name, it["code"])

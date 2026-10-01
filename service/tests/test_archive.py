@@ -381,3 +381,125 @@ def test_folder_name():
     assert B.folder_name("赵某丁", "钱某戊") == "赵某丁与钱某戊案件归档"
     assert B.folder_name("某/公司:分部", None) == "某_公司_分部案件归档"
     assert B.folder_name("长" * 60, "短") == "长" * 40 + "与短案件归档"
+
+
+# ---------------------------------------------------------------- 第一轮复核返修（0054 令）
+
+class _Counter(__import__("http.server").server.BaseHTTPRequestHandler):
+    hits: list = []
+
+    def do_GET(self):  # noqa: N802
+        type(self).hits.append(self.path)
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, *a):
+        pass
+
+
+@needs_lo
+def test_import_rejected_material_not_converted(tmp_path, monkeypatch):
+    """P1-1 端到端：带外链图片的旧版 .doc 改名 .docx 放进案件 → 导入 failed → 放进方案（只给提醒）→ 生成：
+    这份材料跳过、写进提示；监听 0 请求；假 Word 只转了起诉状和结案报告。"""
+    import http.server
+    import threading
+    from test_convert import linked_picture_docx
+    _Counter.hits = []
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Counter)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        src = tmp_path / "linked.docx"
+        linked_picture_docx(src, url)
+        lo_base = tmp_path / "lo"
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="lblo-") as lb, lo.Converter(tmp_path / "mk", lo_base=lb).session() as s:
+            doc_bytes = s.convert(src, "doc").read_bytes()
+        _Counter.hits.clear()
+        evil = tmp_path / "src" / "对方证据甲.docx"
+        evil.parent.mkdir()
+        evil.write_bytes(doc_bytes)
+        files = dict(FILES)
+        files["03一审/我方证据/对方证据甲.docx"] = evil
+        e = Env(tmp_path / "case", files)
+        try:
+            m = next(x for x in json.loads((e.root / "工作区" / "材料" / "index.json").read_text(encoding="utf-8"))
+                     ["materials"] if x["name"] == "对方证据甲")
+            assert m["status"] == "failed"
+            log = tmp_path / "com.log"
+            log.write_text("", encoding="utf-8")
+            monkeypatch.setattr(C, "WORKER_CMD", [sys.executable, str(pathlib.Path(__file__).with_name("fake_com_worker.py"))])
+            monkeypatch.setenv("FAKE_COM_LOG", str(log))
+            monkeypatch.setenv("FAKE_COM_WORD", "ok")
+            s = ok(e.client.get("/api/settings"), "api/settings.schema.json")
+            s["converter"] = "auto"
+            ok(e.client.put("/api/settings", json=s), "api/settings.schema.json")
+            tid = e.begin("sess-evil")["task_id"]
+            p = plan(items=[it if it["code"] != 7 else {"code": 7, "name": "证据材料",
+                                                         "materials": ["对方证据甲", "送货单"]} for it in plan()["items"]])
+            saved = e.tool_ok(tid, "case_save_archive_plan", p)
+            assert any("对方证据甲" in w for w in saved["warnings"])
+            v = ok(build(e, tid, p), "api/archive_build.schema.json")
+            assert any("对方证据甲" in x for x in v["manual"])
+            rng = {x["code"]: x for x in v["page_ranges"]}
+            assert rng[7]["to"] - rng[7]["from"] + 1 == pdf_pages(CLOSED / "03一审" / "我方证据" / "送货单.pdf")
+            assert log.read_text(encoding="utf-8").split() == ["Word.Application"] * 2   # 起诉状、结案报告；对方证据甲没碰
+            assert _Counter.hits == []
+        finally:
+            e.close()
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_md_material_rejected_in_plan(tmp_path):
+    """P3-2：.md 材料转不了 PDF：保存方案时就拒，不等生成到一半才失败。"""
+    md = tmp_path / "备忘.md"
+    md.write_text("# 备忘\n内容", encoding="utf-8")
+    files = dict(FILES)
+    files["03一审/我方证据/备忘.md"] = md
+    e = Env(tmp_path / "case", files)
+    try:
+        tid = e.begin("sess-md")["task_id"]
+        p = plan(items=[{"code": 7, "name": "证据材料", "materials": ["备忘"]}])
+        fail(e.tool(tid, "case_save_archive_plan", p), "INVALID_ARGUMENT")
+    finally:
+        e.close()
+
+
+@needs_lo
+def test_item_with_no_readable_material_counts_missing(env, tid, monkeypatch):
+    """P3-4：某项的材料全都跳过：这一项不进立卷申请书、归档目录写缺失；必交项计入缺失并生成情况说明。"""
+    real = B._readable
+    monkeypatch.setattr(B, "_readable", lambda p: None if p.name == "授权委托书.pdf" else real(p))
+    p = plan()
+    save_plan(env, tid, p)
+    v = ok(build(env, tid, p), "api/archive_build.schema.json")
+    assert 3 not in [x["code"] for x in v["page_ranges"]]
+    paths = {pathlib.PurePosixPath(f["path"]).name: env.root / f["path"] for f in v["files"]}
+    assert "3" not in [r[0] for r in app_rows(paths["立卷申请书.docx"])]
+    miss = "\n".join(x.text for x in pydocx.Document(str(paths["材料缺失情况说明及承诺.docx"])).paragraphs)
+    assert "缺失材料：授权委托书" in miss
+    md = paths["归档目录.md"].read_text(encoding="utf-8")
+    assert "| 3 | 授权委托书 | * | — |" in md and "未能放入卷宗的材料：授权委托书" in md
+
+
+def test_page_numbers_inside_cropbox():
+    """P3-1：CropBox 比纸面小（扫描件常见）时，页码画在可见区域里。"""
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(595, 842))
+    c.drawString(100, 400, "正文")
+    c.showPage()
+    c.save()
+    w = PdfWriter()
+    w.append(PdfReader(io.BytesIO(buf.getvalue())))
+    w.pages[0].cropbox.lower_left = (40, 100)
+    w.pages[0].cropbox.upper_right = (560, 800)
+    B.number_pages(w)
+    out = io.BytesIO()
+    w.write(out)
+    page = PdfReader(io.BytesIO(out.getvalue())).pages[0]
+    ys = []
+    page.extract_text(visitor_text=lambda text, cm, tm, fd, fs: ys.append((text, tm[5] * cm[3] + cm[5])) if "页" in text else None)
+    assert ys and all(100 <= y <= 800 for _t, y in ys), ys

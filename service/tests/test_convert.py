@@ -281,3 +281,196 @@ def test_real_word(case, lo_base, listener, tmp_path):
     linked_picture_docx(p, url)
     out, used = C.OfficeConverter(lo_base).to_pdf(str(case), p, "工作区/临时/j")
     assert used == "libreoffice" and hits == []
+
+
+# ---------------------------------------------------------------- 第一轮复核返修（0054 令）：按文件头分流
+
+@pytest.fixture
+def linked_doc_bytes(tmp_path, lo_base):
+    """LibreOffice 把"链接到文件"图片的 docx 存成旧版 .doc（OLE），带外链图片；地址指向一个不存在的端口。"""
+    if not HAS_LO:
+        pytest.skip("本机没有 LibreOffice")
+    src = tmp_path / "linked.docx"
+    linked_picture_docx(src, "http://127.0.0.1:9")
+    with lo.Converter(tmp_path / "mk", lo_base=lo_base).session() as s:
+        return s.convert(src, "doc").read_bytes()
+
+
+def test_word_has_external_by_header(tmp_path):
+    """P1-2：按文件头判断，扩展名怎么改都一样。"""
+    linked = tmp_path / "a.docx"
+    linked_picture_docx(linked, "http://127.0.0.1:9")
+    for ext in (".doc", ".wps", ".docx", ".rtf"):
+        x = tmp_path / f"改名{ext}"
+        x.write_bytes(linked.read_bytes())
+        assert C.word_has_external(x), ext                                   # docx 内容改名：照查 OOXML
+    for content in (b"{\\rtf1\\ansi hello}", b"<html><img src='http://127.0.0.1:9/a.png'></html>", b"plain"):
+        x = tmp_path / "冒充.doc"
+        x.write_bytes(content)
+        assert C.word_has_external(x)                                       # RTF、HTML、文本冒充：不交 Word
+    plain = tmp_path / "普通.doc"
+    plain.write_bytes(COMPLAINT.read_bytes())                               # 正常 docx 内容配 .doc 扩展名：可以交 Word
+    assert not C.word_has_external(plain)
+
+
+def altchunk_docx(path: pathlib.Path, url: str) -> None:
+    d = pydocx.Document()
+    d.add_paragraph("正文")
+    tmp = io.BytesIO()
+    d.save(tmp)
+    zin = zipfile.ZipFile(io.BytesIO(tmp.getvalue()))
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in zin.namelist():
+            zout.writestr(n, zin.read(n))
+        zout.writestr("word/afchunk.html", f"<html><body><img src=\"{url}/c.png\"></body></html>")
+
+
+def test_altchunk_html_external(tmp_path):
+    p = tmp_path / "块.docx"
+    altchunk_docx(p, "http://127.0.0.1:9")
+    assert C.word_has_external(p) and C._altchunk_external(p)
+
+
+def test_docx_renamed_doc_goes_to_libreoffice_not_word(case, lo_base, fake, tmp_path, listener):
+    """P1-2 端到端：外链 docx 改名 .doc / .wps，auto 下假 Word / WPS 没被调用，LibreOffice 转、监听 0 请求。"""
+    if not HAS_LO:
+        pytest.skip("本机没有 LibreOffice")
+    url, hits = listener
+    fake.set(word="ok", kwps="ok", wps="ok")
+    linked = tmp_path / "a.docx"
+    linked_picture_docx(linked, url)
+    for ext in (".doc", ".wps"):
+        x = tmp_path / f"对方证据{ext}"
+        x.write_bytes(linked.read_bytes())
+        out, used = C.OfficeConverter(lo_base).to_pdf(str(case), x, "工作区/临时/j")
+        assert used == "libreoffice" and pages(out) >= 1
+    assert fake.calls() == [] and hits == []
+
+
+def test_ole_doc_renamed_docx_refused_by_libreoffice(case, lo_base, fake, linked_doc_bytes, tmp_path, monkeypatch):
+    """P1-1：旧版 .doc（有外链图片）改名 .docx：Word / WPS 不交（OLE 里查到外链），LibreOffice 也不交 → 转不了。"""
+    started = []
+    real = C.lo.Converter.session
+    monkeypatch.setattr(C.lo.Converter, "session", lambda self: (started.append(1), real(self))[1])
+    fake.set(word="ok", kwps="ok", wps="ok")
+    x = tmp_path / "对方证据甲.docx"
+    x.write_bytes(linked_doc_bytes)
+    with pytest.raises(ApiError) as e:
+        C.OfficeConverter(lo_base).to_pdf(str(case), x, "工作区/临时/j")
+    assert e.value.code == "CONVERTER_UNAVAILABLE" and fake.calls() == [] and started == []
+
+
+def test_xls_shell_checked_by_header(case, lo_base, tmp_path, monkeypatch):
+    """NOTE-3：带外部图片关系的 xlsx 改名 .xls：按文件头走 14.3 ②b，不交 LibreOffice。"""
+    started = []
+    monkeypatch.setattr(C.lo.Converter, "session", lambda self: started.append(1))
+    zin = zipfile.ZipFile(FIXTURES / "civil-01" / "银行流水.xlsx")
+    x = tmp_path / "表.xls"
+    with zipfile.ZipFile(x, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in zin.namelist():
+            zout.writestr(n, zin.read(n))
+        zout.writestr("xl/drawings/_rels/drawing9.xml.rels",
+                      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/'
+                      'package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/'
+                      'officeDocument/2006/relationships/image" Target="http://127.0.0.1:9/x.png" TargetMode="External"/>'
+                      "</Relationships>")
+    with pytest.raises(ApiError):
+        C.OfficeConverter(lo_base).to_pdf(str(case), x, "工作区/临时/j", "libreoffice")
+    assert started == []
+
+
+@pytest.mark.parametrize("content", [b"<html><body><img src='http://127.0.0.1:9/a.png'></body></html>",
+                                     b"{\\rtf1 x}", b"PK\x03\x04 not text"])
+def test_text_material_that_is_not_text_refused(case, lo_base, tmp_path, monkeypatch, content):
+    started = []
+    monkeypatch.setattr(C.lo.Converter, "session", lambda self: started.append(1))
+    x = tmp_path / "说明.txt"
+    x.write_bytes(content)
+    with pytest.raises(ApiError):
+        C.OfficeConverter(lo_base).to_pdf(str(case), x, "工作区/临时/j", "libreoffice")
+    assert started == []
+
+
+def test_com_worker_calls(monkeypatch):
+    """P3-3：com_worker 对 COM 的调用（假 win32com）：新起实例、不可见、不弹窗、禁宏、只读打开且不进最近文档、
+    只用导出接口不打印、UpdateLinksAtOpen 先关后恢复、关闭不保存、Quit。"""
+    import types
+    calls = []
+
+    class Doc:
+        def ExportAsFixedFormat(self, out, fmt):
+            calls.append(("Export", out, fmt))
+
+        def Close(self, save):
+            calls.append(("Close", save))
+
+        def PrintOut(self, *a):
+            calls.append(("PrintOut",))
+
+    class Opt:
+        def __init__(self):
+            object.__setattr__(self, "UpdateLinksAtOpen", True)
+
+        def __setattr__(self, k, v):
+            calls.append(("Options." + k, v))
+            object.__setattr__(self, k, v)
+
+    class Docs:
+        def Open(self, *a, **kw):
+            calls.append(("Open", a, kw))
+            return Doc()
+
+    class App:
+        def __init__(self):
+            object.__setattr__(self, "Options", Opt())
+            object.__setattr__(self, "Documents", Docs())
+
+        def __setattr__(self, k, v):
+            calls.append(("App." + k, v))
+            object.__setattr__(self, k, v)
+
+        def Quit(self, *a):
+            calls.append(("Quit", a))
+
+    w32, cl = types.ModuleType("win32com"), types.ModuleType("win32com.client")
+    cl.DispatchEx = lambda progid: (calls.append(("DispatchEx", progid)), App())[1]
+    cl.Dispatch = lambda progid: (calls.append(("Dispatch", progid)), App())[1]
+    w32.client = cl
+    pc, pt = types.ModuleType("pythoncom"), types.ModuleType("pywintypes")
+    pc.CoInitialize = lambda: None
+    pc.CoUninitialize = lambda: None
+    pt.com_error = type("com_error", (Exception,), {})
+    for k, v in (("win32com", w32), ("win32com.client", cl), ("pythoncom", pc), ("pywintypes", pt)):
+        monkeypatch.setitem(sys.modules, k, v)
+    from lawbench.office import com_worker
+    assert com_worker.main("Word.Application", "C:/x/in.docx", "C:/x/out.pdf") == 0
+    assert calls == [
+        ("DispatchEx", "Word.Application"),
+        ("App.Visible", False), ("App.DisplayAlerts", 0), ("App.AutomationSecurity", 3),
+        ("Options.UpdateLinksAtOpen", False),
+        ("Open", ("C:/x/in.docx", False, True, False), {}),           # FileName, ConfirmConversions, ReadOnly, AddToRecentFiles
+        ("Export", "C:/x/out.pdf", 17), ("Close", 0),
+        ("Options.UpdateLinksAtOpen", True), ("Quit", (0,)),
+    ]
+    assert not any(c[0] in ("PrintOut", "Dispatch") for c in calls)
+
+
+def test_com_conversions_one_at_a_time(lo_base, monkeypatch, tmp_path):
+    """NOTE-1：两路同时转换时 Word / WPS 那一步串行（收尾按"本次期间新出现"认进程，并发会互相误杀）。"""
+    import threading
+    spans = []
+
+    def slow(self, name, local):
+        t0 = time.monotonic()
+        time.sleep(0.5)
+        spans.append((t0, time.monotonic()))
+        return local
+    monkeypatch.setattr(C.OfficeConverter, "_com_locked", slow)
+    conv = C.OfficeConverter(lo_base)
+    ts = [threading.Thread(target=conv._com, args=("word", tmp_path / "x")) for _ in range(2)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    (a0, a1), (b0, b1) = sorted(spans)
+    assert b0 >= a1

@@ -70,7 +70,7 @@ def number_pages(writer: PdfWriter) -> None:
     boxes = []
     for i, page in enumerate(writer.pages):
         page.transfer_rotation_to_content()
-        box = page.mediabox
+        box = page.cropbox                       # 可见区域；扫描件常把 CropBox 设得比纸面小（复核 P3-1）
         x0, y0, w, h = float(box.left), float(box.bottom), float(box.width), float(box.height)
         boxes.append(page)
         c.setPageSize((x0 + w, y0 + h))
@@ -166,6 +166,9 @@ class ArchiveBuilder:
         pdfs: dict[int, list[pathlib.Path]] = {}
         for it in sorted(plan["items"], key=lambda x: x["code"]):
             for name in it["materials"]:
+                if by_name[name]["status"] in am._UNREADABLE:     # 导入时没通过（加密、有外链……）：不碰原件（复核 P1-1）
+                    skipped.append(name)
+                    continue
                 pdf, used = self._to_pdf(root, by_name[name], job, choice)
                 if used:
                     used_any.append(used)
@@ -173,6 +176,14 @@ class ArchiveBuilder:
                     skipped.append(name)
                     continue
                 pdfs.setdefault(it["code"], []).append(pdf)
+
+        # 一份材料都没放进卷宗的项：不算已归档（申请书、归档目录不列）；必交的计入缺失（复核 P3-4）
+        empty = [it for it in plan["items"] if it["code"] not in pdfs]
+        if empty:
+            plan = dict(plan, items=[it for it in plan["items"] if it["code"] in pdfs])
+            req = {it["code"]: it for it in catalog["items"] if it["required"]}
+            missing = sorted(missing + [{"code": it["code"], "name": req[it["code"]]["name"]}
+                                        for it in empty if it["code"] in req], key=lambda m: m["code"])
 
         # 结案报告
         f = D.report_fields(plan, lawyer)

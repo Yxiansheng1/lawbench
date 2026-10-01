@@ -18,13 +18,14 @@ import pathlib
 import re
 import subprocess
 import sys
+import threading
 import time
 from ctypes import wintypes
 
 from .. import logs
 from ..case import gate
 from ..errors import ApiError
-from ..ingest import ParseError, links
+from ..ingest import ParseError, detect, links
 from ..ingest import libreoffice as lo
 from ..procs import kill_tree
 
@@ -38,6 +39,7 @@ LO_ONLY = {".xlsx", ".xls", ".xlsm", ".csv", ".txt", ".odt", ".ods"}
 # 测试可替换：Word / WPS 子进程的命令（默认 python -m lawbench.office.com_worker）
 WORKER_CMD: list[str] | None = None
 _PKG_PARENT = str(pathlib.Path(__file__).resolve().parents[2])
+_COM_LOCK = threading.Lock()
 
 
 class _Failed(Exception):
@@ -86,24 +88,21 @@ def com_started(before: dict, after: dict, exes: tuple[str, ...]) -> list[int]:
     return out
 
 
-_RTF_LINK = re.compile(rb"(INCLUDEPICTURE|INCLUDETEXT|LINK|IMPORT|DDEAUTO|DDE|objautlink)[^}]{0,400}?"
-                       rb"(https?://|ftp://|file://|\\\\\\\\)", re.IGNORECASE)
-
-
 def word_has_external(path: pathlib.Path) -> bool:
     """交给 Word / WPS 之前查外链（2026-10-01 T23 实测：Word 打开带"链接到文件"图片的 docx 并导出 PDF 时会去取图，
     关掉 UpdateLinksAtOpen 也一样）。有外链、或查不了，就不交给 Word / WPS，只能走 LibreOffice（它有外链拦截）。
-    - .doc / .wps：14.3 ②a 的检查；
-    - docx 类：任何关系文件里 TargetMode="External"（超链接除外：点了才打开）；以及正文、页眉页脚里链接类域
-      （INCLUDEPICTURE 等）的指令里有外部地址（同一部件的域指令连起来查，宁可多拦）；
-    - rtf：链接类域或对象自动链接之后 400 字节内出现外部地址。"""
-    ext = path.suffix.lower()
+    **按文件头分流，不看扩展名**（T23 复核 P1-2：docx 改名 .doc 曾走二进制检查漏判）：
+    - OLE（旧版二进制、加密的新版）：加密的不交；14.3 ②a 的检查；
+    - 压缩包（docx 类）：任何关系文件里 TargetMode="External"（超链接除外：点了才打开）；正文、页眉页脚里链接类域
+      （INCLUDEPICTURE 等）的指令里有外部地址（同一部件的域指令连起来查，宁可多拦）；altChunk 内嵌的 HTML 里有外部地址；
+    - 其他（RTF、HTML、文本冒充 Word 文档）：一律不交 Word / WPS。"""
     try:
-        if ext in (".doc", ".wps"):
-            return links.has_external_picture(path)
-        if ext == ".rtf":
-            return bool(_RTF_LINK.search(path.read_bytes()))
-        if links.xlsx_has_external_rels(path):          # 函数名是 xlsx，判断对任何 OOXML 压缩包都成立
+        kind = detect.content_kind(path)
+        if kind == "ole":
+            return detect.ole_encrypted(path) or links.has_external_picture(path)
+        if kind != "zip":
+            return True
+        if links.xlsx_has_external_rels(path) or _altchunk_external(path):   # 函数名是 xlsx，对任何 OOXML 都成立
             return True
         with links.open_zip(path) as z:
             for n in z.namelist():
@@ -120,6 +119,16 @@ def word_has_external(path: pathlib.Path) -> bool:
 
 
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_HTML_URL = re.compile(rb"""(?:src|href|data|background)\s*=\s*["']?\s*(?:https?:|ftp:|file:|\\\\)""", re.IGNORECASE)
+
+
+def _altchunk_external(path: pathlib.Path) -> bool:
+    """docx 的 altChunk 内嵌 HTML / MHT 部件里有没有指向外部的 src、href 等（复核 NOTE-2，只做这一条低成本的）。"""
+    with links.open_zip(path) as z:
+        for n in z.namelist():
+            if n.lower().endswith((".html", ".htm", ".mht", ".mhtml", ".xhtml")) and _HTML_URL.search(z.read(n)):
+                return True
+    return False
 
 
 def _kill_pid(pid: int) -> None:
@@ -163,6 +172,10 @@ class OfficeConverter:
     # ---------- Word / WPS ----------
 
     def _com(self, name: str, local: pathlib.Path) -> pathlib.Path:
+        with _COM_LOCK:                   # 一次只做一个：收尾按"本次期间新出现"认进程，并发会互相误杀（复核 NOTE-1）
+            return self._com_locked(name, local)
+
+    def _com_locked(self, name: str, local: pathlib.Path) -> pathlib.Path:
         out = local.with_name("out.pdf")
         for progid in PROGIDS[name]:
             code = self._run_worker(name, progid, local, out)
@@ -213,18 +226,50 @@ class OfficeConverter:
     # ---------- LibreOffice ----------
 
     def _lo(self, root: str, local: pathlib.Path, sub: str) -> pathlib.Path:
+        """交给 LibreOffice 之前按文件头查（T23 复核 P1-1、NOTE-3：旧版 .doc 改名 .docx 曾不经检查直接转换）：
+        - Word 类：OLE → 加密的不转、14.3 ②a 查外链；压缩包 → 照转（配置里拦外链图片），altChunk HTML 有外部地址的不转；
+          其他（RTF、HTML 冒充）→ 不转；
+        - 表格类：OLE → 加密的不转；压缩包 → 14.3 ②b 查外部关系；其他 → 不转；
+        - 文本类（txt、csv）：文件头是 OLE / 压缩包 / PDF 的不转；开头 4KB 里像 HTML、RTF 的不转（防 LibreOffice 按内容
+          认成网页去取图）。
+        副本扩展名按文件头定（与 T5 X1 同口径）。"""
         ext = local.suffix.lower()
         try:
-            if ext in (".doc", ".wps") and links.has_external_picture(local):
-                raise _Failed("external_link")
-            if ext in (".xlsx", ".xlsm") and links.xlsx_has_external_rels(local):
-                raise _Failed("external_link")
+            kind = detect.content_kind(local)
+            if ext in WORD_TYPES:
+                if kind == "ole":
+                    if detect.ole_encrypted(local) or links.has_external_picture(local):
+                        raise _Failed("encrypted_or_external_link")
+                    suffix = ".doc"
+                elif kind == "zip":
+                    if _altchunk_external(local):
+                        raise _Failed("external_link")
+                    suffix = ".docx"
+                else:
+                    raise _Failed("not_office_file")
+            elif ext in (".xlsx", ".xlsm", ".xls"):
+                if kind == "ole":
+                    if detect.ole_encrypted(local):
+                        raise _Failed("encrypted")
+                    suffix = ".xls"
+                elif kind == "zip":
+                    if links.xlsx_has_external_rels(local):
+                        raise _Failed("external_link")
+                    suffix = ".xlsx"
+                else:
+                    raise _Failed("not_office_file")
+            else:
+                head = local.read_bytes()[:4096].lower()
+                if kind != "other" or any(m in head for m in (b"<html", b"<img", b"<iframe", b"<link", b"{\\rtf",
+                                                                b"<?xml", b"<svg")):
+                    raise _Failed("not_plain_text")
+                suffix = ext
         except ParseError:
             raise _Failed("unchecked")
         conv = lo.Converter(gate.resolve_internal(root, sub, op="convert"), self.lo_base, soffice=self.soffice)
         try:
             with conv.session() as s:
-                tmp = s.convert(local, "pdf")
+                tmp = s.convert(local, "pdf", suffix=suffix)
                 out = local.with_name("out.pdf")
                 os.replace(tmp, out)           # 会话结束时会删它自己的工作目录；结果先挪到本次目录
         except ParseError as e:

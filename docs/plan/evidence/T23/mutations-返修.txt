@@ -1,0 +1,15 @@
+P1-1 生成时不跳过导入失败的材料: 红（1 failed, 1 warning in 17.76s）
+P1-1 LibreOffice 前不查 OLE（加密与外链）: 红（1 failed, 1 warning in 19.17s）
+P1-2 交 Word 前按扩展名: 红（1 failed, 1 passed, 1 warning in 18.84s）
+P1-2 其他内容也交 Word: 红（1 failed, 1 warning in 1.12s）
+NOTE-3 表格外壳按扩展名: 红（1 failed, 1 warning in 0.98s）
+文本类不查内容: 红（3 failed, 1 warning in 1.11s）
+NOTE-2 不查 altChunk: 红（1 failed, 1 warning in 0.95s）
+NOTE-1 去掉 COM 锁: 红（1 failed, 1 warning in 1.35s）
+P3-1 页码按 MediaBox: 红（1 failed, 1 warning in 1.04s）
+P3-2 方案收 md: 红（1 failed, 1 warning in 2.32s）
+P3-4 空项仍算已归档: 红（1 failed, 1 warning in 24.26s）
+P3-3 AddToRecentFiles=True（M14）: 红（1 failed, 1 warning in 0.88s）
+P3-3 ReadOnly=False（M15）: 红（1 failed, 1 warning in 0.75s）
+P3-3 不恢复 UpdateLinksAtOpen: 红（1 failed, 1 warning in 0.89s）
+P3-3 不禁宏: 红（1 failed, 1 warning in 0.92s）
