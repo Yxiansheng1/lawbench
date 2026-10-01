@@ -1,4 +1,4 @@
-// 弹框（注册在 DSH 的 shell.overlay）：确认、提示、导入确认、选择案件、占位。一次显示队首一个。
+// 弹框（注册在 DSH 的 shell.overlay）：确认、提示、导入确认、选择案件。一次显示队首一个。
 import { useEffect, useState } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { app, popDialog, type CaseRef, type Dialog } from './state.ts'
@@ -29,11 +29,10 @@ function OneDialog({ d }: { d: Dialog }) {
       )
     }
     case 'notice':
-    case 'placeholder':
       return (
         <Modal open onClose={close} title={d.title} closeLabel="关闭" footer={<Button variant="primary" data-modal-autofocus onClick={close}>知道了</Button>}>
           <p style={{ margin: 0, lineHeight: 1.7 }}>{d.text}</p>
-          {d.kind === 'notice' && d.lines?.length ? (
+          {d.lines?.length ? (
             <ul style={{ ...S.list, marginTop: 10, maxHeight: 260, overflow: 'auto', fontSize: 12, color: C.sub }}>
               {d.lines.map((l, i) => <li key={i}>{l}</li>)}
             </ul>

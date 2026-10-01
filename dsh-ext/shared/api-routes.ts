@@ -22,6 +22,7 @@ export interface ApiRoute {
 }
 
 const LONG = 10 * 60_000
+const INVOICE = 35 * 60_000
 
 export const API_ROUTES: readonly ApiRoute[] = [
   { method: 'caseOpen', http: 'POST', path: '/api/case/open', contract: 'case_open' },
@@ -51,8 +52,10 @@ export const API_ROUTES: readonly ApiRoute[] = [
   { method: 'putCapsules', http: 'PUT', path: '/api/capsules', contract: 'capsules' },
   { method: 'capsulesReset', http: 'POST', path: '/api/capsules/reset', contract: 'capsules_reset' },
   { method: 'archiveBuild', http: 'POST', path: '/api/archive/build', contract: 'archive_build', timeoutMs: LONG },
-  { method: 'invoiceRun', http: 'POST', path: '/api/invoice/run', contract: 'invoice_run', timeoutMs: LONG },
-  { method: 'retainerDriver', http: 'POST', path: '/api/retainer/driver', contract: 'retainer_driver' },
+  // 发票动作单个最长 30 分钟（Spec 13.3）；不设短超时：排队中的不可逆动作拿到锁就会执行，界面得等到结果（T25 复核后改）
+  { method: 'invoiceRun', http: 'POST', path: '/api/invoice/run', contract: 'invoice_run', timeoutMs: INVOICE },
+  // 启动证件识别驱动要等它就绪
+  { method: 'retainerDriver', http: 'POST', path: '/api/retainer/driver', contract: 'retainer_driver', timeoutMs: 2 * 60_000 },
 ]
 
 /** 把 request 拆成路径、查询串、请求体。路径参数缺失时返回 undefined。 */

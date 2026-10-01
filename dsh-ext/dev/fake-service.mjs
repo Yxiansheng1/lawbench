@@ -7,6 +7,7 @@
 //   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）、
 //   --fail-context <错误码>（/core/context 一律返回这个错误，如 INPUT_CHANGED：测输入材料变化后整轮被拦下的提示）、
 //   --case-root <目录>（T13：假数据里第一个案件的文件夹改成这个真实存在的空目录，桌面端才能把它当工作区打开）
+//   T26：发票整理与委托材料两条接口见 dev/fake-tools.mjs（--invoice-delay、--invoice-blocked、--retainer-python、--retainer-stop-stuck）
 //   --llm-reply <文件>（T17：在本机转发端口 LB_FORWARD_PORT 上假扮模型网关，POST /v1/chat/completions 以流式返回这个文件的内容，
 //     让 DSH 用真实的 Markdown 渲染一段回答；只监听 127.0.0.1，不连外网）
 import { createServer } from 'node:http'
@@ -17,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { loadContracts, CONTRACTS_DIR } from '../scripts/contracts-source.mjs'
+import { makeTools } from './fake-tools.mjs'
 
 const require = createRequire(import.meta.url)
 const Ajv2020 = require('ajv/dist/2020.js').default
@@ -60,6 +62,9 @@ const check = (id, def, value) => {
   return fn(value) ? [] : fn.errors.map((e) => `${e.instancePath || '/'} ${e.message}`)
 }
 const example = (name) => JSON.parse(readFileSync(join(CONTRACTS_DIR, 'examples', name), 'utf8'))
+const savedSettings = () => { const f = join(APPDATA, 'settings.json'); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : example('file_settings.json') }
+const tools = makeTools({ arg, flag, check, fail: (code, message) => ({ ok: false, error: { code, message } }), ok: (value) => ({ ok: true, value }), settings: savedSettings })
+for (const sig of ['SIGINT', 'SIGTERM', 'exit']) process.on(sig, () => { tools.close(); if (sig !== 'exit') process.exit(0) })
 
 // 工具样例：有官方样例的用样例；T23/T24 的三个工具按工单返回 SERVICE_UNAVAILABLE；其余没有样例的如实返回 INTERNAL
 const TOOL_RESULTS = {
@@ -204,24 +209,25 @@ createServer((req, res) => {
   req.on('end', () => {
     let body
     try { body = raw ? JSON.parse(raw) : undefined } catch { return send(200, fail('INVALID_ARGUMENT', '请求参数有误')) }
-    const out = handle(req.method, url.pathname, body) ?? (FIXTURES ? fromFixtures(req.method, url.pathname, url.searchParams, body) : null)
-    if (!out) return send(404, fail('INVALID_ARGUMENT', '请求参数有误'))
-    let [payload, violations] = out
-    if (BAD_RESPONSE && payload.ok) {
-      // 去掉一个必填字段：/core/tool 去掉工具结果里的第一个字段；其他命令在 value 里塞一个契约没有的字段或删字段
-      const v = structuredClone(payload.value)
-      const firstKey = v && typeof v === 'object' ? Object.keys(v)[0] : undefined
-      if (firstKey) delete v[firstKey]; else payload = { ...payload, unexpected: true }
-      payload = { ...payload, value: v }
-    }
-    const route = ROUTE_RE.find(({ r, re }) => r.http === req.method && re.test(url.pathname))?.r
-    const rs = RESPONSE_SCHEMA[url.pathname] ?? (route ? `api/${route.contract}` : undefined)
-    const selfCheck = rs ? check(rs, 'response', payload) : []
-    res.meta = {
-      tool: body?.tool, ok: payload.ok, code: payload.ok ? undefined : payload.error.code,
-      ...(violations?.length ? { violations } : {}), ...(selfCheck.length ? { response_violations: selfCheck } : {}),
-    }
-    send(200, payload)
+    void Promise.resolve(tools.handle(req.method, url.pathname, body) ?? handle(req.method, url.pathname, body) ?? (FIXTURES ? fromFixtures(req.method, url.pathname, url.searchParams, body) : null)).then((out) => {
+      if (!out) return send(404, fail('INVALID_ARGUMENT', '请求参数有误'))
+      let [payload, violations] = out
+      if (BAD_RESPONSE && payload.ok) {
+        // 去掉一个必填字段：/core/tool 去掉工具结果里的第一个字段；其他命令在 value 里塞一个契约没有的字段或删字段
+        const v = structuredClone(payload.value)
+        const firstKey = v && typeof v === 'object' ? Object.keys(v)[0] : undefined
+        if (firstKey) delete v[firstKey]; else payload = { ...payload, unexpected: true }
+        payload = { ...payload, value: v }
+      }
+      const route = ROUTE_RE.find(({ r, re }) => r.http === req.method && re.test(url.pathname))?.r
+      const rs = RESPONSE_SCHEMA[url.pathname] ?? (route ? `api/${route.contract}` : undefined)
+      const selfCheck = rs ? check(rs, 'response', payload) : []
+      res.meta = {
+        tool: body?.tool, ok: payload.ok, code: payload.ok ? undefined : payload.error.code,
+        ...(violations?.length ? { violations } : {}), ...(selfCheck.length ? { response_violations: selfCheck } : {}),
+      }
+      send(200, payload)
+    })
   })
 }).listen(PORT, '127.0.0.1', () => process.stdout.write(`fake service on 127.0.0.1:${PORT} contract ${version}\n`))
 

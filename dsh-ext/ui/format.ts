@@ -100,6 +100,9 @@ export const ERROR_HINT: Record<string, string> = {
   PREP_UNAVAILABLE: '识别服务器暂时不可用，稍后再试。',
   KEY_INVALID: '请到设置里检查个人 Key。',
   SERVICE_UNAVAILABLE: '工作台服务正在启动或已停止，稍后再试。',
+  OFFICE_DIR_NOT_SET: '请到设置的"律师工作台"里指定日常办公文件夹。',
+  ENGINE_BUSY: '发票整理正在进行中，请等它结束后再操作。',
+  ENGINE_FAILED: '请稍后再试；多次出现请联系技术支持。',
 }
 
 /** 给律师看的提示：没有中文的（如 DSH 网关的英文技术信息）一律换成通用中文提示（返修 P3-2，Spec U-1）。 */

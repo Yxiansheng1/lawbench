@@ -1,14 +1,23 @@
 // 首页（PRD 6.3、7.9；Spec U-11、U-12）：分流提示、两级胶囊、右上角"管理胶囊"、最近案件、新建 / 打开案件。
+// 工具胶囊（T26）："发票整理"在首页位置换成发票页（U-13）；"文件生成"打开委托材料窗口（U-14）。
 import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport, withCase } from './cases.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, useLoad } from './kit.tsx'
-import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, pushDialog, setIntent, type CaseRef, type SkillInfo } from './state.ts'
+import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, setIntent, type CaseRef, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { errorText, lawyerMessage } from './format.ts'
+import { homeView } from './invoice-logic.ts'
+import { InvoicePage } from './invoice.tsx'
+import { openRetainer } from './retainer.ts'
 
 export function HomePage() {
+  const view = useStore(homeView, (v) => v)
+  return view === 'invoice' ? <InvoicePage /> : <CapsulesPage />
+}
+
+function CapsulesPage() {
   const [caps, reload] = useLoad(() => call<Capsules>('getCapsules'), [])
   const [skills] = useLoad(async () => { try { return await lb().listSkills() } catch (e) { return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: lawyerMessage((e as Error).message) } } } }, [])
   const [managing, setManaging] = useState(false)
@@ -34,7 +43,8 @@ function CapsuleHome({ caps, skills, onManage }: { caps: Capsules; skills: Skill
   const title = (name: string) => skills.find((s) => s.name === name)?.title ?? name
   const open = (item: Capsule) => {
     if (item.kind === 'tool') {
-      pushDialog({ kind: 'placeholder', title: item.name, text: `${TOOL_WORD[item.tool]}的页面在后续版本提供（工单 T26），本版先占位。` })
+      if (item.tool === 'invoice') homeView.set('invoice')
+      else void openRetainer(current)
       return
     }
     withCase(current, (c) => {

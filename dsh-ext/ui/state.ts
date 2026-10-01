@@ -20,7 +20,6 @@ export type Dialog =
   | { kind: 'notice'; title: string; text: string; lines?: string[] }
   | { kind: 'import'; caseRef: CaseRef; paths: string[]; from: string }
   | { kind: 'casePick'; then?: (c: CaseRef) => void }
-  | { kind: 'placeholder'; title: string; text: string }
 
 export interface AppState {
   cases: CaseRef[]
