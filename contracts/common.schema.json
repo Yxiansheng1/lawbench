@@ -118,6 +118,7 @@
         "CONVERTER_UNAVAILABLE",
         "TEMPLATE_MISSING",
         "ENGINE_FAILED",
+        "ENGINE_BUSY",
         "PLAN_NOT_CONFIRMED"
       ],
       "description": "错误码；含义与对应的中文提示见 Spec 20.1"

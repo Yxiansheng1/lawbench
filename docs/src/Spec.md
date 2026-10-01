@@ -1151,7 +1151,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | `report`、`check_schema` | `invoice_db.py report\|check-schema --ledger …` | 报表、台账体检 |
 
 - **不提供**：`--imap-host`、`--download-links`、`attach`、`channel=mcp/imap`（都需要联网）。邮箱里的发票由律师自己下载，或在邮件客户端导出为 EML 后导入。
-- 引擎退出码 0 为成功，2 为"有重复、冲突、待核或部分失败"（界面标黄，提示看明细），其他为失败（`ENGINE_FAILED`）。引擎输出原样显示在面板上，不写日志；日志只记动作名、退出码、耗时。
+- 引擎退出码 0 为成功，2 为"有重复、冲突、待核或部分失败"（界面标黄，提示看明细；返回 `attention:true`），输出任一行以 `[BLOCKED]` 开头或退出码非 0/2 为引擎自报失败（返回 `failed:true`，原因在 `output`）；引擎起不来、超时为 `ENGINE_FAILED`；同一时间只跑一个动作，后到的等锁最多 2 秒，超过返回 `ENGINE_BUSY`——界面（T26）在动作进行中要禁用按钮、不得给请求设短超时，因为排队中的 `cancel`/`reimburse --apply`/`exclude` 一旦拿到锁就会执行（2026-10-01 T25 复核后改）。引擎输出原样显示在面板上，不写日志；日志只记动作名、退出码、耗时。
 - 同一时间只运行一个动作（引擎自己也有台账文件锁）；单个动作超时 30 分钟。
 - 日常办公文件夹未设置时返回 `OFFICE_DIR_NOT_SET`；设置时按 SEC-14 的规则拒绝云同步目录。
 - 发票不是案卷：台账和原票在日常办公文件夹，不进案件检索，不进 AI 上下文。
@@ -1386,7 +1386,8 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | `OFFICE_DIR_NOT_SET` | 没有设置日常办公文件夹就用发票整理 | 请先在设置中指定日常办公文件夹 |
 | `CONVERTER_UNAVAILABLE` | Word、WPS、LibreOffice 都转换失败 | 无法把文件转成 PDF，请在 Word 或 WPS 中另存为 PDF 后放入案件文件夹 |
 | `TEMPLATE_MISSING` | 需要的模板文件缺失且没有临时版式 | 缺少模板文件，请联系管理员 |
-| `ENGINE_FAILED` | 发票引擎退出码不是 0 或 2，或超时 | 发票整理未完成，请查看下方的输出信息 |
+| `ENGINE_FAILED` | 发票引擎起不来（解释器或入口缺失）、超时、识别驱动模型哈希不符（2026-10-01 改：引擎自己报失败不再用本码，走 `invoice_run` 返回的 `failed:true`） | 发票整理未完成，请查看下方的输出信息 |
+| `ENGINE_BUSY`（1.3，2026-10-01 加） | 发票引擎正在执行另一个动作，排队等待超过 2 秒 | 发票整理正在进行中，请等它完成再操作 |
 | `PLAN_NOT_CONFIRMED` | 归档方案的办案结果为空 | 请先确认办案结果 |
 
 - **编号**（`common.schema.json`）：`case_id` 为 UUID v4；`material_id` 为 `M` + 4 位序号；`task_id` 为 `T-`（Agent）或 `P-`（流水线）+ `YYYYMMDDHHMMSS` + `-` + 4 位小写十六进制；`job_id` 为 `J-` + 同样格式；wiki 事实 `F` + 4 位、wiki 建议 `S` + 4 位。
@@ -1504,4 +1505,4 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | 1.0 | 2026-09-28 | 首版 |
 | 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹；`settings.servers` 增加所外地址 `llm_alt_base_url`、`prep_alt_base_url`，`connection_test` 返回增加 `route`（2026-09-29） |
 | 1.2 | 2026-09-30 | 用户当日拍板的一批（候 owner 清单 N37、N21、N26、N28、N31、N32、N35）：①任务单改为"管到律师改掉为止"——`POST /api/task` 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 `GET /api/task/current?session_id=`；`/core/task/begin` 按当前选择新建执行中的任务；②`case_read_material` 加可选参数 `offset`、返回加 `next_offset`，单元超过 `max_chars` 时能接着读同一单元；`start`/`end` 的 Excel 编号改为整份材料连续（`formats.md` 第 2 节）；③`tasks_list` 任务项加 `coverage`、`citation_check`，并写明不列待执行的任务单；④新增 `GET /api/outputs?case_id=` 成果列表；⑤胶囊项加可缺省字段 `new`（升级新补进来的胶囊，首页据此提示"有新功能"）；⑥材料索引 `note` 枚举加"有外部链接，未重算公式"；⑦材料文本 Source 行加取值"待识别"；⑧`unit_count` 写明 cell 时为工作表个数；⑨`case_db.sql` 新增 `material_ids` 表（材料编号留底，schema_version 仍为 1）。`contract_version` 升 1.2 |
-| 1.3 | 2026-09-30 | T25 调研（线 C）发现契约与发票引擎不一致，随 T25 开工前一并改：①`invoice_run` plan 的 `history_numbers` 票号改 18–20 位（引擎 `[0-9]{18,20}`）；②`batch` 加正则 `^[A-Za-z0-9_\u4e00-\u9fff-]{1,40}$`（引擎 `[\w-]{1,80}`）；③plan 加可缺省的 `start`/`end`（YYYY-MM-DD），`channel=eml` 时必填（引擎 `period_plan` 要求邮件来源必须给起止日期）；④`cancel` 的 `apply=false` 说明：引擎不支持取消预览，服务忽略、界面先展示批次再确认。⑤`exclude` 动作加入白名单（线 C 17:34 给出引擎参数）：`{action, period, item ^[0-9a-f]{64}$, reason 1–200, reviewer 1–40, confirm: true}`，服务一律带 `--confirm`。⑥（2026-10-01）`invoice_run` 返回加 `failed`：引擎自己报失败（`[BLOCKED]` 或退出码非 0/2）时返回成功体、`failed: true`、原因在 `output`，不再用 `ENGINE_FAILED` 吞掉原因（T25 1711 注记 A）。**未纳入**：N45（出处正则允许材料名含 `〔〕`）——材料名内含括号会让出处解析二义，要先定解析规则，留待 1.4。`contract_version` 升 1.3；395 与工作台服务的 `/health` 读 `contracts\VERSION` |
+| 1.3 | 2026-09-30 | T25 调研（线 C）发现契约与发票引擎不一致，随 T25 开工前一并改：①`invoice_run` plan 的 `history_numbers` 票号改 18–20 位（引擎 `[0-9]{18,20}`）；②`batch` 加正则 `^[A-Za-z0-9_\u4e00-\u9fff-]{1,40}$`（引擎 `[\w-]{1,80}`）；③plan 加可缺省的 `start`/`end`（YYYY-MM-DD），`channel=eml` 时必填（引擎 `period_plan` 要求邮件来源必须给起止日期）；④`cancel` 的 `apply=false` 说明：引擎不支持取消预览，服务忽略、界面先展示批次再确认。⑤`exclude` 动作加入白名单（线 C 17:34 给出引擎参数）：`{action, period, item ^[0-9a-f]{64}$, reason 1–200, reviewer 1–40, confirm: true}`，服务一律带 `--confirm`。⑦（2026-10-01 T25 复核后）错误码加 `ENGINE_BUSY`（等锁超 2 秒）；`failed` 描述改为"任一行以 [BLOCKED] 开头"。⑥（2026-10-01）`invoice_run` 返回加 `failed`：引擎自己报失败（`[BLOCKED]` 或退出码非 0/2）时返回成功体、`failed: true`、原因在 `output`，不再用 `ENGINE_FAILED` 吞掉原因（T25 1711 注记 A）。**未纳入**：N45（出处正则允许材料名含 `〔〕`）——材料名内含括号会让出处解析二义，要先定解析规则，留待 1.4。`contract_version` 升 1.3；395 与工作台服务的 `/health` 读 `contracts\VERSION` |
