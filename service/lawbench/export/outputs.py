@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import threading
@@ -32,6 +33,47 @@ def _case_lock(case_id: str) -> threading.Lock:
     """成果/ 和 成果/索引.json 的读-改-写：同一案件一次一个确认。"""
     with _guard:
         return _locks.setdefault(case_id, threading.Lock())
+
+
+def read_index(root: str) -> dict:
+    p = gate.resolve_internal(root, OUTPUTS_REL, op="outputs_index")
+    if not p.is_file():
+        return {"v": 1, "outputs": []}
+    data = contracts.read_json(p)
+    contracts.validate("files/outputs_index.schema.json", "", data)
+    return data
+
+
+@contextlib.contextmanager
+def index_update(root: str, case_id: str):
+    """成果/索引.json 唯一的写入途径（确认保存、案卷归档共用）：持本案锁读出索引交给调用方，调用方往
+    outputs 里追加；块正常结束时按契约校验后原子写回，块里出错则不写。调用方在块里写的成果文件，出错时自己清。"""
+    with _case_lock(case_id):
+        index = read_index(root)
+        yield index
+        contracts.validate("files/outputs_index.schema.json", "", index)
+        gate.write_bytes(root, OUTPUTS_REL, json.dumps(index, ensure_ascii=False, indent=2).encode("utf-8"),
+                         op="outputs_index")
+
+
+def remove_outputs(root: str, paths: list[str]) -> None:
+    """索引没写成时，刚写的成果文件也不留，免得成果区和索引对不上。"""
+    for p in paths:
+        try:
+            gate.resolve_write(root, p, op="outputs_rollback").unlink(missing_ok=True)
+        except Exception as e:  # noqa: BLE001
+            logs.event("export", "rollback", status="fail", error=type(e).__name__)
+
+
+def result_passed(tasks, root: str, task_id: str) -> bool:
+    """没有出处可核的成果（修订版、归档文件）：取本任务 result.json 的核对结果（合同审查的意见稿、归档核对表
+    在同一任务里），没有算 false。"""
+    try:
+        res = tasks.result(root, task_id)
+    except Exception:  # noqa: BLE001 result.json 不在或不合契约
+        return False
+    chk = res.get("citation_check")
+    return bool(chk and chk.get("passed"))
 
 
 class Exporter:
@@ -80,11 +122,10 @@ class Exporter:
             payload["docx"] = src.read_bytes()
             passed = self._result_passed(root, d["task_id"])
 
-        with _case_lock(d["case_id"]):
-            index = self._index(root)
-            version = self._next_version(root, index, title)
-            written: list[str] = []
-            try:
+        written: list[str] = []
+        try:
+            with index_update(root, d["case_id"]) as index:
+                version = self._next_version(root, index, title)
                 for fmt in formats:
                     out = f"{OUTPUT_DIR}/{title}-v{version}.{fmt}"
                     gate.write_bytes(root, out, payload[fmt], op="outputs_confirm")
@@ -94,27 +135,11 @@ class Exporter:
                     "files": [{"format": f, "path": p} for f, p in zip(formats, written)],
                     "task_id": d["task_id"], "inputs": task["inputs"], "citation_passed": passed,
                     "confirmed_at": now_iso()})
-                contracts.validate("files/outputs_index.schema.json", "", index)
-                gate.write_bytes(root, OUTPUTS_REL, json.dumps(index, ensure_ascii=False, indent=2).encode("utf-8"),
-                                 op="outputs_confirm")
-            except Exception:
-                for p in written:                      # 索引没写成：刚导出的文件也不留，免得成果区和索引对不上
-                    try:
-                        gate.resolve_write(root, p, op="outputs_confirm").unlink(missing_ok=True)
-                    except Exception as e:  # noqa: BLE001
-                        logs.event("export", "confirm_rollback", status="fail", error=type(e).__name__)
-                raise
+        except Exception:
+            remove_outputs(root, written)
+            raise
         logs.event("export", "confirm", case_id=d["case_id"])
         return {"outputs": [{"format": f, "path": p, "version": version} for f, p in zip(formats, written)]}
-
-    @staticmethod
-    def _index(root: str) -> dict:
-        p = gate.resolve_internal(root, OUTPUTS_REL, op="outputs_confirm")
-        if not p.is_file():
-            return {"v": 1, "outputs": []}
-        data = contracts.read_json(p)
-        contracts.validate("files/outputs_index.schema.json", "", data)
-        return data
 
     @staticmethod
     def _next_version(root: str, index: dict, title: str) -> int:
@@ -135,13 +160,7 @@ class Exporter:
         return bool(check["passed"])
 
     def _result_passed(self, root: str, task_id: str) -> bool:
-        """Word 草稿（修订版）没有出处可核：取本任务 result.json 的核对结果（合同审查的意见稿在同一任务里），没有算 false。"""
-        try:
-            res = self.tasks.result(root, task_id)
-        except Exception:  # noqa: BLE001 result.json 不在或不合契约
-            return False
-        chk = res.get("citation_check")
-        return bool(chk and chk.get("passed"))
+        return result_passed(self.tasks, root, task_id)
 
     # ================================================================ 修订版
 

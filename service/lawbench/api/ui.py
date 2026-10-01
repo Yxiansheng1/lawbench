@@ -137,6 +137,9 @@ def routes(st) -> list[Route]:
     def redline(d: dict) -> dict:
         return st.exporter.redline(d)
 
+    def archive_build(d: dict) -> dict:
+        return st.archive.build(d)
+
     def ocr_submit(d: dict) -> dict:
         return st.ocr.submit(d)
 
@@ -165,6 +168,7 @@ def routes(st) -> list[Route]:
         Route("/api/outputs", E("outputs_list", outputs_list, query=True), methods=["GET"]),
         Route("/api/outputs/confirm", E("outputs_confirm", outputs_confirm), methods=["POST"]),
         Route("/api/redline", E("redline", redline), methods=["POST"]),
+        Route("/api/archive/build", E("archive_build", archive_build), methods=["POST"]),
         Route("/api/search", E("search", search, query=True), methods=["GET"]),
         Route("/api/pipeline/run", E("pipeline_run", pipeline_run), methods=["POST"]),
         Route("/api/pipeline/{task_id}", E("pipeline_status", pipeline_status, query=True), methods=["GET"]),

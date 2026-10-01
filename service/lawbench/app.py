@@ -15,6 +15,7 @@ from starlette.routing import Route
 
 from . import contracts, logs
 from .api import core, ui
+from .archive.build import ArchiveBuilder
 from .capsules import CapsuleStore
 from .case.materials import Materials
 from .export.outputs import Exporter
@@ -59,6 +60,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
     st.invoice = InvoiceRunner(st.settings, config.appdata)
     st.retainer = RetainerDriver()
+    st.archive = ArchiveBuilder(st.cases, st.tasks, st.materials, st.settings, config.skills_dirs, lo_base)  # T23
     st.exporter = Exporter(st.cases, st.tasks, st.materials, st.settings, config.skills_dirs)  # 确认保存、修订版（T15）
     try:
         servers = st.settings.get()["servers"]
