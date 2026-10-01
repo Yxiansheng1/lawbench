@@ -140,8 +140,17 @@ class Net:
         self._routes: dict[str, tuple[str, str, float]] = {}
         self._servers: dict = {}
         self.update(servers)
+        self._transport = transport
         self.client = httpx.Client(
             follow_redirects=False, trust_env=False, transport=transport,
+            timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),
+            event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
+
+    def own_client(self) -> httpx.Client:
+        """单独的一个 client（钩子、超时与 self.client 相同）：流水线每次请求用一个，取消时整个关掉以断开连接
+        （T16 返修 P2-1）。没有注入 transport 时各用各的连接池，关掉它不影响 self.client。"""
+        return httpx.Client(
+            follow_redirects=False, trust_env=False, transport=self._transport,
             timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),
             event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
 

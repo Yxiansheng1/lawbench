@@ -7,6 +7,7 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 
 import httpx
 import pytest
@@ -53,6 +54,17 @@ class Fake6000D:
         self.extract: list[dict] = []
         self.card_cut = 0                     # 卡片这一步前几次回"被截断"（finish_reason=length）
         self.stubborn = False                 # 修改轮原样交回句子（大卷宗实测出现过）
+        self.fix_wrong = False                # 修改轮每次都换一个错的行号（看修改轮上限）
+        self.header_delay = 0.0               # 摘要调用迟迟不回响应头（6000D 排队），秒
+        self.prep_delay = 0.0                 # 假 395 迟迟不回，秒
+        self.card_len_valid = 0               # 卡片前几次回合法 JSON 但 finish_reason=length
+        self.raise_exc = None                 # 摘要调用抛这个网络异常
+        self.primary_down = False             # 所内地址探测不通
+        self.prep_dup, self.prep_bad = 1, 0   # 假 395 mix 模式：真字段重复几遍、另加几个对不上的
+        self.slow = 0.0                       # 每次调用耗时（看同时在途的请求数）
+        self.on_summary = None                # 每次摘要调用时回调（注入时钟用）
+        self.inflight = self.max_inflight = 0
+        self.queue_ms = 7
         self._lock = threading.Lock()
 
     def step_of(self, system: str) -> str:
@@ -60,6 +72,8 @@ class Fake6000D:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/models"):
+            if self.primary_down and request.url.host == "192.168.8.77":
+                return httpx.Response(503)
             return httpx.Response(200, json={"data": [{"id": "qwen38-27b"}]})
         if request.url.path == "/health":
             return httpx.Response(200, json={"status": "ok"})
@@ -69,22 +83,47 @@ class Fake6000D:
         system, user = body["messages"][0]["content"], body["messages"][1]["content"]
         step = self.step_of(system)
         with self._lock:
-            self.requests.append({"step": step, "body": body, "headers": dict(request.headers), "user": user})
+            self.requests.append({"step": step, "body": body, "headers": dict(request.headers), "user": user,
+                                  "host": request.url.host})
+            self.inflight += 1
+            self.max_inflight = max(self.max_inflight, self.inflight)
+        try:
+            return self._answer(step, user, request)
+        finally:
+            with self._lock:
+                self.inflight -= 1
+
+    def _answer(self, step: str, user: str, request: httpx.Request) -> httpx.Response:
+        if self.slow:
+            time.sleep(self.slow)
         if self.status != 200:
             return httpx.Response(self.status, json={"error": "x"})
+        if step == "材料摘要":
+            if self.on_summary is not None:
+                self.on_summary()
+            if self.raise_exc is not None:
+                raise self.raise_exc("x", request=request)
+            if self.header_delay:
+                time.sleep(self.header_delay)
         if step == "材料摘要" and self.block is not None:
             self.block.wait(10)
+        if step == "案件卡片" and self.card_len_valid > 0:
+            self.card_len_valid -= 1
+            return httpx.Response(200, headers={"content-type": "text/event-stream"},
+                                  content=sse(self.answer(step, user), finish="length"))
         if step == "案件卡片" and self.card_cut > 0:
             self.card_cut -= 1
             return httpx.Response(200, headers={"content-type": "text/event-stream"},
                                   content=sse('{"case_type": "civil", "parties": [{"text": "王', finish="length"))
-        return httpx.Response(200, headers={"content-type": "text/event-stream", "x-queue-wait-ms": "7"},
+        return httpx.Response(200, headers={"content-type": "text/event-stream", "x-queue-wait-ms": str(self.queue_ms)},
                               content=sse(self.answer(step, user)))
 
     def prep(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         with self._lock:
             self.extract.append({"body": body, "headers": dict(request.headers)})
+        if self.prep_delay:
+            time.sleep(self.prep_delay)
         if self.prep_mode == "down":
             return httpx.Response(503, json={"error": {"code": "QUEUE_FULL", "message": "满"}})
         if body["task"] == "classify":
@@ -92,8 +131,11 @@ class Fake6000D:
         out = []
         for n, t in re.findall(r"【第(\d+)行】(.+)", body["text"]):
             for v in re.findall(r"\d[\d,]*元|\d{4}年\d+月\d+日", t):
-                out.append({"field": "金额" if v.endswith("元") else "日期",
-                            "value": v if self.prep_mode == "good" else v.replace("0", "9"), "loc": f"第{n}行"})
+                f = {"field": "金额" if v.endswith("元") else "日期",
+                     "value": v if self.prep_mode in ("good", "mix") else v.replace("0", "9"), "loc": f"第{n}行"}
+                out += [f] * (self.prep_dup if self.prep_mode == "mix" else 1)
+        if self.prep_mode == "mix" and out:
+            out += [dict(out[0], value="对不上的值")] * self.prep_bad
         return httpx.Response(200, json={"task": "fields", "result": out, "elapsed_ms": 9})
 
     def answer(self, step: str, user: str) -> str:
@@ -108,7 +150,10 @@ class Fake6000D:
         if step == "修改":
             out = []
             for n, line in re.findall(r"^(\d+)\. (.+)$", user, re.M):
-                out.append(f"{n}. " + (line if self.stubborn else re.sub(r"〔[^〔〕]*〕", "〔推断〕", line)))
+                if self.fix_wrong:          # 每轮换一个仍然错的行号：内容有变化、问题还在
+                    line = re.sub(r"第(\d+)行〕", lambda m: f"第{int(m.group(1)) + 1}行〕", line)
+                out.append(f"{n}. " + (line if self.stubborn or self.fix_wrong
+                                       else re.sub(r"〔[^〔〕]*〕", "〔推断〕", line)))
             return "\n".join(out)
         if step == "案件卡片":
             cite = re.search(r"〔[^〔〕]+ 第\d+行〕", user)
@@ -201,7 +246,7 @@ def test_build(world):
     assert wiki_file(w, "index.md").startswith("# 案件 wiki 目录") and tid in wiki_file(w, "log.md")
     task = task_json(w, tid, "task.json")
     assert task["kind"] == "pipeline" and task["state"] == "finished" and task["step"] == "wiki_build"
-    assert task["budget"]["model_calls"] == budget_calls(2, 5)        # 两份非表格材料各 1 段、四篇 + 卡片
+    assert task["budget"]["model_calls"] == 2 * 3 + 5 * 3 + 10 == 31     # 两份非表格材料各 1 段、四篇 + 卡片（P3-3：期望值不用同一函数算）
     res = task_json(w, tid, "result.json")
     assert not contracts.errors("files/result.schema.json", "", res)
     assert res["status"] == "completed" and res["citation_check"]["passed"] is True
@@ -430,6 +475,8 @@ def test_prompts_file_has_fixed_steps():
     from lawbench.pipeline.prompts import Prompts
     p = Prompts.load([REPO_ROOT / "skills"], "case-wiki-build", wiki.REQUIRED_STEPS)
     assert set(wiki.REQUIRED_STEPS) <= set(p.sections)
+    # P3-5：表格行不到 60% 的材料仍交模型，实测版"流水只列 ①–⑤ 类行"的规则保留作兜底
+    assert "① 户名、账号、查询期间" in p.system("材料摘要") and "通话详单只写机主" in p.system("材料摘要")
 
 
 def test_ranges_and_failed_reason(world):
@@ -585,3 +632,395 @@ def test_settle_per_class():
     assert out[1] == "- 借款90,000元〔未找到依据〕，3月12日陈美华转账100,000.00〔流水 第2页〕"
     assert out[2] == "- 周立新显然知情〔流水 第2页〕"                         # G 程序改不了
     assert [p["class"] for _, _, ps in r.problem_lines("\n".join(out)) for p in ps] == ["G"]
+
+
+# ---------- T16 返修（执行令 20261001-2147） ----------
+
+def _wait_done(w, tid, limit):
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < limit:
+        if w["st"].pipelines.status(tid)["status"] != "running":
+            return time.monotonic() - t0
+        time.sleep(0.05)
+    return None
+
+
+def _cancel_after_1s(w, tid):
+    time.sleep(1)
+    ok(w["client"].post(f"/api/pipeline/{tid}/cancel", json={}), "api/pipeline_cancel.schema.json")
+    return _wait_done(w, tid, 10)
+
+
+def test_cancel_while_waiting_headers(world):
+    """P2-1：6000D 排队时迟迟不回响应头（假服务 30 秒），第 1 秒取消，10 秒内结束、状态 cancelled。"""
+    w = world
+    w["fake"].header_delay = 30
+    tid = start(w)
+    took = _cancel_after_1s(w, tid)
+    assert took is not None and took < 10
+    w["st"].pipelines.wait(tid, 10)
+    assert finish(w, tid)["status"] == "cancelled" and task_json(w, tid, "result.json")["status"] == "cancelled"
+
+
+def test_cancel_during_395(world):
+    """P2-1：395 阶段也看取消标志（假 395 30 秒不回）。"""
+    w = world
+    w["fake"].prep_delay = 30
+    tid = start(w, use_prep=True)
+    took = _cancel_after_1s(w, tid)
+    assert took is not None and took < 10
+    w["st"].pipelines.wait(tid, 10)
+    assert finish(w, tid)["status"] == "cancelled" and not w["fake"].requests
+
+
+def test_cancel_closes_connection():
+    """P2-1：真套接字——响应头一直不来，取消后很快抛 Cancelled，服务端看到连接断开（网关据此记 499）。"""
+    import socket
+    from lawbench.net import Net
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen()
+    port = srv.getsockname()[1]
+    closed = threading.Event()
+
+    def handle(c):
+        buf = b""
+        try:
+            while True:
+                while b"\r\n\r\n" not in buf:
+                    got = c.recv(65536)
+                    if not got:
+                        return
+                    buf += got
+                head, buf = buf.split(b"\r\n\r\n", 1)
+                if head.startswith(b"GET"):
+                    c.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}")
+                    continue
+                c.settimeout(20)
+                while c.recv(65536):                 # 不回响应头，等客户端断开
+                    pass
+                closed.set()
+                return
+        except OSError:
+            closed.set()
+        finally:
+            c.close()
+
+    def serve():
+        while True:
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                return
+            threading.Thread(target=handle, args=(c,), daemon=True).start()
+
+    threading.Thread(target=serve, daemon=True).start()
+    url = f"http://127.0.0.1:{port}/v1"
+    net = Net({"llm_base_url": url, "llm_alt_base_url": None, "prep_base_url": url, "prep_alt_base_url": None})
+    cancel = threading.Event()
+    box = {}
+
+    def go():
+        t0 = time.monotonic()
+        try:
+            llm_mod.LLM(net, lambda: KEY, cancel).chat("s", "u", PARAMS, "P-20260101000000-abcd")
+        except BaseException as e:  # noqa: BLE001
+            box["e"], box["t"] = e, time.monotonic() - t0
+
+    t = threading.Thread(target=go)
+    t.start()
+    time.sleep(1)
+    cancel.set()
+    t.join(5)
+    srv.close()
+    assert isinstance(box.get("e"), llm_mod.Cancelled) and box["t"] < 3
+    assert closed.wait(5)
+
+
+def test_same_case_started_twice_at_once(world, monkeypatch):
+    """P2-3：同一案件两个请求同时到（建任务前放慢一点），只起一个任务、两个请求拿到同一个编号。"""
+    w = world
+    orig = wiki.load_materials
+    monkeypatch.setattr(wiki, "load_materials", lambda *a, **k: (time.sleep(0.3), orig(*a, **k))[1])
+    d = {"case_id": w["cid"], "step": "wiki_build", "use_prep": False, "params": PARAMS}
+    gate_ = threading.Barrier(2)
+    got = []
+
+    def one():
+        gate_.wait()
+        got.append(w["st"].pipelines.run(dict(d))["task_id"])
+
+    ts = [threading.Thread(target=one) for _ in range(2)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(10)
+    assert len(got) == 2 and got[0] == got[1]
+    finish(w, got[0])
+    assert [p.name for p in (w["root"] / "工作区" / "任务").iterdir() if p.name.startswith("P-")] == [got[0]]
+
+
+def test_dirs_made_before_parallel_steps(world):
+    """P2-2：第一次调模型之前，wiki 的 材料/、案件/ 和任务的 草稿/ 都已建好（两路并行第一次建目录时闸门偶发误判）。"""
+    w = world
+    seen = []
+
+    def look():
+        base = w["root"] / "工作区"
+        seen.append(((base / "wiki" / "案件").is_dir(), (base / "wiki" / "材料").is_dir(),
+                     any((t / "草稿").is_dir() for t in (base / "任务").iterdir())))
+
+    w["fake"].on_summary = look
+    assert finish(w, start(w))["status"] == "completed"
+    assert seen and all(x == (True, True, True) for x in seen)
+
+
+def _small_chunks(monkeypatch):
+    orig = wiki.chunk
+    monkeypatch.setattr(wiki, "chunk", lambda m, limit=wiki.CHUNK_CHARS: orig(m, 20))   # 借条 4 段、说明 2 段
+
+
+def _row(w, name):
+    return next(ln for ln in wiki_file(w, "案件/材料清单.md").splitlines() if ln.startswith(f"| {name} |"))
+
+
+def test_stop_keeps_complete_page(world, monkeypatch):
+    """P2-4：已有完整摘要页时，停下不覆盖；半份存任务草稿；清单写"保留上次的摘要页"。"""
+    w = world
+    _small_chunks(monkeypatch)
+    finish(w, start(w))
+    mid = index(w)["借条"]["material_id"]
+    before = wiki_file(w, f"材料/{mid}.md")
+    monkeypatch.setattr("lawbench.pipeline.budget_calls", lambda s, a: 1)
+    tid = start(w)
+    assert finish(w, tid)["status"] == "budget_stopped"
+    assert wiki_file(w, f"材料/{mid}.md") == before
+    drafts = [p.name for p in (w["root"] / "工作区" / "任务" / tid / "草稿").iterdir()]
+    assert drafts == [f"材料摘要 {mid} 部分（1 段，共 4 段）-v1.md"]
+    assert "| 是 |" in _row(w, "借条") and "保留上次的摘要页" in _row(w, "借条")
+
+
+def test_stop_without_old_page_writes_part(world, monkeypatch):
+    """P2-4：没有旧页时写半份，页首和材料清单都写"部分（k/n 段）"；一段没写的写"运行中止，未生成"。"""
+    w = world
+    _small_chunks(monkeypatch)
+    monkeypatch.setattr("lawbench.pipeline.budget_calls", lambda s, a: 1)
+    tid = start(w)
+    assert finish(w, tid)["status"] == "budget_stopped"
+    page = wiki_file(w, f"材料/{index(w)['借条']['material_id']}.md")
+    assert page.splitlines()[1] == f"{wiki.PARTIAL_HEAD}部分（1/4 段），运行中止，没有读完"
+    assert "| 部分（1/4 段） |" in _row(w, "借条") and _row(w, "说明").endswith("| **否** | 运行中止，未生成 |")
+    assert "已读 1 份" in wiki_file(w, "案件/材料清单.md")          # 只有程序筛选的流水算读完
+
+
+def test_run_record_has_no_text(world):
+    """P3-1：运行记录的对象写材料编号，修改记录不写原句（兜底也只记行号和做法）。"""
+    w = world
+    w["fake"].wrong_first_summary = True
+    w["fake"].stubborn = True
+    tid = start(w)
+    finish(w, tid)
+    raw = (w["root"] / "工作区" / "任务" / tid / "运行记录.json").read_text(encoding="utf-8")
+    rec = json.loads(raw)
+    assert any(f["轮次"] == "程序兜底" for f in rec["修改记录"])
+    for s in ("借条", "说明", "80,000", "王某", "〔"):
+        assert s not in raw, s
+    assert any(re.fullmatch(r"M\d{4}#1", c["对象"]) for c in rec["调用"])
+
+
+def test_two_cases_share_two_slots(world, tmp_path):
+    """P3-2：两个案件同时跑，同时在途的 6000D 请求不超过 2 个（Spec 8.5 每位律师 2 路）。"""
+    w = world
+    root2 = tmp_path / "案件二"
+    root2.mkdir()
+    for n, t in CASE.items():
+        (root2 / n).write_text(t, encoding="utf-8")
+    cid2 = ok(w["client"].post("/api/case/open", json={"path": str(root2)}), "api/case_open.schema.json")["case_id"]
+    ok(w["client"].post("/api/materials/scan", json={"case_id": cid2}), "api/materials_scan.schema.json")
+    w["fake"].slow = 0.15
+    a = start(w)
+    b = ok(w["client"].post("/api/pipeline/run", json={"case_id": cid2, "step": "wiki_build", "use_prep": False,
+                                                       "params": PARAMS}), "api/pipeline_run.schema.json")["task_id"]
+    assert finish(w, a)["status"] == "completed" and finish(w, b)["status"] == "completed"
+    assert w["fake"].max_inflight == 2
+
+
+def test_fix_rounds_at_most_two(world):
+    """P3-3：修改后内容有变化但问题还在：最多 2 轮。"""
+    w = world
+    w["fake"].wrong_first_summary = True
+    w["fake"].fix_wrong = True
+    finish(w, start(w))
+    assert sum(r["step"] == "修改" for r in w["fake"].requests) == 2
+
+
+def test_fix_stops_when_unchanged(world):
+    """P3-3：修改轮原样交回：第 1 轮后就停。"""
+    w = world
+    w["fake"].wrong_first_summary = True
+    w["fake"].stubborn = True
+    finish(w, start(w))
+    assert sum(r["step"] == "修改" for r in w["fake"].requests) == 1
+
+
+def _jump_clock(w):
+    off = [0.0]
+    w["st"].pipelines.clock = lambda: time.monotonic() + off[0]
+    w["fake"].on_summary = lambda: off.__setitem__(0, 46 * 60)        # 第一次摘要调用时时钟跳过 46 分钟
+    return off
+
+
+def test_minutes_limit(world):
+    """P3-3：45 分钟上限（注入时钟）：到了就停在下一次调用前，状态 budget_stopped。"""
+    w = world
+    _jump_clock(w)
+    tid = start(w)
+    assert finish(w, tid)["status"] == "budget_stopped"
+    assert len(w["fake"].requests) <= 2
+
+
+def test_queue_wait_not_counted(world):
+    """P3-3：排队时间不算进 45 分钟：时钟跳过 46 分钟、但每次都排队 46 分钟，照常完成。"""
+    w = world
+    _jump_clock(w)
+    w["fake"].queue_ms = 46 * 60 * 1000
+    assert finish(w, start(w))["status"] == "completed"
+
+
+def test_llm_goes_through_net_selection(world):
+    """P3-3：6000D 地址由 Net 选：所内探测不通时走所外。"""
+    w = world
+    w["fake"].primary_down = True
+    assert finish(w, start(w))["status"] == "completed"
+    assert w["fake"].requests and {r["host"] for r in w["fake"].requests} == {"10.126.126.1"}
+
+
+def test_lawyer_confirmed_and_stance_kept(world):
+    """P3-3：律师确认的条目和本方立场在重新生成后保留。"""
+    w = world
+    finish(w, start(w))
+    p = w["root"] / "工作区" / "wiki" / "case.json"
+    card = json.loads(p.read_text(encoding="utf-8"))
+    card["stance"] = {"text": "主张已部分还款", "set_at": card["generated_at"]}
+    card["key_facts"][0].update(text="律师核实：借款80,000元", status="lawyer_confirmed")
+    assert not contracts.errors("files/case_card.schema.json", "", card)
+    p.write_text(json.dumps(card, ensure_ascii=False), encoding="utf-8")
+    assert finish(w, start(w))["status"] == "completed"
+    new = json.loads(p.read_text(encoding="utf-8"))
+    assert new["stance"] == card["stance"]
+    assert [f["text"] for f in new["key_facts"] if f["status"] == "lawyer_confirmed"] == ["律师核实：借款80,000元"]
+
+
+@pytest.mark.parametrize("dup,bad,used", [(3, 2, False), (17, 6, True)])
+def test_prep_threshold_boundary(world, dup, bad, used):
+    """P3-3：9B 字段核对不过 25%（高于 20%）整体跳过，15% 照用。"""
+    w = world
+    w["fake"].prep_mode, w["fake"].prep_dup, w["fake"].prep_bad = "mix", dup, bad
+    tid = start(w, use_prep=True)
+    assert finish(w, tid)["status"] == "completed"
+    rec = task_json(w, tid, "运行记录.json")["395"]
+    assert rec["核对不过"] / rec["字段"] == (0.25 if not used else 0.15)
+    assert (rec["提示"] is None) == used
+    assert any("395 抽取的参考字段" in r["user"] for r in w["fake"].requests) == used
+
+
+def test_update_reruns_missing_or_partial_pages(world):
+    """P3-3：更新时，没有摘要页的、摘要页只有部分的材料也重跑（sha 没变）。"""
+    w = world
+    finish(w, start(w))
+    mats = index(w)
+    (w["root"] / "工作区" / "wiki" / "材料" / f"{mats['借条']['material_id']}.md").unlink()
+    p = w["root"] / "工作区" / "wiki" / "材料" / f"{mats['说明']['material_id']}.md"
+    p.write_text(f"# 说明\n{wiki.PARTIAL_HEAD}部分（1/2 段），运行中止，没有读完\n\n## 摘要\n\n- 半份\n", encoding="utf-8")
+    n0 = len(w["fake"].requests)
+    assert finish(w, start(w, "wiki_update"))["status"] == "completed"
+    got = sorted(r["user"].split("\n", 1)[0] for r in w["fake"].requests[n0:] if r["step"] == "材料摘要")
+    assert got == ["材料名：借条", "材料名：说明"]
+
+
+def test_card_length_finish_not_success(world):
+    """P3-3：卡片 finish_reason=length 即使 JSON 能解析也不算成功，重试。"""
+    w = world
+    w["fake"].card_len_valid = 1
+    assert finish(w, start(w))["status"] == "completed"
+    assert sum(r["step"] == "案件卡片" for r in w["fake"].requests) == 2
+
+
+def test_status_checks_task_kind(world):
+    """P3-3：status、cancel 只认流水线任务。"""
+    from lawbench.errors import ApiError
+    w = world
+    tid = ok(w["client"].post("/core/task/begin", json={"session_id": "s-t16k", "cwd": str(w["root"])}),
+             "core/task_begin.schema.json")["task_id"]
+    for fn in (w["st"].pipelines.status, w["st"].pipelines.cancel):
+        with pytest.raises(ApiError) as e:
+            fn(tid)
+        assert e.value.code == "TASK_NOT_FOUND"
+
+
+def test_consecutive_lawyer_blocks_keep_order():
+    """P3-4：连续几块整组放回，顺序不变。"""
+    def blk(x):
+        return f"<!-- 律师修改 -->\n{x}\n<!-- /律师修改 -->"
+    old = f"# 标题\n\n第一行\n{blk('一')}\n{blk('二')}\n\n{blk('三')}\n第二行\n"
+    blocks = wiki.take_lawyer_blocks(old)
+    assert len(blocks) == 1 and blocks[0][0] == "第一行"
+    out = wiki.put_lawyer_blocks("# 标题\n\n第一行\n新内容", blocks)
+    assert out.index("一") < out.index("二") < out.index("三") < out.index("新内容")
+    two = [("第一行", blk("甲")), ("第一行", blk("乙"))]      # 不同组落在同一位置（锚点相同）也按原来的先后
+    out = wiki.put_lawyer_blocks("第一行\n尾", two)
+    assert out.index("甲") < out.index("乙") < out.index("尾")
+
+
+def test_window_exceeded_fails_before_sending(world):
+    """P3-6：系统提示 + 输入 + max_tokens 超过窗口：不发，整次 failed、错误 CONTEXT_TOO_LONG。"""
+    w = world
+    params = {"thinking": "关闭", "window": "32K", "max_tokens": 32768}
+    tid = ok(w["client"].post("/api/pipeline/run", json={"case_id": w["cid"], "step": "wiki_build", "use_prep": False,
+                                                         "params": params}), "api/pipeline_run.schema.json")["task_id"]
+    assert finish(w, tid)["status"] == "failed"
+    assert task_json(w, tid, "运行记录.json")["错误"] == "CONTEXT_TOO_LONG" and not w["fake"].requests
+
+
+def test_bad_old_card_not_overwritten(world):
+    """P3-7：旧 case.json 不合契约：不覆盖、整次报错，不发任何请求。"""
+    w = world
+    p = w["root"] / "工作区" / "wiki" / "case.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    bad = '{"v": 1, "stance": {"text": "律师写的立场"}}'
+    p.write_text(bad, encoding="utf-8")
+    tid = start(w)
+    assert finish(w, tid)["status"] == "failed"
+    assert task_json(w, tid, "运行记录.json")["错误"] == "INVALID_ARGUMENT" and not w["fake"].requests
+    assert p.read_text(encoding="utf-8") == bad
+
+
+def test_index_lawyer_block_kept(world):
+    """NOTE：目录 index.md 也保护律师修改块。"""
+    w = world
+    finish(w, start(w))
+    p = w["root"] / "工作区" / "wiki" / "index.md"
+    block = "<!-- 律师修改 -->\n备注\n<!-- /律师修改 -->"
+    p.write_text(p.read_text(encoding="utf-8").replace("## 材料\n", "## 材料\n" + block + "\n"), encoding="utf-8")
+    finish(w, start(w))
+    assert block in p.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("exc,code", [(httpx.RemoteProtocolError, "SERVER_UNREACHABLE"), (httpx.ReadTimeout, "TIMEOUT")])
+def test_network_errors_mapped(world, exc, code):
+    """NOTE：网络异常按 Spec 8.3 的错误码记，不记异常类名。"""
+    w = world
+    w["fake"].raise_exc = exc
+    tid = start(w)
+    assert finish(w, tid)["status"] == "failed"
+    assert task_json(w, tid, "运行记录.json")["错误"] == code
+
+
+def test_key_invalid_stops_other_segments(world, monkeypatch):
+    """NOTE：某段报 401 后，排着的其余段不再发出（只有并行的 2 路）。"""
+    w = world
+    _small_chunks(monkeypatch)
+    w["fake"].status = 401
+    tid = start(w)
+    assert finish(w, tid)["status"] == "failed"
+    assert len(w["fake"].requests) <= 2

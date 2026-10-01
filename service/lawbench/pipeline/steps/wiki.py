@@ -10,10 +10,14 @@
 - 摘要步骤里模型的出处只写位置（〔第N页〕），程序补成〔材料名 第N页〕再核对（wiki 测试的写法，实测稳定）。
 - 表格类材料（以 | 开头的行占 60% 以上，Excel 一律算）：按 Skill 目录的 `表格筛选.json` 列出部分行，其余计数；
   摘要页第二行写"> 筛选条件：…；已列出 X 行 / 共 Y 行"，材料清单里注明"摘要为筛选结果，非全量"。
-- 律师修改块：`<!-- 律师修改 -->` 到 `<!-- /律师修改 -->` 之间的内容先取出，写新文件时放回原位置（按块前一行定位）；
-  原位置不在了放到文末，并加 `> **Status: 待律师核对**`。
+- 律师修改块：`<!-- 律师修改 -->` 到 `<!-- /律师修改 -->` 之间的内容先取出，写新文件时放回原位置（按块前一行定位；
+  紧挨着的几块算一组，整组放回，顺序不变）；原位置不在了放到文末，并加 `> **Status: 待律师核对**`。目录 index.md 也保护。
 - 更新（wiki_update）：只重跑新增或变化材料的摘要页（与 case.json 的 materials_at_generation 比 sha256），
-  不在了的材料删掉摘要页；再重写四篇、卡片、清单、目录、日志。
+  没有摘要页或摘要页只有部分的也重跑；不在了的材料删掉摘要页；再重写四篇、卡片、清单、目录、日志。
+- 中途停下（取消、到预算、出错，T16 返修 P2-4）：已有完整摘要页的不覆盖，半份存进任务的 草稿/；没有旧页的才写半份，
+  页首注明"部分（k/n 段）"，材料清单那一行也写"部分（k/n 段）"。
+- 旧 case.json 不合契约（律师手改坏了）：不覆盖，整次报错，免得静默丢掉本方立场和律师确认的条目（P3-7）。
+- 开跑前先建好 材料/、案件/ 和任务的 草稿/（两路并行第一次建目录时，路径闸门偶发误判越界，P2-2）。
 """
 from __future__ import annotations
 
@@ -26,6 +30,7 @@ from ... import checks, contracts
 from ...case import gate, texts
 from ...checks.parse import citation_re, find_cites
 from ...errors import ApiError
+from ...tools.drafts import _WIKI_LOCK
 from ..runner import Runner
 
 WIKI = "工作区/wiki"
@@ -38,6 +43,7 @@ DEFAULT_FILTER = {"amount_min": 10000, "cash_words": ["取现", "现金"], "pers
 LAWYER_OPEN, LAWYER_CLOSE = "<!-- 律师修改 -->", "<!-- /律师修改 -->"
 _LAWYER = re.compile(re.escape(LAWYER_OPEN) + r".*?" + re.escape(LAWYER_CLOSE), re.S)
 _SHORT = re.compile(r"〔(第[^〔〕]*)〕")
+PARTIAL_HEAD = "> 部分摘要："
 RETRY_CARD = ("\n\n【注意】上一次输出过长被截断或不是合法 JSON。请精简：每条 text 不超过 60 字，每条最多 2 个出处，"
               "parties 不超过 20 条，issues 不超过 10 条，key_facts 不超过 15 条；只输出 JSON。")
 ORG_WORDS = ("公司", "超市", "店", "站", "中心", "局", "行", "美团", "拼多多", "物业", "移动", "药房",
@@ -269,24 +275,36 @@ def filter_note(rule: dict) -> str:
 # ---------- 律师修改块 ----------
 
 def take_lawyer_blocks(old: str) -> list[tuple[str | None, str]]:
-    """[(块前一行非空文字, 块全文)]。"""
-    out = []
+    """[(块前一行非空文字, 块全文)]。中间只隔空白的几块算一组（P3-4），整组按第一块的位置放回。"""
+    out: list[tuple[str | None, str]] = []
+    end = None
     for m in _LAWYER.finditer(old):
-        before = [ln for ln in old[:m.start()].splitlines() if ln.strip()]
-        out.append((before[-1].strip() if before else None, m.group(0)))
+        if out and end is not None and not old[end:m.start()].strip():
+            anchor, block = out[-1]
+            out[-1] = (anchor, block + old[end:m.start()] + m.group(0))
+        else:
+            before = [ln for ln in old[:m.start()].splitlines() if ln.strip()]
+            out.append((before[-1].strip() if before else None, m.group(0)))
+        end = m.end()
     return out
 
 
 def put_lawyer_blocks(new: str, blocks: list[tuple[str | None, str]]) -> str:
     lines = new.splitlines()
     tail = []
+    after: dict[int, list[str]] = {}
     for anchor, block in blocks:
         idx = next((i for i, ln in enumerate(lines) if anchor is not None and ln.strip() == anchor), None)
         if idx is None:
             tail.append(block)
         else:
-            lines[idx + 1:idx + 1] = block.splitlines()
-    text = "\n".join(lines)
+            after.setdefault(idx, []).append(block)      # 同一位置的几组按原来的先后放
+    out = []
+    for i, ln in enumerate(lines):
+        out.append(ln)
+        for block in after.get(i, []):
+            out += block.splitlines()
+    text = "\n".join(out)
     if tail:
         text = text.rstrip("\n") + "\n\n> **Status: 待律师核对**\n\n" + "\n\n".join(tail)
     return text
@@ -340,17 +358,18 @@ class WikiRun:
             contracts.validate("files/case_card.schema.json", "", data)
             return data
         except (ValueError, contracts.ContractError):
-            return None
+            raise ApiError("INVALID_ARGUMENT", "case_card_invalid") from None
 
     # ---- 主流程 ----
 
     def run(self) -> None:
         mats, skipped = load_materials(self.root, self.index)
         card = self.old_card()
+        for rel in (f"{WIKI}/材料", f"{WIKI}/案件", self.tasks.rel(self.task_id, "草稿")):
+            gate.mkdir_work(self.root, rel, op="pipeline")
         before = {x["material_id"]: x["sha256"] for x in (card or {}).get("materials_at_generation", [])}
         if self.step == "wiki_update" and card is not None:
-            redo = [m for m in mats if before.get(m.mid) != m.meta["sha256"]
-                    or self._read(f"{WIKI}/材料/{m.mid}.md") is None]
+            redo = [m for m in mats if before.get(m.mid) != m.meta["sha256"] or not self._complete_page(m)]
         else:
             redo = list(mats)
         keep = [m for m in mats if m not in redo]
@@ -381,23 +400,35 @@ class WikiRun:
             results, stop = getattr(e, "partial", None), e
             if results is None:
                 raise
+        kept_old: set[str] = set()
         for m in redo:
             if m.table:
                 continue
             parts = [res for (mm, _, _), res in zip(items, results) if mm is m and res is not None]
-            if len(parts) < len(m.chunks):
-                partial[m.mid] = f"部分（{len(parts)}/{len(m.chunks)} 段）"
-            if parts:
+            if len(parts) == len(m.chunks):
                 summaries[m.mid] = "\n".join(parts)
                 self._write_material(m, summaries[m.mid], None)
+                continue
+            k_n = f"部分（{len(parts)}/{len(m.chunks)} 段）"
+            if self._complete_page(m):
+                # 停下时不覆盖已有的完整页（主编排定，P2-4）：半份存任务草稿，清单仍按旧页算已读
+                if parts:      # 标题进文件名，不能带"/"
+                    self._draft(f"材料摘要 {m.mid} 部分（{len(parts)} 段，共 {len(m.chunks)} 段）", "\n".join(parts))
+                summaries[m.mid] = self._existing_summary(m)
+                kept_old.add(m.mid)
+            elif parts:
+                summaries[m.mid] = "\n".join(parts)
+                partial[m.mid] = k_n
+                self._write_material(m, summaries[m.mid], f"{PARTIAL_HEAD}{k_n}，运行中止，没有读完")
         if stop is not None:
+            self._inventory(mats, skipped, summaries, partial, kept_old, stopped=True)
             raise stop
         removed = [mid for mid in before if mid not in {m.mid for m in mats}]
         for mid in removed:
             gate.delete_work_file(self.root, f"{WIKI}/材料/{mid}.md", op="pipeline")
 
         # 2 材料清单（程序）
-        inventory = self._inventory(mats, skipped, summaries, partial)
+        inventory = self._inventory(mats, skipped, summaries, partial, kept_old)
         p.step_index += 1
 
         # 3 四篇
@@ -413,6 +444,10 @@ class WikiRun:
         # 5 目录、日志
         self._index_and_log(mats, summaries, inventory)
         p.step_index += 1
+
+    def _complete_page(self, m: Mat) -> bool:
+        text = self._read(f"{WIKI}/材料/{m.mid}.md")
+        return text is not None and PARTIAL_HEAD not in "\n".join(text.splitlines()[:3])
 
     def _existing_summary(self, m: Mat) -> str:
         text = self._read(f"{WIKI}/材料/{m.mid}.md") or ""
@@ -432,7 +467,7 @@ class WikiRun:
         if refs:
             header += (f"\n395 分类：{self.prep_cats.get(m.mid, '未分类')}"
                        "\n【395 抽取的参考字段（已按原文核对，可以直接用，但仍要带出处）】\n" + "\n".join(refs))
-        res = self.r.write_checked("材料摘要", header + "\n\n" + src, f"{m.name}#{i + 1}",
+        res = self.r.write_checked("材料摘要", header + "\n\n" + src, f"{m.mid}#{i + 1}",
                                    expand=lambda t: expand_short(t, m.name), sources=header + "\n\n" + src)
         p.step_index += 1
         return res.text
@@ -441,18 +476,20 @@ class WikiRun:
         head = f"# {m.name}\n" + (note + "\n" if note else "")
         self._write(f"{WIKI}/材料/{m.mid}.md", head + "\n## 摘要\n\n" + body.strip() + "\n")
 
-    def _inventory(self, mats, skipped, summaries, partial) -> str:
+    def _inventory(self, mats, skipped, summaries, partial, kept_old=(), stopped=False) -> str:
         rows, n_read = [], 0
         for m in mats:
             if m.mid not in summaries:
-                rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | **否** | 摘要生成失败 |")
+                why = "运行中止，未生成" if stopped else "摘要生成失败"
+                rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | **否** | {why} |")
                 continue
             if m.mid in partial:
                 rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | {partial[m.mid]} | |")
                 continue
             n_read += 1
             note = "；".join(x for x in ("摘要为筛选结果，非全量" if m.table else "",
-                                         "原件已删除（保留材料文本）" if m.meta["status"] == "source_deleted" else "") if x)
+                                         "原件已删除（保留材料文本）" if m.meta["status"] == "source_deleted" else "",
+                                         "本次运行中止，保留上次的摘要页" if m.mid in kept_old else "") if x)
             rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | 是 | {note} |")
         for meta, why in skipped:
             rows.append(f"| {meta['name']} | {meta['type']} | {meta.get('unit_count') or '—'} | **否** | {why} |")
@@ -533,16 +570,17 @@ class WikiRun:
         idx += [f"| {t} | {self.today} |" for t in ("概览", "当事人", "时间线", "材料清单", "争议焦点")]
         idx += ["", "## 材料", "", "| 摘要页 | 更新日期 |", "|---|---|"]
         idx += [f"| {m.name} | {self.today} |" for m in mats if m.mid in summaries]
-        gate.write_bytes(self.root, f"{WIKI}/index.md", ("\n".join(idx) + "\n").encode("utf-8"), op="pipeline")
-        old = self._read(f"{WIKI}/log.md") or "# Wiki Log\n"
+        self._write(f"{WIKI}/index.md", "\n".join(idx) + "\n")          # 律师修改块同样保护
         what = "更新" if self.step == "wiki_update" else "生成"
         cov = inventory.splitlines()[1] if len(inventory.splitlines()) > 1 else ""
         entry = (f"\n## [{self.today}] {what} | 流水线 {self.task_id}\n- 材料：{len(summaries)} 份有摘要页\n"
                  f"- 覆盖：{cov}\n- 改动文章：概览、当事人、时间线、材料清单、争议焦点、案件卡片\n")
         if self.prep is not None:
             entry += f"- 395 抽取：{self.prep.note or '已用，核对通过的字段作为摘要的参考输入'}\n"
-        gate.write_bytes(self.root, f"{WIKI}/log.md", (old.rstrip("\n") + "\n" + entry).encode("utf-8"),
-                         op="pipeline")
+        with _WIKI_LOCK:                             # 与"采纳修改建议"写日志用同一把锁
+            old = self._read(f"{WIKI}/log.md") or "# Wiki Log\n"
+            gate.write_bytes(self.root, f"{WIKI}/log.md", (old.rstrip("\n") + "\n" + entry).encode("utf-8"),
+                             op="pipeline")
 
     # ---- 全文核对 ----
 

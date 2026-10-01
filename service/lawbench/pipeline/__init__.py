@@ -1,7 +1,8 @@
 """流水线（Spec 9.1；接口 /api/pipeline/run、/api/pipeline/{task_id}、/api/pipeline/{task_id}/cancel）。
 
 本次只有案件 wiki（wiki_build、wiki_update）。一次运行 = 一个 P- 任务（工作区/任务/<编号>/），在后台线程里跑；
-同一案件已有一次在跑时，再请求运行返回正在跑的那个任务编号（契约没有"正在运行"的错误码）。
+同一案件已有一次在跑时，再请求运行返回正在跑的那个任务编号（契约没有"正在运行"的错误码）；建任务那段时间在锁内
+以案件编号占位，同时到的第二个请求等它建好再返回同一个编号（T16 返修 P2-3）。
 状态先看本进程内存，没有（服务重启过、或已结束）再读 result.json。
 """
 from __future__ import annotations
@@ -50,24 +51,36 @@ class Pipelines:
         self.clock = clock
         self._lock = threading.Lock()
         self._live: dict[str, _Live] = {}
+        self._starting: dict[str, threading.Event] = {}
 
     def run(self, d: dict) -> dict:
         case_id = d["case_id"]
-        with self._lock:
-            for tid, live in self._live.items():
-                if live.case_id == case_id and live.progress.status == "running":
-                    return {"task_id": tid}
-        root = self.cases.root_of(case_id)
-        index = self.materials.index(case_id)
-        prompts = Prompts.load(self.skills_dirs, SKILL, wiki.REQUIRED_STEPS)
-        mats, _ = wiki.load_materials(root, index)
-        segments = sum(len(m.chunks) for m in mats if not m.table)
-        articles = len(wiki.SECTIONS) + 1
-        budget = {"model_calls": budget_calls(segments, articles), "tool_calls": 1, "minutes": MINUTES}
-        tid, root = self.tasks.begin_pipeline(case_id, d["step"], SKILL, d["params"], budget)
-        live = _Live(case_id, Progress(), threading.Event())
-        with self._lock:
-            self._live[tid] = live
+        while True:
+            with self._lock:
+                for tid, live in self._live.items():
+                    if live.case_id == case_id and live.progress.status == "running":
+                        return {"task_id": tid}
+                other = self._starting.get(case_id)
+                if other is None:
+                    mine = self._starting[case_id] = threading.Event()     # 锁内占位（T16 返修 P2-3）
+                    break
+            other.wait(30)          # 另一个请求正在建这个案件的任务：等它建好，返回它的编号；它失败了就由本请求建
+        try:
+            root = self.cases.root_of(case_id)
+            index = self.materials.index(case_id)
+            prompts = Prompts.load(self.skills_dirs, SKILL, wiki.REQUIRED_STEPS)
+            mats, _ = wiki.load_materials(root, index)
+            segments = sum(len(m.chunks) for m in mats if not m.table)
+            articles = len(wiki.SECTIONS) + 1
+            budget = {"model_calls": budget_calls(segments, articles), "tool_calls": 1, "minutes": MINUTES}
+            tid, root = self.tasks.begin_pipeline(case_id, d["step"], SKILL, d["params"], budget)
+            live = _Live(case_id, Progress(), threading.Event())
+            with self._lock:
+                self._live[tid] = live
+        finally:
+            with self._lock:
+                self._starting.pop(case_id, None)                          # 建好或失败都撤销占位
+            mine.set()
         live.thread = threading.Thread(target=self._work, name=f"pipeline-{tid}", daemon=True,
                                        args=(tid, root, case_id, index, d, prompts, budget, live))
         live.thread.start()
@@ -87,7 +100,7 @@ class Pipelines:
         try:
             if d.get("use_prep"):
                 from . import prep
-                prep.attach(run, self.net, self.key_getter)
+                prep.attach(run, self.net, self.key_getter, live.cancel)
             run.run()
         except Cancelled:
             status = "cancelled"

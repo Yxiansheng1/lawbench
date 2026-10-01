@@ -46,7 +46,7 @@ rg.MUTATIONS = [
         ('        return {"status": STATUS_OF_RESULT.get(res["status"], "failed"),', '        return {"status": "failed",')],
      f"{R} -k status_after_restart"),
     ("同一案件在跑时不另起一次", "pipeline/__init__.py", [
-        ('                if live.case_id == case_id and live.progress.status == "running":', "                if False:")],
+        ('                    if live.case_id == case_id and live.progress.status == "running":', "                    if False:")],
      f"{R} -k second_run"),
     ('"高"发 xhigh', "pipeline/llm.py", [('EFFORT = {"低": "low", "中": "medium", "高": "xhigh"}',
                                          'EFFORT = {"低": "low", "中": "medium", "高": "high"}')], f"{R} -k request_shape"),
@@ -87,6 +87,79 @@ rg.MUTATIONS = [
          "                new = line\n                if new == line:")], f"{R} -k settle_unfixable"),
     ("原件已删除的材料清单注明", W, [('"原件已删除（保留材料文本）" if m.meta["status"] == "source_deleted" else ""', '""')],
      f"{R} -k deleted_originals"),
+]
+
+# ---- 返修（执行令 20261001-2147） ----
+L = "pipeline/llm.py"
+N = "pipeline/runner.py"
+P = "pipeline/prep.py"
+I = "pipeline/__init__.py"
+rg.MUTATIONS += [
+    ("P2-1 等响应头时取消：后台读、本线程查取消", L, [
+        ("        return abortable(read, self.cancel, REQUEST_SECONDS, client.close, self.clock)", "        return read()")],
+     f"{R} -k 'cancel_while_waiting or cancel_closes'"),
+    ("P2-1 取消时关掉连接（服务端看到断开）", L, [
+        ("        return abortable(read, self.cancel, REQUEST_SECONDS, client.close, self.clock)",
+         "        return abortable(read, self.cancel, REQUEST_SECONDS, None, self.clock)")], f"{R} -k cancel_closes"),
+    ("P2-1 395 阶段也能取消", P, [("                return abortable(go, self.cancel, TIMEOUT, client.close)",
+                                 "                return go()")], f"{R} -k cancel_during_395"),
+    ("P2-2 开跑前建好目录", W, [('            gate.mkdir_work(self.root, rel, op="pipeline")', "            pass")],
+     f"{R} -k dirs_made"),
+    ("P2-3 锁内按案件占位", I, [("                if other is None:", "                if True:")],
+     f"{R} -k same_case_started"),
+    ("P2-4 停下不覆盖完整页", W, [("            if self._complete_page(m):", "            if False:")],
+     f"{R} -k stop_keeps_complete"),
+    ("P2-4 半份页首注明部分", W, [('f"{PARTIAL_HEAD}{k_n}，运行中止，没有读完")', "None)")],
+     f"{R} -k stop_without_old_page"),
+    ("P2-4 停下时重写材料清单", W, [("            self._inventory(mats, skipped, summaries, partial, kept_old, stopped=True)\n", "")],
+     f"{R} -k stop_without_old_page"),
+    ("P3-1 运行记录对象写材料编号", W, [('f"{m.mid}#{i + 1}",', 'f"{m.name}#{i + 1}",')], f"{R} -k run_record"),
+    ("P3-1 兜底记录不写原句", N, [('            done.append(f"第{i + 1}行 " + "、".join(dict.fromkeys(acts)))', "            done.append(line)")],
+     f"{R} -k run_record"),
+    ("P3-2 进程内最多 2 路", L, [("_slots = threading.BoundedSemaphore(SLOTS)", "_slots = threading.BoundedSemaphore(4)")],
+     f"{R} -k two_cases"),
+    ("P3-3 修改最多 2 轮", N, [("MAX_FIX = 2", "MAX_FIX = 3")], f"{R} -k fix_rounds_at_most"),
+    ("P3-3 改完没变化就停", N, [("            if _same(new, text):\n                break", "            if False:\n                break")],
+     f"{R} -k fix_stops"),
+    ("P3-3 45 分钟上限", N, [("            if self.clock() - self.started - self.queue_s > self.minutes * 60:", "            if False:")],
+     f"{R} -k minutes_limit"),
+    ("P3-3 排队时间不计时", N, [("        self.budget.queued((reply.queue_wait_ms or 0) + reply.local_wait_ms)",
+                              "        self.budget.queued(0)")], f"{R} -k queue_wait_not"),
+    ("P3-3 预算公式", I, [("    return segments * 3 + articles * 3 + 10", "    return segments * 2 + articles * 3 + 10")],
+     f"{R} -k test_build"),
+    ("P3-3 6000D 地址经 Net 选", L, [('                base, _ = self.net.select("llm", force=attempt > 0)',
+                                    '                base = self.net.candidates("llm")[0][0]')], f"{R} -k net_selection"),
+    ("P3-3 律师确认的条目保留", W, [('            kept = [f for f in (old or {}).get(key, []) if f["status"] == "lawyer_confirmed"]',
+                                  "            kept = []")], f"{R} -k lawyer_confirmed"),
+    ("P3-3 本方立场保留", W, [('                "stance": (old or {}).get("stance"),', '                "stance": None,')],
+     f"{R} -k lawyer_confirmed"),
+    ("P3-3 9B 阈值 20%", P, [("FAIL_RATIO = 0.2", "FAIL_RATIO = 0.9")], f"{R} -k prep_threshold"),
+    ("P3-3 更新时补跑没有完整摘要页的材料", W, [("or not self._complete_page(m)]", "or False]")],
+     f"{R} -k update_reruns_missing"),
+    ("P3-3 卡片 finish=length 不算成功", W, [
+        ('"案件卡片", "案件卡片")\n        data = _json_object(raw) if finish != "length" else {}',
+         '"案件卡片", "案件卡片")\n        data = _json_object(raw)')], f"{R} -k card_length_finish"),
+    ("P3-3 status/cancel 查任务类型", I, [
+        ('        _, root, task = self.tasks.locate(task_id)\n        if task["kind"] != "pipeline":',
+         '        _, root, task = self.tasks.locate(task_id)\n        if False:'),
+        ('            _, _, task = self.tasks.locate(task_id)\n            if task["kind"] != "pipeline":',
+         '            _, _, task = self.tasks.locate(task_id)\n            if False:')], f"{R} -k status_checks_task_kind"),
+    ("P3-4 连续律师块成组", W, [("        if out and end is not None and not old[end:m.start()].strip():", "        if False:")],
+     f"{R} -k consecutive_lawyer"),
+    ("P3-4 同一位置的几组按原先后", W, [("            after.setdefault(idx, []).append(block)", "            after.setdefault(idx, []).insert(0, block)")],
+     f"{R} -k consecutive_lawyer"),
+    ("P3-6 窗口超限不发", L, [('        if need > tokens.WINDOWS[params["window"]]:', "        if False:")], f"{R} -k window_exceeded"),
+    ("P3-7 旧卡片不合契约整次报错", W, [('            raise ApiError("INVALID_ARGUMENT", "case_card_invalid") from None', "            return None")],
+     f"{R} -k bad_old_card"),
+    ("NOTE 目录也保护律师块", W, [('        self._write(f"{WIKI}/index.md", "\\n".join(idx) + "\\n")',
+                                '        gate.write_bytes(self.root, f"{WIKI}/index.md", ("\\n".join(idx) + "\\n").encode(), op="pipeline")')],
+     f"{R} -k index_lawyer"),
+    ("NOTE 网络异常映射到 8.3 错误码", L, [
+        ('                except httpx.TimeoutException:\n                    raise ApiError("TIMEOUT", "read_timeout") from None\n'
+         '                except httpx.HTTPError:\n                    raise ApiError("SERVER_UNREACHABLE", "transport_error") from None\n', "")],
+     f"{R} -k network_errors"),
+    ("NOTE 某段 401 后其余不再发", N, [("        except (Cancelled, BudgetStop, ApiError) as e:", "        except (Cancelled, BudgetStop) as e:")],
+     f"{R} -k key_invalid_stops"),
 ]
 
 _run = rg.run

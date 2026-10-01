@@ -8,14 +8,18 @@
   记一条提示（写进运行记录和 wiki 日志；status 接口没有放提示的字段）。
 - 通过的字段按段交给摘要步骤，作为参考输入（摘要仍要带出处、照常核对）。395 的调用不计入 6000D 的调用预算。
 请求头带律师 Key（与 6000D 同一个 Key，395 用它校验）；日志只记元数据。
+取消（T16 返修 P2-1）：与 6000D 同一个取消标志；每段请求前查一次，在途请求单独一个 client，取消即关掉。
 """
 from __future__ import annotations
+
+import threading
 
 import httpx
 
 from .. import contracts, logs
 from ..checks import evidence
 from ..errors import ApiError
+from .llm import Cancelled, abortable
 
 MAX_CHARS = 16000
 FIELDS = ["当事人", "日期", "金额", "案号"]
@@ -31,9 +35,10 @@ class Unavailable(Exception):
 
 
 class Prep:
-    def __init__(self, net, key_getter):
+    def __init__(self, net, key_getter, cancel: threading.Event | None = None):
         self.net = net
         self.key_getter = key_getter
+        self.cancel = cancel or threading.Event()
         self.note: str | None = None
         self.stats = {"字段": 0, "核对不过": 0, "调用": 0}
 
@@ -42,8 +47,7 @@ class Prep:
         if not key:
             raise Unavailable("no_key")
         try:
-            r, _ = self.net.request("prep", "POST", "/v1/extract", json=body, timeout=TIMEOUT,
-                                    headers={"Authorization": f"Bearer {key}"})
+            r = self._send(body, {"Authorization": f"Bearer {key}"})
         except (ApiError, httpx.HTTPError) as e:
             raise Unavailable(type(e).__name__) from None
         self.stats["调用"] += 1
@@ -56,6 +60,28 @@ class Prep:
         if contracts.errors(SCHEMA, "#/$defs/response", data):
             raise Unavailable("response_contract")
         return data
+
+    def _send(self, body: dict, headers: dict) -> httpx.Response:
+        """与 Net.request 相同（连不上时重新选址再发一次），只是每次一个 client、可被取消标志打断。"""
+        for attempt in (0, 1):
+            if self.cancel.is_set():
+                raise Cancelled()
+            base, _ = self.net.select("prep", force=attempt > 0)
+            client = self.net.own_client()
+
+            def go():
+                try:
+                    return client.post(base + "/v1/extract", json=body, headers=headers, timeout=TIMEOUT)
+                finally:
+                    client.close()
+
+            try:
+                return abortable(go, self.cancel, TIMEOUT, client.close)
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                self.net.invalidate("prep")
+                if attempt:
+                    raise
+        raise AssertionError("unreachable")
 
     def run(self, mats: list) -> tuple[dict[str, list[tuple[int, str]]], dict[str, str]]:
         """(材料编号 → 通过核对的参考字段行, 材料编号 → 分类)。不可用或核对不过太多时返回两个空表。"""
@@ -122,5 +148,5 @@ def _found(m, unit: str, no: int, value: str) -> bool:
     return v in evidence.squash(text)
 
 
-def attach(run, net, key_getter) -> None:
-    run.prep = Prep(net, key_getter)
+def attach(run, net, key_getter, cancel: threading.Event | None = None) -> None:
+    run.prep = Prep(net, key_getter, cancel)

@@ -11,7 +11,8 @@
   到上限抛 BudgetStop，调用方保存已完成的部分。
 - 取消：Event 置位后，在途请求在读流的下一行关闭，排队的不再发出，抛 Cancelled。
 - 并行度 2（Spec 8.5）。
-- 运行记录只有元数据（步骤、对象、耗时、token、结束原因）；服务日志更少，只记案件编号、耗时（Spec 20.8）。
+- 运行记录只有元数据（步骤、对象、耗时、token、结束原因；对象写材料编号，修改记录只写问题类别和行号，
+  不写原句，T16 返修 P3-1）；服务日志更少，只记案件编号、耗时（Spec 20.8）。
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from dataclasses import dataclass, field
 
 from .. import checks
 from ..checks.parse import Material, find_cites
+from ..errors import ApiError
 from .llm import LLM, Cancelled
 from .prompts import Prompts
 
@@ -139,7 +141,7 @@ class Runner:
             raise Cancelled()
         self.budget.take()
         reply = self.llm.chat(system, user, self.params, self.task_id)
-        self.budget.queued(reply.queue_wait_ms)
+        self.budget.queued((reply.queue_wait_ms or 0) + reply.local_wait_ms)
         with self._lock:
             self.progress.queue_wait_ms = reply.queue_wait_ms
             self.calls.append({"步骤": step, "对象": obj, "耗时秒": round(reply.elapsed_s, 1),
@@ -149,7 +151,8 @@ class Runner:
         return clean_output(reply.text), reply.finish_reason
 
     def map(self, fn, items: list) -> list:
-        """并行度 2 跑 fn(item)；任何一个抛 Cancelled / BudgetStop 就让其余的不再发出，并把异常抛给调用方。"""
+        """并行度 2 跑 fn(item)；任何一个抛 Cancelled / BudgetStop / ApiError（如 401）就让其余的不再发出，
+        并把异常抛给调用方。"""
         out: list = [None] * len(items)
         first_stop: list[BaseException] = []
         with cf.ThreadPoolExecutor(max_workers=self.parallel) as ex:
@@ -167,7 +170,7 @@ class Runner:
             return None
         try:
             return fn(item)
-        except (Cancelled, BudgetStop) as e:
+        except (Cancelled, BudgetStop, ApiError) as e:
             with self._lock:
                 if not first_stop:
                     first_stop.append(e)
@@ -186,8 +189,8 @@ class Runner:
             if not bad:
                 break
             with self._lock:
-                self.fixes.append({"对象": obj, "轮次": rnd + 1, "问题": [p["class"] + " " + p["message"]
-                                                                       for _, _, ps in bad for p in ps]})
+                self.fixes.append({"对象": obj, "轮次": rnd + 1,
+                                   "问题": [f"第{i + 1}行 {p['class']}" for i, _, ps in bad for p in ps]})
             req = self.fix_request(bad, sources)
             reply = self.call(self.prompts.system("修改", extra=step), req, step + "修改", obj)
             new = self.apply_fixes(text, bad, reply, expand)
@@ -210,6 +213,7 @@ class Runner:
         done = []
         for i, line, ps in bad:
             new = line
+            acts = []
             for p in ps:
                 if p["class"] == "A":
                     # 疑似补全：不动出处，句末注明原文的识别不清写法（照原样保留，规则要求的写法）
@@ -218,22 +222,26 @@ class Runner:
                         note = f"（原文{m.group(1)}为“{m.group(2)}”，识别不清，需核对原件）"
                         cite = p.get("citation")      # 插在那组出处前面：核对看的是出处前面那段文字
                         new = new.replace(cite, note + cite, 1) if cite and cite in new else new.rstrip() + note
+                        acts.append("A 注明原文写法")
                 elif p["class"] == "B" and p.get("citation"):
                     at = _AT.search(p["message"])
                     if at:
                         new = new.replace(p["citation"], "〔" + at.group(1) + "〕", 1)
+                        acts.append("B 挪到实际位置")
                 elif p["class"] in "CE" and p.get("citation"):
                     new = new.replace(p["citation"], "〔未找到依据〕", 1)
+                    acts.append(p["class"] + " 改标未找到依据")
             left = [q for _, _, qs in self.problem_lines(new) for q in qs if q["class"] != "G"]
             if left:
                 # 还不过：整句的出处改标〔未找到依据〕（仓库草稿版"修改"段：改不了的把出处改为〔未找到依据〕）
                 new = _replace_cites(line, "〔未找到依据〕")
                 if new == line:                      # 句子里没有认得出的出处，在句末补标
                     new = line.rstrip() + "〔未找到依据〕"
+                acts = ["整句出处改标未找到依据"]
             if new == line:
                 continue                             # 只剩 G：程序改不了，留着如实报告
             lines[i] = new
-            done.append(f"程序改标：{line[:60]} → {new[-50:]}")
+            done.append(f"第{i + 1}行 " + "、".join(dict.fromkeys(acts)))    # 只记行号和做法，不记原句（P3-1）
         if not done:
             return text
         with self._lock:
