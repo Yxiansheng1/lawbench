@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { requestJson, RequestTimeout } from '../host/http-json.ts'
 import { cleanPasteDir, LawbenchRemote, PASTE_TARGET, pasteDir, type ApiResult } from '../host/index.ts'
 import { API_ROUTES } from '../shared/api-routes.ts'
 import { listSkills, parseSkill } from '../host/skills.ts'
@@ -18,6 +19,8 @@ let server: Server
 let port = 0
 let seen: Seen[] = []
 let reply: (s: Seen) => unknown = () => ({ ok: true, value: {} })
+/** 回响应头之前等多久（模拟服务等引擎跑完才回头部）。 */
+let delayMs = 0
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -34,6 +37,7 @@ beforeAll(async () => {
     if (paths) s.files = paths.filter((p) => existsSync(p))
     seen.push(s)
     const out = reply(s)
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs))
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(typeof out === 'string' ? out : JSON.stringify(out))
   })
@@ -41,7 +45,7 @@ beforeAll(async () => {
   port = (server.address() as { port: number }).port
 })
 afterAll(() => new Promise<void>((r) => server.close(() => r())))
-beforeEach(() => { seen = []; reply = () => ({ ok: true, value: {} }) })
+beforeEach(() => { seen = []; reply = () => ({ ok: true, value: {} }); delayMs = 0 })
 
 const up = () => ({ endpoint: () => ({ port, token: 'tok-test' }), state: 'running' }) as unknown as Supervisor
 const down = () => ({ endpoint: () => undefined, state: 'starting' }) as unknown as Supervisor
@@ -295,5 +299,47 @@ describe('粘贴截图的上限与文件名（返修 P3-4）', () => {
     expect(new Set(names).size).toBe(2)
     for (const n of names) expect(n).toMatch(/粘贴-\d{14}-[0-9a-f-]{36}\.png$/)
     expect(seen.every((s) => s.files?.length === 1)).toBe(true)
+  })
+})
+
+describe('长路由不被头部时限掐断（T26 复核 P2-1）', () => {
+  let appData: string
+  beforeEach(() => { appData = mkdtempSync(join(tmpdir(), 'lb-host-long-')) })
+  afterEach(() => rmSync(appData, { recursive: true, force: true }))
+  const VALUE = { exit_code: 0, attention: false, failed: false, output: '完成', files: [] }
+
+  it('/api 路由不走全局 fetch（它等响应头最多 300 秒），换成没有头部时限、只有路由总时限的请求', async () => {
+    const real = globalThis.fetch
+    globalThis.fetch = (() => { throw new Error('不该走 fetch') }) as typeof fetch
+    try {
+      reply = () => ({ ok: true, value: VALUE })
+      const r = new LawbenchRemote(up(), appData, () => undefined)
+      expect(await call(r, 'invoiceRun', { action: 'env_check' })).toEqual({ ok: true, value: VALUE })
+      expect(await call(r, 'archiveBuild', { case_id: CASE })).toMatchObject({ ok: expect.any(Boolean) })
+    } finally { globalThis.fetch = real }
+  })
+
+  it('响应头迟到也等到底：只看总时限（小参数：头部迟到 1.2 秒，总时限 3 秒）', async () => {
+    delayMs = 1200
+    reply = () => ({ ok: true, value: VALUE })
+    expect(await requestJson({ method: 'POST', port, path: '/api/invoice/run', headers: {}, body: '{}', timeoutMs: 3000 })).toEqual({ ok: true, value: VALUE })
+  })
+
+  it('超过路由总时限报 TIMEOUT', async () => {
+    delayMs = 1200
+    await expect(requestJson({ method: 'POST', port, path: '/x', headers: {}, timeoutMs: 300 })).rejects.toBeInstanceOf(RequestTimeout)
+    const route = API_ROUTES.find((x) => x.method === 'invoiceRun')! as { timeoutMs?: number }
+    const keep = route.timeoutMs
+    route.timeoutMs = 300
+    try {
+      const r = new LawbenchRemote(up(), appData, () => undefined)
+      expect(await call(r, 'invoiceRun', { action: 'env_check' })).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } })
+    } finally { route.timeoutMs = keep }
+  })
+
+  it('长路由（发票、归档、导入）的总时限都长于发票单个动作的 30 分钟或 10 分钟', () => {
+    const t = (m: string) => API_ROUTES.find((x) => x.method === m)!.timeoutMs ?? 0
+    expect(t('invoiceRun')).toBeGreaterThan(30 * 60_000)
+    for (const m of ['archiveBuild', 'materialsImport', 'materialsScan', 'outputsConfirm', 'redline']) expect(t(m), m).toBeGreaterThanOrEqual(10 * 60_000)
   })
 })

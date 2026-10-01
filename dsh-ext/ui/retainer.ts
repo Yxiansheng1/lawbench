@@ -21,6 +21,8 @@ export const TEXT = {
   openFailed: '委托材料窗口打不开',
   driverDown: '证件识别没有启动',
   driverDownTail: '仍可在委托材料窗口里手工填写。',
+  // ENGINE_FAILED 在这条接口上只表示驱动的模型文件缺失或损坏（T25：启动前核 sha256），服务的通用说明会提到发票整理，换成自己的话（复核 P3-3）
+  engineBroken: '本机识别引擎文件缺失或损坏，请联系技术支持。',
   stopTitle: '证件识别',
   importTitle: '导入新生成的文件到 01委托手续',
   noCaseTitle: '请先打开案件再导入',
@@ -38,7 +40,7 @@ const bridge = (): RetainerBridge | undefined => (window as Window & { __LAWBENC
 export async function openRetainer(current: CaseRef | undefined, b: RetainerBridge | undefined = bridge()): Promise<void> {
   if (!b) { notice(TEXT.noDesktop[0], TEXT.noDesktop[1]); return }
   const started = await call<DriverValue>('retainerDriver', { action: 'start' })
-  if (!started.ok) notice(TEXT.driverDown, `${errorText(started.error)} ${TEXT.driverDownTail}`)
+  if (!started.ok) notice(TEXT.driverDown, `${started.error.code === 'ENGINE_FAILED' ? TEXT.engineBroken : errorText(started.error)} ${TEXT.driverDownTail}`)
   else if (!started.value.running) notice(TEXT.driverDown, `${started.value.message} ${TEXT.driverDownTail}`)
 
   let result: RetainerResult

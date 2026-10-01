@@ -50,9 +50,10 @@ describe('表单 → 请求（契约 1.3）', () => {
     expect(buildInvoiceRequest('exclude', filled({ reviewer: ' ' }))).toMatchObject({ ok: false })
     expect(buildInvoiceRequest('history', filled({ period: '2026-13' }))).toMatchObject({ ok: false })
   })
-  it('cancel 与 reimburse 默认不带 apply:true；exclude 一律 confirm:true', () => {
+  it('reimburse 默认只预览；cancel 一律 apply:true（只在两步路径里构造）；review、exclude 一律 confirm:true（引擎没有 review 预览）', () => {
     expect(buildInvoiceRequest('reimburse', filled())).toMatchObject({ request: { apply: false } })
-    expect(buildInvoiceRequest('cancel', filled())).toMatchObject({ request: { apply: false } })
+    expect(buildInvoiceRequest('cancel', filled(), { apply: false })).toMatchObject({ request: { apply: true } })
+    expect(buildInvoiceRequest('review', filled(), { confirm: false })).toMatchObject({ request: { confirm: true } })
     expect(buildInvoiceRequest('exclude', filled())).toMatchObject({ request: { confirm: true } })
   })
   it('结果标色：failed 红、退出码 2 黄、其余绿；契约样例', () => {
@@ -199,6 +200,26 @@ describe('发票整理页', () => {
     await click('取消批次')
     expect(sent.map((r) => r.action)).toEqual(['report', 'cancel'])
     expect(sent[1]).toMatchObject({ apply: true })
+  })
+
+  it('人工核验：先弹确认框（逐张核对原票、带核验人），确认后只发一次 confirm:true；不确认 0 次（复核 P1-1）', async () => {
+    await render()
+    await setInput('文件指纹', 'd'.repeat(64))
+    confirms.push(false)
+    await click('人工核验')
+    expect(sent).toHaveLength(0)
+    await click('人工核验')
+    expect(sent).toEqual([{ action: 'review', sha256: 'd'.repeat(64), reviewer: '张律师', confirm: true }])
+    expect(confirmTexts.join()).toContain('逐张核对原票')
+    expect(confirmTexts.join()).toContain('张律师')
+  })
+
+  it('取消批次的确认框说清是整个台账的报表、要先确认批次尚未报销（复核 P3-1）', async () => {
+    await render()
+    await click('取消批次')
+    expect(confirmTexts[0]).toContain('将取消批次"2026-09"并写入台账')
+    expect(confirmTexts[0]).toContain('尚未报销')
+    expect(confirmTexts[0]).not.toContain('请核对批次')
   })
 
   it('人工排除：确认框说明"排除后本期不再计入该票"，确认后发 confirm:true；不确认不发', async () => {

@@ -1,0 +1,3 @@
+服务回头部前等 310 秒；2026-10-01T15:26:47.674Z 开始
+原来（fetch）：304 秒 失败 UND_ERR_HEADERS_TIMEOUT
+现在（requestJson）：310 秒 拿到回答 {"ok":true,"value":{}}

@@ -72,8 +72,10 @@ const BATCH = '请填批次名：1 到 40 个字，只用汉字、字母、数�
 
 /**
  * 表单 → 契约请求。
- * @param opts.apply - cancel / reimburse 是否真的执行（false 只预览；cancel 引擎不支持预览，界面先用报表展示再确认，契约 1.3 说明）。
- * @param opts.confirm - review 是否确认写入。
+ * @param opts.apply - reimburse 是否真的执行（false 只预览）。cancel 一律 apply:true：引擎不支持 cancel 预览，服务对 cancel 也一律带 --apply
+ *   （契约 1.3 说明），界面只在律师看过报表、点了确认之后才构造它（两步路径）。
+ * review、exclude 一律 confirm:true：引擎对不带 --confirm 的 review 直接报 [BLOCKED]（workflow.py:155），没有预览；
+ *   界面先弹确认框再发一次。
  */
 export function buildInvoiceRequest(action: InvoiceAction, f: InvoiceForm, opts: { apply?: boolean; confirm?: boolean } = {}): Built {
   const period = f.period.trim()
@@ -120,11 +122,12 @@ export function buildInvoiceRequest(action: InvoiceAction, f: InvoiceForm, opts:
     case 'reprint':
       return problem(need(BATCH_RE.test(batch), BATCH)) ?? { ok: true, request: { action, batch } }
     case 'cancel':
+      return problem(need(BATCH_RE.test(batch), BATCH)) ?? { ok: true, request: { action, batch, apply: true } }
     case 'reimburse':
       return problem(need(BATCH_RE.test(batch), BATCH)) ?? { ok: true, request: { action, batch, apply: opts.apply === true } }
     case 'review':
       return problem(need(SHA_RE.test(f.sha256.trim()), '请填要核验的发票文件指纹（64 位小写字母和数字，见引擎输出）。'), need(f.reviewer.trim().length > 0, '请填核验人。'))
-        ?? { ok: true, request: { action, sha256: f.sha256.trim(), reviewer: f.reviewer.trim(), confirm: opts.confirm === true } }
+        ?? { ok: true, request: { action, sha256: f.sha256.trim(), reviewer: f.reviewer.trim(), confirm: true } }
     case 'exclude':
       return problem(
         need(PERIOD_RE.test(period), PERIOD),
@@ -153,11 +156,17 @@ export const TONE_TEXT = {
 /** 生成、重印贴票包时服务可能不列文件（files 为空），打印包位置在输出里。 */
 export const PRINT_FROM_OUTPUT = '打印包的位置见下方输出。'
 
-/** 先预览、再确认的动作（Spec 13.3：--apply 类先预览；cancel 引擎不支持预览，先用报表展示）。 */
+/** 先预览、再确认的动作（Spec 13.3：--apply 类先预览；cancel 引擎不支持预览，先显示台账报表再确认；review 没有预览，见 REVIEW_CONFIRM）。 */
 export const TWO_STEP: Partial<Record<InvoiceAction, { preview: 'self' | 'report'; title: string; text: (batch: string) => string; ok: string }>> = {
   reimburse: { preview: 'self', title: '确认已报销', text: (b) => `上面是批次"${b}"确认报销的预览。确认后批次标为已报销，不能撤回。`, ok: '确认已报销' },
-  cancel: { preview: 'report', title: '取消批次', text: (b) => `上面是台账报表，请核对批次"${b}"的内容。取消后这个批次作废，不能撤回。`, ok: '取消这个批次' },
-  review: { preview: 'self', title: '人工核验', text: () => '上面是核验预览。确认后按核验结果写入台账。', ok: '确认写入' },
+  cancel: { preview: 'report', title: '取消批次', text: (b) => `将取消批次"${b}"并写入台账，取消后不能撤回。上面的报表是整个台账的统计；请先确认这个批次尚未报销。`, ok: '取消这个批次' },
+}
+
+/** 人工核验：引擎没有预览，逐张核对原票后确认，确认后写入台账（只发一次 confirm:true）。 */
+export const REVIEW_CONFIRM = {
+  title: '人工核验',
+  text: (reviewer: string) => `请先逐张核对原票。确认后以核验人"${reviewer}"写入台账。`,
+  ok: '确认写入',
 }
 
 export const EXCLUDE_CONFIRM = {

@@ -22,10 +22,12 @@ const OUT = {
   cancel: [0, '批次 {batch} 已取消'],
   reimburse_preview: [0, '[预览] 批次 {batch}：3 张，合计 1,566.50 元。确认后标为已报销'],
   reimburse: [0, '批次 {batch} 已标为已报销'],
-  review_preview: [0, '[预览] 核验结果：金额、抬头一致'],
+  // 真引擎对不带 --confirm 的 review 直接报错（workflow.py:155），没有预览
+  review_preview: [2, '[BLOCKED] ValueError 逐张核对原票后，填写reviewer并加--confirm'],
   review: [0, '核验结果已写入台账'],
   exclude: [0, '已排除 1 项；本期不再计入该票'],
-  report: [0, '批次 {batch}：待报销 3 张，1,566.50 元\n未入批次：1 张'],
+  // 同真引擎 invoice_db.py report：整个台账的统计，没有批次参数
+  report: [0, '台账统计（全部）：已入账 12 张，合计 8,431.20 元\n  已报销 9 张，6,864.70 元\n  待报销 3 张，1,566.50 元\n  未入批次 1 张'],
   check_schema: [0, '台账结构正常'],
 }
 
@@ -59,6 +61,7 @@ export function makeTools({ arg, flag, check, fail, ok, settings }) {
       const ledger = `${office.dir}\\发票台账`
       const [code, text] = OUT[key]
       const output = text.replace(/\{(\w+)\}/g, (_m, k) => ({ ledger, ...body }[k] ?? ''))
+      if (output.startsWith('[BLOCKED]')) return [ok({ exit_code: code, attention: false, failed: true, output, files: [] })]
       const files = body.action === 'run' && office.invoice_buyer ? [`${ledger}\\_打印\\${body.batch}\\贴票清单（${office.invoice_buyer}）.html`] : []
       return [ok({ exit_code: code, attention: code === 2, failed: false, output, files })]
     } finally { busy = false }

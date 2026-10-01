@@ -6,7 +6,7 @@ import { Badge, Button, C, ErrorLine, getNav, S, Section } from './kit.tsx'
 import { call, confirm, lb } from './state.ts'
 import { errorText } from './format.ts'
 import {
-  ACTION_LABEL, BUSY_CODE, BUSY_HOLD_MS, BUSY_TEXT, buildInvoiceRequest, emptyForm, EXCLUDE_CONFIRM, homeView, PRINT_FROM_OUTPUT,
+  ACTION_LABEL, BUSY_CODE, BUSY_HOLD_MS, BUSY_TEXT, buildInvoiceRequest, emptyForm, EXCLUDE_CONFIRM, homeView, PRINT_FROM_OUTPUT, REVIEW_CONFIRM,
   REPLACE_CONFIRM, resultTone, TONE_TEXT, TWO_STEP, type InvoiceAction, type InvoiceForm, type InvoiceValue,
 } from './invoice-logic.ts'
 
@@ -67,8 +67,8 @@ export function InvoicePage() {
     const two = TWO_STEP[action]
     if (two) {
       // 先预览（cancel 用报表展示，引擎不支持 cancel 预览），预览成功再确认、再真的执行
-      const pre = two.preview === 'report' ? buildInvoiceRequest('report', form) : buildInvoiceRequest(action, form, { apply: false, confirm: false })
-      const real = buildInvoiceRequest(action, form, { apply: true, confirm: true })
+      const pre = two.preview === 'report' ? buildInvoiceRequest('report', form) : buildInvoiceRequest(action, form, { apply: false })
+      const real = buildInvoiceRequest(action, form, { apply: true })
       if (!real.ok) { setProblem(real.problem); return }
       if (!pre.ok) { setProblem(pre.problem); return }
       const v = await send(two.preview === 'report' ? 'report' : action, pre.request, true)
@@ -80,6 +80,7 @@ export function InvoicePage() {
     const built = buildInvoiceRequest(action, form)
     if (!built.ok) { setProblem(built.problem); return }
     if (action === 'exclude' && !(await confirm(EXCLUDE_CONFIRM.title, EXCLUDE_CONFIRM.text, EXCLUDE_CONFIRM.ok))) return
+    if (action === 'review' && !(await confirm(REVIEW_CONFIRM.title, REVIEW_CONFIRM.text(form.reviewer.trim()), REVIEW_CONFIRM.ok))) return
     if (action === 'prepare' && form.replace && !(await confirm(REPLACE_CONFIRM.title, REPLACE_CONFIRM.text, REPLACE_CONFIRM.ok))) return
     await send(action, built.request)
   }

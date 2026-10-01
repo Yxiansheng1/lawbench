@@ -106,6 +106,8 @@ describe('委托材料窗口（界面）', () => {
     expect(calls.some((c) => c[0] === 'open')).toBe(true)
     expect(notices()[0]!.title).toBe(TEXT.driverDown)
     expect(notices()[0]!.text).toContain(TEXT.driverDownTail)
+    // ENGINE_FAILED 用自己的话，不带服务那句通用说明（复核 P3-3）
+    expect(notices()[0]!.text).toBe(`${TEXT.engineBroken} ${TEXT.driverDownTail}`)
   })
 
   it('窗口已开着：只聚焦，不停驱动', async () => {

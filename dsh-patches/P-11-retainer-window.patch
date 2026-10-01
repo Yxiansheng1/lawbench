@@ -317,6 +317,57 @@ index 0000000000..8b895efe08
 +    }
 +  },
 +})
+diff --git a/apps/desktop/tests/lawbench-retainer-preload.spec.ts b/apps/desktop/tests/lawbench-retainer-preload.spec.ts
+new file mode 100644
+index 0000000000..9ceebcf112
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-retainer-preload.spec.ts
+@@ -0,0 +1,45 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++
++// lawbench P-11（T26 复核 P3-2）：委托材料窗口的预加载在网页脚本之前删掉 showDirectoryPicker、showSaveFilePicker。
++// 取出交给 contextBridge.executeInMainWorld 的函数，在带这两个属性的假 window 上执行，断言都不在了。
++
++const bridge = vi.hoisted(() => ({ scripts: [] as Array<{ func: () => void }> }))
++vi.mock('electron', () => ({ contextBridge: { executeInMainWorld: (script: { func: () => void }) => { bridge.scripts.push(script) } } }))
++
++const saved = { window: (globalThis as Record<string, unknown>).window, Window: (globalThis as Record<string, unknown>).Window }
++afterEach(() => { Object.assign(globalThis, saved) })
++
++function fakeWindow(where: 'own' | 'prototype' | 'locked') {
++  class FakeWindow {}
++  const picker = () => Promise.resolve('picked')
++  const win = new FakeWindow() as Record<string, unknown>
++  for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) {
++    if (where === 'prototype') Object.defineProperty(FakeWindow.prototype, name, { value: picker, configurable: true, writable: true })
++    else Object.defineProperty(win, name, { value: picker, configurable: where === 'own', writable: true })
++  }
++  Object.assign(globalThis, { window: win, Window: FakeWindow })
++  return win
++}
++
++describe('委托材料窗口的预加载（lawbench P-11）', () => {
++  it('只交一段在网页里执行的函数，不向网页暴露任何东西', async () => {
++    await import('../src/preload-retainer.ts')
++    expect(bridge.scripts).toHaveLength(1)
++    expect(typeof bridge.scripts[0]!.func).toBe('function')
++  })
++
++  it.each(['own', 'prototype'] as const)('两个选择器（定义在 %s）执行后都不在了', (where) => {
++    const win = fakeWindow(where)
++    bridge.scripts[0]!.func()
++    for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) {
++      expect(name in win, name).toBe(false)
++      expect(win[name], name).toBeUndefined()
++    }
++  })
++
++  it('删不掉的（不可配置）也钉成 undefined，网页的 if (!window.showDirectoryPicker) 走下载', () => {
++    const win = fakeWindow('locked')
++    try { bridge.scripts[0]!.func() } catch { /* 钉不住时会抛，下面的断言会失败 */ }
++    for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) expect(win[name], name).toBeUndefined()
++  })
++})
 diff --git a/apps/desktop/tests/lawbench-retainer.spec.ts b/apps/desktop/tests/lawbench-retainer.spec.ts
 new file mode 100644
 index 0000000000..af2775def2

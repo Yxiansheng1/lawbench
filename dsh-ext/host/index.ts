@@ -15,6 +15,7 @@ import { attachCaseSessions, type PersistenceLike, type RegistryLike } from './a
 import { API_ROUTES, buildRequest, type ApiRoute } from '../shared/api-routes.ts'
 import { listSkills, type SkillInfo } from './skills.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
+import { requestJson } from './http-json.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -145,12 +146,12 @@ export class LawbenchRemote {
     if (!ep) return done(fail('SERVICE_UNAVAILABLE', UNAVAILABLE))
     let json: unknown
     try {
-      const r = await fetch(`http://127.0.0.1:${ep.port}${built.path}`, {
-        method: route.http, redirect: 'error', signal: AbortSignal.timeout(route.timeoutMs ?? 30_000),
+      // 不用 fetch：它等响应头最多 300 秒，长路由（发票、归档、导入）会被掐断（T26 复核 P2-1，见 http-json.ts）
+      json = await requestJson({
+        method: route.http, port: ep.port, path: built.path, timeoutMs: route.timeoutMs ?? 30_000,
         headers: { authorization: `Bearer ${ep.token}`, ...(built.body === undefined ? {} : { 'content-type': 'application/json' }) },
         body: built.body === undefined ? undefined : JSON.stringify(built.body),
       })
-      json = await r.json()
     } catch (e) {
       const timeout = (e as Error)?.name === 'TimeoutError'
       return done(timeout ? fail('TIMEOUT', '工作台服务响应超时，请稍后重试') : fail('SERVICE_UNAVAILABLE', UNAVAILABLE))
