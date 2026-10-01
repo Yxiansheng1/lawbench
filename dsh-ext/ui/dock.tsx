@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
 import { statusErrorText } from './format.ts'
 import { Badge, Button, C, getNav, S } from './kit.tsx'
-import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, setSelection, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
+import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, notice as showNotice, setSelection, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
 import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
@@ -17,6 +17,9 @@ const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 const WRITE_DELAY_MS = 500
 /** 上一轮因输入材料变化被拦下（/core/context 报 INPUT_CHANGED）时状态行的话（ORCH 注记 2026-09-30 13:18）。 */
 export const INPUT_CHANGED_TEXT = '输入材料已变化，请重新选择'
+/** 上一轮因会话所在的案件文件夹已不在原处、接不到新位置被拒（T17 第五轮复核 F1，Agent 插件记 CASE_MOVED）。 */
+export const CASE_MOVED_TITLE = '这条消息没有发出'
+export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在原来的位置，没能接着写入。请从首页重新打开案件，再在这个对话里继续。'
 /** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */
 export const TURN_ENDED = 'lawbench:turn-ended'
 
@@ -122,6 +125,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
       try {
         const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
         if (r.ok && r.value?.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
+        if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)
       } catch { /* 当没有提示 */ }
     }
     setError(null)

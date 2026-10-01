@@ -179,10 +179,14 @@ export class LawbenchRemote {
     const root = (request as { root?: unknown } | null)?.root
     if (typeof root !== 'string' || !root) return fail('INVALID_ARGUMENT', BAD_ARGS)
     const registry = this.service('workspaceRegistry') as RegistryLike | undefined
-    const persistence = this.service('sessionPersistence') as PersistenceLike | undefined
+    const persistence = this.service('sessionPersistence') as (PersistenceLike & { hasCaseRoot?(root: string): boolean }) | undefined
     if (!registry || !persistence) return { ok: true, value: { attached: 0, failed: 0 } }
     try {
-      return { ok: true, value: await attachCaseSessions(registry, persistence, root, this.log) }
+      const sessions = this.service('sessions') as { get?(id: string): { header?: { cwd?: string } } | undefined } | undefined
+      const r = await attachCaseSessions(registry, persistence, root, this.log, (id) => sessions?.get?.(id)?.header?.cwd)
+      // 刷新过名单之后核对：这个案件根不在名单上（服务没答、答错、挂住）就让界面提示（第五轮复核 F2）
+      const listed = persistence.hasCaseRoot?.(root)
+      return { ok: true, value: listed === false ? { ...r, listed } : r }
     } catch (error) {
       this.log('warn', 'workspace.attach_case_sessions_failed', { error: (error as Error)?.name ?? 'Error' })
       return fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持')

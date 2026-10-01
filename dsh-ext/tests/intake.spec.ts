@@ -5,7 +5,7 @@
 import { installPasteTextWatch, makeIntakeHook, pasteCarriedText } from '../ui/intake.ts'
 import { app, setApi, type LawbenchApi } from '../ui/state.ts'
 import { getNav, setNav, type Nav } from '../ui/kit.tsx'
-import { apply } from '../ui/index.tsx'
+import { apply, ROOTS_NOT_REFRESHED } from '../ui/index.tsx'
 
 const CASE = { case_id: 'C-1', name: '虚构案件', root: 'D:\\案件\\虚构' }
 const png = (name: string) => new File([new Uint8Array([137, 80, 78, 71])], name, { type: 'image/png' })
@@ -60,7 +60,7 @@ describe('带文字的粘贴里的位图不导入（B-F2）', () => {
 })
 
 /** 界面插件 apply 用的最小上下文；steps 记下打开案件的各步。 */
-function fakeCtx(registered: { intake: number; marks: number }, steps: string[] = [], attachFails = false) {
+function fakeCtx(registered: { intake: number; marks: number }, steps: string[] = [], attachFails = false, attachValue: Record<string, unknown> = {}) {
   const observable = <T,>(v: T) => ({ getSnapshot: () => v, subscribe: () => () => {} })
   const ctx: Record<string, unknown> = {}
   Object.assign(ctx, {
@@ -72,6 +72,7 @@ function fakeCtx(registered: { intake: number; marks: number }, steps: string[] 
           if (method === 'attachCaseSessions') {
             steps.push(`attach ${JSON.stringify(request)}`)
             if (attachFails) throw new Error('x')
+            return { ok: true, value: { ok: true, value: attachValue } } // 网关外层 + Host 的 {ok, value}
           }
           return { ok: true, value: {} }
         },
@@ -117,4 +118,16 @@ describe('打开案件：建工作区 → 挂回游离会话 → 打开工作区
       await dispose()
     })
   }
+
+  it('第五轮 F2：挂回结果说名单里没有这个案件（listed:false）：照常打开，并提示稍后再打开一次', async () => {
+    const steps: string[] = []
+    app.set((st) => ({ ...st, dialogs: [] }))
+    const dispose = await apply(fakeCtx({ intake: 0, marks: 0 }, steps, false, { attached: 0, failed: 0, listed: false }) as never)
+    await new Promise((r) => setTimeout(r, 0))
+    await getNav().openCaseWorkspace(CASE.root)
+    expect(steps.at(-1)).toBe('open w')
+    expect(app.get().dialogs.map((d) => [(d as { title?: string }).title, (d as { text?: string }).text])).toEqual([[ROOTS_NOT_REFRESHED[0], ROOTS_NOT_REFRESHED[1]]])
+    app.set((st) => ({ ...st, dialogs: [] }))
+    await dispose()
+  })
 })

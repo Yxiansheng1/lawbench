@@ -58,6 +58,19 @@ describe('一轮完整对话（对假服务）', () => {
   })
 })
 
+describe('会话的写入位置已失效（T17 第五轮复核 F1）', () => {
+  it('step 1 整轮拒绝、记 CASE_MOVED 给界面，不取任务；位置正常时照常', async () => {
+    const blocked: Array<[string, string]> = []
+    const lost = new Set(['s-moved'])
+    const a = new LegalAgent(new CoreClient(() => ({ port: fake.port, token: fake.token }), log), log, (id, code) => { blocked.push([id, code]) }, () => {}, (id) => lost.has(id))
+    expect(await a.preStep(agentObj('s-moved'), 1, enter())).toEqual({ kind: 'reject' })
+    expect(blocked).toEqual([['s-moved', 'CASE_MOVED']])
+    expect(a.tasks.has('s-moved')).toBe(false)
+    expect(events).toContain('agent.case_moved')
+    expect((await a.preStep(agentObj('s-ok'), 1, enter())).kind).toBe('enter')
+  })
+})
+
 describe('预算（验收：第 25 次被拒绝，case_save_draft 仍可调用）', () => {
   it('24 次后拒绝 case_*，case_save_draft 放行；结束原因报 budget', async () => {
     const a = mk()

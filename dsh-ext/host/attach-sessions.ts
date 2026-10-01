@@ -19,6 +19,10 @@
 // 两处私有写法（indexHeaders、table.get）任一不在：一个也不挂、计为失败、记一条日志（第四轮复核 A-P3-1）。看不到原始记录就
 // 说不准它是否还记在别的工作区，挂上可能记成两处；不重建索引，attach 拿旧记录头核对也挂不上。
 // 某个编号从别的工作区去掉时出错（或工作区没有 detachSession），这个编号不挂、计为失败（第四轮复核 A-P2-1 = B-F2）。
+// 内存里的会话（DSH 的会话仓库里有它：Agent 活着，或启动时就恢复了上次的会话）且它那份记录头的 cwd 不是这个案件根时
+// 不动登记：登记核对 cwd 用的是内存里那份记录头（建会话时的旧位置），挂不上；先去掉再挂会把它弄成"未分组"
+// （第五轮复核后桌面端实测）。内存里的记录头就是这个根的照常挂。它的写入者已由会话存储搬到新位置（router.ts 的 relocate），
+// 这次运行里侧栏仍归在旧位置下；重启后记录头是新位置，再打开案件时挂回。
 // 先请会话存储按服务刷新一次案件根名单（第四轮复核 B-F1：服务在律师打开案件之后才只列新位置；Host 在 caseOpen 成功后
 // 已刷过一次，这里再刷一次，覆盖不经 caseOpen 直接打开工作区的路）。
 import { pathKey } from '../session-store/case-roots.ts'
@@ -49,15 +53,17 @@ type LogFn = (level: 'info' | 'warn' | 'error', event: string, meta?: Record<str
  * @param root - 案件根（界面刚把它作为工作区打开）。
  * @returns 挂回了几个、失败几个；找不到这个案件的工作区时都是 0。
  */
-export async function attachCaseSessions(registry: RegistryLike, persistence: PersistenceLike, root: string, log: LogFn = () => {}): Promise<{ attached: number; failed: number }> {
+export async function attachCaseSessions(registry: RegistryLike, persistence: PersistenceLike, root: string, log: LogFn = () => {}, liveCwd: (id: string) => string | undefined = () => undefined): Promise<{ attached: number; failed: number }> {
   const key = pathKey(root)
   const workspaces = registry.list()
   const ws = workspaces.find((w) => pathKey(w.path) === key)
   if (!ws) return { attached: 0, failed: 0 }
   await persistence.refreshCaseRoots?.().catch(() => undefined)
-  const stale = (await persistence.list())
+  const candidates = (await persistence.list())
     .map((row) => row.header)
     .filter((h) => h.cwd !== undefined && pathKey(h.cwd) === key && !ws.sessionIds.includes(h.id))
+  const stale = candidates.filter((h) => { const cwd = liveCwd(h.id); return cwd === undefined || pathKey(cwd) === key })
+  if (stale.length < candidates.length) log('info', 'workspace.attach_deferred_live', { count: candidates.length - stale.length })
   const todo = stale.map((h) => h.id)
   if (!todo.length) return { attached: 0, failed: 0 }
   const table = registry.table

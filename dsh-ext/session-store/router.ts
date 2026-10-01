@@ -7,9 +7,17 @@
 // - 列表：合并各实例；某个案件根读不出来（盘拔了、路径不在、没权限）或 3 秒没回应（网络盘挂住）只跳过它、
 //   记一条元数据日志，不连累整体。
 // - 不在案件里的旧会话（默认根）：N46 ② 下只读，续写拒绝（第三轮裁决 A-P3-3）。
+// - 活着的写入者跟着案件走（第五轮复核 F1）：DSH 的会话一旦起过 Agent，Agent 一直攥着打开时拿到的写句柄，
+//   也没有公开的办法让它放下；而且会话的事件不经句柄的 append——原版实例监听全局 session/event，按编号投给
+//   自己实例里登记的写入者。所以这里记下路由交出去的每个案件写句柄；名单刷新后由会话存储插件调 relocate()：
+//   关掉旧句柄（原版把缓冲的事件落进旧文件、注销旧实例里的写入者），在新位置的实例上以写方式打开；新位置的记录若是
+//   旧处的前缀（复制之后旧处又写过：比如复制时正在跑的那一轮、复制后点开会话 resume 补的事件），把差的那几条从旧处
+//   补到新位置，再核对与内存里的会话一样长——此后事件投到新实例。搬不了（新位置找不到、两处各自写过）就记为"已失效"，
+//   由我方 Agent 插件在下一轮开始时整轮拒绝并给中文说明（不写旧处，也不静默丢）。
 // - 搬家（F-CASE-04，方案甲）：记录头里的 cwd 是建会话时的旧路径；从案件实例读出的会话，交给 DSH 的记录头里
 //   cwd 一律换成该案件现在的根，DSH 和工作区登记据此认得它。原版实例的身份核对按"根 + 旧 cwd 的编码"找文件，
 //   整个案件目录一起搬走时这条相对路径不变，所以不需要改原版包（见交付说明第 5 节）。
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { inside, pathKey, type CaseRoots } from './case-roots.ts'
 
@@ -65,6 +73,8 @@ function within<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 interface Store { readonly root: string; readonly caseRoot: string | null; readonly backend: Backend; readonly index: number }
+/** 交出去的一个案件写句柄：现在属于哪个实例、真正的句柄是哪个、是否已失效。 */
+interface Writer { readonly id: string; at: Store; cur: Handle; lost: boolean }
 
 export class SessionRouter {
   private readonly stores = new Map<string, Store>()
@@ -124,6 +134,7 @@ export class SessionRouter {
 
   private handle(s: Store, h: Handle): Handle {
     const header = this.header(s, h.header)
+    if (s.caseRoot && h.access === 'write') return this.movingWriter(s, h, header)
     if (header === h.header) return h
     return new Proxy(h, {
       get: (target, prop) => {
@@ -132,6 +143,117 @@ export class SessionRouter {
         return typeof v === 'function' ? v.bind(target) : v
       },
     })
+  }
+
+  /** 路由交出去、还没关的案件写句柄（按会话编号）。 */
+  private readonly writers = new Map<string, Writer>()
+
+  /**
+   * 案件里的写句柄：记下它属于哪个实例，以便名单变了以后 relocate() 把写入者搬到新位置。
+   * 交出去的是代理：header 是改写过的；关闭时从记录里去掉；其余转给当前真正的句柄（搬过之后是新位置那个）。
+   */
+  private movingWriter(s: Store, h: Handle, header: Header): Handle {
+    const w: Writer = { id: h.id, at: s, cur: h, lost: false }
+    this.writers.set(h.id, w)
+    const close = async (): Promise<void> => {
+      if (this.writers.get(h.id) === w) this.writers.delete(h.id)
+      await (w.cur.close as () => Promise<void>).call(w.cur)
+    }
+    return new Proxy(h, {
+      get: (_target, prop) => {
+        if (prop === 'header') return header
+        if (prop === 'close' || prop === Symbol.asyncDispose) return close
+        const v = Reflect.get(w.cur, prop, w.cur)
+        return typeof v === 'function' ? v.bind(w.cur) : v
+      },
+    })
+  }
+
+  /** 所属案件根已不在名单上、或已不在盘上的写入者（会话编号）。已失效的不再列。 */
+  staleWriters(): string[] {
+    return [...this.writers.values()].filter((w) => !w.lost && this.writerStale(w)).map((w) => w.id)
+  }
+
+  private writerStale(w: Writer): boolean {
+    return !this.current(w.at) || !existsSync(w.at.caseRoot!)
+  }
+
+  /**
+   * 把一个会话的写入者搬到它现在所在的实例（调用方保证这个会话的 Agent 空闲，见会话存储插件）。
+   * @param expectedEvents - 内存里这个会话的事件数（DSH 会话的 seq）；新位置的记录（补齐之后）必须正好这么长才接着写。不知道时不核对。
+   * @returns moved：已搬；kept：不需要搬；lost：搬不了（新位置找不到、记录对不上、打开失败），写入者已注销，记为已失效。
+   */
+  relocate(id: string, expectedEvents?: number): Promise<'moved' | 'kept' | 'lost'> {
+    // 同一会话同时只搬一次（打开案件后的刷新与后台刷新可能同时触发）；后来的等前一次做完再判
+    const prev = this.relocating.get(id) ?? Promise.resolve('kept' as const)
+    const run = prev.catch(() => 'kept' as const).then(() => this.relocateOnce(id, expectedEvents))
+    this.relocating.set(id, run)
+    void run.finally(() => { if (this.relocating.get(id) === run) this.relocating.delete(id) }).catch(() => undefined)
+    return run
+  }
+
+  private readonly relocating = new Map<string, Promise<'moved' | 'kept' | 'lost'>>()
+
+  private async relocateOnce(id: string, expectedEvents?: number): Promise<'moved' | 'kept' | 'lost'> {
+    const w = this.writers.get(id)
+    if (!w || w.lost || !this.writerStale(w)) return 'kept'
+    const from = w.at
+    // 先关旧句柄：把缓冲的事件落进旧处、注销旧实例里的写入者（搬家时旧目录已不在，落不进去就丢在旧处，与不搬一样）
+    await (w.cur.close as () => Promise<void>).call(w.cur).catch(() => undefined)
+    const lose = (reason: string): 'lost' => {
+      w.lost = true
+      this.opts.log?.('warn', 'session_store.writer_lost', { index: from.index, reason })
+      return 'lost'
+    }
+    const next = await this.locate(id, undefined, from).catch(() => undefined)
+    if (!next?.caseRoot || next === from) return lose('not_found')
+    let fresh: Handle
+    try {
+      fresh = await next.backend.open(id, 'write')
+    } catch (error) {
+      return lose((error as Error)?.name ?? 'open_failed')
+    }
+    const read = async (h: Handle): Promise<unknown[]> => (await (h.read as () => Promise<{ events: unknown[] }>).call(h)).events
+    // 新位置的记录要与这个会话一致：旧处还在盘上（复制）时逐条比对旧处——新位置是旧处的前缀就把旧处多出来的补过去
+    // （复制之后旧处又写过：复制时正在跑的那一轮、复制后点开会话 resume 补的事件），补完必须与旧处完全相同；
+    // 两处各自写过（同样长也算）就不搬。旧处已不在（搬家）时两处本来是同一份，只核对长度。最后都要与内存里的会话一样长。
+    let same = false
+    try {
+      let events = await read(fresh)
+      if (existsSync(from.caseRoot!)) {
+        const old = await from.backend.open(id, 'read')
+        try {
+          const all = await read(old)
+          const prefix = events.length <= all.length && JSON.stringify(all.slice(0, events.length)) === JSON.stringify(events)
+          if (prefix && events.length < all.length) {
+            const added = all.length - events.length
+            await (fresh.append as (e: unknown[]) => Promise<void>).call(fresh, all.slice(events.length))
+            events = await read(fresh)
+            this.opts.log?.('info', 'session_store.writer_caught_up', { count: added })
+          }
+          same = prefix && JSON.stringify(events) === JSON.stringify(all)
+        } finally {
+          await (old.close as () => Promise<void>).call(old).catch(() => undefined)
+        }
+      } else {
+        same = true
+      }
+      if (expectedEvents !== undefined && events.length !== expectedEvents) same = false
+    } catch { /* 当对不上 */ }
+    if (!same) {
+      await (fresh.close as () => Promise<void>).call(fresh).catch(() => undefined)
+      return lose('diverged')
+    }
+    w.cur = fresh
+    w.at = next
+    this.owner.set(id, next)
+    this.opts.log?.('info', 'session_store.writer_moved', { index: next.index })
+    return 'moved'
+  }
+
+  /** 这个会话的写入位置已失效（搬不了），下一轮要拒绝。 */
+  writerLost(id: string): boolean {
+    return this.writers.get(id)?.lost === true
   }
 
   async create(header: Header, options?: Opts): Promise<Handle> {

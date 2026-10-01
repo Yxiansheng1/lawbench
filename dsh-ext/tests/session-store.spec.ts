@@ -307,6 +307,49 @@ describe('第三轮复核返修：路由', () => {
     expect(refreshes).toBe(1) // 2 秒内不再刷
   })
 
+  it('第五轮 F1：写入者搬家——新位置与旧处一样长但内容不同（两处各自写过）→ 已失效；是旧处的前缀 → 补齐后搬；完全相同 → 直接搬', async () => {
+    // 带事件的假实例：一个根一份"磁盘"，写句柄能 read、append
+    const disk = new Map<string, Map<string, string[]>>()
+    class EvBackend implements Backend {
+      constructor(private root: string) {}
+      private get m() { let m = disk.get(this.root); if (!m) { m = new Map(); disk.set(this.root, m) } return m }
+      async create(h: Header) { this.m.set(h.id, []); return this.open(h.id, 'write') }
+      async open(id: string, access: 'read' | 'write') {
+        const ev = this.m.get(id)
+        if (!ev) throw Object.assign(new Error('nf'), { name: 'SessionPersistenceNotFoundError' })
+        return { id, access, header: H(id, 'X'), read: async () => ({ events: [...ev] }), append: async (e: string[]) => { ev.push(...e) }, close: async () => {} }
+      }
+      async flush() {}
+      async stat(id: string) { return this.m.has(id) ? { header: H(id, 'X') } : undefined }
+      async list() { return [...this.m.keys()].map((id) => ({ header: H(id, 'X') })) }
+    }
+    const put = (root: string, ev: readonly string[]) => { const k = join(root, '工作区', '会话'); if (!disk.has(k)) disk.set(k, new Map()); disk.get(k)!.set('s1', [...ev]) }
+    const OLD = mkdtempSync(join(tmpdir(), 'lb-reloc-')); const NEW = OLD + '-新'
+    mkdirSync(NEW)
+    try {
+      for (const [label, oldEv, newEv, want, after] of [
+        ['分叉', ['e0', 'e1', 'old'], ['e0', 'e1', 'new'], 'lost', undefined],
+        ['前缀', ['e0', 'e1', 'e2'], ['e0', 'e1'], 'moved', ['e0', 'e1', 'e2']],
+        ['相同', ['e0', 'e1'], ['e0', 'e1'], 'moved', ['e0', 'e1']],
+      ] as const) {
+        disk.clear()
+        const roots = new CaseRoots(); roots.replace([{ root: OLD, exists: true }])
+        const router = new SessionRouter((r) => new EvBackend(r), roots, { defaultRoot: join(OLD, 'home'), allowOutsideCase: false })
+        const h = await router.create(H('s1', OLD))
+        put(OLD, oldEv)
+        ;(router as unknown as { all(): unknown }).all()
+        roots.replace([{ root: NEW, exists: true }])
+        ;(router as unknown as { all(): unknown }).all()
+        put(NEW, newEv)
+        expect(router.staleWriters()).toEqual(['s1'])
+        expect([label, await router.relocate('s1', oldEv.length)]).toEqual([label, want])
+        expect(router.writerLost('s1')).toBe(want === 'lost')
+        if (after) expect(disk.get(join(NEW, '工作区', '会话'))!.get('s1')).toEqual(after)
+        void h
+      }
+    } finally { rmSync(OLD, { recursive: true, force: true }); rmSync(NEW, { recursive: true, force: true }) }
+  })
+
   it('A-P3-3：默认根里已有的旧会话只读，续写拒绝并给同一句中文说明（开关打开时照常）', async () => {
     const off = fakeRouter([A], { allowOutsideCase: false })
     off.backendOf('C:\\dsh\\sessions').sessions.set('old', H('old', 'D:\\别处'))

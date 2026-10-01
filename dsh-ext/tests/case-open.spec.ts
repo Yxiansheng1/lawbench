@@ -37,6 +37,10 @@ type H = { header: Header; append(e: unknown): Promise<void>; close(): Promise<v
 // 假工作台服务：/api/case/recent 列 cases；/api/case/open 之后改成只列打开的那个位置（真服务的 registry.open 语义）
 let cases: Array<{ root: string; exists: boolean }> = []
 let opens = 0
+/** /api/case/recent 的回答延迟（毫秒）：列表在收到请求时取，过这么久才回（第五轮复核 A-P3-1 的"途中那次"）。 */
+let recentDelay = 0
+/** 为 true 时 /api/case/open 不改列表（模拟服务没把打开的位置列出来，第五轮复核 F2）。 */
+let openIgnored = false
 let server: Server
 let port = 0
 beforeAll(async () => {
@@ -44,13 +48,14 @@ beforeAll(async () => {
     res.setHeader('content-type', 'application/json')
     if (req.headers.authorization !== 'Bearer t') { res.statusCode = 401; res.end('{}'); return }
     if (req.url === '/api/case/recent') {
-      res.end(JSON.stringify({ ok: true, value: { cases: cases.map((c) => ({ case_id: 'C-1', name: '虚构', last_opened: '2026-10-01T12:00:00+08:00', ...c })) } }))
+      const snapshot = cases.map((c) => ({ case_id: 'C-1', name: '虚构', last_opened: '2026-10-01T12:00:00+08:00', ...c }))
+      setTimeout(() => res.end(JSON.stringify({ ok: true, value: { cases: snapshot } })), recentDelay)
       return
     }
     if (req.url === '/api/case/open' && req.method === 'POST') {
       let body = ''
       req.on('data', (d) => { body += d })
-      req.on('end', () => { opens++; cases = [{ root: JSON.parse(body).path, exists: true }]; res.end(JSON.stringify(CASE_OPEN_OK)) })
+      req.on('end', () => { opens++; if (!openIgnored) cases = [{ root: JSON.parse(body).path, exists: true }]; res.end(JSON.stringify(CASE_OPEN_OK)) })
       return
     }
     res.statusCode = 404; res.end('{}')
@@ -82,9 +87,9 @@ async function bootReg(pool: unknown, p: Backend) {
 /** /api 各接口是按路由表挂到原型上的方法（类型里没有）。 */
 type Api = LawbenchRemote & { caseOpen(request: unknown): Promise<{ ok: boolean }> }
 /** 我方 Host 的远程接口：工作台服务指向假服务，DSH 的两个服务取自上面的会话存储与登记。 */
-const remote = (p: unknown, reg: unknown, appData: string): Api =>
+const remote = (p: unknown, reg: unknown, appData: string, sessions?: unknown): Api =>
   new LawbenchRemote({ endpoint: () => ({ port, token: 't' }), state: 'running' } as unknown as Supervisor, appData, () => undefined, [], () => {}, undefined,
-    (name) => (name === 'sessionPersistence' ? p : name === 'workspaceRegistry' ? reg : undefined)) as Api
+    (name) => (name === 'sessionPersistence' ? p : name === 'workspaceRegistry' ? reg : name === 'sessions' ? sessions : undefined)) as Api
 const raw = (reg: any, path: string): string[] => { const w = reg.list().find((x: any) => x.path === path); return w ? [...reg.table.get(w.id).sessionIds].sort() : ['<no ws>'] }
 async function write(p: Backend, id: string, cwd: string, events = oneTurnLog()) {
   const h = (await p.create(meta(id, cwd) as never)) as unknown as H
@@ -98,7 +103,7 @@ const hashDir = (d: string) => files(d).sort().map((f) => f.slice(d.length) + ':
 const waitRoots = async (appData: string, want: string) => { for (let i = 0; i < 150; i++) { if (new CaseRoots(appData).load().list().includes(want)) return; await sleep(20) } }
 
 let tmp: string
-beforeEach(() => { tmp = realpathSync(mkdtempSync(join(tmpdir(), 'lb-caseopen-'))); cases = []; opens = 0 })
+beforeEach(() => { tmp = realpathSync(mkdtempSync(join(tmpdir(), 'lb-caseopen-'))); cases = []; opens = 0; recentDelay = 0; openIgnored = false })
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }) })
 
 /** 旧位置建案件、写一个会话 s1 并挂进旧工作区；停掉；复制（或搬家）到新位置；重启（服务仍只列旧位置）。 */
@@ -147,6 +152,21 @@ for (const [label, waitBefore] of [['刚刷新过（5 秒节流内）', 0], ['�
     void home
   }, 30000)
 }
+
+it('X1d 会话在内存里、记录头还是旧位置：Host 挂回时不动它，留在旧工作区（不进"未分组"）；内存里记录头就是这个根的照常挂', async () => {
+  const pool = new MemoryMediaPool()
+  const { appData, oldR, newR, s, b } = await prepare('copy', pool)
+  let liveCwd = oldR
+  const r = remote(s.persistence, b.reg, appData, { get: (id: string) => (id === 's1' ? { header: { cwd: liveCwd } } : undefined) })
+  expect((await r.caseOpen({ path: newR, template: null })).ok).toBe(true)
+  await b.reg.create(newR)
+  expect(await r.attachCaseSessions({ root: newR })).toEqual({ ok: true, value: { attached: 0, failed: 0 } })
+  expect([raw(b.reg, newR), raw(b.reg, oldR)]).toEqual([[], ['s1']])
+  liveCwd = newR // 比如这时内存里的会话已是从新位置 resume 的
+  expect(await r.attachCaseSessions({ root: newR })).toEqual({ ok: true, value: { attached: 1, failed: 0 } })
+  expect([raw(b.reg, newR), raw(b.reg, oldR)]).toEqual([['s1'], []])
+  await b.dispose(); await s.dispose()
+}, 30000)
 
 it('X1b 纯搬家后第一次在新位置打开：caseOpen → 挂回就挂上（不进"未分组"）', async () => {
   const pool = new MemoryMediaPool()
@@ -197,6 +217,37 @@ it('X7 同一进程里案件整个搬走、先打开后列表：找不到时强�
   expect(h.header.cwd).toBe(newR)
   await h.close()
   await s.dispose()
+}, 30000)
+
+it('A-P3-1 途中那次刷新是打开之前发出的：caseOpen 后先等它回来、再问一次，续写落新文件夹', async () => {
+  const pool = new MemoryMediaPool()
+  const { appData, oldR, newR, s, b } = await prepare('copy', pool)
+  const oldHash = hashDir(oldR)
+  recentDelay = 800
+  await sleep(5200) // 过了 5 秒节流
+  await s.persistence.list() // 触发后台刷新：服务这时还只列旧位置，800 毫秒后才回
+  await sleep(100)
+  expect((await remote(s.persistence, b.reg, appData).caseOpen({ path: newR, template: null })).ok).toBe(true)
+  expect(new CaseRoots(appData).load().list()).toEqual([newR])
+  const h = (await s.persistence.open('s1', 'write')) as unknown as H
+  expect(h.header.cwd).toBe(newR)
+  await h.append(oneTurnLog().slice(2)); await h.close()
+  expect(hashDir(oldR)).toBe(oldHash)
+  await b.dispose(); await s.dispose()
+}, 30000)
+
+it('F2 打开后服务没把这个位置列出来：挂回结果带 listed:false（界面据此提示稍后再打开）', async () => {
+  const pool = new MemoryMediaPool()
+  const { appData, newR, s, b } = await prepare('copy', pool)
+  openIgnored = true
+  const r = remote(s.persistence, b.reg, appData)
+  expect((await r.caseOpen({ path: newR, template: null })).ok).toBe(true)
+  await b.reg.create(newR)
+  expect(await r.attachCaseSessions({ root: newR })).toEqual({ ok: true, value: { attached: 0, failed: 0, listed: false } })
+  openIgnored = false
+  expect((await r.caseOpen({ path: newR, template: null })).ok).toBe(true)
+  expect(await r.attachCaseSessions({ root: newR })).toEqual({ ok: true, value: { attached: 1, failed: 0 } })
+  await b.dispose(); await s.dispose()
 }, 30000)
 
 describe('Host 包装（第四轮复核 A-P3-3）', () => {

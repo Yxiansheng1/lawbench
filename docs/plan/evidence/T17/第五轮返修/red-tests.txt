@@ -1,0 +1,117 @@
+# T17 第五轮返修（活着的句柄）变异（撤回单处修法）
+
+## F1：名单变了以后不搬写入者
+文件：dsh-ext/session-store/index.ts；跑：tests/live-writer.spec.ts
+结果：8 failed | 1 passed (9)
+- tests/live-writer.spec.ts > 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- tests/live-writer.spec.ts > 复制后新位置被另一个进程续写过（旧处也接着说过一句）：两处分叉，搬不了，记为已失效，两处都不再变
+- tests/live-writer.spec.ts > 复制后新位置被另一个进程续写过（旧处没再写）：两处分叉，搬不了，记为已失效，两处都不再变
+- tests/live-writer.spec.ts > 复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置
+- tests/live-writer.spec.ts > 复制：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- tests/live-writer.spec.ts > 搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效
+- tests/live-writer.spec.ts > 搬家后服务还没列出新位置（律师没在新位置打开）：写入者搬不过去，记为已失效，两处都不写
+- tests/live-writer.spec.ts > 搬家：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- 复制后新位置被另一个进程续写过（旧处也接着说过一句）：两处分叉，搬不了，记为已失效，两处都不再变
+- 复制后新位置被另一个进程续写过（旧处没再写）：两处分叉，搬不了，记为已失效，两处都不再变
+- 复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置
+- 复制：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- 搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效
+- 搬家后服务还没列出新位置（律师没在新位置打开）：写入者搬不过去，记为已失效，两处都不写
+- 搬家：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+
+## F1：打开案件后的刷新不顺带搬写入者
+文件：dsh-ext/session-store/index.ts；跑：tests/live-writer.spec.ts
+结果：7 failed | 2 passed (9)
+- tests/live-writer.spec.ts > 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- tests/live-writer.spec.ts > 复制后新位置被另一个进程续写过（旧处也接着说过一句）：两处分叉，搬不了，记为已失效，两处都不再变
+- tests/live-writer.spec.ts > 复制后新位置被另一个进程续写过（旧处没再写）：两处分叉，搬不了，记为已失效，两处都不再变
+- tests/live-writer.spec.ts > 复制：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- tests/live-writer.spec.ts > 搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效
+- tests/live-writer.spec.ts > 搬家后服务还没列出新位置（律师没在新位置打开）：写入者搬不过去，记为已失效，两处都不写
+- tests/live-writer.spec.ts > 搬家：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- 复制后新位置被另一个进程续写过（旧处也接着说过一句）：两处分叉，搬不了，记为已失效，两处都不再变
+- 复制后新位置被另一个进程续写过（旧处没再写）：两处分叉，搬不了，记为已失效，两处都不再变
+- 复制：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- 搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效
+- 搬家后服务还没列出新位置（律师没在新位置打开）：写入者搬不过去，记为已失效，两处都不写
+- 搬家：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+
+## F1：正在跑的一轮不等结束就搬（不看 Agent 状态）
+文件：dsh-ext/session-store/index.ts；跑：tests/live-writer.spec.ts
+结果：1 failed | 8 passed (9)
+- tests/live-writer.spec.ts > 复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置
+- 复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置
+
+## F1：不补旧处多出来的事件
+文件：dsh-ext/session-store/router.ts；跑：tests/live-writer.spec.ts
+结果：2 failed | 7 passed (9)
+- tests/live-writer.spec.ts > 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- tests/live-writer.spec.ts > 复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置
+- 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- 复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置
+
+## F1：不逐条比对旧处（两处分叉也照样搬）
+文件：dsh-ext/session-store/router.ts；跑：tests/live-writer.spec.ts、tests/session-store.spec.ts
+结果：1 failed | 95 passed (96)
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > 第五轮 F1：写入者搬家——新位置与旧处一样长但内容不同（两处各自写过）→ 已失效；是旧处的前缀 → 补齐后搬；完全相同 → 直接搬
+- 第五轮 F1：写入者搬家——新位置与旧处一样长但内容不同（两处各自写过）→ 已失效；是旧处的前缀 → 补齐后搬；完全相同 → 直接搬
+
+## F1：不核对内存里的会话长度（搬家后只在内存里的那几句之后照样搬）
+文件：dsh-ext/session-store/router.ts；跑：tests/live-writer.spec.ts
+结果：1 failed | 8 passed (9)
+- tests/live-writer.spec.ts > 搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效
+- 搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效
+
+## F1：同一会话的搬动不排队
+文件：dsh-ext/session-store/router.ts；跑：tests/live-writer.spec.ts
+结果：3 failed | 6 passed (9)
+- tests/live-writer.spec.ts > 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- tests/live-writer.spec.ts > 复制：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- tests/live-writer.spec.ts > 搬家：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- 关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹
+- 复制：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+- 搬家：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到
+
+## F1：挂回时动内存里记录头还是旧位置的会话（去掉再挂不上，进"未分组"）
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 10 passed (11)
+- W7 活着的会话（会话仓库里有它，内存里的记录头还是旧位置）：不去掉、不挂，留在旧工作区；不进"未分组"，重启正常（第五轮桌面端实测）
+- tests/workspace-attach.spec.ts > W7 活着的会话（会话仓库里有它，内存里的记录头还是旧位置）：不去掉、不挂，留在旧工作区；不进"未分组"，重启正常（第五轮桌面端实测）
+
+## F1：Host 不告诉挂回哪些会话活着
+文件：dsh-ext/host/index.ts；跑：tests/case-open.spec.ts
+结果：1 failed | 10 passed (11)
+- X1d 会话在内存里、记录头还是旧位置：Host 挂回时不动它，留在旧工作区（不进"未分组"）；内存里记录头就是这个根的照常挂
+- tests/case-open.spec.ts > X1d 会话在内存里、记录头还是旧位置：Host 挂回时不动它，留在旧工作区（不进"未分组"）；内存里记录头就是这个根的照常挂
+
+## F1：写入位置失效时 Agent 插件不拒绝
+文件：dsh-ext/agent/index.ts；跑：tests/agent.spec.ts
+结果：1 failed | 11 passed (12)
+- step 1 整轮拒绝、记 CASE_MOVED 给界面，不取任务；位置正常时照常
+- tests/agent.spec.ts > 会话的写入位置已失效（T17 第五轮复核 F1） > step 1 整轮拒绝、记 CASE_MOVED 给界面，不取任务；位置正常时照常
+
+## F1：输入区不提示 CASE_MOVED
+文件：dsh-ext/ui/dock.tsx；跑：tests/dock-a19.spec.ts
+结果：1 failed | 21 passed (22)
+- tests/dock-a19.spec.ts > turnNotice 返回 CASE_MOVED：弹"这条消息没有发出"的中文说明
+- turnNotice 返回 CASE_MOVED：弹"这条消息没有发出"的中文说明
+
+## F2：挂回结果不报 listed
+文件：dsh-ext/host/index.ts；跑：tests/case-open.spec.ts
+结果：1 failed | 10 passed (11)
+- F2 打开后服务没把这个位置列出来：挂回结果带 listed:false（界面据此提示稍后再打开）
+- tests/case-open.spec.ts > F2 打开后服务没把这个位置列出来：挂回结果带 listed:false（界面据此提示稍后再打开）
+
+## F2：界面不提示名单没刷新
+文件：dsh-ext/ui/index.tsx；跑：tests/intake.spec.ts
+结果：1 failed | 6 passed (7)
+- tests/intake.spec.ts > 打开案件：建工作区 → 挂回游离会话 → 打开工作区（B-F2） > 第五轮 F2：挂回结果说名单里没有这个案件（listed:false）：照常打开，并提示稍后再打开一次
+- 第五轮 F2：挂回结果说名单里没有这个案件（listed:false）：照常打开，并提示稍后再打开一次
+
+## A-P3-1：打开案件后的刷新不等途中那次
+文件：dsh-ext/session-store/index.ts；跑：tests/case-open.spec.ts
+结果：1 failed | 10 passed (11)
+- A-P3-1 途中那次刷新是打开之前发出的：caseOpen 后先等它回来、再问一次，续写落新文件夹
+- tests/case-open.spec.ts > A-P3-1 途中那次刷新是打开之前发出的：caseOpen 后先等它回来、再问一次，续写落新文件夹

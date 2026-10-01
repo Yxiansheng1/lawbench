@@ -281,6 +281,32 @@ it('W6 从旧工作区去掉时出错（写盘失败）：这个会话不挂、�
   await b.dispose()
 })
 
+it('W7 活着的会话（会话仓库里有它，内存里的记录头还是旧位置）：不去掉、不挂，留在旧工作区；不进"未分组"，重启正常（第五轮桌面端实测）', async () => {
+  const oldR = join(tmp, '桌面', '案癸'); const newR = join(tmp, '案件盘', '案癸')
+  mkdirSync(oldR, { recursive: true })
+  const pool = new MemoryMediaPool()
+  const roots = new CaseRoots(); roots.replace([{ root: oldR, exists: true }])
+  const live = new Map<string, { header: Header }>()
+  let router = newRouter(roots, tmp)
+  let b = await boot(pool, router, live)
+  const w = await b.reg.create(oldR)
+  await router.create(H('s1', oldR)); live.set('s1', { header: H('s1', oldR) }); await w.attachSession('s1')
+  cpSync(oldR, newR, { recursive: true }); copyDisk(store(oldR), store(newR), true)
+  roots.replace([{ root: newR, exists: true }])
+  await b.reg.create(newR)
+  const logs: string[] = []
+  expect(await attachCaseSessions(b.reg, b.persistence, newR, (_l, e) => { logs.push(e) }, (id) => live.get(id)?.header.cwd)).toEqual({ attached: 0, failed: 0 })
+  expect(logs).toContain('workspace.attach_deferred_live')
+  expect([raw(b.reg, newR), raw(b.reg, oldR), members(b.reg, oldR)]).toEqual([[], ['s1'], ['s1']])
+  await b.dispose(); live.clear()
+  // 重启后（不再活着）打开新位置：挂过去
+  router = newRouter(roots, tmp)
+  b = await boot(pool, router, live)
+  expect(await attachCaseSessions(b.reg, b.persistence, newR, () => {}, (id) => live.get(id)?.header.cwd)).toEqual({ attached: 1, failed: 0 })
+  expect([raw(b.reg, newR), raw(b.reg, oldR)]).toEqual([['s1'], []])
+  await b.dispose()
+})
+
 it('找不到这个案件的工作区时什么也不做；挂不上的只计数、日志不带路径和编号', async () => {
   const logs: Array<[string, unknown]> = []
   const reg = { list: () => [{ path: join(tmp, '案丁'), sessionIds: [], attachSession: async () => { throw new Error(`cannot attach session 's9' to workspace '${tmp}'`) } }] }

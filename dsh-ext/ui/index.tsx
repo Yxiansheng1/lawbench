@@ -50,6 +50,9 @@ type DesktopWindow = Window & {
 }
 const win = window as DesktopWindow
 
+/** 打开案件后会话名单没刷新到这个案件时的提示（第五轮复核 F2）。 */
+export const ROOTS_NOT_REFRESHED = ['会话名单没刷新', '案件已打开，但会话名单没刷新，请稍后再打开一次。'] as const
+
 /** 导航能力：各块 inject 成功后各自填入。 */
 const navImpl: Partial<Nav> & { pending?: { kind: string; params?: Record<string, string> } } = {
   pathFor: (f) => { try { return win.__DSH_HOST_PATHS__?.pathFor(f) ?? '' } catch { return '' } },
@@ -114,7 +117,9 @@ function registerHome(ctx: Ctx): void {
 function registerWorkspace(ctx: Ctx): void {
   navImpl.openCaseWorkspace = async (root) => {
     const ws = await ctx.workspaces.create({ path: root })
-    await call('attachCaseSessions', { root }).catch(() => undefined)
+    const r = await call<{ listed?: boolean }>('attachCaseSessions', { root }).catch(() => undefined)
+    // 打开后会话名单没刷新到这个案件（服务没答、挂住）：旧会话可能还没归到这里，提示稍后再打开一次（第五轮复核 F2）
+    if (r?.ok && r.value.listed === false) notice(ROOTS_NOT_REFRESHED[0], ROOTS_NOT_REFRESHED[1])
     await ctx.uiWorkspace.openWorkspace(ws.workspaceId)
   }
   const fallbackPick = ctx.uiWorkspace.pickDirectory

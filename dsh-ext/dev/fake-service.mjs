@@ -12,7 +12,7 @@
 import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
 import { API_ROUTES } from '../shared/api-routes.ts'
-import { join, dirname } from 'node:path'
+import { basename, join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -32,7 +32,11 @@ const FAIL_BEGIN = flag('--fail-begin')
 const FAIL_CONTEXT = arg('--fail-context', null)
 const BAD_RESPONSE = flag('--bad-response')
 const FIXTURES = flag('--fixtures')
-const CASE_ROOT = arg('--case-root', null)
+// 真服务按案件编号去重：律师在新位置打开（/api/case/open）之后，最近案件只列新位置（T17 第五轮复核的证据缺口）。
+// 这里模拟：给了 --case-root 时，打开的路径若与它同名（复制、搬家后的同一案件），之后第一个案件就报打开的那个路径。
+let CASE_ROOT = arg('--case-root', null)
+// --case-root-file <文件>：每次请求都从这个文件读第一个案件的位置（桌面端复测时手动切换"服务现在只列哪个位置"）
+const CASE_ROOT_FILE = arg('--case-root-file', null)
 // 契约 1.2（N37）：任务单按"管到律师改掉为止"模拟——/api/task 设置该会话当前的选择（新的顶掉旧的）；
 // /api/task/current 读回；/core/task/begin 按当前选择复制一份新建执行中的任务，当前选择不消耗、不删除；
 // /api/tasks 只列已开始执行的。--fail-task-create：写选择一律返回 SERVICE_UNAVAILABLE（测"写入失败保留下拉框"）
@@ -175,6 +179,8 @@ function fromFixtures(method, path, query, body) {
   }
   if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
   const out = fixture(`${r.contract}.json`)
+  if (CASE_ROOT_FILE && existsSync(CASE_ROOT_FILE)) CASE_ROOT = readFileSync(CASE_ROOT_FILE, 'utf8').trim() || CASE_ROOT
+  if (CASE_ROOT && r.method === 'caseOpen' && typeof request?.path === 'string' && basename(request.path) === basename(CASE_ROOT)) CASE_ROOT = request.path
   if (CASE_ROOT && r.method === 'caseRecent' && out.ok && out.value.cases[0]) out.value.cases[0].root = CASE_ROOT
   return [out]
 }

@@ -33,6 +33,7 @@ export interface Config {
 }
 
 type Ctx = {
+  on(event: string, listener: (...args: any[]) => unknown): () => void
   isolate(name: string): Ctx
   get(name: string): unknown
   provide(name: string, value: unknown): unknown
@@ -113,7 +114,7 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     if (!force && Date.now() - lastAt < 5000) return Promise.resolve()
     if (!core()?.endpoint()) return Promise.resolve()
     inFlight = refreshFromService(core(), roots, log)
-      .then((ok) => { if (ok) gate.mark() })
+      .then((ok) => { if (ok) { gate.mark(); void relocateStale() } })
       .finally(() => { lastAt = Date.now(); inFlight = undefined })
     return inFlight
   }
@@ -124,6 +125,35 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
   const refreshNow = async (): Promise<void> => {
     if (inFlight) await inFlight.catch(() => undefined)
     await refresh(true)
+    await relocateStale()
+  }
+
+  /**
+   * 活着的写入者跟着案件走（第五轮复核 F1，见 router.ts 文件头）：名单变了以后，把所属案件根已失效的写入者搬到会话现在
+   * 所在的实例。时机：会话的 Agent 空闲时立刻搬；正在跑一轮的不打断，等它这一轮结束（agent/status 变 idle）再搬，
+   * 不设超时（一轮多长由模型决定；没搬之前这一轮的事件照旧落旧处，与律师打开新位置之前一样）。
+   * 核对：新位置的记录必须与内存里的会话一样长（DSH 会话的 seq），对不上（复制之后旧处又写过）就记为已失效。
+   */
+  const waiting = new Set<string>()
+  const relocateOne = async (id: string): Promise<void> => {
+    const sessions = ctx.get('sessions') as { get(id: string): { seq?: number } | undefined } | undefined
+    const seq = sessions?.get(id)?.seq
+    await router.relocate(id, typeof seq === 'number' ? seq : undefined).catch((e: unknown) => {
+      log('warn', 'session_store.writer_relocate_failed', { error: (e as Error)?.name ?? 'Error' })
+    })
+  }
+  const relocateStale = async (): Promise<void> => {
+    const agents = ctx.get('agents') as { get(id: string): { status?: string } | undefined } | undefined
+    for (const id of router.staleWriters()) {
+      if (agents?.get(id)?.status !== 'running') { await relocateOne(id); continue }
+      if (waiting.has(id)) continue
+      waiting.add(id)
+      const off = ctx.on('agent/status', (payload: { agent?: { id?: string }; status?: string }) => {
+        if (payload?.agent?.id !== id || payload.status !== 'idle') return
+        off(); waiting.delete(id)
+        void relocateOne(id)
+      })
+    }
   }
   const router = new SessionRouter(
     (root) => new Jsonl(ctx.isolate('sessionPersistence'), { root, ...(config.compression ? { compression: config.compression } : {}) }),
@@ -140,6 +170,10 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     list(options?: never) { return router.list(options) }
     /** 我方加的（不在 DSH 的接口里）：Host 打开案件后调，见 refreshNow。 */
     refreshCaseRoots() { return refreshNow() }
+    /** 我方加的：这个会话的写入位置已失效（案件文件夹搬走、又搬不过去），我方 Agent 插件据此拒绝下一轮。 */
+    writerLost(id: string) { return router.writerLost(id) }
+    /** 我方加的：案件根名单上有没有这个根（Host 打开案件后核对刷新是否成功）。 */
+    hasCaseRoot(root: string) { return roots.has(root) }
   }
   new LawbenchSessionPersistence(ctx)
   log('info', 'session_store.started', { case_roots: roots.list().length, allow_outside_case: config.allowOutsideCase ?? false })
