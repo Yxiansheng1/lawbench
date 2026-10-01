@@ -1,0 +1,4 @@
+﻿merge gate T3/T10 两小项 @ da473d7 2026-10-02 00:24
+[对] case-archiving/catalogs/民事行政卷.json
+结果：✔ 通过
+957 passed, 6 skipped, 1 warning in 625.23s (0:10:25)
