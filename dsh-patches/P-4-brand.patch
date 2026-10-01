@@ -1,0 +1,564 @@
+diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
+index 174ebfa28b..265940ac6a 100644
+--- a/apps/desktop/installer/strings.nsh
++++ b/apps/desktop/installer/strings.nsh
+@@ -19,20 +19,20 @@ LangString INSTALLER_BROWSE ${LANG_ENGLISH} "Browse"
+ LangString INSTALLER_BROWSE ${LANG_SIMPCHINESE} "选择"
+ LangString INSTALLER_LAUNCH ${LANG_ENGLISH} "Launch now"
+ LangString INSTALLER_LAUNCH ${LANG_SIMPCHINESE} "立即启动"
+-LangString INSTALLER_LAUNCH_FAILED ${LANG_ENGLISH} "DeepSeek Harness could not be launched. Retry, or clear Launch now and close the installer."
+-LangString INSTALLER_LAUNCH_FAILED ${LANG_SIMPCHINESE} "无法启动 DeepSeek Harness。请重试，或取消勾选立即启动后关闭安装程序。"
++LangString INSTALLER_LAUNCH_FAILED ${LANG_ENGLISH} "连越律师工作台 could not be launched. Retry, or clear Launch now and close the installer."
++LangString INSTALLER_LAUNCH_FAILED ${LANG_SIMPCHINESE} "无法启动 连越律师工作台。请重试，或取消勾选立即启动后关闭安装程序。"
+ LangString INSTALLER_UI_ERROR ${LANG_ENGLISH} "The installer could not initialize its window. Close it and try again."
+ LangString INSTALLER_UI_ERROR ${LANG_SIMPCHINESE} "无法初始化安装窗口，请关闭后重试。"
+ LangString INSTALLER_THEME_ERROR ${LANG_ENGLISH} "Use /THEME=auto, /THEME=light or /THEME=dark."
+ LangString INSTALLER_THEME_ERROR ${LANG_SIMPCHINESE} "主题参数须为 /THEME=auto、/THEME=light 或 /THEME=dark。"
+ LangString INSTALLER_FAILED ${LANG_ENGLISH} "Installation did not finish. Close this installer and retry. If the problem persists, download the installer again."
+ LangString INSTALLER_FAILED ${LANG_SIMPCHINESE} "安装未完成，请关闭安装程序后重试。如仍然失败，请重新下载安装包。"
+-LangString INSTALLER_RUNNING ${LANG_ENGLISH} "DeepSeek Harness is running. Quit it from the system tray and try again."
+-LangString INSTALLER_RUNNING ${LANG_SIMPCHINESE} "DeepSeek Harness 正在运行，请先在系统托盘中退出应用后重试。"
++LangString INSTALLER_RUNNING ${LANG_ENGLISH} "连越律师工作台 is running. Quit it from the system tray and try again."
++LangString INSTALLER_RUNNING ${LANG_SIMPCHINESE} "连越律师工作台 正在运行，请先在系统托盘中退出应用后重试。"
+ LangString INSTALLER_PATH_INVALID ${LANG_ENGLISH} "Choose a full local folder path. Drive roots, system folders, links and special characters are not supported."
+ LangString INSTALLER_PATH_INVALID ${LANG_SIMPCHINESE} "请选择本地磁盘上的完整文件夹路径，不能使用磁盘根目录、系统目录、链接目录或包含特殊字符的路径。"
+-LangString INSTALLER_PATH_OWNERSHIP ${LANG_ENGLISH} "Choose an empty folder or the registered DeepSeek Harness installation folder."
+-LangString INSTALLER_PATH_OWNERSHIP ${LANG_SIMPCHINESE} "请选择空文件夹，或 DeepSeek Harness 原来的安装目录。"
++LangString INSTALLER_PATH_OWNERSHIP ${LANG_ENGLISH} "Choose an empty folder or the registered 连越律师工作台 installation folder."
++LangString INSTALLER_PATH_OWNERSHIP ${LANG_SIMPCHINESE} "请选择空文件夹，或 连越律师工作台 原来的安装目录。"
+ LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
+ LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
+ LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
+diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
+index 2bb56c359f..a8d6c82a64 100644
+--- a/apps/desktop/scripts/electron-builder-config.mjs
++++ b/apps/desktop/scripts/electron-builder-config.mjs
+@@ -99,16 +99,16 @@ export function createElectronBuilderConfig(
+   const packaged = resolveDesktopBuildCommit(env)
+   return {
+     appId,
+-    protocols: [{ name: 'DeepSeek Harness', schemes: ['dsh'] }],
++    protocols: [{ name: '连越律师工作台', schemes: ['dsh'] }], // lawbench P-4：名称换掉，scheme 不动（DSH 单实例与唤起依赖它）
+     extraMetadata: {
+       dshDesktopAppId: appId,
+       dshMandatoryUpdatePolicy: policy,
+       ...buildVersion === productVersion ? {} : { version: buildVersion },
+       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
+     },
+-    productName: 'DeepSeek Harness',
++    productName: '连越律师工作台', // lawbench P-4：软件名称未定，暂用占位名（packaging\brand\names.txt）
+     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
+-    artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
++    artifactName: `lawbench-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
+     directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
+     asar: true,
+     electronDist: buildPaths.electron,
+@@ -156,7 +156,7 @@ export function createElectronBuilderConfig(
+       identity: macOSSigning?.signingIdentity,
+       forceCodeSigning: true,
+       hardenedRuntime: true,
+-      extendInfo: { NSMicrophoneUsageDescription: 'DeepSeek Harness uses your microphone to transcribe speech into message drafts.' },
++      extendInfo: { NSMicrophoneUsageDescription: '连越律师工作台 uses your microphone to transcribe speech into message drafts.' },
+       // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
+       signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
+       notarize: true,
+diff --git a/apps/desktop/src/locale.ts b/apps/desktop/src/locale.ts
+index b3f9e535c9..52e7c968ad 100644
+--- a/apps/desktop/src/locale.ts
++++ b/apps/desktop/src/locale.ts
+@@ -4,21 +4,21 @@ export const en = {
+   application: 'Application',
+   fileMenu: 'File',
+   closePage: 'Close Page or Window',
+-  aboutMenu: 'About DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
+-  aboutVersion: 'Version V{version}',
+-  hideApplication: 'Hide DeepSeek Harness',
++  aboutMenu: 'About 连越律师工作台',
++  aboutProduct: '连越律师工作台',
++  aboutVersion: 'Version V{version}\nGuangdong Lianyue (Shenzhen) Law Firm\nTechnical support: Shanghai Morelite Intelligent Technology Co., Ltd.',
++  hideApplication: 'Hide 连越律师工作台',
+   hideOtherApplications: 'Hide Others',
+   showAllApplications: 'Show All',
+-  quitApplication: 'Quit DeepSeek Harness',
+-  openApplication: 'Open DeepSeek Harness',
++  quitApplication: 'Quit 连越律师工作台',
++  openApplication: 'Open 连越律师工作台',
+   quit: 'Quit',
+   cancel: 'Cancel',
+-  quitTitle: 'Quit DeepSeek Harness?',
++  quitTitle: 'Quit 连越律师工作台?',
+   quitActiveTasks: 'Running tasks will be interrupted.',
+   quitScheduledTasks: 'Scheduled tasks will not run while the app is closed.',
+   quitActiveAndScheduledTasks: 'Running tasks will be interrupted, and scheduled tasks will not run while the app is closed.',
+-  backgroundNoticeBody: 'Running tasks will continue. You can reopen the window from the system tray.',
++  backgroundNoticeBody: 'The window is closed; material recognition continues in the background. Reopen it from the system tray.',
+   backgroundNoticeConfirm: 'Confirm',
+   edit: 'Edit',
+   menuBar: 'Application menu',
+@@ -29,7 +29,7 @@ export const en = {
+   copy: 'Copy',
+   paste: 'Paste',
+   selectAll: 'Select All',
+-  startupFailed: 'DeepSeek Harness is unavailable',
++  startupFailed: '连越律师工作台 is unavailable',
+   fatalSummary: 'The application could not start or stopped unexpectedly.',
+   startupAddressInUse: 'Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.',
+   diagnosticTruncated: '… Error details shortened.',
+@@ -39,10 +39,10 @@ export const en = {
+   restartApplication: 'Restart',
+   recoveryOperationFailed: 'The recovery operation failed',
+   disableThirdPartyPlugins: 'Disable third-party plugins, back up profile patch, and restart',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: '连越律师工作台',
++  welcomeBrand: '连越律师工作台',
+   welcomeTaglineBefore: 'Welcome to ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: '连越律师工作台',
+   welcomeTaglineAfter: '',
+   welcomeDescription: 'Build potential. Explore intelligence.',
+   welcomeAuthStarting: 'Opening sign in…',
+@@ -85,7 +85,7 @@ export const en = {
+   updateCurrent: 'No updates available. Current version: V{version}',
+   updateChecking: 'Checking for updates…',
+   updateDownload: 'Download update',
+-  updateDownloadedTitle: 'DeepSeek Harness v{version} downloaded',
++  updateDownloadedTitle: '连越律师工作台 v{version} downloaded',
+   updateDownloadedDetail: 'The update package has downloaded. Select “Install and Restart” to restart the app and begin installation.',
+   updateDownloadedTitleWindows: 'New version v{version} is ready',
+   updateDownloadedDetailWindows: 'The app will close temporarily during the update and reopen automatically when it is complete.\n\nThe update may take some time. Please wait and do not launch the app again during installation.',
+@@ -103,9 +103,9 @@ export const en = {
+   updateTasksUnavailable: 'Task status is unavailable. Try updating again when the workspace is ready.',
+   updateStopFailed: 'Tasks could not be stopped safely. The update was not installed. Please try again later.',
+   updateTechnicalDetails: 'View technical details',
+-  updateTitle: 'DeepSeek Harness Update',
++  updateTitle: '连越律师工作台 Update',
+   updateAvailable: 'An update is available',
+-  updateDetail: 'DeepSeek Harness {version}\n\nDeepSeek Harness will restart to complete the update.',
++  updateDetail: '连越律师工作台 {version}\n\n连越律师工作台 will restart to complete the update.',
+   installAndRestart: 'Install and Restart',
+   later: 'Later',
+   updateFailedTitle: 'Update Failed',
+@@ -148,21 +148,23 @@ export const zh = {
+   application: '应用',
+   fileMenu: '文件',
+   closePage: '关闭页面或窗口',
+-  aboutMenu: '关于 DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
+-  aboutVersion: '版本 V{version}',
+-  hideApplication: '隐藏 DeepSeek Harness',
++  aboutMenu: '关于 连越律师工作台',
++  aboutProduct: '连越律师工作台',
++  // lawbench P-4：关于面板写律所和"技术支持"
++  aboutVersion: '版本 V{version}\n广东连越（深圳）律师事务所\n技术支持：上海莫莱特智能科技有限公司',
++  hideApplication: '隐藏 连越律师工作台',
+   hideOtherApplications: '隐藏其他',
+   showAllApplications: '显示全部',
+-  quitApplication: '退出 DeepSeek Harness',
+-  openApplication: '打开 DeepSeek Harness',
++  quitApplication: '退出 连越律师工作台',
++  openApplication: '打开 连越律师工作台',
+   quit: '退出',
+   cancel: '取消',
+-  quitTitle: '退出 DeepSeek Harness？',
++  quitTitle: '退出 连越律师工作台？',
+   quitActiveTasks: '当前正在运行的任务将会中断',
+   quitScheduledTasks: '应用关闭期间，定时任务不会运行',
+   quitActiveAndScheduledTasks: '当前正在运行的任务将会中断，且应用关闭期间，定时任务不会运行',
+-  backgroundNoticeBody: '正在运行的任务不会中断，可在系统托盘中重新打开窗口',
++  // lawbench P-4 / U-10：首次关闭窗口时说明识别在后台继续
++  backgroundNoticeBody: '窗口已关闭，材料识别会在后台继续；可在系统托盘中重新打开窗口',
+   backgroundNoticeConfirm: '确认',
+   edit: '编辑',
+   menuBar: '应用菜单',
+@@ -173,7 +175,7 @@ export const zh = {
+   copy: '复制',
+   paste: '粘贴',
+   selectAll: '全选',
+-  startupFailed: 'DeepSeek Harness 无法使用',
++  startupFailed: '连越律师工作台 无法使用',
+   fatalSummary: '应用无法启动或已意外停止。',
+   startupAddressInUse: '有其他正在运行的 DSH（如其他 dsh web、桌面端），无法同时启动，请退出其他正在运行的 DSH 后重启。',
+   diagnosticTruncated: '… 错误详情已截短。',
+@@ -183,10 +185,10 @@ export const zh = {
+   restartApplication: '重启',
+   recoveryOperationFailed: '恢复操作失败',
+   disableThirdPartyPlugins: '禁用第三方插件、备份 profile patch 并重启',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: '连越律师工作台',
++  welcomeBrand: '连越律师工作台',
+   welcomeTaglineBefore: '欢迎使用 ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: '连越律师工作台',
+   welcomeTaglineAfter: '',
+   welcomeDescription: '组装无限可能，共探智能上限',
+   welcomeAuthStarting: '正在打开登录…',
+@@ -229,7 +231,7 @@ export const zh = {
+   updateCurrent: '当前暂无可用更新。当前版本：V{version}',
+   updateChecking: '正在检查更新…',
+   updateDownload: '下载更新',
+-  updateDownloadedTitle: 'DeepSeek Harness v{version} 下载完成',
++  updateDownloadedTitle: '连越律师工作台 v{version} 下载完成',
+   updateDownloadedDetail: '安装包已下载完毕，点击“安装并重启”，即刻重启客户端，开始部署。',
+   updateDownloadedTitleWindows: '新版本 v{version} 已准备就绪',
+   updateDownloadedDetailWindows: '更新期间应用将暂时关闭，完成后会自动打开。\n\n更新可能需要一些时间，请耐心等待，期间请勿重复启动应用。',
+@@ -247,9 +249,9 @@ export const zh = {
+   updateTasksUnavailable: '无法确认任务状态，请在工作区就绪后重试更新。',
+   updateStopFailed: '未能安全停止任务，更新未安装。请稍后重试。',
+   updateTechnicalDetails: '查看技术详情',
+-  updateTitle: 'DeepSeek Harness 更新',
++  updateTitle: '连越律师工作台 更新',
+   updateAvailable: '发现可用更新',
+-  updateDetail: 'DeepSeek Harness {version}\n\nDeepSeek Harness 将重启以完成更新。',
++  updateDetail: '连越律师工作台 {version}\n\n连越律师工作台 将重启以完成更新。',
+   installAndRestart: '安装并重启',
+   later: '稍后',
+   updateFailedTitle: '更新失败',
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index bae6af8ad7..40621e1d2b 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -825,7 +825,7 @@ async function main(): Promise<void> {
+   const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
+     : join(process.resourcesPath, 'icon.png')
+   app.setAboutPanelOptions({
+-    applicationName: 'DeepSeek Harness',
++    applicationName: '连越律师工作台', // lawbench P-4
+     applicationVersion: app.getVersion(),
+     // The release has no separate build number; omit Electron's bundle version.
+     version: '',
+diff --git a/apps/desktop/tests/background-notice.spec.ts b/apps/desktop/tests/background-notice.spec.ts
+index cfccf81dd3..ee005900ff 100644
+--- a/apps/desktop/tests/background-notice.spec.ts
++++ b/apps/desktop/tests/background-notice.spec.ts
+@@ -31,8 +31,8 @@ it('keeps the window visible until confirmation and remembers acknowledgement ac
+   f.notice.close(f.hide)
+   expect(f.hide).not.toHaveBeenCalled()
+   expect(existsSync(f.markerPath)).toBe(false)
+-  expect(f.show).toHaveBeenCalledExactlyOnceWith({ type: 'info', title: 'DeepSeek Harness',
+-    message: '正在运行的任务不会中断，可在系统托盘中重新打开窗口', buttons: ['确认'], defaultId: 0, cancelId: -1 })
++  expect(f.show).toHaveBeenCalledExactlyOnceWith({ type: 'info', title: '连越律师工作台',
++    message: '窗口已关闭，材料识别会在后台继续；可在系统托盘中重新打开窗口', buttons: ['确认'], defaultId: 0, cancelId: -1 })
+   expect(f.focus).toHaveBeenCalledOnce()
+   f.response.resolve({ response: 0, checkboxChecked: false })
+   await vi.waitFor(() => { expect(f.hide).toHaveBeenCalledOnce() })
+diff --git a/apps/desktop/tests/expected/about-panel.json b/apps/desktop/tests/expected/about-panel.json
+index 8dc6ee9063..66a8946fc8 100644
+--- a/apps/desktop/tests/expected/about-panel.json
++++ b/apps/desktop/tests/expected/about-panel.json
+@@ -1,11 +1,11 @@
+ {
+   "darwin:en-US": {
+     "menu": [
+-      { "label": "About DeepSeek Harness", "role": "about" },
++      { "label": "About 连越律师工作台", "role": "about" },
+       { "type": "separator" }
+     ],
+     "options": {
+-      "applicationName": "DeepSeek Harness",
++      "applicationName": "连越律师工作台",
+       "applicationVersion": "1.0.0",
+       "version": "",
+       "copyright": "",
+@@ -14,11 +14,11 @@
+   },
+   "darwin:zh-CN": {
+     "menu": [
+-      { "label": "关于 DeepSeek Harness", "role": "about" },
++      { "label": "关于 连越律师工作台", "role": "about" },
+       { "type": "separator" }
+     ],
+     "options": {
+-      "applicationName": "DeepSeek Harness",
++      "applicationName": "连越律师工作台",
+       "applicationVersion": "1.0.0",
+       "version": "",
+       "copyright": "",
+@@ -27,11 +27,11 @@
+   },
+   "win32:zh-CN": {
+     "menu": [
+-      { "label": "关于 DeepSeek Harness" },
++      { "label": "关于 连越律师工作台" },
+       { "type": "separator" }
+     ],
+     "options": {
+-      "applicationName": "DeepSeek Harness",
++      "applicationName": "连越律师工作台",
+       "applicationVersion": "1.0.0",
+       "version": "",
+       "copyright": "",
+@@ -40,11 +40,11 @@
+   },
+   "win32:en-US": {
+     "menu": [
+-      { "label": "About DeepSeek Harness" },
++      { "label": "About 连越律师工作台" },
+       { "type": "separator" }
+     ],
+     "options": {
+-      "applicationName": "DeepSeek Harness",
++      "applicationName": "连越律师工作台",
+       "applicationVersion": "1.0.0",
+       "version": "",
+       "copyright": "",
+diff --git a/apps/desktop/tests/expected/application-menu-en-US.json b/apps/desktop/tests/expected/application-menu-en-US.json
+index af72c9b264..c1ffedea6b 100644
+--- a/apps/desktop/tests/expected/application-menu-en-US.json
++++ b/apps/desktop/tests/expected/application-menu-en-US.json
+@@ -1,7 +1,7 @@
+ [
+   {
+     "role": "hide",
+-    "label": "Hide DeepSeek Harness"
++    "label": "Hide 连越律师工作台"
+   },
+   {
+     "role": "hideOthers",
+@@ -13,6 +13,6 @@
+   },
+   {
+     "role": "quit",
+-    "label": "Quit DeepSeek Harness"
++    "label": "Quit 连越律师工作台"
+   }
+ ]
+diff --git a/apps/desktop/tests/expected/application-menu-zh-CN.json b/apps/desktop/tests/expected/application-menu-zh-CN.json
+index 991b9d7639..0e01007d6c 100644
+--- a/apps/desktop/tests/expected/application-menu-zh-CN.json
++++ b/apps/desktop/tests/expected/application-menu-zh-CN.json
+@@ -1,7 +1,7 @@
+ [
+   {
+     "role": "hide",
+-    "label": "隐藏 DeepSeek Harness"
++    "label": "隐藏 连越律师工作台"
+   },
+   {
+     "role": "hideOthers",
+@@ -13,6 +13,6 @@
+   },
+   {
+     "role": "quit",
+-    "label": "退出 DeepSeek Harness"
++    "label": "退出 连越律师工作台"
+   }
+ ]
+diff --git a/apps/desktop/tests/expected/fatal-address-in-use-en.txt b/apps/desktop/tests/expected/fatal-address-in-use-en.txt
+index 1e9a9b62d0..42d9660b00 100644
+--- a/apps/desktop/tests/expected/fatal-address-in-use-en.txt
++++ b/apps/desktop/tests/expected/fatal-address-in-use-en.txt
+@@ -1,4 +1,4 @@
+-DeepSeek Harness is unavailable
++连越律师工作台 is unavailable
+ The application could not start or stopped unexpectedly.
+ Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.
+ Exit
+diff --git a/apps/desktop/tests/expected/fatal-address-in-use-zh-CN.txt b/apps/desktop/tests/expected/fatal-address-in-use-zh-CN.txt
+index 30cad3d061..2e0fb07d07 100644
+--- a/apps/desktop/tests/expected/fatal-address-in-use-zh-CN.txt
++++ b/apps/desktop/tests/expected/fatal-address-in-use-zh-CN.txt
+@@ -1,4 +1,4 @@
+-DeepSeek Harness 无法使用
++连越律师工作台 无法使用
+ 应用无法启动或已意外停止。
+ 有其他正在运行的 DSH（如其他 dsh web、桌面端），无法同时启动，请退出其他正在运行的 DSH 后重启。
+ 退出
+diff --git a/apps/desktop/tests/expected/fatal-dialog-en.txt b/apps/desktop/tests/expected/fatal-dialog-en.txt
+index 0dd0a62eb3..5a27400e10 100644
+--- a/apps/desktop/tests/expected/fatal-dialog-en.txt
++++ b/apps/desktop/tests/expected/fatal-dialog-en.txt
+@@ -1,4 +1,4 @@
+-DeepSeek Harness is unavailable
++连越律师工作台 is unavailable
+ The application could not start or stopped unexpectedly.
+ Desktop Host failed
+ Plugin initialization failed
+diff --git a/apps/desktop/tests/expected/fatal-dialog-with-report-en.txt b/apps/desktop/tests/expected/fatal-dialog-with-report-en.txt
+index aaa637ca1a..307d285493 100644
+--- a/apps/desktop/tests/expected/fatal-dialog-with-report-en.txt
++++ b/apps/desktop/tests/expected/fatal-dialog-with-report-en.txt
+@@ -1,8 +1,8 @@
+-DeepSeek Harness is unavailable
++连越律师工作台 is unavailable
+ The application could not start or stopped unexpectedly.
+ Desktop Host failed
+ Plugin initialization failed
+-Diagnostic report: C:\Users\someone\AppData\Roaming\DeepSeek Harness\logs\crash-2026-09-22T10-30-00-000Z-host.log
++Diagnostic report: C:\Users\someone\AppData\Roaming\连越律师工作台\logs\crash-2026-09-22T10-30-00-000Z-host.log
+ 
+ If application files are missing or damaged, close the application and reinstall it. Your tasks are stored separately.
+ Exit
+diff --git a/apps/desktop/tests/expected/fatal-dialog-with-report-zh-CN.txt b/apps/desktop/tests/expected/fatal-dialog-with-report-zh-CN.txt
+index 353b59f4a4..cdc676e52d 100644
+--- a/apps/desktop/tests/expected/fatal-dialog-with-report-zh-CN.txt
++++ b/apps/desktop/tests/expected/fatal-dialog-with-report-zh-CN.txt
+@@ -1,8 +1,8 @@
+-DeepSeek Harness 无法使用
++连越律师工作台 无法使用
+ 应用无法启动或已意外停止。
+ Desktop Host failed
+ Plugin initialization failed
+-诊断报告：C:\Users\someone\AppData\Roaming\DeepSeek Harness\logs\crash-2026-09-22T10-30-00-000Z-host.log
++诊断报告：C:\Users\someone\AppData\Roaming\连越律师工作台\logs\crash-2026-09-22T10-30-00-000Z-host.log
+ 
+ 如果应用文件缺失或损坏，请关闭应用并重新安装。任务数据存储在独立位置。
+ 退出
+diff --git a/apps/desktop/tests/expected/fatal-dialog-zh-CN.txt b/apps/desktop/tests/expected/fatal-dialog-zh-CN.txt
+index 6c40644c09..5f5fc52cd5 100644
+--- a/apps/desktop/tests/expected/fatal-dialog-zh-CN.txt
++++ b/apps/desktop/tests/expected/fatal-dialog-zh-CN.txt
+@@ -1,4 +1,4 @@
+-DeepSeek Harness 无法使用
++连越律师工作台 无法使用
+ 应用无法启动或已意外停止。
+ Desktop Host failed
+ Plugin initialization failed
+diff --git a/apps/desktop/tests/expected/update-restart-darwin-en-US.json b/apps/desktop/tests/expected/update-restart-darwin-en-US.json
+index 599f39fa68..dfd45136c0 100644
+--- a/apps/desktop/tests/expected/update-restart-darwin-en-US.json
++++ b/apps/desktop/tests/expected/update-restart-darwin-en-US.json
+@@ -1,5 +1,5 @@
+ {
+-  "message": "DeepSeek Harness v0.1.99 downloaded",
++  "message": "连越律师工作台 v0.1.99 downloaded",
+   "detail": "The update package has downloaded. Select “Install and Restart” to restart the app and begin installation.",
+   "buttons": [
+     "Install and Restart"
+diff --git a/apps/desktop/tests/expected/update-restart-darwin-zh-CN.json b/apps/desktop/tests/expected/update-restart-darwin-zh-CN.json
+index d7ea2daa57..6b9c85c3f4 100644
+--- a/apps/desktop/tests/expected/update-restart-darwin-zh-CN.json
++++ b/apps/desktop/tests/expected/update-restart-darwin-zh-CN.json
+@@ -1,5 +1,5 @@
+ {
+-  "message": "DeepSeek Harness v0.1.99 下载完成",
++  "message": "连越律师工作台 v0.1.99 下载完成",
+   "detail": "安装包已下载完毕，点击“安装并重启”，即刻重启客户端，开始部署。",
+   "buttons": [
+     "安装并重启"
+diff --git a/apps/desktop/tests/fatal-recovery.spec.ts b/apps/desktop/tests/fatal-recovery.spec.ts
+index 7ab4efd68a..4cd977d998 100644
+--- a/apps/desktop/tests/fatal-recovery.spec.ts
++++ b/apps/desktop/tests/fatal-recovery.spec.ts
+@@ -27,7 +27,7 @@ async function shown(operations: { show: ReturnType<typeof vi.fn> }): Promise<vo
+   await vi.waitFor(() => { expect(operations.show).toHaveBeenCalled() })
+ }
+ 
+-const REPORT_PATH = 'C:\\Users\\someone\\AppData\\Roaming\\DeepSeek Harness\\logs\\crash-2026-09-22T10-30-00-000Z-host.log'
++const REPORT_PATH = 'C:\\Users\\someone\\AppData\\Roaming\\连越律师工作台\\logs\\crash-2026-09-22T10-30-00-000Z-host.log'
+ 
+ afterEach(() => { vi.restoreAllMocks() })
+ 
+diff --git a/apps/desktop/tests/installer-packaging.spec.ts b/apps/desktop/tests/installer-packaging.spec.ts
+index 15a4610d98..095c6bb985 100644
+--- a/apps/desktop/tests/installer-packaging.spec.ts
++++ b/apps/desktop/tests/installer-packaging.spec.ts
+@@ -74,7 +74,7 @@ describe('installer preparation preserves application dependencies', () => {
+       DSH_DESKTOP_TARGET_ARCH: 'x64',
+       DSH_DESKTOP_UNSIGNED: '1',
+     }, 'win32', 'x64')
+-    expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
++    expect(config.artifactName).toBe('lawbench-${version}-${os}-${arch}-unsigned.${ext}')
+   })
+ 
+   it('packages every preload entry point the shell loads', async () => {
+diff --git a/apps/desktop/tests/macos-signature.spec.ts b/apps/desktop/tests/macos-signature.spec.ts
+index 8ce24c2250..78b0af7da5 100644
+--- a/apps/desktop/tests/macos-signature.spec.ts
++++ b/apps/desktop/tests/macos-signature.spec.ts
+@@ -41,7 +41,7 @@ describe('desktop macOS release signature', () => {
+   it('loads release identifiers from the environment and requires code signing', async () => {
+     const { createElectronBuilderConfig } = await import('../electron-builder.config.mjs')
+     const config = createElectronBuilderConfig(RELEASE_ENVIRONMENT, 'darwin', 'arm64')
+-    expect(config.protocols).toEqual([{ name: 'DeepSeek Harness', schemes: ['dsh'] }])
++    expect(config.protocols).toEqual([{ name: '连越律师工作台', schemes: ['dsh'] }])
+     expect(portablePath(config.directories.output)).toContain('/.desktop-build/targets/mac-arm64/artifacts')
+     expect(config.mac.extendInfo.NSMicrophoneUsageDescription).toContain('microphone')
+     expect(config.extraResources).toHaveLength(2)
+diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
+index 07f5d6ec74..ddb355d81d 100644
+--- a/apps/desktop/tests/main-startup.spec.ts
++++ b/apps/desktop/tests/main-startup.spec.ts
+@@ -501,8 +501,10 @@ describe('desktop main startup', () => {
+     await vi.advanceTimersByTimeAsync(0)
+     const zh = locale === 'zh-CN'
+     expect(harness.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
+-      type: 'info', title: zh ? '关于 DeepSeek Harness' : 'About DeepSeek Harness', message: 'DeepSeek Harness',
+-      detail: zh ? '版本 V1.0.0' : 'Version V1.0.0', buttons: [zh ? '确定' : 'OK'], cancelId: 0,
++      type: 'info', title: zh ? '关于 连越律师工作台' : 'About 连越律师工作台', message: '连越律师工作台',
++      // lawbench P-4：关于面板写律所和"技术支持"
++      detail: zh ? '版本 V1.0.0\n广东连越（深圳）律师事务所\n技术支持：上海莫莱特智能科技有限公司'
++        : 'Version V1.0.0\nGuangdong Lianyue (Shenzhen) Law Firm\nTechnical support: Shanghai Morelite Intelligent Technology Co., Ltd.', buttons: [zh ? '确定' : 'OK'], cancelId: 0,
+     }))
+     // A dialog that cannot open is logged, not surfaced as an unhandled rejection.
+     harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
+@@ -823,7 +825,7 @@ describe('desktop main startup', () => {
+     expect(() => handler(event, 'application', NaN, 34)).toThrow('invalid popup request')
+     const application = handler(event, 'application', 48, 34)
+     expect(harness.menu.buildFromTemplate.mock.lastCall![0].map(item => item.label ?? item.type)).toEqual([
+-      '关于 DeepSeek Harness', 'separator', '检查更新…', 'separator', '退出',
++      '关于 连越律师工作台', 'separator', '检查更新…', 'separator', '退出',
+     ])
+     expect(harness.popup.mock.lastCall![0]).toMatchObject({ window, x: 48, y: 34 })
+     expect(harness.popup.mock.lastCall![0].callback).toBeTypeOf('function')
+diff --git a/apps/desktop/tests/quit-confirmation.spec.ts b/apps/desktop/tests/quit-confirmation.spec.ts
+index e7843f6b71..69593c4c34 100644
+--- a/apps/desktop/tests/quit-confirmation.spec.ts
++++ b/apps/desktop/tests/quit-confirmation.spec.ts
+@@ -43,7 +43,7 @@ describe('DesktopQuitConfirmation', () => {
+     const f = setup('darwin', async () => ({ activeTasks: true, scheduledTasks: true }))
+     expect(await f.confirmation.confirm()).toBe(true)
+     expect(f.shown).toEqual([{
+-      type: 'warning', title: 'DeepSeek Harness', message: '退出 DeepSeek Harness？',
++      type: 'warning', title: '连越律师工作台', message: '退出 连越律师工作台？',
+       detail: '当前正在运行的任务将会中断，且应用关闭期间，定时任务不会运行',
+       buttons: ['退出', '取消'], defaultId: 0, cancelId: 1, noLink: true,
+     }])
+@@ -54,7 +54,7 @@ describe('DesktopQuitConfirmation', () => {
+     f.answer(1)
+     expect(await f.confirmation.confirm()).toBe(false)
+     expect(f.shown).toEqual([{
+-      type: 'none', icon: f.icon, title: 'DeepSeek Harness', message: 'Quit DeepSeek Harness?',
++      type: 'none', icon: f.icon, title: '连越律师工作台', message: 'Quit 连越律师工作台?',
+       detail: 'Scheduled tasks will not run while the app is closed.',
+       buttons: ['Quit', 'Cancel'], defaultId: 0, cancelId: 1, noLink: true,
+     }])
+diff --git a/apps/desktop/tests/tray.spec.ts b/apps/desktop/tests/tray.spec.ts
+index 11c3a48865..146f207438 100644
+--- a/apps/desktop/tests/tray.spec.ts
++++ b/apps/desktop/tests/tray.spec.ts
+@@ -43,8 +43,8 @@ it('shows the application icon with its name as the tooltip and an Open / Quit m
+   const f = setup()
+   expect(native.createFromPath).toHaveBeenCalledWith('C:/app/resources/tray.ico')
+   expect(f.native.image).toEqual({ path: 'C:/app/resources/tray.ico' })
+-  expect(f.native.setToolTip).toHaveBeenCalledWith('DeepSeek Harness')
+-  expect(labels(native.menus[0]!)).toEqual(['Open DeepSeek Harness', 'separator', 'Quit DeepSeek Harness'])
++  expect(f.native.setToolTip).toHaveBeenCalledWith('连越律师工作台')
++  expect(labels(native.menus[0]!)).toEqual(['Open 连越律师工作台', 'separator', 'Quit 连越律师工作台'])
+   expect(f.native.setContextMenu).toHaveBeenCalledWith({ template: native.menus[0] })
+ })
+ 
+@@ -63,7 +63,7 @@ it('relabels the menu in the current locale and ignores relabel after disposal',
+   const f = setup()
+   f.setLocale('zh')
+   f.tray.relabel()
+-  expect(labels(native.menus[1]!)).toEqual(['打开 DeepSeek Harness', 'separator', '退出 DeepSeek Harness'])
++  expect(labels(native.menus[1]!)).toEqual(['打开 连越律师工作台', 'separator', '退出 连越律师工作台'])
+   f.tray.dispose()
+   f.tray.dispose()
+   expect(f.native.destroy).toHaveBeenCalledOnce()
+diff --git a/apps/desktop/tests/windows-update-publisher.spec.ts b/apps/desktop/tests/windows-update-publisher.spec.ts
+index a1af8d5416..cbc30ca585 100644
+--- a/apps/desktop/tests/windows-update-publisher.spec.ts
++++ b/apps/desktop/tests/windows-update-publisher.spec.ts
+@@ -90,7 +90,7 @@ describe('Windows update publisher', () => {
+         DSH_DESKTOP_AUTO_UPDATE_ENV: 'production',
+       }, 'win32', 'x64')
+       expect(config.win.forceCodeSigning).toBe(true)
+-      expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}.${ext}')
++      expect(config.artifactName).toBe('lawbench-${version}-${os}-${arch}.${ext}')
+       expect(typeof config.win.signtoolOptions.sign).toBe('function')
+       const manager = new WindowsSignToolManager({ platformSpecificBuildOptions: config.win, getCscLink: () => undefined })
+       expect(await manager.computedPublisherName.value).toEqual(['CN=Publisher,O=Company,C=CN'])
