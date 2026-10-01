@@ -1,0 +1,5 @@
+# T13 N51 补充令小项 变异：notice 去掉 try/catch（取提示出错就不读），跑 tests/dock-a19.spec.ts
+
+结果：1 failed | 20 passed (21)
+- N2 返回 {ok:true, value:null}：不卡在"正在读取"，意向照常写给服务
+- tests/dock-a19.spec.ts > turnNotice 出错时照常读取（第四轮复核 N1、N2） > N2 返回 {ok:true, value:null}：不卡在"正在读取"，意向照常写给服务

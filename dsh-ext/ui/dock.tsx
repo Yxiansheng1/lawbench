@@ -117,9 +117,12 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
     }
     // 问 Host 上一轮是否被拦下（取一次即删）；输入材料变了（INPUT_CHANGED）就记下提示，并退回"正在读取"
     // 提示按会话记进 store，取到了就记，不看 alive：Host 那边取一次即删，途中切走也不能丢（第三轮复核 P3-3）
+    // 取提示出错（Host 方法抛错、返回不合形状）不挡读取：两处调用都是取完再读（第四轮复核 N1、N2）
     const notice = async (): Promise<void> => {
-      const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
-      if (r.ok && r.value.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
+      try {
+        const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
+        if (r.ok && r.value?.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
+      } catch { /* 当没有提示 */ }
     }
     setError(null)
     // 挂上、换会话时也取一次：被拦下的那一轮结束时律师可能正看着别的会话（返修 P3-C ②）。

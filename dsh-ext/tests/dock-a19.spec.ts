@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // 改编自契约 1.2 第三轮复核员的实验 rv-a19-skl3.spec.ts（E3）与 rv-a19-ic.spec.ts（E4、E6、E7、E8、E8b、E11、E12、E13，两种挂载模式），
 // 收为回归用例（T13 第四轮返修）：打印改为断言，复核员原有断言保留；夹具见 helpers/dock-lab.ts。
+// 第四轮复核实验 rv4.spec.ts 的 K9（两种挂载模式）、N1、N2 随 N51 补充令（2026-10-01 11:19）收进来。
 import { act } from 'react'
 import { INPUT_CHANGED_TEXT } from '../ui/dock.tsx'
-import { app, setIntent } from '../ui/state.ts'
-import { A, B, begin, button, CASE, click, flush, h, mount, paramsPanel, pick, send, setup, status, teardown, turnEnded, unmount, verdict, X } from './helpers/dock-lab.ts'
+import { app, setApi, setIntent } from '../ui/state.ts'
+import { A, api, B, begin, button, CASE, click, flush, h, mount, paramsPanel, pick, send, setup, status, teardown, turnEnded, unmount, verdict, X } from './helpers/dock-lab.ts'
 
 const IC = INPUT_CHANGED_TEXT
 beforeEach(setup)
@@ -145,5 +146,40 @@ for (const remount of [false, true]) {
       expect(r).toBe(A); expect(status()).not.toBe(IC)
       const r2 = await send('S1'); expect(verdict(r2)).toBe('一致')
     })
+  })
+}
+
+// 第四轮复核 N1、N2：取提示出错不挡读取（挂上时先取提示再读，取提示抛错或返回不合形状时也要读）
+describe('turnNotice 出错时照常读取（第四轮复核 N1、N2）', () => {
+  for (const [name, turnNotice] of [
+    ['N1 Host 方法抛错', async () => { throw new Error('boom') }],
+    ['N2 返回 {ok:true, value:null}', async () => ({ ok: true, value: null })],
+  ] as const) {
+    it(`${name}：不卡在"正在读取"，意向照常写给服务`, async () => {
+      setIntent(CASE.case_id, { capsuleId: A, skill: A, params: null, inputs: [] })
+      setApi({ ...api(), turnNotice } as never)
+      const errs: unknown[] = []
+      const on = (e: unknown) => { errs.push(e) }
+      process.on('unhandledRejection', on)
+      try {
+        await mount('S1'); await flush(1500)
+      } finally { process.off('unhandledRejection', on) }
+      expect(status()).not.toBe('正在读取当前选择…')
+      expect(h.svc.cur('S1')?.entry).toBe(A)
+      expect(errs).toEqual([])
+    })
+  }
+})
+
+for (const remount of [false, true]) {
+  it(`K9 一轮结束时 turnNotice 比 task/current 慢 50ms（律师正看着这个会话被拦下）：先显示提示，改选写成后状态行回到就绪（${remount ? '重挂' : '不重挂'}）`, async () => {
+    await mount('S1', remount); await pick(A); await act(async () => { setIntent(CASE.case_id, { inputs: [X] }) }); await flush(700)
+    h.svc.versions[X] = 1
+    h.svc.noticeDelay = 50
+    expect(await send('S1')).toBe('被拦下'); await flush(100)
+    expect(status()).toBe(IC)
+    await pick(B); await flush(700)
+    expect(status()).toContain('合同起草')
+    expect(h.svc.cur('S1')?.entry).toBe(B)
   })
 }
