@@ -23,6 +23,11 @@ dependencies = [
   "olefile>=0.47,<0.48",
   # 真 token 计数（llm/tokens.py）：只用 Tokenizer.from_file 读本地 tokenizer.json，不联网
   "tokenizers>=0.23.2,<0.24",
+  # 案卷归档（T23，Spec 12.3、12.4）：卷宗合并、页码层、结案报告与立卷申请书、Word / WPS 自动化
+  "pypdf>=6.19,<7",
+  "reportlab>=5.0,<6",
+  "python-docx>=1.2,<2",
+  "pywin32>=312; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
