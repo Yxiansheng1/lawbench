@@ -316,7 +316,7 @@ lawbench/                 我方仓库
 | P-6 | 远程命名空间 | `packages/api/remotes/src/client/index.ts` | 加一行导入我方 `lawbench` 命名空间（第 1.2 节） |
 | P-7 | 网络白名单 | `packages/util/http-proxy/src/install.ts`（全局 undici dispatcher） | 加地址白名单（第 14.3 节） |
 | P-8 | 会话记录存到案件目录 | `packages/session/session-persistence-jsonl` | 复制为我方插件，改目录规则（第 3.3 节）；如果做成独立插件、通过补丁替换 `session-persistence-jsonl` 行，就不算改源码 |
-| P-9 | Electron 后台请求 | `apps/desktop/src/main.ts` | 主窗口关闭拼写检查（`session.setSpellCheckerEnabled(false)`）；`session.defaultSession.webRequest.onBeforeRequest` 拦截白名单以外的请求 | 2026-09-30 T17 落地：`P-9-default-session-request-whitelist.patch`（`onBeforeRequest` 白名单，放行本应用资源与 Host 自己的 http/ws；侧栏浏览器、用量页、策略测试鉴权用各自分区会话不走它，入口已由配置关掉；拼写检查与 `webviewTag`/`browserAcquire` 在返修中补） |
+| P-9 | Electron 后台请求 | `apps/desktop/src/main.ts` | 主窗口关闭拼写检查（`session.setSpellCheckerEnabled(false)`）；`session.defaultSession.webRequest.onBeforeRequest` 拦截白名单以外的请求 | 2026-09-30 T17 落地：`P-9-default-session-request-whitelist.patch`（`onBeforeRequest` 白名单，放行本应用资源与 Host 自己的 http/ws；侧栏浏览器、用量页、策略测试鉴权用各自分区会话不走它，入口已由配置关掉；拼写检查用 `session.defaultSession.setSpellCheckerEnabled(false)`；`webviewTag:false`、`browserAcquire` 不注册；协议白名单放行 `dsh-app:`、`data:`、`blob:`、`devtools:`、`about:`，**`file:` 只放行本应用 renderer 目录**（首次配置窗口 `loadFile` 要用；2026-10-01 复核接受的偏离），`chrome:`、`chrome-extension:` 不放） |
 | P-11 | 委托材料窗口 | `apps/desktop/src/main.ts` | 增加一个 IPC 通道 `lawbench:open-retainer`：新建 `BrowserWindow` 加载 `<安装目录>/engines/retainer/启动.html`，`partition: 'persist:retainer'`（与主窗口的存储隔开），`nodeIntegration: false`、`contextIsolation: true`、禁止 `window.open` 和跳转到其他地址。**这个分区是独立的 session，P-9 不会自动作用到它**：对 `session.fromPartition('persist:retainer')` 同样设置 `webRequest` 白名单（只放行 `file://` 和 `127.0.0.1:17801`）并关闭拼写检查。预加载脚本在网页脚本运行前删除 `window.showDirectoryPicker`，让网页改用下载保存；`will-download` 把下载一律存到当前案件的 `工作区/临时/委托材料/<时间>/`（第 13.5 节）。关闭窗口时通知工作台服务停止证件识别驱动 |
 | P-10 | 组合包进入桌面端 | `packages/boot/app-boot/src/profile.ts`（`PROFILE_TEMPLATES.web`）；`@deepseek-ai/dsh` 的依赖列表 | 加上 `lawbench-dsh`（第 14.1 节） |
 | P-12 | 桌面端自带的 Office 组合 | `apps/desktop-host/src/index.ts` | 去掉 `desktop-office` 的挂载（Office Skill 和 `load_workspace_dependencies` 工具）。桌面端 Host 在补丁行之外直接挂载它，配置补丁关不掉；不去掉模型会多出白名单外的工具（2026-09-29 T4 抓包发现） |
@@ -338,8 +338,8 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 
 | 数据 | 默认位置 | 含正文 | 处理 |
 |---|---|---|---|
-| 会话记录（JSONL） | `$DSH_HOME/sessions`（`session-persistence-jsonl`，`root: dshHomePath('sessions')`） | 是 | **按案件存储**：复制 `session-persistence-jsonl` 为我方插件，在组合包补丁里替换该行。官方实现中会话目录由 `sessionDir(root, header.cwd, id)` 决定，创建时就能拿到会话头的 `cwd`；改为 `<cwd>/工作区/会话/<会话ID>/`。`list` / `stat` 原本扫描 `root` 下的项目目录，改为遍历案件注册表中的案件。`cwd` 不是已登记案件的会话，拒绝创建 |
-| 会话列表缓存 | `$DSH_HOME/storages`（`session-projection-cache`） | 可能含标题 | 标题改为程序生成（第 3.1 节）后，抽查确认不含正文 |
+| 会话记录（JSONL） | `$DSH_HOME/sessions`（`session-persistence-jsonl`，`root: dshHomePath('sessions')`） | 是 | **按案件存储**：复制 `session-persistence-jsonl` 为我方插件，在组合包补丁里替换该行。官方实现中会话目录由 `sessionDir(root, header.cwd, id)` 决定，创建时就能拿到会话头的 `cwd`；改为 `<cwd>/工作区/会话/<会话ID>/`。`list` / `stat` 原本扫描 `root` 下的项目目录，改为遍历案件注册表中的案件。`cwd` 不是已登记案件的会话，拒绝创建 | **2026-10-01 T17 第三步落地**：我方插件 `legal-session-store` 顶替该行，按案件根各起一个原版实例；案件里的会话存 `<案件>\工作区\会话`，案件外不能新建也不能续写（N46 ②）；案件根名单由 Host 缓存并以服务 `/api/case/recent` 返回为准；搬家/复制后记录头 cwd 由路由改报为案件现根，原版包不改 |
+| 会话列表缓存 | `$DSH_HOME/storages`（`session-projection-cache`） | 可能含标题 | **2026-10-01 T17 第三步定**：缓存类原样用、换按案件的存储域——记录落 `<案件>\工作区\会话缓存\<编号>.json`（明文，含标题与最近时间），默认根只放内存，`$DSH_HOME` 不留。原写"标题改为程序生成后抽查"作废。与会话记录一样在 P-15 的 `/api/file` 允许范围内，可被渲染进程读到（P-9 挡出网，不构成外泄） |
 | 工作区列表 | `$DSH_HOME/storages` | 否（只有文件夹路径） | 保持 |
 | 会话全文检索索引 | `session-query-sqlite` | — | 官方默认已是 `:memory:` 且不开启，保持不变 |
 | 大段工具输出的溢出文件 | `spill-local`，系统临时目录 | 是 | 默认超过 12500 token 的工具结果会写成溢出文件。**把 `spill-policy` 的阈值调到大于模型窗口**（第 3.1 节），任何工具结果都不会溢出。另外 `tool-fs-search` 也会写溢出文件，律师工作台 preset 不挂它。验收时检查溢出目录为空 |
