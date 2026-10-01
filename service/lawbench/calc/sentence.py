@@ -83,6 +83,14 @@ def _days(spans: list[tuple[date, date]]) -> int:
 
 
 def calc(a: dict) -> dict:
+    try:
+        return _calc(a)
+    except (OverflowError, ValueError):
+        # 日期算出公元 9999 年以外（执行之日 9999-01-01 加 25 年之类）：按参数错误，不是 500（T24 复核 P3-2）
+        raise ApiError("INVALID_ARGUMENT", "date_out_of_range") from None
+
+
+def _calc(a: dict) -> dict:
     penalty = a["penalty"]
     years, months = a.get("years") or 0, a.get("months") or 0
     es = date.fromisoformat(a["execution_start"]) if a.get("execution_start") else None

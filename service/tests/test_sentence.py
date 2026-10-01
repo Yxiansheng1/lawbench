@@ -74,6 +74,24 @@ def test_tool_via_core(env):
          "INVALID_ARGUMENT")
 
 
+def test_date_out_of_range_is_bad_argument(env):
+    """执行之日 9999-01-01 加 25 年：参数错误，不是 500（复核 P3-2）。"""
+    tid = env.begin("sess-t24-range")["task_id"]
+    fail(env.tool(tid, "case_calc_sentence", {"penalty": "有期徒刑", "years": 25, "months": 0,
+                                              "execution_start": "9999-01-01", "custody": []}), "INVALID_ARGUMENT")
+    with pytest.raises(ApiError) as ei:
+        calc({"penalty": "有期徒刑", "years": 25, "months": 0, "execution_start": "9999-01-01", "custody": []})
+    assert ei.value.code == "INVALID_ARGUMENT" and ei.value.reason == "date_out_of_range"
+
+
+def test_overlapping_segments_count_as_continuous():
+    """重叠的两段也算连续（并集是一整段）：起 = 羁押首日，notes 有"重叠"、没有"不连续"（复核 P3-1）。"""
+    r = run(penalty="有期徒刑", years=1, months=0, execution_start=None,
+            custody=[seg("2026-03-01", "2026-03-31", "刑事拘留"), seg("2026-03-20", "2026-04-30", "逮捕")])
+    assert r["start"] == "2026-03-01" and r["custody_days"] == 61
+    assert any("重叠" in n for n in r["notes"]) and not any("不连续" in n for n in r["notes"])
+
+
 def test_errors_direct():
     with pytest.raises(ApiError) as ei:
         calc({"penalty": "有期徒刑", "years": 1, "custody": [seg("2026-03-02", "2026-03-01")]})

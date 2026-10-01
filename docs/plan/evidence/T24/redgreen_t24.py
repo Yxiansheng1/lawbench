@@ -44,6 +44,11 @@ rg.MUTATIONS = [
     ("羁押段起止写反报参数错误", S, [('            raise ApiError("INVALID_ARGUMENT", "custody_reversed")', "            pass")], R),
     ("没有刑期报参数错误", S, [('        raise ApiError("INVALID_ARGUMENT", "term_missing")', "        pass")], R),
     ("折抵超过刑期提示", S, [("        notes.append(NOTE_SERVED)", "        pass")], R),
+    # ---- 返修（执行令 20261001-1703） ----
+    ("P3-1·重叠的两段也算连续", S, [
+        ("    elif union and len(union) == 1:",
+         "    elif union and len(union) == 1 and custody_days == sum((t - f).days + 1 for f, t, _ in segs):")], R),
+    ("P3-2·日期越界报参数错误", S, [("    except (OverflowError, ValueError):", "    except ZeroDivisionError:")], R),
     ("工具接入 /core/tool", "tools/__init__.py", [
         ('        "case_calc_sentence": sentence.calc_sentence,  # T24\n', "")], R),
 ]
