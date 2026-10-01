@@ -23,4 +23,7 @@ OK   N41：ui-agent-preset 从清单里消失：退出码 1（期望 1），输�
 OK   第三步：legal-session-store 缺失：退出码 1（期望 1），输出含「我方行没有加载或没有激活：legal-session-store」
 OK   第三步：session-projection-cache 被改回启用：退出码 1（期望 1），输出含「必须关的行仍启用：session-projection-cache」
 OK   返修：approval.policy 改成 never：退出码 1（期望 1），输出含「approval 取值不符」
+OK   三轮：allowOutsideCase 改回 true：退出码 1（期望 1），输出含「legal-session-store.allowOutsideCase 不符」
+OK   三轮：投影缓存写入节奏改动：退出码 1（期望 1），输出含「legal-session-store.projectionCache.writeEveryEvents 不符」
+OK   三轮：投影缓存配置整段去掉：退出码 1（期望 1），输出含「legal-session-store.projectionCache.module 不符」
 结论： 变异全部被报出，基线通过

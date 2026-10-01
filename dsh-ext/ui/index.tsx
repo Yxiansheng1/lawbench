@@ -107,10 +107,14 @@ function registerHome(ctx: Ctx): void {
   ctx.effect(() => () => { navImpl.goHome = undefined }, '律师工作台界面：首页导航')
 }
 
-/** 打开案件 = 把案件文件夹当工作区打开（Spec 1.2）。 */
+/**
+ * 打开案件 = 把案件文件夹当工作区打开（Spec 1.2）。建好（或取到已有的）工作区后，请 Host 把 cwd 就是这个案件根、
+ * 又不在任何工作区里的会话挂回来（T17 第三轮复核 B-F2：案件搬家、复制后旧会话不再落进"未分组"）；挂回失败不影响打开。
+ */
 function registerWorkspace(ctx: Ctx): void {
   navImpl.openCaseWorkspace = async (root) => {
     const ws = await ctx.workspaces.create({ path: root })
+    await call('attachCaseSessions', { root }).catch(() => undefined)
     await ctx.uiWorkspace.openWorkspace(ws.workspaceId)
   }
   const fallbackPick = ctx.uiWorkspace.pickDirectory

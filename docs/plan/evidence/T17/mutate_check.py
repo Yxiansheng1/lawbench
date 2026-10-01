@@ -1,4 +1,4 @@
-"""check_plugin_tree.py 的变异验证（T17 第二步 N41 增补 6 例；T17 第一步复制并增补：这一批某行被改回启用、静态树里没关、我方行缺失、启用行没激活、不带取证声明时 plugin-inventory 启用；T13 复制并增补"清单外启用行"一例；T4 第二轮返修 P3-B；T7 增补：Skill 目录整项相等、persona 改为读文件、原 credentials 行）。
+"""check_plugin_tree.py 的变异验证（T17 第二步 N41 增补 6 例；T17 第一步复制并增补：这一批某行被改回启用、静态树里没关、我方行缺失、启用行没激活、不带取证声明时 plugin-inventory 启用；T13 复制并增补"清单外启用行"一例；T4 第二轮返修 P3-B；T7 增补：Skill 目录整项相等、persona 改为读文件、原 credentials 行；T17 第三轮返修增补会话存储配置 3 例）。
 
 对真实输入逐一做一处篡改，确认检查脚本报出；不篡改时必须通过。
 用法：python mutate_check.py plugin-inventory-desktop.json plugin-tree.txt
@@ -99,6 +99,10 @@ CASES = [
     ("第三步：session-projection-cache 被改回启用", enable_entry("include:session-projection-cache"), tree_src, 1, "必须关的行仍启用：session-projection-cache"),
     # 第二步返修：审批写死被改回（读环境变量或改成 never）
     ("返修：approval.policy 改成 never", inv_src, tree_src.replace("policy: ask", "policy: never", 1), 1, "approval 取值不符"),
+    # 第三轮返修（A-P3-4）：会话存储配置
+    ("三轮：allowOutsideCase 改回 true", inv_src, tree_src.replace("allowOutsideCase: false", "allowOutsideCase: true", 1), 1, "legal-session-store.allowOutsideCase 不符"),
+    ("三轮：投影缓存写入节奏改动", inv_src, tree_src.replace("      writeEveryEvents: 200", "      writeEveryEvents: 20", 1), 1, "legal-session-store.projectionCache.writeEveryEvents 不符"),
+    ("三轮：投影缓存配置整段去掉", inv_src, tree_src.replace("    projectionCache:", "    projectionCacheX:", 1), 1, "legal-session-store.projectionCache.module 不符"),
 ]
 
 failed = 0

@@ -44,12 +44,23 @@ git -C dsh apply ..\dsh-patches\P-18-no-mention-hint-no-developer-switch.patch
 | 补丁 | 增补 | 原因（复核编号） | 测试 |
 |---|---|---|---|
 | P-5 | 输入框收文件时（拖入、粘贴、选择三条路都经 `intakeFiles`）先问已登记的导入钩子：注入新方法 `intakeFirst`，`apply.ts` 里依次问钩子。钩子接手就跳过聊天图片上限预检；钩子拒绝就显示它的提示；钩子不接才走原来的上限检查和 `addFiles` | B-F1：超过 20 张、单张超过 20 MB 时，原来先弹聊天附件上限提示，根本到不了导入钩子 | `input-bar.client.spec.tsx`"a registered import hook takes batches over the chat image limits"：21 张、单张超大都交给钩子、无上限提示；钩子不接时上限检查照旧；钩子拒绝时显示它的话 |
-| P-9 | ① 所有窗口 `webviewTag: false`，主窗口原来是 `primary`。② 侧栏浏览器的 IPC `browserAcquire`、`browserRelease` 不再注册，`browserGuests` 对象留着不用。③ 所有窗口 `spellcheck: false`（Spec 3.2 P-9"主窗口关闭拼写检查"；拼写检查会联网取词典）。④ 协议白名单只留 `dsh-app:`（界面本身）、`data:` 和 `blob:`（渲染进程自己生成的资源）、`devtools:`（开发者工具）、`about:`（框架和窗口的初始 `about:blank`）；删掉 `file:`（没人用，而且 `file://主机/共享` 会走 SMB）和 `chrome:`、`chrome-extension:`（不用内部页面和扩展） | B-F7：任何渲染进程脚本都能借侧栏浏览器的 IPC 开独立分区的 webview，绕过白名单。A-P3-3、B-F6：`file:` 等多放的协议。A-P3-4：拼写检查 | `main-startup.spec.ts`"no window may host a webview or spellcheck, and the sidebar browser IPC is not registered"；`lawbench-request-policy.spec.ts`"refuses file:, chrome: and chrome-extension:" |
+| P-9 | ① 所有窗口 `webviewTag: false`，主窗口原来是 `primary`。② 侧栏浏览器的 IPC `browserAcquire`、`browserRelease` 不再注册，`browserGuests` 对象留着不用。③ 主窗口 `spellcheck: false`（Spec 3.2 P-9"主窗口关闭拼写检查"；拼写检查会联网取词典）；首次配置窗口和强制更新层第三轮返修补上，见下一节。④ 协议白名单只留 `dsh-app:`（界面本身）、`data:` 和 `blob:`（渲染进程自己生成的资源）、`devtools:`（开发者工具）、`about:`（框架和窗口的初始 `about:blank`），删掉 `chrome:`、`chrome-extension:`（不用内部页面和扩展）；**`file:` 没有删，改为只放行本应用 `renderer` 目录下的文件**（`lawbench-request-policy.ts` 的 `appFile`）：首次配置窗口在 `welcome-window.ts:90` 用 `loadFile` 从 renderer 目录加载 `welcome.html`，删掉 `file:` 它就打不开。renderer 目录本身、相邻目录（如 `renderer2`）、`..`、`%2F`、`%5C`、`file://主机/共享`、`file:////主机`、本机其他文件都拒绝。这是对第二轮冻结裁决（"删掉 `file:`"）的偏离，第三轮综合裁决第 2 节已由主编排接受 | B-F7：任何渲染进程脚本都能借侧栏浏览器的 IPC 开独立分区的 webview，绕过白名单。A-P3-3、B-F6：`file:` 等多放的协议。A-P3-4：拼写检查 | `main-startup.spec.ts`"no window may host a webview or spellcheck, and the sidebar browser IPC is not registered"；`lawbench-request-policy.spec.ts`"file: only for the application renderer files (first-run window); other local files and shares refused"、"refuses chrome: and chrome-extension: (no internal pages or extensions are used)" |
 | P-15 | ① `realpath` 之前先拒绝以两个斜杠或反斜杠开头的路径（`\\主机`、`//主机`、`\\?\`、`\\.\`），Host 不会先去访问 SMB。② 越界和不存在统一回 403，读取时提供方报"不存在"也是 403，不能借此探测文件在不在。③ 读取用核对过的规范路径，不用请求里的写法，核对和读取之间换了链接也改不了读谁 | B-F3、B-F4 | `media-references.host.spec.ts`：前缀五种写法，连指向案件里真实文件的 `\\?\` 也回 403；按规范路径读取；原来几处 404 的断言改为 403 |
 | P-17 | ① 用量页（`platform-view.ts`）新窗口一律拒绝，不再 `shell.openExternal`。② 强制更新窗口（`mandatory-update-window.ts`）"打开下载页"不再拉起系统浏览器，按打开失败处理，界面照旧提供复制地址。③ `showsAddress` 比较前两边都 `decodeURI`；补上的网址也按解码后显示，中文网址不再重复、不再显示成百分号编码。④ 文件头注释里的字面 `\n` 改为真换行 | 1516 令小项①；B-F9；A-P3-2 | `platform-view.spec.ts`"refuses every new window without handing it to the system browser"；`mandatory-update-window.spec.ts`"the page action never opens the system browser"；`markdown.client.spec.tsx`"an address with non-ASCII characters is shown once" |
 | P-18 | 快捷键说明里不再列"@ 打开引用菜单"（`ui-conversation/src/client/apply.ts` 的 `fixed.mention` 一行） | 1516 令小项② | 没有单测（DSH 没有测固定快捷键列表的用例）；桌面端在"编辑快捷键"里看 |
 
 以上各条的红测见 `docs\plan\evidence\T17\第二步返修\red-tests.txt`。
+
+### T17 第三轮返修增补（综合裁决 `main:docs/plan/evidence/T17/review-综合裁决-第三轮.md` 第 3 节）
+
+重建办法同上：从固定提交起逐个打第二步返修后的补丁，P-5、P-9 各跑一个增补脚本，然后全部重新导出。改动内容只在 P-5、P-9；P-17、P-18 重新导出后只有 index 行和一处行号随之变了，其余补丁与原来逐字节相同。打好后的全部文件与工作区逐字节一致。
+
+| 补丁 | 增补 | 原因（复核编号） | 测试 |
+|---|---|---|---|
+| P-5 | `apply.ts` 里问导入钩子的循环抽成一个小函数 `askIntake`，`intakeFirst` 和 `addFiles` 共用；行为不变（钩子都不接时，`InputBar` 先 `intakeFirst` 再 `addFiles`，钩子仍会被问两次；我方钩子从不返回 `undefined`，没有实际影响） | A-P3-6 | `input-bar.client.spec.tsx` 的 P-5 各例照常通过 |
+| P-9 | 默认会话上 `session.defaultSession.setSpellCheckerEnabled(false)`。首次配置窗口（`welcome-window.ts`）和强制更新层（`update-overlay.ts`）都用默认会话，一并关掉；主窗口原有的 `spellcheck: false` 保留 | A-P3-1：只关了主窗口，文档却写"所有窗口" | `main-startup.spec.ts`"no window may host a webview or spellcheck……"加断言：默认会话的 `setSpellCheckerEnabled` 以 `false` 调过 |
+
+用量页（`platform-view.ts`）和策略测试鉴权（`policy-test-auth.ts`）用自己的分区会话，不在此列；前者的入口已由配置关掉，后者只在开发测试用，且窗口本身已是 `spellcheck: false`。红测见 `docs\plan\evidence\T17\第三轮返修\red-tests.txt`。
 
 ## 换 DSH 提交时的核对清单（我方依赖、但不在补丁里的 DSH 内部写法）
 
@@ -57,6 +68,7 @@ git -C dsh apply ..\dsh-patches\P-18-no-mention-hint-no-developer-switch.patch
 |---|---|---|
 | （T17 P-15 起）`attachments` 服务的 `root` 字段（`packages/attachment/attachment-local`，不在公开类型里，P-15 在 `media-references.ts` 里按 `(ctx.attachments as unknown as { root?: unknown }).root` 取本机附件库根目录） | `/api/file` 允许读取的根目录之一（P-15） | 换提交后若字段改名或去掉，附件库里的图片会回 403：跑 `media-references.host.spec.ts` 的"refuses files outside……"一组（其中读附件库文件的断言会变红），并在桌面端看一张粘贴进对话的图片能否显示 |
 | （T17 P-16 起）`ui-chat` 的 `chatInlineMarks` 服务和 `ChatInlineMark` 的字段（`pattern`、`ranges`、`label`、`open`），由 P-16 补丁提供 | 草稿正文里的出处按钮（`dsh-ext\ui\citation.ts` 的 `citationMark`，`ui\index.tsx` 登记）。原来依赖的对话区节点属性 `data-chat-flow-kind` 随 `citation-click.ts` 撤掉，不再依赖 | `dsh-ext\tests\citation.spec.ts`\"DSH 那一侧的出处按钮服务还在\"一组会先变红；另在桌面端真实回答上点一次出处实测 |
+| （T17 第三轮返修起）工作区登记 `WorkspaceRegistry`（`packages/workspace/workspace/src/index.ts`）的私有方法 `indexHeaders(headers)` 与私有字段 `table`（`KvTable`，`get(工作区编号).sessionIds` 是未经路径索引过滤的原始记录） | 打开案件时把搬家、复制后的旧会话挂回新位置的工作区（`dsh-ext\host\attach-sessions.ts`，复核 B-F2）：先用现在的记录头重建登记的记录头缓存与路径索引（登记启动时缓存的是旧位置的记录头，`attachSession` 拿它核对 cwd 会失败）；只从原始记录里记着它的工作区 `detachSession`（对没记着的工作区写记录会把它们路径索引里解析不了的会话剪掉）。还依赖两条登记的行为：启动时同一编号记在两个工作区的记录里就判"登记不一致"、整个服务起不来（所以先去掉再挂）；`attachSession` 在记录里已有该编号时不重读记录头 | `dsh-ext\tests\workspace-attach.spec.ts`（用已构建的真登记）W1、W4、W5 会先变红；方法或字段不在时代码退回（不重建索引、看过滤后的 `sessionIds`），复制场景挂不上、只记日志。另在桌面端把案件文件夹复制到新位置后打开，看侧栏旧会话是否归到新位置下、重启是否正常 |
 
 ## 结论记录
 

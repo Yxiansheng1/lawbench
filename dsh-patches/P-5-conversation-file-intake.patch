@@ -1,5 +1,5 @@
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 942444d3b7..3c5553dae0 100644
+index 942444d3b7..8066d2973f 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
 @@ -56,6 +56,26 @@ export const inject = [
@@ -52,26 +52,30 @@ index 942444d3b7..3c5553dae0 100644
            removeAttachment: undefined,
            resolveDraftAttachments: undefined,
            retryFileUpload: undefined,
-@@ -456,8 +485,22 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+@@ -454,10 +483,26 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+       const shell = inputHub.shell(sessionId)
+       const inputTriggers = inputHub.inputTriggers(sessionId)
        const bridge = hostPathBridge()
++      // lawbench P-5: the first hook returning a non-`undefined` result takes the files.
++      const askIntake = (files: readonly File[], directories: ReadonlySet<File>): string | null | undefined => {
++        for (const hook of intakeHooks) {
++          const taken = hook(sessionId, files, directories)
++          if (taken !== undefined) return taken
++        }
++        return undefined
++      }
        return {
          keyboard: shell,
 +        // lawbench P-5: the composer asks the hooks before its image-limit pre-check,
 +        // so a batch over the chat attachment limits still reaches the import hook.
 +        intakeFirst: (files, directories = new Set()) => {
 +          if (sessions.binding(sessionId) === undefined) return undefined
-+          for (const hook of intakeHooks) {
-+            const taken = hook(sessionId, files, directories)
-+            if (taken !== undefined) return taken
-+          }
-+          return undefined
++          return askIntake(files, directories)
 +        },
          addFiles: (files, directories = new Set()) => {
            if (sessions.binding(sessionId) === undefined) return t('file.sessionUnavailable')
-+          for (const hook of intakeHooks) {
-+            const taken = hook(sessionId, files, directories)
-+            if (taken !== undefined) return taken
-+          }
++          const taken = askIntake(files, directories)
++          if (taken !== undefined) return taken
            if (shell.snapshot.phase === 'adjudicating' || shell.snapshot.phase === 'submitting') {
              return t('attachment.dropBlocked')
            }

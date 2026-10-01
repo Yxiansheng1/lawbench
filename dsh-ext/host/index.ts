@@ -11,6 +11,7 @@ import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
 import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
 import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
+import { attachCaseSessions, type PersistenceLike, type RegistryLike } from './attach-sessions.ts'
 import { API_ROUTES, buildRequest, type ApiRoute } from '../shared/api-routes.ts'
 import { listSkills, type SkillInfo } from './skills.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
@@ -115,6 +116,8 @@ export class LawbenchRemote {
     private readonly skillDirs: readonly string[] = [],
     private readonly log: LogFn = () => {},
     private readonly notices: TurnNotices = new TurnNotices(),
+    /** 取 DSH 的服务（工作区登记、会话存储）；不给时 attachCaseSessions 什么也不做。 */
+    private readonly service: (name: string) => unknown = () => undefined,
   ) {
     this.typertRemote = Object.freeze({ service: this, serviceKey: LAWBENCH_SERVICE, namespace: LAWBENCH_NAMESPACE })
   }
@@ -165,6 +168,24 @@ export class LawbenchRemote {
   async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null } }> {
     const sessionId = (request as { session_id?: unknown } | null)?.session_id
     return { ok: true, value: { code: typeof sessionId === 'string' ? this.notices.take(sessionId) : null } }
+  }
+
+  /**
+   * 打开案件后把游离会话挂回该案件的工作区（T17 第三轮复核 B-F2），见 attach-sessions.ts。界面不等结果、不提示；出错只记日志。
+   * @param request - { root }：刚作为工作区打开的案件根。
+   */
+  async attachCaseSessions(request: unknown): Promise<ApiResult> {
+    const root = (request as { root?: unknown } | null)?.root
+    if (typeof root !== 'string' || !root) return fail('INVALID_ARGUMENT', BAD_ARGS)
+    const registry = this.service('workspaceRegistry') as RegistryLike | undefined
+    const persistence = this.service('sessionPersistence') as PersistenceLike | undefined
+    if (!registry || !persistence) return { ok: true, value: { attached: 0, failed: 0 } }
+    try {
+      return { ok: true, value: await attachCaseSessions(registry, persistence, root, this.log) }
+    } catch (error) {
+      this.log('warn', 'workspace.attach_case_sessions_failed', { error: (error as Error)?.name ?? 'Error' })
+      return fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持')
+    }
   }
 
   async listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }> {
@@ -399,7 +420,7 @@ export function apply(ctx: Ctx, config: Config): void {
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))
-  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices))
+  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices, (name) => ctx.get(name)))
   void cleanPasteDir(config.appData).then((n) => { if (n) log('info', 'paste.cleaned', { count: n }) })
   ctx.effect(() => {
     void supervisor.start().catch((e: unknown) => log('error', 'service.start_failed', { error: String((e as Error)?.message ?? e) }))

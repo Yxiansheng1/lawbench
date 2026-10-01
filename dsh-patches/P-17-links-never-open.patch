@@ -1,5 +1,5 @@
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index 99fbbe85da..3d08a6cc45 100644
+index 4e03717ea9..1470b99356 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -16,7 +16,6 @@ import {
@@ -89,10 +89,10 @@ index ce759c61b1..b254de3fbc 100644
        try {
          const parsed = new URL(url)
 diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
-index f9e1d6ac5c..9723239b7f 100644
+index b1a8917e48..07f5d6ec74 100644
 --- a/apps/desktop/tests/main-startup.spec.ts
 +++ b/apps/desktop/tests/main-startup.spec.ts
-@@ -1033,20 +1033,20 @@ describe('desktop main startup', () => {
+@@ -1035,20 +1035,20 @@ describe('desktop main startup', () => {
      expect(harness.menu).not.toHaveBeenCalled()
    })
  

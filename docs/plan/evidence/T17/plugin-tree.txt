@@ -1480,4 +1480,9 @@
     appData: !!js >-
       process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ??
       process.getBuiltinModule('node:os').homedir(), 'lawbench')
-    allowOutsideCase: true
+    allowOutsideCase: false
+    projectionCache:
+      module: !!js >-
+        process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-projection-cache')
+      writeEveryEvents: 200
+      writeIntervalMs: 5000

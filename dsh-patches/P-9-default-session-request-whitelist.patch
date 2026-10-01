@@ -54,7 +54,7 @@ index 0000000000..d711363098
 +  return (target.protocol === 'http:' || target.protocol === 'ws:') && target.host === host.host && target.username === '' && target.password === ''
 +}
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index fb7cbfdf41..99fbbe85da 100644
+index fb7cbfdf41..4e03717ea9 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -32,6 +32,7 @@ import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLoc
@@ -77,7 +77,7 @@ index fb7cbfdf41..99fbbe85da 100644
        devTools: true,
      },
    })
-@@ -596,13 +600,13 @@ async function main(): Promise<void> {
+@@ -596,13 +600,17 @@ async function main(): Promise<void> {
      reportFatal(new Error(message), 'web-boot')
    })
  
@@ -91,6 +91,10 @@ index fb7cbfdf41..99fbbe85da 100644
 +  // lawbench P-9: the sidebar browser channel (browserAcquire / browserRelease) is not registered: a
 +  // renderer script could otherwise open a separate-partition webview outside the request filter.
 +  void browserGuests
++
++  // lawbench P-9: no spellchecker in any default-session window (main, first-run setup, mandatory update);
++  // it would fetch dictionaries from the network.
++  session.defaultSession.setSpellCheckerEnabled(false)
 +
 +  // lawbench P-9 (N38): the default session only reaches app resources and the local Host; other network requests are cancelled.
 +  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
@@ -152,7 +156,7 @@ index 0000000000..e5ed4de276
 +  })
 +})
 diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
-index 3e1e988a1d..f9e1d6ac5c 100644
+index 3e1e988a1d..b1a8917e48 100644
 --- a/apps/desktop/tests/main-startup.spec.ts
 +++ b/apps/desktop/tests/main-startup.spec.ts
 @@ -185,7 +185,7 @@ const harness = await vi.hoisted(async () => {
@@ -160,7 +164,7 @@ index 3e1e988a1d..f9e1d6ac5c 100644
      failWindow(error: Error) { windowFailure = error },
      windows, hosts, handlers, app, FakeWindow, FakeHost, powerMonitor, nativeTheme, trays, FakeTray, backgroundNotice, shellDialog,
 -    menu, popup, socketHeaders: vi.fn(), updateCheck, updateDownload, updateInstall,
-+    menu, popup, socketHeaders: vi.fn(), requestFilter: vi.fn(), updateCheck, updateDownload, updateInstall,
++    menu, popup, socketHeaders: vi.fn(), requestFilter: vi.fn(), spellChecker: vi.fn(), updateCheck, updateDownload, updateInstall,
      platformDispose,
      platformCloseAndWait,
  
@@ -169,16 +173,18 @@ index 3e1e988a1d..f9e1d6ac5c 100644
    Menu: { setApplicationMenu: harness.menu.setApplicationMenu, buildFromTemplate: harness.menu },
    session: { defaultSession: {
 -    setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: harness.socketHeaders },
-+    setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: harness.socketHeaders, onBeforeRequest: harness.requestFilter },
++    setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), setSpellCheckerEnabled: harness.spellChecker, webRequest: { onBeforeSendHeaders: harness.socketHeaders, onBeforeRequest: harness.requestFilter },
    } },
    protocol: { registerSchemesAsPrivileged: vi.fn(), handle: harness.protocolHandle },
    powerMonitor: harness.powerMonitor,
-@@ -907,6 +907,41 @@ describe('desktop main startup', () => {
+@@ -907,6 +907,43 @@ describe('desktop main startup', () => {
      expect(callback).toHaveBeenLastCalledWith({})
    })
  
 +  it('lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered', async () => {
 +    await readyForUpdate()
++    // the default session (main, first-run setup and mandatory-update windows) has its spellchecker off
++    expect(harness.spellChecker).toHaveBeenCalledWith(false)
 +    expect(harness.windows.length).toBeGreaterThan(0)
 +    for (const window of harness.windows) {
 +      const prefs = (window.options as { webPreferences?: { webviewTag?: boolean; spellcheck?: boolean } }).webPreferences

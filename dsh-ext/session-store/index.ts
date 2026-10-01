@@ -3,9 +3,11 @@
 // 原版 JSONL 实例用 DSH 自己装的那份（补丁里按 DSH 的模块解析求出入口文件再 import），不打进我方包：
 // 这样 cordis 的 Service 基类、SessionPersistence 基类与 DSH 是同一份。每个实例放在自己隔离的服务作用域里，
 // 互不覆盖，也不占用对外的 sessionPersistence。
+// 会话投影缓存（原 session-projection-cache 行，配置补丁里关掉）也由这里接回来，按案件存，见 projection-cache.ts。
 import { pathToFileURL } from 'node:url'
 import { defaultAppData, makeLogger } from '../shared/file-log.ts'
 import { CaseRoots } from './case-roots.ts'
+import { CaseProjectionTable, caseProjectionDomain, type CacheRecord } from './projection-cache.ts'
 import { SessionRouter, type Backend, type Header, type LogFn } from './router.ts'
 
 export const name = 'lawbench-session-store'
@@ -23,11 +25,18 @@ export interface Config {
   allowOutsideCase?: boolean
   /** 原版的物理编码（不给时用原版默认）。 */
   compression?: string
+  /**
+   * 会话投影缓存（第三轮裁决 A-P2-1 ①）：原版包 @deepseek-ai/dsh-session-projection-cache 的入口文件与它的两项写入节奏
+   * （同 base 原行）。不给时不提供投影缓存（侧栏冷会话没有标题）。
+   */
+  projectionCache?: { module?: string; impl?: unknown; writeEveryEvents: number; writeIntervalMs: number }
 }
 
 type Ctx = {
   isolate(name: string): Ctx
   get(name: string): unknown
+  provide(name: string, value: unknown): unknown
+  plugin(plugin: unknown, config?: unknown): unknown
   inject(deps: string[], apply: (ctx: Ctx) => void): unknown
   effect(fn: () => () => void, label?: string): void
   logger?(name: string): { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void }
@@ -36,10 +45,13 @@ type Ctx = {
 type LawbenchCore = { endpoint(): { port: number; token: string } | undefined; onState(fn: (s: string) => void): () => void }
 type BackendClass = (new (ctx: Ctx, config: { root: string; compression?: string }) => Backend)
 
-/** 问工作台服务要最近案件，更新名单。服务不在、超时、返回不对都当没有新消息。 */
-async function refreshFromService(core: LawbenchCore | undefined, roots: CaseRoots, log: LogFn): Promise<void> {
+/**
+ * 问工作台服务要最近案件，名单以它为准整个换掉。服务不在、超时、返回不对都当没有新消息、名单不动。
+ * @returns 是否刷新成功。
+ */
+async function refreshFromService(core: LawbenchCore | undefined, roots: CaseRoots, log: LogFn): Promise<boolean> {
   const ep = core?.endpoint()
-  if (!ep) return
+  if (!ep) return false
   try {
     const r = await fetch(`http://127.0.0.1:${ep.port}/api/case/recent`, {
       method: 'GET', redirect: 'error', signal: AbortSignal.timeout(3000),
@@ -47,12 +59,32 @@ async function refreshFromService(core: LawbenchCore | undefined, roots: CaseRoo
     })
     const j = (await r.json()) as { ok?: boolean; value?: { cases?: unknown } }
     const cases = j.ok === true && Array.isArray(j.value?.cases) ? j.value.cases : undefined
-    if (!cases) return
-    const changed = roots.merge(cases.filter((c): c is { root: string; exists: boolean } =>
+    if (!cases) return false
+    const changed = roots.replace(cases.filter((c): c is { root: string; exists: boolean } =>
       !!c && typeof (c as { root?: unknown }).root === 'string' && typeof (c as { exists?: unknown }).exists === 'boolean'))
     if (changed) log('info', 'session_store.case_roots_refreshed', { count: roots.list().length })
+    return true
   } catch (e) {
     log('warn', 'session_store.case_roots_refresh_failed', { error: (e as Error)?.name ?? 'Error' })
+    return false
+  }
+}
+
+/** 第一次刷新成功的标记与有上限的等待（第三轮复核 B-F4）。 */
+function firstRefreshGate(limitMs: number) {
+  let done = false
+  let open!: () => void
+  const opened = new Promise<void>((resolve) => { open = resolve })
+  return {
+    done: () => done,
+    mark: () => { if (!done) { done = true; open() } },
+    wait: async (): Promise<boolean> => {
+      if (done) return true
+      let timer: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([opened, new Promise<void>((resolve) => { timer = setTimeout(resolve, limitMs) })])
+      clearTimeout(timer)
+      return done
+    },
   }
 }
 
@@ -64,21 +96,25 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     ?? ((await import(pathToFileURL(config.backendModule!).href)) as { default: BackendClass }).default
   // DSH 的 SessionPersistence 抽象基类（原版类的父类）：继承它，构造时即以 sessionPersistence 注册到本插件的上下文
   const Base = Object.getPrototypeOf(Jsonl) as new (ctx: Ctx) => object
-  const roots = new CaseRoots(appData).load()
+  const roots = new CaseRoots(appData, log).load()
   const core = (): LawbenchCore | undefined => ctx.get('lawbenchCore') as LawbenchCore | undefined
-  // 同一时间只问一次，5 秒内不重复问（list 可能被频繁调用）
+  // 同一时间只问一次，5 秒内不重复问（list 可能被频繁调用）；服务还不在时不算问过
+  const gate = firstRefreshGate(3000)
   let inFlight: Promise<void> | undefined
   let lastAt = 0
   const refresh = (force = false): Promise<void> => {
     if (inFlight) return inFlight
     if (!force && Date.now() - lastAt < 5000) return Promise.resolve()
-    inFlight = refreshFromService(core(), roots, log).finally(() => { lastAt = Date.now(); inFlight = undefined })
+    if (!core()?.endpoint()) return Promise.resolve()
+    inFlight = refreshFromService(core(), roots, log)
+      .then((ok) => { if (ok) gate.mark() })
+      .finally(() => { lastAt = Date.now(); inFlight = undefined })
     return inFlight
   }
   const router = new SessionRouter(
     (root) => new Jsonl(ctx.isolate('sessionPersistence'), { root, ...(config.compression ? { compression: config.compression } : {}) }),
     roots,
-    { defaultRoot: config.defaultRoot, allowOutsideCase: config.allowOutsideCase ?? false, refresh, log },
+    { defaultRoot: config.defaultRoot, allowOutsideCase: config.allowOutsideCase ?? false, refresh, firstRefresh: gate, log },
   )
 
   class LawbenchSessionPersistence extends Base {
@@ -91,6 +127,34 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
   }
   new LawbenchSessionPersistence(ctx)
   log('info', 'session_store.started', { case_roots: roots.list().length, allow_outside_case: config.allowOutsideCase ?? false })
+
+  // 投影缓存：原版类放进一个只隔离 storageDomain 的作用域，交给它按案件落盘的替身存储域；
+  // 它对外仍以 sessionProjectionCache 提供。它要等 sessions（而 sessions 要等本插件），所以不等它起来。
+  const pc = config.projectionCache
+  if (pc && (pc.impl || pc.module)) {
+    const mod = (pc.impl ? { default: pc.impl } : await import(pathToFileURL(pc.module!).href)) as {
+      default: unknown; checkpointRecord?: { safeParse(v: unknown): { success: boolean; data?: unknown } }
+    }
+    const schema = mod.checkpointRecord
+    const table = new CaseProjectionTable({
+      caseRootOf: (id) => router.ownerOf(id),
+      parse: (v) => {
+        if (schema) { const r = schema.safeParse(v); return r.success ? (r.data as CacheRecord) : undefined }
+        const rec = v as CacheRecord | null
+        return rec && typeof rec === 'object' && rec.identity && typeof rec.identity === 'object' && rec.rows && typeof rec.rows === 'object' ? rec : undefined
+      },
+      log,
+    })
+    // 替身存储域由一个放在隔离作用域里的小插件提供：cordis 在提供者启用时只通知同一隔离作用域里的依赖方
+    const cacheConfig = { writeEveryEvents: pc.writeEveryEvents, writeIntervalMs: pc.writeIntervalMs }
+    void ctx.isolate('storageDomain').plugin({
+      name: 'lawbench-session-projection-cache',
+      apply: (scope: Ctx) => {
+        scope.provide('storageDomain', caseProjectionDomain(table))
+        scope.plugin(mod.default, cacheConfig)
+      },
+    })
+  }
 
   // 工作台服务起来（或重启）后刷新一次名单；lawbenchCore 由 legal-host 提供，不是硬依赖（会话存储要比它先可用）
   ctx.inject(['lawbenchCore'], (c) => {

@@ -2,13 +2,17 @@
 // 一、假实例测路由本身：按 cwd 选实例、编号表、列表合并与单个案件根失败跳过、开关两态、记录头 cwd 换成案件现根；
 // 二、接 DSH 自己装的原版 JSONL 包和 cordis：记录落在 <案件>\工作区\会话、默认根里没有；案件目录整个改名后
 //     旧会话能列出、能打开、能续写（不改原版包）；
-// 三、DSH 的存储契约用例整套对路由再跑一遍（不在案件里的会话走默认根）。
+// 三、DSH 的存储契约用例整套对路由再跑三遍：不在案件里的会话走默认根；会话 cwd 是已登记的案件根；
+//     cwd 在案件根的子目录里（记录头交出时改写成案件根，与搬家后同一条路）。
+// 第三轮复核返修（B-F1 复制、B-F4 名单未就绪、B-F5 超时、B-F6 同进程搬家、A-P3-2 flush 与重复编号、
+// A-P3-3 默认根只读、A-P3-5 列表不等服务）的用例随各节。
+import { createServer, type Server } from 'node:http'
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CACHE_FILE, CaseRoots, inside } from '../session-store/case-roots.ts'
-import { OUTSIDE_CASE, SessionRouter, type Backend, type Handle, type Header, type Snapshot } from '../session-store/router.ts'
+import { NOT_READY, OUTSIDE_CASE, SessionRouter, type Backend, type Handle, type Header, type Snapshot } from '../session-store/router.ts'
 import { apply as applyStore, name as storeName } from '../session-store/index.ts'
 
 
@@ -30,6 +34,9 @@ const Jsonl = ((await import(/* @vite-ignore */ realpathSync(JSONL))) as { defau
 class FakeBackend implements Backend {
   sessions = new Map<string, Header>()
   failList = false
+  /** 读取永不返回（网络盘挂住）。 */
+  hang = false
+  flushed = 0
   constructor(public root: string) {}
   async create(h: Header) { this.sessions.set(h.id, h); return this.h(h) }
   async open(id: string, access: 'read' | 'write') {
@@ -37,24 +44,31 @@ class FakeBackend implements Backend {
     if (!h) throw Object.assign(new Error(`not found ${id}`), { name: 'SessionPersistenceNotFoundError' })
     return { ...this.h(h), access }
   }
-  async flush() {}
-  async stat(id: string) { const h = this.sessions.get(id); return h && { header: h, revision: 'r' } }
+  async flush() { this.flushed++ }
+  async stat(id: string) {
+    if (this.hang) await new Promise(() => {})
+    const h = this.sessions.get(id); return h && { header: h, revision: 'r' }
+  }
   async list() {
+    if (this.hang) await new Promise(() => {})
     if (this.failList) throw Object.assign(new Error('EIO'), { code: 'EIO' })
     return [...this.sessions.values()].map((header) => ({ header, revision: 'r' }))
   }
   private h(header: Header): Handle { return { id: header.id, header, read: function (this: Handle) { return this.id } } }
 }
 
-function fakeRouter(roots: string[], opts: { allowOutsideCase?: boolean; refresh?: (r: CaseRoots) => void } = {}) {
+type Gate = { done(): boolean; wait(): Promise<boolean> }
+function fakeRouter(roots: string[], opts: { allowOutsideCase?: boolean; refresh?: (r: CaseRoots) => void | Promise<void>; firstRefresh?: Gate; timeoutMs?: number } = {}) {
   const made: FakeBackend[] = []
   const caseRoots = new CaseRoots()
-  caseRoots.merge(roots.map((root) => ({ root, exists: true })))
+  caseRoots.replace(roots.map((root) => ({ root, exists: true })))
   const logs: Array<[string, Record<string, unknown> | undefined]> = []
   const router = new SessionRouter((root) => { const b = new FakeBackend(root); made.push(b); return b }, caseRoots, {
     defaultRoot: 'C:\\dsh\\sessions',
     allowOutsideCase: opts.allowOutsideCase ?? true,
     refresh: opts.refresh ? async () => opts.refresh!(caseRoots) : undefined,
+    firstRefresh: opts.firstRefresh,
+    caseRootTimeoutMs: opts.timeoutMs,
     log: (_l, e, m) => { logs.push([e, m]) },
   })
   const backendOf = (root: string) => made.find((b) => b.root === root)!
@@ -130,34 +144,174 @@ describe('会话存储路由：选实例、编号表、列表合并', () => {
   })
 
   it('刚登记的案件还不在名单里：新建时先问一次服务再判', async () => {
-    const { router, backendOf } = fakeRouter([], { refresh: (r) => { r.merge([{ root: B, exists: true }]) } })
+    const { router, backendOf } = fakeRouter([], { refresh: (r) => { r.replace([{ root: B, exists: true }]) } })
     await router.create(H('s', B))
     expect([...backendOf(B_STORE).sessions.keys()]).toEqual(['s'])
   })
 })
 
 describe('案件根名单缓存', () => {
-  it('读写缓存；服务说"不在了"的去掉、在的加入、没列出的保留；坏缓存当空', () => {
+  it('读写缓存；名单以服务为准整个换掉：没列出的去掉、exists 为假的去掉、同一路径不同写法只留一个；坏缓存当空并记日志', () => {
     const dir = mkdtempSync(join(tmpdir(), 'lb-roots-'))
+    const logs: Array<[string, Record<string, unknown> | undefined]> = []
     try {
       const r = new CaseRoots(dir).load()
       expect(r.list()).toEqual([])
-      r.merge([{ root: A, exists: true }, { root: B, exists: true }])
+      r.replace([{ root: A, exists: true }, { root: B, exists: true }])
       expect(new CaseRoots(dir).load().list()).toEqual([A, B])
-      r.merge([{ root: 'd:/案件/张三诉李四', exists: false }, { root: 'F:\\新案', exists: true }])
-      expect(new CaseRoots(dir).load().list()).toEqual([B, 'F:\\新案'])
+      expect(r.replace([{ root: 'd:/案件/张三诉李四', exists: false }, { root: 'F:\\新案', exists: true }, { root: 'f:/新案/', exists: true }])).toBe(true)
+      expect(new CaseRoots(dir).load().list()).toEqual(['F:\\新案'])
+      expect(r.replace([{ root: 'F:\\新案', exists: true }])).toBe(false)
       writeFileSync(join(dir, CACHE_FILE), '{坏', 'utf8')
-      expect(new CaseRoots(dir).load().list()).toEqual([])
+      expect(new CaseRoots(dir, (_l, e, m) => { logs.push([e, m]) }).load().list()).toEqual([])
+      expect(logs).toEqual([['session_store.case_roots_cache_unreadable', { code: 'SyntaxError' }]])
       expect([inside('D:\\案件\\张三诉李四2', A), inside('D:\\案件\\张三诉李四\\x', A)]).toEqual([false, true])
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('B-F1：盘拔了（exists 为假）从名单去掉，插回来（exists 为真）加回', () => {
+    const r = new CaseRoots()
+    r.replace([{ root: A, exists: true }, { root: B, exists: true }])
+    r.replace([{ root: A, exists: false }, { root: B, exists: true }])
+    expect(r.list()).toEqual([B])
+    expect(r.match(join(A, 'x'))).toBeUndefined()
+    r.replace([{ root: A, exists: true }, { root: B, exists: true }])
+    expect(r.list()).toEqual([A, B])
+  })
+
+  it('A-P3-5：缓存写不进去记一条只带错误码的日志', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lb-roots-'))
+    const logs: Array<[string, Record<string, unknown> | undefined]> = []
+    try {
+      writeFileSync(join(dir, 'x'), 'x')
+      new CaseRoots(join(dir, 'x', '子'), (_l, e, m) => { logs.push([e, m]) }).replace([{ root: A, exists: true }])
+      expect(logs.map(([e]) => e)).toEqual(['session_store.case_roots_cache_write_failed'])
+      expect(typeof logs[0][1]?.code).toBe('string')
+      expect(JSON.stringify(logs)).not.toContain('案件')
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
 
+describe('第三轮复核返修：路由', () => {
+  const gate = () => {
+    let done = false
+    let waits = 0
+    return { g: { done: () => done, wait: async () => { waits++; return done } } as Gate, set: () => { done = true }, waits: () => waits }
+  }
+
+  it('B-F4：名单为空、服务还没刷新过：列表先有上限地等第一次刷新；新建仍拿不到名单时说"服务还没就绪"', async () => {
+    const t = gate()
+    const { router } = fakeRouter([], { allowOutsideCase: false, firstRefresh: t.g })
+    await router.list()
+    expect(t.waits()).toBe(1)
+    await expect(router.create(H('x', A))).rejects.toThrow(NOT_READY)
+    t.set()
+    await expect(router.create(H('x', A))).rejects.toThrow(OUTSIDE_CASE)
+  })
+
+  it('B-F4：等的这段时间里名单刷新到了，案件里的会话照常列出、照常新建', async () => {
+    let fill: (() => void) | undefined
+    let done = false
+    const { router, caseRoots, backendOf } = fakeRouter([], {
+      allowOutsideCase: false,
+      firstRefresh: { done: () => done, wait: () => new Promise<boolean>((resolve) => { fill = () => { caseRoots.replace([{ root: A, exists: true }]); done = true; resolve(true) } }) },
+    })
+    const created = router.create(H('n', A))
+    await new Promise((r) => setTimeout(r, 10))
+    fill!()
+    await created
+    expect([...backendOf(A_STORE).sessions.keys()]).toEqual(['n'])
+    expect((await router.list()).map((r) => r.header.id)).toEqual(['n'])
+  })
+
+  it('A-P3-5：平时列表不等服务刷新（刷新挂住时列表照常返回）', async () => {
+    const { router } = fakeRouter([A], { refresh: () => new Promise<void>(() => {}) })
+    await router.create(H('s1', A))
+    expect((await router.list()).map((r) => r.header.id)).toEqual(['s1'])
+  })
+
+  it('B-F5：某个案件根的 list、stat 挂住：到时跳过它、记一条 ETIMEDOUT 日志，其余照常', async () => {
+    const { router, backendOf, logs } = fakeRouter([A, B], { timeoutMs: 50 })
+    await router.create(H('a', A)); await router.create(H('b', B))
+    backendOf(B_STORE).hang = true
+    expect((await router.list()).map((r) => r.header.id)).toEqual(['a'])
+    expect(logs.find(([e]) => e === 'session_store.case_root_skipped')?.[1]).toEqual({ index: 2, code: 'ETIMEDOUT' })
+    const fresh = fakeRouter([B, A], { timeoutMs: 50 })
+    ;(fresh.router as unknown as { all(): unknown }).all()
+    fresh.backendOf(B_STORE).hang = true
+    fresh.backendOf(A_STORE).sessions.set('a', H('a', A))
+    expect((await fresh.router.stat('a'))?.header.id).toBe('a')
+  })
+
+  it('B-F6：同一进程里案件搬了家，编号表还指向旧实例：打开、stat 去掉这条再逐个实例找', async () => {
+    const OLD = 'D:\\旧\\张三诉李四'
+    const { router, backendOf, caseRoots } = fakeRouter([OLD])
+    await router.create(H('s1', OLD))
+    const moved = backendOf(join(OLD, '工作区', '会话')).sessions
+    caseRoots.replace([{ root: A, exists: true }])
+    ;(router as unknown as { all(): unknown }).all()
+    backendOf(A_STORE).sessions = new Map(moved)
+    moved.clear()
+    const h = await router.open('s1', 'write')
+    expect(h.header.cwd).toBe(A)
+    expect(router.ownerOf('s1')).toBe(A)
+    const again = fakeRouter([OLD])
+    await again.router.create(H('s2', OLD))
+    const m2 = again.backendOf(join(OLD, '工作区', '会话')).sessions
+    again.caseRoots.replace([{ root: A, exists: true }])
+    ;(again.router as unknown as { all(): unknown }).all()
+    again.backendOf(A_STORE).sessions = new Map(m2)
+    m2.clear()
+    expect((await again.router.stat('s2'))?.header.cwd).toBe(A)
+  })
+
+  it('A-P3-3：默认根里已有的旧会话只读，续写拒绝并给同一句中文说明（开关打开时照常）', async () => {
+    const off = fakeRouter([A], { allowOutsideCase: false })
+    off.backendOf('C:\\dsh\\sessions').sessions.set('old', H('old', 'D:\\别处'))
+    expect((await off.router.open('old', 'read')).header.id).toBe('old')
+    await expect(off.router.open('old', 'write')).rejects.toThrow(OUTSIDE_CASE)
+    await off.router.create(H('c', A))
+    expect((await off.router.open('c', 'write')).header.id).toBe('c')
+    const on = fakeRouter([A])
+    on.backendOf('C:\\dsh\\sessions').sessions.set('old', H('old', 'D:\\别处'))
+    expect((await on.router.open('old', 'write')).access).toBe('write')
+  })
+
+  it('A-P3-2：flush 也刷各案件实例；两个实例里有同一编号时只交第一个、记一条日志', async () => {
+    const { router, backendOf, logs } = fakeRouter([A, B])
+    await router.create(H('a', A)); await router.create(H('b', B))
+    await router.flush()
+    expect([backendOf('C:\\dsh\\sessions').flushed, backendOf(A_STORE).flushed, backendOf(B_STORE).flushed]).toEqual([1, 1, 1])
+    backendOf(B_STORE).sessions.set('a', H('a', B))
+    const rows = await router.list()
+    expect(rows.filter((r) => r.header.id === 'a').map((r) => r.header.cwd)).toEqual([A])
+    expect(logs.find(([e]) => e === 'session_store.duplicate_id')?.[1]).toEqual({ index: 2 })
+  })
+})
+
 // ── 二、接原版 JSONL 包 ────────────────────────────────────────────────────
-async function startStore(appData: string, defaultRoot: string, extra: Record<string, unknown> = {}) {
+/** 假的工作台服务：只答 GET /api/case/recent（cases 每次现取），只听 127.0.0.1。 */
+async function fakeService(cases: () => Array<{ root: string; exists: boolean }>): Promise<{ port: number; close(): Promise<void> }> {
+  const server: Server = createServer((req, res) => {
+    const ok = req.url === '/api/case/recent' && req.headers.authorization === 'Bearer t'
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify(ok ? { ok: true, value: { cases: cases() } } : { ok: false, error: { code: 'NOT_FOUND', message: 'x' } }))
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as { port: number }).port
+  return { port, close: () => new Promise<void>((resolve) => server.close(() => resolve())) }
+}
+
+/**
+ * 起会话存储插件（原版 JSONL 包）。给 cases 时同时起假的工作台服务并以 lawbenchCore 提供端点（名单按它刷新）；
+ * 不给时没有服务（名单只有缓存）。
+ */
+async function startStore(appData: string, defaultRoot: string, extra: Record<string, unknown> = {}, cases?: () => Array<{ root: string; exists: boolean }>) {
   const ctx = new cordis.Context()
+  const svc = cases ? await fakeService(cases) : undefined
+  if (svc) ctx.provide('lawbenchCore', { endpoint: () => ({ port: svc.port, token: 't' }), onState: (fn: (s: string) => void) => { fn('running'); return () => {} } })
   const fiber = await ctx.plugin({ name: storeName, apply: applyStore }, { backend: Jsonl, defaultRoot, appData, compression: 'none', ...extra })
-  return { persistence: ctx.sessionPersistence as Backend, dispose: () => fiber.dispose() }
+  return { ctx, persistence: ctx.sessionPersistence as Backend, dispose: async () => { await fiber.dispose(); await svc?.close() } }
 }
 
 function files(dir: string): string[] {
@@ -173,7 +327,7 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
   it('案件里的会话只写进 <案件>\\工作区\\会话，默认根没有；开关打开时不在案件里的写默认根', async () => {
     const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions'); const caseRoot = join(tmp, '刑事-虚构甲')
     mkdirSync(caseRoot, { recursive: true })
-    new CaseRoots(appData).merge([{ root: caseRoot, exists: true }])
+    new CaseRoots(appData).replace([{ root: caseRoot, exists: true }])
     const s = await startStore(appData, home, { allowOutsideCase: true })
     try {
       const h = await s.persistence.create(meta('in-case', caseRoot) as never)
@@ -191,9 +345,9 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
   it('N46 ②（默认）：不在案件里的会话拒绝新建、给中文说明，$DSH_HOME\\sessions 下不新增目录；案件里的照常', async () => {
     const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions'); const caseRoot = join(tmp, '刑事-虚构丙')
     mkdirSync(caseRoot, { recursive: true }); mkdirSync(home, { recursive: true })
-    new CaseRoots(appData).merge([{ root: caseRoot, exists: true }])
     const before = readdirSync(home)
-    const s = await startStore(appData, home)
+    // 服务在、名单按服务刷新（缓存为空）
+    const s = await startStore(appData, home, {}, () => [{ root: caseRoot, exists: true }])
     try {
       await expect(s.persistence.create(meta('outside', join(tmp, '别处')) as never)).rejects.toThrow(OUTSIDE_CASE)
       await expect(s.persistence.create(meta('no-cwd') as never)).rejects.toThrow(OUTSIDE_CASE)
@@ -205,11 +359,11 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
     expect(files(join(caseRoot, '工作区', '会话')).some((f) => f.includes('in-case'))).toBe(true)
   })
 
-  it('搬家：案件目录整个改名、名单按服务更新后重启，旧会话能列出（cwd 为新路径）、能打开、能续写，不需要改原版包', async () => {
+  it('搬家：案件目录整个改名、服务只列新位置后重启，旧会话能列出（cwd 为新路径）、能打开、能续写，不需要改原版包', async () => {
     const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions')
     const oldRoot = join(tmp, '旧位置', '民事-虚构乙'); const newRoot = join(tmp, '新位置', '民事-虚构乙')
     mkdirSync(oldRoot, { recursive: true })
-    new CaseRoots(appData).merge([{ root: oldRoot, exists: true }])
+    new CaseRoots(appData).replace([{ root: oldRoot, exists: true }])
     let s = await startStore(appData, home)
     try {
       const h = await s.persistence.create(meta('moved', oldRoot) as never)
@@ -218,7 +372,7 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
     } finally { await s.dispose() }
     mkdirSync(join(tmp, '新位置'), { recursive: true })
     renameSync(oldRoot, newRoot)
-    new CaseRoots(appData).load().merge([{ root: oldRoot, exists: false }, { root: newRoot, exists: true }])
+    new CaseRoots(appData).load().replace([{ root: newRoot, exists: true }]) // 真服务按案件编号去重，只列现在的位置
     s = await startStore(appData, home)
     try {
       const row = (await s.persistence.list()).find((r) => r.header.id === 'moved')
@@ -235,11 +389,63 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
     expect(files(home)).toEqual([])
   })
 
+  it('B-F1 复制：案件文件夹复制到新位置、服务只列新位置：列出的 cwd 是新根，续写落在新文件夹，旧文件夹一个字节不变', async () => {
+    const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions')
+    const oldRoot = join(tmp, '桌面', '民事-虚构乙'); const newRoot = join(tmp, '案件盘', '民事-虚构乙')
+    mkdirSync(oldRoot, { recursive: true })
+    new CaseRoots(appData).replace([{ root: oldRoot, exists: true }])
+    let s = await startStore(appData, home)
+    try {
+      const h = await s.persistence.create(meta('copied', oldRoot) as never)
+      await (h as unknown as { append(e: unknown): Promise<void> }).append(oneTurnLog().slice(0, 2))
+      await (h as unknown as { close(): Promise<void> }).close()
+    } finally { await s.dispose() }
+    cpSync(oldRoot, newRoot, { recursive: true })
+    const snapshot = (dir: string) => files(dir).map((f) => [f.slice(dir.length), readFileSync(f).toString('base64')].join(':')).sort()
+    const oldBefore = snapshot(oldRoot)
+    new CaseRoots(appData).load().replace([{ root: newRoot, exists: true }]) // 真服务只列新位置，旧位置不出现
+    s = await startStore(appData, home)
+    try {
+      const rows = (await s.persistence.list()).filter((r) => r.header.id === 'copied')
+      expect(rows.map((r) => r.header.cwd)).toEqual([newRoot])
+      const w = (await s.persistence.open('copied', 'write')) as unknown as { header: Header; append(e: unknown): Promise<void>; close(): Promise<void> }
+      expect(w.header.cwd).toBe(newRoot)
+      await w.append(oneTurnLog().slice(2))
+      await w.close()
+    } finally { await s.dispose() }
+    expect(snapshot(oldRoot)).toEqual(oldBefore)
+    const newLog = files(join(newRoot, '工作区', '会话')).filter((f) => f.includes('copied'))
+    expect(newLog.length).toBeGreaterThan(0)
+    expect(snapshot(newRoot)).not.toEqual(oldBefore)
+  })
+
+  it('B-F1 纯搬家对照：旧位置已不在、服务只列新位置：照常列出、打开、续写', async () => {
+    const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions')
+    const oldRoot = join(tmp, 'a', '案甲'); const newRoot = join(tmp, 'b', '案甲')
+    mkdirSync(oldRoot, { recursive: true }); mkdirSync(join(tmp, 'b'))
+    new CaseRoots(appData).replace([{ root: oldRoot, exists: true }])
+    let s = await startStore(appData, home)
+    try {
+      const h = await s.persistence.create(meta('m', oldRoot) as never)
+      await (h as unknown as { append(e: unknown): Promise<void> }).append(oneTurnLog())
+      await (h as unknown as { close(): Promise<void> }).close()
+    } finally { await s.dispose() }
+    renameSync(oldRoot, newRoot)
+    new CaseRoots(appData).load().replace([{ root: newRoot, exists: true }])
+    s = await startStore(appData, home)
+    try {
+      expect((await s.persistence.list()).map((r) => [r.header.id, r.header.cwd])).toEqual([['m', newRoot]])
+      const w = (await s.persistence.open('m', 'write')) as unknown as { read(): Promise<{ events: unknown[] }>; close(): Promise<void> }
+      expect((await w.read()).events).toEqual(oneTurnLog())
+      await w.close()
+    } finally { await s.dispose() }
+  })
+
   it('某个案件根读不出来（路径被占成文件）：列表只跳过它，其余照常', async () => {
     const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions')
     const good = join(tmp, '好的案件'); const bad = join(tmp, '坏的案件')
     mkdirSync(good, { recursive: true }); mkdirSync(bad, { recursive: true })
-    new CaseRoots(appData).merge([{ root: good, exists: true }, { root: bad, exists: true }])
+    new CaseRoots(appData).replace([{ root: good, exists: true }, { root: bad, exists: true }])
     let s = await startStore(appData, home)
     try {
       for (const [id, cwd] of [['g', good], ['b', bad]] as const) {
@@ -257,10 +463,54 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
   })
 })
 
-// ── 三、DSH 的存储契约整套对路由再跑一遍 ──────────────────────────────────
+// ── 三、DSH 的存储契约整套对路由再跑三遍 ──────────────────────────────────
 runPersistenceContract('lawbench-session-store（默认根）', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lb-store-contract-'))
   // 契约用例的会话 cwd 不在任何案件里，按开关打开跑（验的是原版实例经路由转发的语义）
   const s = await startStore(join(dir, 'appdata'), join(dir, 'sessions'), { allowOutsideCase: true })
   return { persistence: s.persistence as never, dispose: async () => { await s.dispose(); rmSync(dir, { recursive: true, force: true }) } } as never
 })
+
+/**
+ * 契约用例的会话 cwd 只有 '/work' 和不给两种。这里把它们换到案件里（to），交出来的记录头再换回原样，
+ * 让整套用例走案件实例、编号表和记录头改写那条路（A-P3-2）；开关关着（N46 ②），不在案件里的会话一个也不建。
+ */
+function inCase(p: Backend, to: string): Backend {
+  const orig = new Map<string, string | undefined>()
+  const back = (h: Header): Header => {
+    if (!orig.has(h.id)) return h
+    const o = orig.get(h.id)
+    const { cwd: _cwd, ...rest } = h
+    return Object.freeze(o === undefined ? rest : { ...rest, cwd: o }) as Header
+  }
+  const wrap = <T extends { header: Header }>(x: T): T => {
+    const header = back(x.header)
+    return new Proxy(x, { get: (t, k) => { if (k === 'header') return header; const v = Reflect.get(t, k, t); return typeof v === 'function' ? v.bind(t) : v } })
+  }
+  return {
+    create: async (h, o) => { orig.set(h.id, h.cwd); return wrap(await p.create({ ...h, cwd: to }, o)) },
+    open: async (id, a, o) => wrap(await p.open(id, a, o)),
+    flush: () => p.flush(),
+    stat: async (id, o) => { const r = await p.stat(id, o); return r && { ...r, header: back(r.header) } },
+    list: async (o) => (await p.list(o)).map((r) => ({ ...r, header: back(r.header) })),
+  }
+}
+
+for (const [label, sub] of [['案件根', ''], ['案件根下子目录（记录头改写，同搬家后）', '子目录']] as const) {
+  runPersistenceContract(`lawbench-session-store（${label}）`, async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'lb-store-contract-')))
+    const caseRoot = join(dir, '刑事-虚构丁')
+    mkdirSync(join(caseRoot, sub), { recursive: true })
+    new CaseRoots(join(dir, 'appdata')).replace([{ root: caseRoot, exists: true }])
+    const s = await startStore(join(dir, 'appdata'), join(dir, 'sessions'))
+    return {
+      persistence: inCase(s.persistence, join(caseRoot, sub)) as never,
+      dispose: async () => {
+        await s.dispose()
+        // 记录全在案件文件夹里，默认根一个也没有
+        expect(files(join(dir, 'sessions'))).toEqual([])
+        rmSync(dir, { recursive: true, force: true })
+      },
+    } as never
+  })
+}

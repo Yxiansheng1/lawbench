@@ -12,6 +12,8 @@
   5. 启用的行必须都已激活（fiberPhase=active）：关掉某行后依赖它的行起不来会在这里报出。
   6. 我方 legal-ui、legal-host、legal-credentials 与 preset-lawbench 必须启用且已激活（组合包没加载时 DSH 会静默以原版启动）。
   7. 静态树（plugin-tree.txt）里"必须关"的行都写着 disabled: true。
+  8. 我方会话存储 legal-session-store 的配置（T17 第三轮返修 A-P3-4）：allowOutsideCase 为 false（N46 ②），
+     投影缓存按案件存（projectionCache 指向原版包、写入节奏同 base 原行）。
 plugin-inventory 行（清单导出本身靠它）：产品配置关闭；取证启动在 profile 自己的补丁层临时写 disabled: false，
 用 --inventory-overlay 声明，脚本对这一行改判为"取证期临时启用"，其余照常。产品配置下它关着由第 7 项静态树和
 另行请求 /api/pluginInventory/list 失败两处核对。
@@ -66,7 +68,7 @@ T17_N41 = {
 assert len(T17_N41) == 9, f"N41 名单应为 9 行，现为 {len(T17_N41)} 行"
 MUST_OFF |= T17_N41
 # T17 第三步（执行令 2026-09-30 15:16）：会话记录改由我方 legal-session-store 按案件存；原存储行关掉；
-# 会话投影缓存会把律师原话存进 $DSH_HOME\storages，一并关掉
+# 会话投影缓存会把律师原话存进 $DSH_HOME\storages，一并关掉（第三轮返修起由 legal-session-store 按案件存，见第 8 项）
 T17_STEP3 = {"session-persistence-jsonl", "session-projection-cache"}
 MUST_OFF |= T17_STEP3
 # 取证期允许临时启用的行（见文件头）
@@ -186,7 +188,7 @@ ALLOWED = {
     "legal-ui": (OURS, "我方界面插件：首页、胶囊管理、右侧栏材料 / 成果 / 原文查看、输入区上方选择、设置页一节；一切数据经 lawbench 远程接口（Host 转 127.0.0.1 的工作台服务），不读写案件文件"),
     "legal-credentials": (OURS, "我方凭据插件：只认 LAWFIRM_KEY、读写 Windows 凭据管理器；授权记录只在内存；不读环境变量"),
     # T17 第三步
-    "legal-session-store": (OURS, "我方会话存储：顶替 session-persistence-jsonl，案件里的会话存 <案件>\\工作区\\会话，其余存 $DSH_HOME\\sessions；内部用原版 JSONL 包"),
+    "legal-session-store": (OURS, "我方会话存储：顶替 session-persistence-jsonl 与 session-projection-cache，案件里的会话记录存 <案件>\\工作区\\会话、投影缓存存 <案件>\\工作区\\会话缓存；不在案件里的会话不许新建、已有的只读；内部用原版 JSONL 包与原版缓存类"),
     # 后续工单处理（不是 AI 工具、不外连；归 T17 / T13 / T7 加固，本轮不关）
     "workspace": (LATER, "工作区服务与\"默认工作区\"入口（T13）"),
     "ui-workspace": (LATER, "\"默认工作区\"入口界面（T13）"),
@@ -212,6 +214,12 @@ EXPECT = {
     # T17 第二步返修（1516 令小项③）：权限关掉后写死，不读 DSH_PERMISSION_MODE
     "sandbox-policy": {"mode": "workspace-write", "workspaceRoot": "!!js process.cwd()"},
     "approval": {"policy": "ask"},
+}
+# 第 8 项：legal-session-store 的配置
+SESSION_STORE_EXPECT = {
+    "allowOutsideCase": False,
+    "projectionCache.writeEveryEvents": 200,
+    "projectionCache.writeIntervalMs": 5000,
 }
 LLM_EXPECT = {"baseURL": "http://127.0.0.1:18765/v1", "api": "openai-completions", "apiKeyEnv": "LAWFIRM_KEY",
               "retryPolicy": {"mode": "normal", "maxRetries": 1}}
@@ -346,6 +354,23 @@ def main(inv_path, tree_path, overlay=False):
         if not ok:
             bad.append(f"preset-lawbench {name} 不符：{got}")
         out.append(f"  {name:48s} {'一致' if ok else '不一致!'}  {json.dumps(got, ensure_ascii=False)}")
+
+    out += ["", "## 8. 我方会话存储 legal-session-store 的配置（静态树）"]
+    ss = (rows.get("legal-session-store") or {}).get("config") or {}
+    ssp = ss.get("projectionCache") or {}
+    got8 = {"allowOutsideCase": ss.get("allowOutsideCase"),
+            "projectionCache.writeEveryEvents": ssp.get("writeEveryEvents"),
+            "projectionCache.writeIntervalMs": ssp.get("writeIntervalMs")}
+    for k, v in SESSION_STORE_EXPECT.items():
+        ok = got8[k] == v
+        if not ok:
+            bad.append(f"legal-session-store.{k} 不符：{got8[k]}")
+        out.append(f"  {k:36s} {'一致' if ok else '不一致!'}  {json.dumps(got8[k], ensure_ascii=False)}")
+    mod = norm(ssp.get("module", ""))
+    ok = mod.startswith("!!js") and "@deepseek-ai/dsh-session-projection-cache" in mod
+    if not ok:
+        bad.append(f"legal-session-store.projectionCache.module 不符：{mod}")
+    out.append(f"  {'projectionCache.module':36s} {'一致' if ok else '不一致!'}  {mod[:90]}")
 
     out += ["", "## 4. preset-lawbench 实际挂载的插件（运行时）"]
     for p in inv.get("agentPresets", []):

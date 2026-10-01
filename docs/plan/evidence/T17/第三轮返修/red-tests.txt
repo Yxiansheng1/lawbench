@@ -1,0 +1,159 @@
+# T17 第三轮返修 变异（撤回单处修法）
+
+## B-F1 撤回：名单刷新时没列出的保留（旧做法）
+文件：dsh-ext/session-store/case-roots.ts；跑：tests/session-store.spec.ts、tests/workspace-attach.spec.ts
+结果：5 failed | 84 passed (89)
+- B-F1 复制：案件文件夹复制到新位置、服务只列新位置：列出的 cwd 是新根，续写落在新文件夹，旧文件夹一个字节不变
+- B-F1：盘拔了（exists 为假）从名单去掉，插回来（exists 为真）加回
+- W3 F-CASE-04 复制后在新位置打开：会话归新案件工作区，旧工作区里不再算它
+- W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > B-F1 复制：案件文件夹复制到新位置、服务只列新位置：列出的 cwd 是新根，续写落在新文件夹，旧文件夹一个字节不变
+- tests/session-store.spec.ts > 案件根名单缓存 > B-F1：盘拔了（exists 为假）从名单去掉，插回来（exists 为真）加回
+- tests/session-store.spec.ts > 案件根名单缓存 > 读写缓存；名单以服务为准整个换掉：没列出的去掉、exists 为假的去掉、同一路径不同写法只留一个；坏缓存当空并记日志
+- tests/workspace-attach.spec.ts > W3 F-CASE-04 复制后在新位置打开：会话归新案件工作区，旧工作区里不再算它
+- tests/workspace-attach.spec.ts > W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- 读写缓存；名单以服务为准整个换掉：没列出的去掉、exists 为假的去掉、同一路径不同写法只留一个；坏缓存当空并记日志
+
+## B-F2 撤回：打开案件不请 Host 挂回游离会话
+文件：dsh-ext/ui/index.tsx；跑：tests/intake.spec.ts
+结果：2 failed | 4 passed (6)
+- tests/intake.spec.ts > 打开案件：建工作区 → 挂回游离会话 → 打开工作区（B-F2） > 挂回出错也照常打开工作区
+- tests/intake.spec.ts > 打开案件：建工作区 → 挂回游离会话 → 打开工作区（B-F2） > 按顺序：create、attachCaseSessions({root})、openWorkspace
+- 挂回出错也照常打开工作区
+- 按顺序：create、attachCaseSessions({root})、openWorkspace
+
+## B-F2 撤回：挂不上的不再挂第二次
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 6 passed (7)
+- W2 名单缓存丢了、服务没起时启动，之后在该案件新建会话：打开案件时旧会话挂回，再重启仍在（登记没有私有方法时：退回到没挂上的再挂一次）
+- tests/workspace-attach.spec.ts > W2 名单缓存丢了、服务没起时启动，之后在该案件新建会话：打开案件时旧会话挂回，再重启仍在（登记没有私有方法时：退回到没挂上的再挂一次）
+
+## B-F2：只挂不在任何工作区里的（启动时按旧位置算进旧工作区的不挂）
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 6 passed (7)
+- W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- tests/workspace-attach.spec.ts > W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+
+## B-F2：挂之前不用现在的记录头重建登记的索引
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 6 passed (7)
+- W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- tests/workspace-attach.spec.ts > W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+
+## B-F2：不从旧工作区去掉（同一编号记在两处，下次启动登记不一致；侧栏不更新）
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：3 failed | 4 passed (7)
+- W1 搬家（改名）后在新位置打开案件：旧会话挂回新案件工作区（不再落进"未分组"）
+- W3 F-CASE-04 复制后在新位置打开：会话归新案件工作区，旧工作区里不再算它
+- W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- tests/workspace-attach.spec.ts > W1 搬家（改名）后在新位置打开案件：旧会话挂回新案件工作区（不再落进"未分组"）
+- tests/workspace-attach.spec.ts > W3 F-CASE-04 复制后在新位置打开：会话归新案件工作区，旧工作区里不再算它
+- tests/workspace-attach.spec.ts > W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+
+## B-F2：只看过滤后的 sessionIds 决定从哪里去掉（纯搬家后旧工作区的登记记录里留着它）
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：3 failed | 4 passed (7)
+- W1 搬家（改名）后在新位置打开案件：旧会话挂回新案件工作区（不再落进"未分组"）
+- W3 F-CASE-04 复制后在新位置打开：会话归新案件工作区，旧工作区里不再算它
+- W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- tests/workspace-attach.spec.ts > W1 搬家（改名）后在新位置打开案件：旧会话挂回新案件工作区（不再落进"未分组"）
+- tests/workspace-attach.spec.ts > W3 F-CASE-04 复制后在新位置打开：会话归新案件工作区，旧工作区里不再算它
+- tests/workspace-attach.spec.ts > W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+
+## B-F2：对别的工作区一律去掉（不在名单上的案件的会话被剪掉）
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 6 passed (7)
+- W5 打开一个案件时，不在名单上的别的案件（盘拔了）的工作区不被改写，它的会话不被剪掉
+- tests/workspace-attach.spec.ts > W5 打开一个案件时，不在名单上的别的案件（盘拔了）的工作区不被改写，它的会话不被剪掉
+
+## B-F2：先挂后去掉（中途断掉会留下同一编号记在两处）
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 6 passed (7)
+- W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+- tests/workspace-attach.spec.ts > W4 复制后启动时名单缓存还是旧位置（服务还没刷新）：登记把会话算在旧工作区；打开新位置时挂到新工作区，旧工作区不再算它
+
+## A-P2-1 撤回：不接投影缓存
+文件：dsh-ext/session-store/index.ts；跑：tests/projection-cache.spec.ts
+结果：1 failed | 4 passed (5)
+- tests/projection-cache.spec.ts > 接 DSH 原版投影缓存类 > 标题写进案件文件夹；重启后冷会话从缓存拿到标题；案件搬家后照样拿到；$DSH_HOME 下没有缓存文件
+- 标题写进案件文件夹；重启后冷会话从缓存拿到标题；案件搬家后照样拿到；$DSH_HOME 下没有缓存文件
+
+## A-P2-1：搬家后身份 cwd 不换成现根
+文件：dsh-ext/session-store/projection-cache.ts；跑：tests/projection-cache.spec.ts
+结果：2 failed | 3 passed (5)
+- tests/projection-cache.spec.ts > 接 DSH 原版投影缓存类 > 标题写进案件文件夹；重启后冷会话从缓存拿到标题；案件搬家后照样拿到；$DSH_HOME 下没有缓存文件
+- tests/projection-cache.spec.ts > 替身表 > 搬家后读出的身份 cwd 换成现根（记录就在这个案件的文件夹里）；同根不同写法不改
+- 搬家后读出的身份 cwd 换成现根（记录就在这个案件的文件夹里）；同根不同写法不改
+- 标题写进案件文件夹；重启后冷会话从缓存拿到标题；案件搬家后照样拿到；$DSH_HOME 下没有缓存文件
+
+## A-P2-1：默认根的会话也落盘（落到 $DSH_HOME）
+文件：dsh-ext/session-store/projection-cache.ts；跑：tests/projection-cache.spec.ts
+结果：1 failed | 4 passed (5)
+- tests/projection-cache.spec.ts > 替身表 > 案件里的会话落在 <案件>\工作区\会话缓存\<编号>.json，新实例读得到；默认根和不知道在哪的只放内存
+- 案件里的会话落在 <案件>\工作区\会话缓存\<编号>.json，新实例读得到；默认根和不知道在哪的只放内存
+
+## A-P3-3 撤回：默认根的旧会话可续写
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- A-P3-3：默认根里已有的旧会话只读，续写拒绝并给同一句中文说明（开关打开时照常）
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > A-P3-3：默认根里已有的旧会话只读，续写拒绝并给同一句中文说明（开关打开时照常）
+
+## B-F4 撤回：名单为空时列表不等第一次刷新
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- B-F4：名单为空、服务还没刷新过：列表先有上限地等第一次刷新；新建仍拿不到名单时说"服务还没就绪"
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > B-F4：名单为空、服务还没刷新过：列表先有上限地等第一次刷新；新建仍拿不到名单时说"服务还没就绪"
+
+## B-F4 撤回：拿不到名单时仍说"不是案件"
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- B-F4：名单为空、服务还没刷新过：列表先有上限地等第一次刷新；新建仍拿不到名单时说"服务还没就绪"
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > B-F4：名单为空、服务还没刷新过：列表先有上限地等第一次刷新；新建仍拿不到名单时说"服务还没就绪"
+
+## B-F5 撤回：案件根读取不加上限
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- B-F5：某个案件根的 list、stat 挂住：到时跳过它、记一条 ETIMEDOUT 日志，其余照常
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > B-F5：某个案件根的 list、stat 挂住：到时跳过它、记一条 ETIMEDOUT 日志，其余照常
+
+## B-F6 撤回：表里的实例说没有就照原样报错
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- B-F6：同一进程里案件搬了家，编号表还指向旧实例：打开、stat 去掉这条再逐个实例找
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > B-F6：同一进程里案件搬了家，编号表还指向旧实例：打开、stat 去掉这条再逐个实例找
+
+## A-P3-5 撤回：列表等服务刷新
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- A-P3-5：平时列表不等服务刷新（刷新挂住时列表照常返回）
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > A-P3-5：平时列表不等服务刷新（刷新挂住时列表照常返回）
+
+## A-P3-5 撤回：缓存读坏不记日志
+文件：dsh-ext/session-store/case-roots.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- tests/session-store.spec.ts > 案件根名单缓存 > 读写缓存；名单以服务为准整个换掉：没列出的去掉、exists 为假的去掉、同一路径不同写法只留一个；坏缓存当空并记日志
+- 读写缓存；名单以服务为准整个换掉：没列出的去掉、exists 为假的去掉、同一路径不同写法只留一个；坏缓存当空并记日志
+
+## A-P3-2：flush 只刷默认根
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- A-P3-2：flush 也刷各案件实例；两个实例里有同一编号时只交第一个、记一条日志
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > A-P3-2：flush 也刷各案件实例；两个实例里有同一编号时只交第一个、记一条日志
+
+## A-P3-2：重复编号不跳过
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 81 passed (82)
+- A-P3-2：flush 也刷各案件实例；两个实例里有同一编号时只交第一个、记一条日志
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > A-P3-2：flush 也刷各案件实例；两个实例里有同一编号时只交第一个、记一条日志
+
+## A-P3-1 撤回：默认会话不关拼写检查
+文件：dsh/apps/desktop/src/main.ts；跑：apps/desktop/tests/main-startup.spec.ts
+结果：1 failed | 106 passed (107)
+- lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered
+- |thread-safe| apps/desktop/tests/main-startup.spec.ts > desktop main startup > lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered
+
+## A-P3-6：addFiles 不再问导入钩子
+文件：dsh/packages/client/ui-conversation/src/client/apply.ts；跑：packages/client/ui-conversation
+结果：1 failed | 529 passed (530)
+- lawbench P-5: a registered intake hook takes the files before references or uploads
+- |thread-safe| packages/client/ui-conversation/tests/apply-inject.client.spec.tsx > Conversation inject API > lawbench P-5: a registered intake hook takes the files before references or uploads

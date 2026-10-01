@@ -367,8 +367,9 @@
 - id: session-persistence-jsonl
   disabled: true
 
-# 会话投影缓存：把每个会话的投影（含律师发的原话）存进 $DSH_HOME\storages\session_projcache，不跟案件走
-# （第三步验收全盘搜特征串时发现）。它只是冷读加速，用它的地方都是可选的（ctx.get），关掉只是列会话时多重放一遍记录
+# 会话投影缓存：原行把每个会话的投影（标题等，含律师发的原话）存进 $DSH_HOME\storages\session_projcache，不跟案件走
+# （第三步验收全盘搜特征串时发现），关掉。侧栏里没打开过的会话，标题、最近活动、是否空白只从这份缓存取（不重放记录），
+# 所以不能干脆不要：改由下面的 legal-session-store 用原版缓存类按案件存（<案件>\工作区\会话缓存，第三轮裁决 A-P2-1 ①）
 - id: session-projection-cache
   disabled: true
 
@@ -379,5 +380,10 @@
         backendModule: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-persistence-jsonl')"
         defaultRoot: !!js dshHomePath('sessions')
         appData: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
-        # 不在案件里的会话不许新建（N46 用户定 ②：没有打开案件就不能发消息）；已有的照常可读
+        # 不在案件里的会话不许新建（N46 用户定 ②：没有打开案件就不能发消息）；已有的只读，不能续写
         allowOutsideCase: false
+        # 会话投影缓存按案件存；写入节奏同 base 原行
+        projectionCache:
+          module: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-projection-cache')"
+          writeEveryEvents: 200
+          writeIntervalMs: 5000

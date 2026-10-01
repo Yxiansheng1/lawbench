@@ -1,5 +1,5 @@
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 3c5553dae0..b6c2bb54b2 100644
+index 8066d2973f..8ff0d143e7 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
 @@ -273,8 +273,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {

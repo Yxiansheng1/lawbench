@@ -27,6 +27,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'importPastedImage', params: ['request'] },
   // ORCH 注记 2026-09-30 13:18：上一轮被拦下的原因（INPUT_CHANGED 等），输入区在一轮结束后取
   { method: 'turnNotice', params: ['request'] },
+  // T17 第三轮复核 B-F2：打开案件后把 cwd 是该案件根、不在任何工作区里的会话挂回该案件工作区
+  { method: 'attachCaseSessions', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]
