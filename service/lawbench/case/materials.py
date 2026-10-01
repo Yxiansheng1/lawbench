@@ -161,6 +161,8 @@ class Materials:
         self.cases = cases
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+        # 识别队列（T12）挂上：重新生成文本后把已有识别结果合并回去，签名 (root, index, material_ids)；持锁调用
+        self.after_render = None
 
     def _lock(self, case_id: str) -> threading.Lock:
         with self._guard:
@@ -413,6 +415,8 @@ class Materials:
                                  op="materials_text")
         for m in renamed:
             self._retitle(root, m)
+        if self.after_render is not None:
+            self.after_render(root, index, [mid for mid, p in parsed_now.items() if p is not None])
 
         self._save_index(root, index)
         self._write_status(root, index, unreadable_dirs)
@@ -504,7 +508,8 @@ class Materials:
 
     @staticmethod
     def _stale_ocr(root: str, index: dict) -> set[str]:
-        """原件变了而识别结果还是旧版本：case.db 里有该材料的识别任务，但 material_version 不是当前 sha256。"""
+        """原件变了而识别结果还是旧版本：该材料有已完成页的识别任务，但没有一个是当前 sha256 的
+        （T12：原件改过后重新识别过，就不再算过期）。"""
         db = gate.resolve_internal(root, "工作区/case.db", op="materials_list")
         if not db.exists():
             return set()
@@ -516,7 +521,8 @@ class Materials:
             rows = []
         finally:
             con.close()
-        return {mid for mid, ver in rows if mid in cur and cur[mid] != ver}
+        current = {mid for mid, ver in rows if mid in cur and cur[mid] == ver}
+        return {mid for mid, ver in rows if mid in cur and cur[mid] != ver and mid not in current}
 
     stale_ocr = _stale_ocr  # 工具 case_list_materials 也用
 

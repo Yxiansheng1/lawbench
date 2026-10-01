@@ -23,7 +23,7 @@ KEY_TIMEOUT = 10.0
 
 
 def _endpoint(app_state, name: str, fn: Callable[[dict], dict], *, query: bool = False,
-              no_input: bool = False, family: str = "api"):
+              no_input: bool = False, family: str = "api", path_params: bool = False):
     """family：契约目录（api 或 core）；日志的模块名也用它。"""
     schema = f"{family}/{name}.schema.json"
 
@@ -130,6 +130,15 @@ def routes(st) -> list[Route]:
     def retainer_driver(d: dict) -> dict:
         return st.retainer.handle(d)
 
+    def ocr_submit(d: dict) -> dict:
+        return st.ocr.submit(d)
+
+    def ocr_list(d: dict) -> dict:
+        return st.ocr.list(d["case_id"])
+
+    def ocr_cancel(d: dict) -> dict:
+        return st.ocr.cancel(d["job_id"])
+
     E = lambda name, fn, **kw: _endpoint(st, name, fn, **kw)  # noqa: E731
     return [
         Route("/api/case/open", E("case_open", case_open), methods=["POST"]),
@@ -155,6 +164,9 @@ def routes(st) -> list[Route]:
         Route("/api/wiki/suggestions/{id}", E("wiki_suggestions", wiki_suggestions), methods=["POST"]),
         Route("/api/invoice/run", E("invoice_run", invoice_run), methods=["POST"]),
         Route("/api/retainer/driver", E("retainer_driver", retainer_driver), methods=["POST"]),
+        Route("/api/ocr/jobs", E("ocr_submit", ocr_submit), methods=["POST"]),
+        Route("/api/ocr/jobs", E("ocr_list", ocr_list, query=True), methods=["GET"]),
+        Route("/api/ocr/jobs/{job_id}/cancel", E("ocr_cancel", ocr_cancel, path_params=True), methods=["POST"]),
     ]
 
 

@@ -152,6 +152,15 @@ class Net:
             follow_redirects=False, trust_env=False, transport=transport,
             timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),
             event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
+        self._transport = transport
+
+    def new_client(self, read_timeout: float = REQUEST_TIMEOUT) -> httpx.Client:
+        """一次性客户端：与 self.client 同样的地址白名单、不跟随跳转、不读代理环境变量。
+        识别队列每页用一个，取消时在别的线程里 close() 它，正在等的请求立即断开（Spec 7.3）。"""
+        return httpx.Client(
+            follow_redirects=False, trust_env=False, transport=self._transport,
+            timeout=httpx.Timeout(read_timeout, connect=CONNECT_TIMEOUT),
+            event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
 
     def own_client(self) -> httpx.Client:
         """单独的一个 client（钩子、超时与 self.client 相同）：流水线每次请求用一个，取消时整个关掉以断开连接

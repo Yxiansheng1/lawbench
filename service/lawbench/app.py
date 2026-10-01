@@ -1,6 +1,7 @@
 """工作台服务的 ASGI 应用：令牌校验、/health、统一返回体与错误码（Spec 1.3、20.1）。"""
 from __future__ import annotations
 
+import contextlib
 import copy
 import hmac
 import types
@@ -18,6 +19,7 @@ from .capsules import CapsuleStore
 from .case.materials import Materials
 from .ingest import libreoffice
 from .invoice.runner import InvoiceRunner
+from .ocr.queue import OcrQueue
 from .retainer.driver import RetainerDriver
 from .case.registry import CaseRegistry
 from .case.task import TaskStore
@@ -72,6 +74,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st.pipelines = Pipelines(cases=st.cases, tasks=st.tasks, materials=st.materials, net=st.net,
                              key_getter=lambda: st.key_getter(), skills_dirs=config.skills_dirs)
     st.key_getter = key_getter or keyring_key
+    st.ocr = OcrQueue(st.cases, st.materials, st.net, st.key_getter)  # 识别队列（Spec 7）；随服务启停
     try:
         st.capsules.ensure()  # 首次启动复制默认胶囊配置；已有配置则补进默认配置新增的胶囊
     except Exception as e:  # noqa: BLE001 capsules.json 损坏：服务照常起来，/api/capsules/reset 可恢复
@@ -80,7 +83,16 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     async def health(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "contract_version": contracts.version()})
 
-    app = Starlette(routes=[Route("/health", health, methods=["GET"]), *ui.routes(st), *core.routes(st)])
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        st.ocr.start()                   # 恢复最近案件里未完成的识别任务（Spec 7.2 第 2 条）
+        try:
+            yield
+        finally:
+            st.ocr.stop()                # 未完成的任务标"已暂停（退出软件）"，下次启动接着做
+
+    app = Starlette(routes=[Route("/health", health, methods=["GET"]), *ui.routes(st), *core.routes(st)],
+                    lifespan=lifespan)
     app.state.lb = st
     token = config.token.encode("utf-8")
 
