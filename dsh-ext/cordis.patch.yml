@@ -305,8 +305,9 @@
               includeDefaultRoots: false
               watch: false
               # Spec 10.1：管理员目录 %ProgramData%\lawbench\skills 在前（DSH 同级先到先得，同名时它覆盖内置），
-              # 内置目录 <安装目录>\skills 在后；开发期内置目录由 LAWBENCH_SKILLS_DIR 指定，打包后由 Host 固定为安装目录（T20 待办）
-              customSkillDirs: !!js "[process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+              # 内置目录 <安装目录>\skills 在后；开发期内置目录由 LAWBENCH_SKILLS_DIR 指定。装好的客户端（exe 旁有 resources\app.asar）
+              # 固定为安装目录、不读这个环境变量（T20 步骤 3；与 host\install-layout.ts 同一判断，ProgramData 下目录名同 ADMIN_DIR_NAME）
+              customSkillDirs: !!js "((p, fs) => { const inst = p.dirname(process.execPath); const packaged = fs.existsSync(p.join(inst, 'resources', 'app.asar')); return [p.join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), packaged ? p.join(inst, 'skills') : process.env.LAWBENCH_SKILLS_DIR].filter(Boolean) })(process.getBuiltinModule('node:path'), process.getBuiltinModule('node:fs'))"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user

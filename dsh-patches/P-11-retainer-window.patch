@@ -25,10 +25,10 @@ index 45175929d2..151095b90e 100644
  /** Desktop release update state rendered by desktop-owned UI. */
 diff --git a/apps/desktop/src/lawbench-retainer.ts b/apps/desktop/src/lawbench-retainer.ts
 new file mode 100644
-index 0000000000..ed4a9fb03b
+index 0000000000..d791412274
 --- /dev/null
 +++ b/apps/desktop/src/lawbench-retainer.ts
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,231 @@
 +/**
 + * lawbench P-11 (Spec 3.2 P-11, 13.5): the retainer-materials window. The main window asks over
 + * `lawbench:open-retainer` to open the firm's offline retainer page (`engines/retainer/启动.html`) in a
@@ -64,11 +64,16 @@ index 0000000000..ed4a9fb03b
 +  | { readonly kind: 'closed'; readonly dir: string; readonly inCase: boolean; readonly files: readonly string[]; readonly failed: number }
 +  | { readonly kind: 'already-open' }
 +
-+/** The installed engines directory: `LAWBENCH_ENGINES_DIR`, else next to the executable (packaged), else the repository's `engines`. */
++/**
++ * The engines directory. Packaged: always `<install>\engines` next to the executable; `LAWBENCH_ENGINES_DIR` is
++ * ignored, since it would point the window (and its file whitelist) at any directory (T20 step 3). Development:
++ * `LAWBENCH_ENGINES_DIR` when given, else the repository's `engines`.
++ */
 +export function enginesDirectory(env: NodeJS.ProcessEnv = process.env): string {
++  if (app.isPackaged) return join(dirname(process.execPath), 'engines')
 +  const configured = env.LAWBENCH_ENGINES_DIR
 +  if (configured !== undefined && configured !== '' && isAbsolute(configured)) return configured
-+  return app.isPackaged ? join(dirname(process.execPath), 'engines') : resolve(app.getAppPath(), '..', '..', '..', 'engines')
++  return resolve(app.getAppPath(), '..', '..', '..', 'engines')
 +}
 +
 +/** The application data directory the Host gives the service (`%LOCALAPPDATA%\lawbench`). */
@@ -370,13 +375,13 @@ index 0000000000..9ceebcf112
 +})
 diff --git a/apps/desktop/tests/lawbench-retainer.spec.ts b/apps/desktop/tests/lawbench-retainer.spec.ts
 new file mode 100644
-index 0000000000..af2775def2
+index 0000000000..ea9c6b029b
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-retainer.spec.ts
-@@ -0,0 +1,220 @@
+@@ -0,0 +1,229 @@
 +import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 +import { tmpdir } from 'node:os'
-+import { join } from 'node:path'
++import { dirname, join } from 'node:path'
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +import { DESKTOP_IPC } from '../src/ipc.ts'
 +
@@ -389,6 +394,7 @@ index 0000000000..af2775def2
 +  windows: [] as Array<ReturnType<typeof fakeWindow>>,
 +  sessions: new Map<string, ReturnType<typeof fakeSession>>(),
 +  appPath: '',
++  packaged: false,
 +}))
 +
 +function emitter() {
@@ -425,7 +431,7 @@ index 0000000000..af2775def2
 +  }
 +}
 +vi.mock('electron', () => ({
-+  app: { isPackaged: false, getAppPath: () => electron.appPath, getPath: () => electron.appPath },
++  app: { get isPackaged() { return electron.packaged }, getAppPath: () => electron.appPath, getPath: () => electron.appPath },
 +  BrowserWindow: vi.fn(function (options: unknown) { const w = fakeWindow(options); electron.windows.push(w); return w }),
 +  ipcMain: {
 +    handle: (name: string, handler: Handler) => {
@@ -586,6 +592,14 @@ index 0000000000..af2775def2
 +    const r = await pending
 +    expect(r.inCase).toBe(false)
 +    expect(r.dir.startsWith(join(dir, 'Local', 'lawbench', '临时', '委托材料'))).toBe(true)
++  })
++
++  it('引擎目录：开发期可用 LAWBENCH_ENGINES_DIR；装好的客户端一律在 exe 旁的 engines、忽略它（T20 步骤 3）', () => {
++    expect(mod.enginesDirectory({ LAWBENCH_ENGINES_DIR: engines })).toBe(engines)
++    electron.packaged = true
++    try {
++      expect(mod.enginesDirectory({ LAWBENCH_ENGINES_DIR: engines })).toBe(join(dirname(process.execPath), 'engines'))
++    } finally { electron.packaged = false }
 +  })
 +
 +  it('网页文件不在时报中文错误、不建窗口', async () => {
