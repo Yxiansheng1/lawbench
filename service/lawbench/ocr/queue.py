@@ -65,6 +65,7 @@ class Job:
     checked: bool = False                        # 本进程里是否已核过原件没改
     claimed: set = field(default_factory=set)     # 正在发送的页号
     skip_until: float = 0.0                       # 案件暂时打不开（case.db 被占等）：到这个时刻前不挑它
+    finalizing: bool = False                      # 某个发送线程正在给它补收尾
 
 
 class OcrQueue:
@@ -82,6 +83,8 @@ class OcrQueue:
         self._stop = threading.Event()
         self._prep_down = threading.Event()
         self._bad_key: str | None = None        # 出 401 / 没有 Key 时那把 Key 的指纹；Key 换了就恢复 key_invalid 的任务
+        self._key_resume_asked = False          # 保存了设置、等探测线程恢复 key_invalid 的任务
+        self._prep_resume_left = False          # 395 恢复后有任务没放回排队（库被占），下个探测周期再放
         self._threads: list[threading.Thread] = []
         materials.after_render = merge.remerge_after_scan    # T5 重新生成文本后把识别结果合并回去
 
@@ -249,10 +252,13 @@ class OcrQueue:
 
     def _next(self):
         """挑下一页：按任务提交顺序，跳过暂停中的任务、已被另一个线程领走的页、暂时打不开的案件。
-        每个任务单独兜住：一个案件出问题（文件夹没了、case.db 被占或坏了）不挡别的案件（T12 复核 P2-2）。"""
+        每个任务单独兜住：一个案件出问题（文件夹没了、case.db 被占或坏了）不挡别的案件（T12 复核 P2-2）。
+        持 _cv 调用，job.claimed 就是真正在途的页：库里"发送中"却不在 claimed 的页是写库失败留下的孤页，
+        改回待发送；没有待发、没有在途、任务还没结束的（收尾时写库失败）返回 (job, None) 让发送线程收尾
+        （T12 第二轮复核 P2-A）。"""
         t = time.monotonic()
         for job in sorted(self._jobs.values(), key=lambda j: j.job_id):
-            if job.skip_until > t:
+            if job.skip_until > t or job.finalizing:
                 continue
             if not os.path.isdir(job.root):                           # 文件夹被移走、移动盘拔了：先放下，重开案件时再接
                 self._jobs.pop(job.job_id, None)
@@ -261,12 +267,24 @@ class OcrQueue:
             try:
                 with merge.connect(job.root, timeout=0.5) as con:
                     st = con.execute("SELECT status FROM ocr_jobs WHERE job_id = ?", (job.job_id,)).fetchone()
-                    if st is None or st[0] not in ("queued", "running"):
+                    if st is None or st[0] not in UNFINISHED:          # 已结束（收尾时被 case_open 放回内存的）：出内存
+                        self._jobs.pop(job.job_id, None)
                         continue
-                    for (page_no,) in con.execute("SELECT page_no FROM ocr_pages WHERE job_id = ? AND "
-                                                  "status = 'pending' ORDER BY page_no", (job.job_id,)):
-                        if page_no not in job.claimed:
+                    if st[0] not in ("queued", "running"):
+                        continue
+                    rows = con.execute("SELECT page_no, status FROM ocr_pages WHERE job_id = ? AND "
+                                       "status IN ('pending', 'sending') ORDER BY page_no", (job.job_id,)).fetchall()
+                    orphans = [p for p, s in rows if s == "sending" and p not in job.claimed]
+                    if orphans:
+                        con.executemany("UPDATE ocr_pages SET status = 'pending' WHERE job_id = ? AND page_no = ? "
+                                        "AND status = 'sending'", [(job.job_id, p) for p in orphans])
+                        logs.event("ocr", "orphan_reset", case_id=job.case_id)
+                    for page_no, s in rows:
+                        if (s == "pending" or page_no in orphans) and page_no not in job.claimed:
                             return job, page_no
+                    if not rows and not job.claimed:
+                        job.finalizing = True
+                        return job, None
             except sqlite3.OperationalError as e:                     # 多半是被占（database is locked）
                 job.skip_until = t + LOCKED_BACKOFF_S
                 logs.event("ocr", "next", status="fail", case_id=job.case_id, error=type(e).__name__)
@@ -283,9 +301,13 @@ class OcrQueue:
                     self._cv.wait(timeout=1.0)
                     continue
                 job, page_no = picked
-                job.claimed.add(page_no)
-                sender = client395.PageSender(self.net, self.key_getter)
-                self._senders[(job.job_id, page_no)] = sender
+                if page_no is not None:
+                    job.claimed.add(page_no)
+                    sender = client395.PageSender(self.net, self.key_getter)
+                    self._senders[(job.job_id, page_no)] = sender
+            if page_no is None:                                       # 页都结束了而任务没收尾：补一次收尾
+                self._finish_stuck(job)
+                continue
             try:
                 self._process(job, page_no, sender)
             except Exception as e:  # noqa: BLE001 意外错误：该页回到待发送，记日志，不让线程退出（T12 复核 P2-1）
@@ -293,13 +315,22 @@ class OcrQueue:
                 job.skip_until = time.monotonic() + LOCKED_BACKOFF_S
                 try:
                     self._set_page(job.root, job.job_id, page_no, "pending", timeout=1.0)
-                except Exception as e2:  # noqa: BLE001 case.db 还是写不了：留在"发送中"，重开案件或重启时回到待发送
+                except Exception as e2:  # noqa: BLE001 case.db 还是写不了：留在"发送中"，退避期过后 _next 把它改回待发送
                     logs.event("ocr", "page_reset", status="fail", case_id=job.case_id, error=type(e2).__name__)
             finally:
                 with self._cv:
                     job.claimed.discard(page_no)
                     self._senders.pop((job.job_id, page_no), None)
                     self._cv.notify_all()
+
+    def _finish_stuck(self, job: Job) -> None:
+        try:
+            self._finalize(job.case_id, job.root, job.job_id, job.material_id)
+        except Exception as e:  # noqa: BLE001 还是写不了库：退避后 _next 再发现、再试
+            job.skip_until = time.monotonic() + LOCKED_BACKOFF_S
+            logs.event("ocr", "finalize", status="fail", case_id=job.case_id, error=type(e).__name__)
+        finally:
+            job.finalizing = False
 
     def _safe_next(self):
         try:
@@ -467,14 +498,17 @@ class OcrQueue:
         last_prep = last_key = 0.0
         while not self._stop.wait(timeout=1.0):
             t = time.monotonic()
-            if self._prep_down.is_set() and t - last_prep >= self.probe_seconds:
+            if (self._prep_down.is_set() or self._prep_resume_left) and t - last_prep >= self.probe_seconds:
                 last_prep = t
                 self._probe_prep()
+            if self._key_resume_asked:                                # 保存了设置：在这里动库，不卡保存设置的请求
+                self._key_resume_asked = False
+                self._resume_key_now("settings")
             if self._bad_key is not None and t - last_key >= self.probe_seconds:
                 last_key = t
                 fp = self._key_fp()
                 if fp is not None and fp != self._bad_key:
-                    self.resume_key_invalid("key_changed")
+                    self._resume_key_now("key_changed")
 
     def _probe_prep(self) -> None:
         try:
@@ -482,26 +516,38 @@ class OcrQueue:
         except ApiError:
             return
         self._prep_down.clear()
-        self._resume_where("pause_reason IN ('prep_down', 'offline')")
+        # 有案件的库这次写不进去（被占）：它的任务还停在"等待 395 恢复"，下个探测周期再放一次
+        self._prep_resume_left = not self._resume_where("pause_reason IN ('prep_down', 'offline')")
         logs.event("ocr", "prep_back")
 
-    def resume_key_invalid(self, why: str = "settings") -> None:
-        """Key 可能换了（凭据管理器里的值变了，或律师保存了设置）：因 Key 暂停的任务回到排队；
-        若 Key 仍无效，发一页后会再次暂停。"""
+    def resume_key_invalid(self) -> None:
+        """律师保存了设置（Key 可能换了）：有任务因 Key 暂停时，请探测线程（1 秒内）把它们放回排队。
+        请求线程里不动 case.db（T12 第二轮复核 P3-A：两个案件 case.db 被占时保存设置曾要 21 秒）。"""
+        if self._bad_key is not None:
+            self._key_resume_asked = True
+
+    def _resume_key_now(self, why: str) -> None:
+        """因 Key 暂停的任务回到排队；若 Key 仍无效，发一页后会再次暂停。有案件的库这次写不进去时，
+        下一个探测周期再试（_bad_key 记成空串，任何真实指纹都与它不同）。"""
         self._bad_key = None
-        self._resume_where("pause_reason = 'key_invalid'")
+        if not self._resume_where("pause_reason = 'key_invalid'"):
+            self._bad_key = ""
         logs.event("ocr", "key_resume", error=why)
 
-    def _resume_where(self, cond: str) -> None:
+    def _resume_where(self, cond: str) -> bool:
+        """返回是否每个任务都写成了。库超时 1 秒：被占的案件跳过，不拖住其他案件。"""
+        ok = True
         for job in list(self._jobs.values()):
             try:
-                with merge.connect(job.root) as con:
+                with merge.connect(job.root, timeout=1.0) as con:
                     con.execute("UPDATE ocr_jobs SET status = 'queued', pause_reason = NULL, updated_at = ? "
                                 f"WHERE job_id = ? AND status = 'paused' AND {cond}", (now(), job.job_id))
             except Exception as e:  # noqa: BLE001
+                ok = False
                 logs.event("ocr", "resume", status="fail", case_id=job.case_id, error=type(e).__name__)
         with self._cv:
             self._cv.notify_all()
+        return ok
 
     def _key_fp(self) -> str | None:
         """当前 Key 的指纹（只在内存里比较，不记日志）；读凭据管理器出错返回 None（不当作"换了"）。"""

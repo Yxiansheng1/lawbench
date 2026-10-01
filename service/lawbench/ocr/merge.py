@@ -19,11 +19,12 @@ from datetime import datetime
 
 from .. import logs
 from ..case import gate, texts
+from ..case.materials import escape_marks
 
 RESULT_DIR = "工作区/材料/识别页"
 OCR_TYPES = ("pdf", "image")
 ACTIVE = ("queued", "running", "paused")
-_PAGE_MARK = re.compile(r"^【第(\d+)页】\n?", re.M)
+_PAGE_MARK = texts._MARKS["page"]   # 整行恰好是"【第N页】"才是页标记，与读侧同一条正则（formats.md 第 2 节）
 _SOURCE = re.compile(r"^(> Source: .*（)(文字版|部分识别|识别所得|待识别)(，)", re.M)
 OCR_HEAD = "> 识别所得"
 
@@ -66,16 +67,11 @@ def has_active_job(root: str, material_id: str, sha256: str) -> bool:
             f"({','.join('?' * len(ACTIVE))}) LIMIT 1", (material_id, sha256, *ACTIVE)).fetchone() is not None
 
 
-def escape_marks(md: str) -> str:
-    """识别文本里以"【"开头的行行首加全角空格：不让它被当成位置标记（如整行"【第1页】"冒充页标记）。"""
-    return "\n".join("\u3000" + line if line.startswith("【") else line for line in md.split("\n"))
-
-
 def merge_text(text: str, results: dict[int, str]) -> tuple[str, dict]:
     """返回（新文本，统计）。统计：pages 总页数、ocr 识别所得的页、pending 仍是占位的页。"""
     parts = _PAGE_MARK.split(text)
     head, rest = parts[0], parts[1:]
-    blocks: list[tuple[int, str]] = [(int(rest[i]), rest[i + 1]) for i in range(0, len(rest), 2)]
+    blocks: list[tuple[int, str]] = [(int(rest[i][1:-1]), rest[i + 1]) for i in range(0, len(rest), 2)]  # 标签"第N页"
     out_blocks: list[str] = []
     ocr_pages, pending = [], []
     for no, body in blocks:

@@ -495,7 +495,9 @@ def test_case_folder_gone_others_continue_then_resume_on_open(env, fake):
     """案件甲的文件夹被移走（移动盘拔了）：线程不死，案件乙照常做完；插回后打开案件甲，接着做完。"""
     cid_b, _ = open_second_case(env, "案件乙")
     ja = submit_in(env, env.case_id, [1, 2])
+    time.sleep(1.1)                                                    # 甲的 job_id 一定排在乙前面（挑页按 job_id 顺序）
     jb = submit_in(env, cid_b, [1, 2])
+    assert ja < jb
     moved = env.root.parent / "案件甲-拔掉了"
     env.root.rename(moved)
     env.st.ocr.start()
@@ -510,7 +512,9 @@ def test_case_db_locked_20s_others_continue(env, fake):
     """案件甲的 case.db 被别的进程以 BEGIN IMMEDIATE 占住 20 秒：线程不死，案件乙照常做完；放开后甲也做完。"""
     cid_b, _ = open_second_case(env, "案件乙")
     ja = submit_in(env, env.case_id, [1, 2])
+    time.sleep(1.1)                                                    # 甲的 job_id 一定排在乙前面（挑页按 job_id 顺序）
     jb = submit_in(env, cid_b, [1, 2])
+    assert ja < jb
     hold = sqlite3.connect(str(env.root / "工作区" / "case.db"), timeout=1, isolation_level=None)
     hold.execute("BEGIN IMMEDIATE")
     t0 = time.monotonic()
@@ -546,13 +550,130 @@ def test_result_write_failure_stops_after_three(env, fake, monkeypatch):
 
 
 def test_ocr_line_like_page_mark_escaped(env, fake):
-    """识别文本里整行"【第1页】"之类：合并时行首加全角空格，不冒充位置标记，页数不变。"""
+    """识别文本里整行"【第1页】"：合并时行首加全角空格，不冒充位置标记；"【第9页】伪造"这种行首带标记的行
+    是正文，原样保留、不被拆页（formats.md 第 2 节，T12 第二轮复核 P3-B）。"""
     from lawbench.case import texts
-    fake.markdown = "【第1页】\n【第9页】伪造\n正文"
+    fake.markdown = "【第1页】\n【第9页】伪造\n【2025-03-10 21:14】周立新：钱已经转了\n正文"
     m = env.material("讯问笔录")
     env.st.ocr.start()
     env.wait(env.submit(m["material_id"], [1, 2, 3])["job_id"], ("done",))
     text = env.text(m)
-    assert "\u3000【第1页】" in text and "\u3000【第9页】伪造" in text
+    assert "\n\u3000【第1页】\n" in text
+    assert "\n【第9页】伪造\n" in text and "\u3000【第9页】伪造" not in text
+    assert "\n【2025-03-10 21:14】周立新：钱已经转了\n" in text
     units = texts.split_units(text, "page")
     assert [u.no for u in units] == [1, 2, 3] and all(u.is_ocr for u in units)
+
+
+def test_text_layer_line_starting_with_mark_not_split():
+    """文字层（T5 写的，不转义）里一行"【第9页】伪造"：合并器只认整行页标记，页数不变、这行原样留在第 1 页
+    （T12 第二轮复核 P3-B：原来的行首正则把它拆成独立的第 9 页、原文丢失）。"""
+    from lawbench.case import texts
+    from lawbench.ocr import merge
+    t5 = ("# x\n\n> Source: a.pdf（部分识别，3页）\n\n【第1页】\n文字层第一页\n【第9页】伪造\n\n【第2页】\n"
+          "（本页需识别）\n\n【第3页】\n文字层第三页\n")
+    new, st = merge.merge_text(t5, {2: "识别出的第二页"})
+    assert st == {"pages": 3, "ocr": [2], "pending": []}
+    assert "文字层第一页\n【第9页】伪造\n" in new
+    assert [u.no for u in texts.split_units(new, "page")] == [1, 2, 3]
+    assert merge.merge_text(new, {2: "识别出的第二页"})[0] == new          # 再合并一次不变
+
+
+# ---------------------------------------------------------------- T12 第二轮复核 P2-A：在途页写库失败不留孤页
+
+def page_rows(root, job_id):
+    con = sqlite3.connect(str(pathlib.Path(root) / "工作区" / "case.db"))
+    try:
+        return {r[0]: r[1] for r in con.execute("SELECT page_no, status FROM ocr_pages WHERE job_id = ?", (job_id,))}
+    finally:
+        con.close()
+
+
+def test_db_locked_while_page_in_flight_recovers_without_reopen(env, fake):
+    """395 正处理第 1 页时 case.db 被占 13 秒：写"已完成"（10 秒）和回退待发送（1 秒）都写不进去，页留在库里的
+    "发送中"。放开后不重开案件、不重启，_next 发现它不在 claimed 里，改回待发送重发，任务做完（复核员 x1）。"""
+    fake.block = True
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    assert fake.arrived.wait(10)
+    hold = sqlite3.connect(str(env.root / "工作区" / "case.db"), timeout=1, isolation_level=None)
+    hold.execute("BEGIN IMMEDIATE")
+    fake.hold.set()
+    try:
+        time.sleep(13)
+    finally:
+        hold.execute("ROLLBACK")
+        hold.close()
+    j = env.wait(v["job_id"], ("done",), timeout=20)
+    assert j["done"] == 1 and page_rows(env.root, v["job_id"]) == {1: "done"}
+    assert len(fake.calls) == 2                                        # 第一次的结果没写进库，重发一次
+    assert all(t.is_alive() for t in env.st.ocr._threads)
+
+
+def test_folder_moved_while_page_in_flight_then_back(env, fake):
+    """395 正处理第 1 页时案件文件夹被移走、4 秒后插回并打开案件：在途那页不成孤页，两页都做完（复核员 x3）。
+    不在原路径重建文件夹。"""
+    fake.block = True
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1, 2])
+    assert fake.arrived.wait(10)
+    moved = env.root.parent / "甲-拔掉"
+    for _ in range(50):
+        try:
+            env.root.rename(moved)
+            break
+        except PermissionError:
+            time.sleep(0.1)
+    fake.hold.set()
+    time.sleep(4)
+    assert not env.root.exists()
+    assert all(t.is_alive() for t in env.st.ocr._threads)
+    moved.rename(env.root)
+    ok(env.client.post("/api/case/open", json={"path": str(env.root)}), "case_open")
+    assert wait_in(env, env.case_id, v["job_id"], ("done",), timeout=30)["done"] == 2
+
+
+def test_finalize_db_failure_then_job_still_finishes(env, fake, monkeypatch):
+    """所有页都完成后收尾写库失败（库被占超时）：任务不永远停在"识别中"，_next 发现没有待发、没有在途时再收尾。"""
+    from lawbench.ocr import queue as Q
+    real = Q.OcrQueue._finalize
+    n = []
+
+    def flaky(self, *a):
+        n.append(1)
+        if len(n) == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return real(self, *a)
+    monkeypatch.setattr(Q.OcrQueue, "_finalize", flaky)
+    monkeypatch.setattr(Q, "LOCKED_BACKOFF_S", 0.5)
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    assert env.wait(v["job_id"], ("done",), timeout=15)["done"] == 1
+    assert len(n) == 2 and len(fake.calls) == 1
+
+
+def test_settings_save_fast_while_case_db_locked(env, fake):
+    """有任务在内存里、它们的 case.db 被占时保存设置不被拖住（T12 第二轮复核 P3-A：原来 21 秒）。"""
+    fake.block = True
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    m = env.material("讯问笔录")
+    env.submit(m["material_id"], [1])
+    env.submit(m["material_id"], [2])
+    assert fake.arrived.wait(10)
+    env.st.ocr._bad_key = "x" * 64                                    # 就算有任务因 Key 暂停，也不在请求线程里动库
+    hold = sqlite3.connect(str(env.root / "工作区" / "case.db"), timeout=1, isolation_level=None)
+    hold.execute("BEGIN IMMEDIATE")
+    try:
+        s = ok(env.client.get("/api/settings"), "settings")
+        t0 = time.monotonic()
+        ok(env.client.put("/api/settings", json=s), "settings")
+        dt = time.monotonic() - t0
+    finally:
+        hold.execute("ROLLBACK")
+        hold.close()
+        fake.hold.set()
+    assert dt < 3, dt
