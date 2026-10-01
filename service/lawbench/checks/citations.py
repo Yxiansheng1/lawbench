@@ -46,6 +46,20 @@ _NUM = re.compile(r"(\d+\.\d+|\d+)(万|亿|%)?")
 _WRAPPED = re.compile(r"(?<=[\d,.，．])[ \t]*\r?\n[ \t]*(?=[\d,.，．])")
 _OCR_NUM = re.compile(r"[\d■][\d,■]*■[\d,■]*(?:\.[\d■]+)?|[\d,]*\d■[\d,■.]*")
 _OCR_NAME = re.compile(r"[一-鿿]*■[一-鿿]*")
+_NAME_LENS = (4, 3)
+
+
+def _name_windows(whole: str) -> list[str]:
+    """先整串；整串长于 4 字时，再取含 ■、且至少有 2 个认得出的字的 4 字、3 字子串（不取 2 字，免得"付■"
+    这类配上文中任意两字）。"""
+    out = [whole]
+    if len(whole) > max(_NAME_LENS):
+        for n in _NAME_LENS:
+            for i in range(len(whole) - n + 1):
+                w = whole[i:i + n]
+                if "■" in w and len(w) - w.count("■") >= 2 and w not in out:
+                    out.append(w)
+    return out
 _EVAL = re.compile(
     r"可信度|可信性|不可信|不可采信|中立性|佐证|足以证明|证明力|印证了|显然|明显(?:虚假|不实|矛盾)|"
     r"预谋|意在|企图|蓄意|说明其|表明其|证实其|可以认定|应当认定|构成犯罪|不构成|罪名成立|"
@@ -281,13 +295,17 @@ def _check_fact(rep: _Report, fact: str, group: list, materials: MaterialSet, de
                 if k == "num" and _ocr_num_matches(tok, v):
                     rep.add("A", excerpt, cite_text, f"原文 {m.name} {loc_label(loc)} 是“{tok}”（识别不清），"
                                                      f"文中写成了 {v}；照抄原文并保留 ■")
-        for tok in {x for x in _OCR_NAME.findall(orig) if len(x) >= 2}:
-            if tok in plain:
-                continue
-            g = re.search(re.escape(tok).replace("■", "[一-鿿]"), plain)
-            if g and g.group(0) != tok and g.group(0) not in orig:
-                rep.add("A", excerpt, cite_text, f"原文 {m.name} {loc_label(loc)} 是“{tok}”（识别不清），"
-                                                 f"文中写成了“{g.group(0)}”；照抄原文并保留 ■")
+        for whole in {x for x in _OCR_NAME.findall(orig) if len(x) >= 2}:
+            # 归一化去掉汉字间空白后，"对方户名 陈美■"合成一串"对方户名陈美■"，整串在文中找不到：
+            # 再取含 ■ 的 3–4 字子串（名字长度）去找（T10 小项，执行令 20261001-2301 第 2 条）
+            for tok in _name_windows(whole):
+                if tok in plain:
+                    break
+                g = re.search(re.escape(tok).replace("■", "[一-鿿]"), plain)
+                if g and g.group(0) != tok and g.group(0) not in orig:
+                    rep.add("A", excerpt, cite_text, f"原文 {m.name} {loc_label(loc)} 是“{tok}”（识别不清），"
+                                                     f"文中写成了“{g.group(0)}”；照抄原文并保留 ■")
+                    break
     if inferred:
         return
     # B / C：金额、日期

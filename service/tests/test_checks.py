@@ -452,3 +452,45 @@ def test_save_draft_does_not_log_content(env):
     text = "".join(p.read_text(encoding="utf-8") for p in (env.appdata / "logs").glob("*"))
     logs.setup(env.appdata)
     assert "独一无二的草稿句子" not in text and f"{name} 第99行" not in text
+
+
+# ---------- A：识别不清的人名紧挨别的汉字（T10 小项，执行令 20261001-2301 第 2 条） ----------
+
+ADJ = MaterialSet.from_texts([
+    {"name": "流水单", "material_id": "M0011", "sha256": "1" * 64, "unit": "page",
+     "text": "【第1页】\n2025-03-20 转账 80,000.00 对方户名 陈美■ 摘要 投资\n\n"
+             "【第2页】\n收款人 陈■华 已签收\n\n"
+             "【第3页】\n| 2025-03-20 | 转账 | 陈美■ |\n\n"
+             "【第4页】\n对方户名付■ 摘要 转账\n"}])
+
+
+@pytest.mark.parametrize("text,needle", [
+    ("3月20日向陈美华转账〔流水单 第1页〕。", "陈美■"),           # ■ 在名字末尾，前面紧挨"对方户名"
+    ("陈美华已签收〔流水单 第2页〕。", "陈■华"),                   # ■ 在名字中间，前面紧挨"收款人"
+    ("3月20日向陈美华转账〔流水单 第3页〕。", "陈美■"),           # 表格单元格里：本来就认得出，仍然认得出
+])
+def test_a_name_next_to_other_chars(text, needle):
+    check, cites = check_text(text, ADJ, "excerpt")
+    assert_contract(check, cites)
+    a = [p for p in check["problems"] if p["class"] == "A"]
+    assert a and needle in a[0]["message"] and not check["passed"], check["problems"]
+
+
+@pytest.mark.parametrize("text", [
+    "3月20日向陈美■转账〔流水单 第1页〕。",                         # 照抄识别结果
+    "陈■华已签收〔流水单 第2页〕。",
+    "3月20日向陈美■转账〔流水单 第3页〕。",
+    "对方户名陈美■〔流水单 第1页〕。",
+    "支付了款项〔流水单 第4页〕。",                                # 不取 2 字子串："付■"不去配"付了"
+])
+def test_a_name_next_to_other_chars_copied(text):
+    check, _ = check_text(text, ADJ, "excerpt")
+    assert "A" not in classes(check), check["problems"]
+
+
+def test_name_windows():
+    from lawbench.checks.citations import _name_windows
+    assert _name_windows("陈美■") == ["陈美■"]                      # 不长于 4 字：只看整串（原来的做法）
+    w = _name_windows("对方户名陈美■")
+    assert w[0] == "对方户名陈美■" and "名陈美■" in w and "陈美■" in w
+    assert not any(len(x) < 3 for x in w) and all("■" in x for x in w)

@@ -1,0 +1,27 @@
+T10 小项·人名紧挨汉字 红绿验证：3 类防护
+
+[01] 整串之外再取 3–4 字子串
+  改坏 checks/citations.py → 红：3 failed, 6 passed, 100 deselected in 0.54s
+      变红的用例：
+        tests/test_checks.py::test_a_name_next_to_other_chars[3\u670820\u65e5\u5411\u9648\u7f8e\u534e\u8f6c\u8d26\u3014\u6d41\u6c34\u5355 \u7b2c1\u9875\u3015\u3002-\u9648\u7f8e\u25a0]
+        tests/test_checks.py::test_a_name_next_to_other_chars[\u9648\u7f8e\u534e\u5df2\u7b7e\u6536\u3014\u6d41\u6c34\u5355 \u7b2c2\u9875\u3015\u3002-\u9648\u25a0\u534e]
+        tests/test_checks.py::test_name_windows
+  复原 → 绿：9 passed, 100 deselected in 0.24s
+
+[02] 不取 2 字子串（长度只取 4、3，且至少 2 个认得出的字）
+  改坏 checks/citations.py → 红：2 failed, 4 passed, 103 deselected in 0.48s
+      变红的用例：
+        tests/test_checks.py::test_a_name_next_to_other_chars_copied[\u652f\u4ed8\u4e86\u6b3e\u9879\u3014\u6d41\u6c34\u5355 \u7b2c4\u9875\u3015\u3002]
+        tests/test_checks.py::test_name_windows
+  复原 → 绿：6 passed, 103 deselected in 0.19s
+
+[03] 原来的整串比对仍在
+  改坏 checks/citations.py → 红：1 failed, 3 passed, 105 deselected in 0.46s
+      变红的用例：
+        tests/test_checks.py::test_name_windows
+  复原 → 绿：4 passed, 105 deselected in 0.21s
+
+源码与开始时逐字节一致：是
+复原后全量：1020 passed, 3 skipped in 666.67s (0:11:06)
+
+结论：3/3 类防护 改坏即红、复原即绿
