@@ -1,0 +1,17 @@
+﻿merge gate T9小项/T10/T10返修/T3小项 @ 22ded63 2026-10-01 16:42
+[对] case-archiving/catalogs/刑事卷.json
+[对] case-archiving/catalogs/常法卷.json
+[对] case-archiving/catalogs/民事行政卷.json
+  - [legal-workflow] 测试集不全：tests/ 下需要至少 4 个样本目录和 要点.md（现有 0 个样本）
+
+结果：✔ 通过
+.......................................                                  [100%]
+============================== warnings summary ===============================
+service\tests\conftest.py:17
+  D:\lawbench\service\tests\conftest.py:17: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+897 passed, 6 skipped, 1 warning in 601.35s (0:10:01)
+
+随后 cherry-pick 39c2503（T5 标记行转义小项，主编排亲核）：test_t5_marks.py 11 passed。
