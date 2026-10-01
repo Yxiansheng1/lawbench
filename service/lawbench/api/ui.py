@@ -37,6 +37,8 @@ def _endpoint(app_state, name: str, fn: Callable[[dict], dict], *, query: bool =
                 data = json.loads(raw) if raw.strip() else {}
             except ValueError:
                 raise ApiError("INVALID_ARGUMENT", "bad_json")
+        if request.path_params and isinstance(data, dict):
+            data = {**data, **request.path_params}   # /api/pipeline/{task_id} 等：路径里的参数并进请求（T16）
         if no_input:
             # settings、capsules 的 $defs/request 是 PUT 的请求体；GET 不带任何参数
             if data:
@@ -109,6 +111,20 @@ def routes(st) -> list[Route]:
     def connection_test(d: dict) -> dict:
         return probe_connection(st, d["server"])
 
+    # T16：流水线与 wiki 修改建议
+    def pipeline_run(d: dict) -> dict:
+        return st.pipelines.run(d)
+
+    def pipeline_status(d: dict) -> dict:
+        return st.pipelines.status(d["task_id"])
+
+    def pipeline_cancel(d: dict) -> dict:
+        return st.pipelines.cancel(d["task_id"])
+
+    def wiki_suggestions(d: dict) -> dict:
+        from ..wiki import suggestions
+        return suggestions.handle(st.cases.root_of(d["case_id"]), d.get("id"), d.get("accept"))
+
     E = lambda name, fn, **kw: _endpoint(st, name, fn, **kw)  # noqa: E731
     return [
         Route("/api/case/open", E("case_open", case_open), methods=["POST"]),
@@ -127,6 +143,11 @@ def routes(st) -> list[Route]:
         Route("/api/task/current", E("task_current", task_current, query=True), methods=["GET"]),
         Route("/api/outputs", E("outputs_list", outputs_list, query=True), methods=["GET"]),
         Route("/api/search", E("search", search, query=True), methods=["GET"]),
+        Route("/api/pipeline/run", E("pipeline_run", pipeline_run), methods=["POST"]),
+        Route("/api/pipeline/{task_id}", E("pipeline_status", pipeline_status, query=True), methods=["GET"]),
+        Route("/api/pipeline/{task_id}/cancel", E("pipeline_cancel", pipeline_cancel), methods=["POST"]),
+        Route("/api/wiki/suggestions", E("wiki_suggestions", wiki_suggestions, query=True), methods=["GET"]),
+        Route("/api/wiki/suggestions/{id}", E("wiki_suggestions", wiki_suggestions), methods=["POST"]),
     ]
 
 

@@ -64,6 +64,9 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
                    error=f"{e.code}:{e.reason}" if isinstance(e, ApiError) else type(e).__name__)
         st.net = Net(copy.deepcopy(DEFAULTS["servers"]), transport=transport, forward_port=config.forward_port)
     st.settings.on_change(lambda s: st.net.update(s["servers"]))
+    from .pipeline import Pipelines  # T16
+    st.pipelines = Pipelines(cases=st.cases, tasks=st.tasks, materials=st.materials, net=st.net,
+                             key_getter=lambda: st.key_getter(), skills_dirs=config.skills_dirs)
     st.key_getter = key_getter or keyring_key
     try:
         st.capsules.ensure()  # 首次启动复制默认胶囊配置；已有配置则补进默认配置新增的胶囊

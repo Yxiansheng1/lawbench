@@ -1,0 +1,110 @@
+T16 红绿验证：17 类防护
+
+[01] 律师修改块放回原位置
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.41s
+      变红的用例：
+        tests/test_pipeline.py::test_lawyer_blocks_kept
+  复原 → 绿：1 passed, 20 deselected in 1.06s
+
+[02] 更新只重跑变化材料
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.87s
+      变红的用例：
+        tests/test_pipeline.py::test_update_reruns_only_changed
+  复原 → 绿：1 passed, 20 deselected in 1.32s
+
+[03] 全新生成重跑全部材料
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.21s
+      变红的用例：
+        tests/test_pipeline.py::test_build_reruns_everything
+  复原 → 绿：1 passed, 20 deselected in 1.20s
+
+[04] 表格类材料由程序筛选、不经模型
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.34s
+      变红的用例：
+        tests/test_pipeline.py::test_table_material_summarized_by_program
+  复原 → 绿：1 passed, 20 deselected in 0.86s
+
+[05] 摘要里的出处补上材料名
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 19 deselected in 2.02s
+      变红的用例：
+        tests/test_pipeline.py::test_build
+  复原 → 绿：2 passed, 19 deselected in 1.79s
+
+[06] 卡片出处不合格的丢掉
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 19 deselected in 2.15s
+      变红的用例：
+        tests/test_pipeline.py::test_build
+  复原 → 绿：2 passed, 19 deselected in 1.98s
+
+[07] 到预算时保存已完成的部分
+  改坏 pipeline/runner.py → 红：1 failed, 1 passed, 19 deselected in 1.50s
+      变红的用例：
+        tests/test_pipeline.py::test_budget_stop_saves_done_parts[1-2]
+  复原 → 绿：2 passed, 19 deselected in 1.25s
+
+[08] 调用次数上限
+  改坏 pipeline/runner.py → 红：2 failed, 19 deselected in 1.79s
+      变红的用例：
+        tests/test_pipeline.py::test_budget_stop_saves_done_parts[1-2]
+        tests/test_pipeline.py::test_budget_stop_saves_done_parts[2-3]
+  复原 → 绿：2 passed, 19 deselected in 1.21s
+
+[09] 修改只交问题句
+  改坏 pipeline/runner.py → 红：1 failed, 20 deselected in 1.11s
+      变红的用例：
+        tests/test_pipeline.py::test_fix_round_sends_only_problem_sentences
+  复原 → 绿：1 passed, 20 deselected in 0.89s
+
+[10] 修改结果按序号换回原句
+  改坏 pipeline/runner.py → 红：1 failed, 20 deselected in 0.44s
+      变红的用例：
+        tests/test_pipeline.py::test_fix_parser_and_apply
+  复原 → 绿：1 passed, 20 deselected in 0.19s
+
+[11] 取消
+  改坏 pipeline/__init__.py → 红：1 failed, 20 deselected in 1.10s
+      变红的用例：
+        tests/test_pipeline.py::test_cancel
+  复原 → 绿：1 passed, 20 deselected in 0.69s
+
+[12] 服务重启后状态读 result.json
+  改坏 pipeline/__init__.py → 红：1 failed, 20 deselected in 1.16s
+      变红的用例：
+        tests/test_pipeline.py::test_status_after_restart_reads_result
+  复原 → 绿：1 passed, 20 deselected in 0.86s
+
+[13] 同一案件在跑时不另起一次
+  改坏 pipeline/__init__.py → 红：1 failed, 20 deselected in 1.23s
+      变红的用例：
+        tests/test_pipeline.py::test_second_run_returns_running_task
+  复原 → 绿：1 passed, 20 deselected in 0.79s
+
+[14] "高"发 xhigh
+  改坏 pipeline/llm.py → 红：1 failed, 20 deselected in 1.15s
+      变红的用例：
+        tests/test_pipeline.py::test_request_shape
+  复原 → 绿：1 passed, 20 deselected in 0.82s
+
+[15] 401 报 KEY_INVALID
+  改坏 pipeline/llm.py → 红：2 failed, 19 deselected in 0.97s
+      变红的用例：
+        tests/test_pipeline.py::test_key_invalid_fails
+        tests/test_pipeline.py::test_http_error_mapping
+  复原 → 绿：2 passed, 19 deselected in 0.65s
+
+[16] 采纳与驳回分开记
+  改坏 wiki/suggestions.py → 红：1 failed, 20 deselected in 0.93s
+      变红的用例：
+        tests/test_pipeline.py::test_wiki_suggestions
+  复原 → 绿：1 passed, 20 deselected in 0.75s
+
+[17] 原件已删除的材料清单注明
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.49s
+      变红的用例：
+        tests/test_pipeline.py::test_update_keeps_pages_of_deleted_originals
+  复原 → 绿：1 passed, 20 deselected in 1.26s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T16\pytest.txt）
+
+结论：17/17 类防护 改坏即红、复原即绿

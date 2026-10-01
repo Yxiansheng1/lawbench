@@ -320,6 +320,47 @@ class TaskStore:
     def save_result(self, root: str, res: dict) -> None:
         self._write(root, self.rel(res["task_id"], "result.json"), res, "files/result.schema.json")
 
+    # ---------- 流水线任务（T16；Spec 9.1"任务记录"） ----------
+
+    def begin_pipeline(self, case_id: str, step: str, skill: str, params: dict, budget: dict) -> tuple[str, str]:
+        """建一个 P- 任务并直接置为执行中；登记进 _begun，重开案件时不会被当成上次硬退出留下的。"""
+        root = self.cases.root_of(case_id)
+        tid = new_task_id("P")
+        task = {"v": 1, "task_id": tid, "case_id": case_id, "kind": "pipeline", "session_id": None,
+                "entry": skill, "skill": skill, "step": step, "inputs": [], "params": params, "budget": budget,
+                "state": "running", "created_at": now_iso()}
+        with self._lock:
+            self._begun[tid] = datetime.now().astimezone()
+            try:
+                self._write(root, self.rel(tid, "task.json"), task, "files/task.schema.json")
+                self._write(root, self.rel(tid, "result.json"), {
+                    "v": 1, "task_id": tid, "status": "running",
+                    "usage": {"model_calls": 0, "tool_calls": 0, "elapsed_s": 0}, "drafts": [],
+                    "citation_check": None, "coverage": None, "citations": [], "finished_at": None},
+                    "files/result.schema.json")
+            except BaseException:
+                self._begun.pop(tid, None)
+                raise
+            self._where[tid] = case_id
+        logs.event("pipeline", "begin", case_id=case_id)
+        return tid, root
+
+    def end_pipeline(self, root: str, task_id: str, status: str, *, model_calls: int, drafts: list[dict],
+                     citation_check: dict | None, citations: list[dict]) -> None:
+        """流水线收尾：task.json 置为已结束，result.json 写状态、用量、草稿、核对结果。"""
+        with self.task_lock(task_id):
+            task = self._read(root, self.rel(task_id, "task.json"), "files/task.schema.json")
+            task["state"] = "finished"
+            self._write(root, self.rel(task_id, "task.json"), task, "files/task.schema.json")
+            res = self.result(root, task_id)
+            started = self._begun.get(task_id)
+            elapsed = int((datetime.now().astimezone() - started).total_seconds()) if started else 0
+            res.update(status=status, usage={"model_calls": model_calls, "tool_calls": 0, "elapsed_s": elapsed},
+                       drafts=drafts, citation_check=citation_check, citations=citations, finished_at=now_iso())
+            self.save_result(root, res)
+        logs.event("pipeline", "end", status="ok" if status == "completed" else "fail", case_id=task["case_id"],
+                   error=None if status == "completed" else status)
+
     def add_read(self, root: str, task_id: str, rec: dict) -> None:
         with self._lock:
             data = self._read(root, self.rel(task_id, "reads.json"), "files/reads.schema.json")
