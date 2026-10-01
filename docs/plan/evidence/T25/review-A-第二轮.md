@@ -1,4 +1,4 @@
-﻿# T25 返修累计（第二轮）· Reviewer A（改动纪律与可维护性）
+# T25 返修累计（第二轮）· Reviewer A（改动纪律与可维护性）
 
 - target：line-C `a0c40a9`；范围 T25 累计 `2785eee`…`36e8f2d` + 返修 `f1c0275`、`a0c40a9`（同分支 T12 提交不在范围）
 - 冻结清单：`review-综合裁决.md` 第 3 节
@@ -112,4 +112,3 @@
 - `netstat` / `powershell` 在律所受限机器上的表现没有验证（见 NOTE）。
 
 PASS
-﻿
