@@ -1,0 +1,21 @@
+T3 小项红绿：字符串字段不收换行：2 类防护
+
+[01] 校验器用带单行检查的那个
+  改坏 contracts.py → 红：4 failed, 9 passed in 3.71s
+      变红的用例：
+        tests/test_t3_single_line.py::test_t25_invoice_period_and_batch['\\n']
+        tests/test_t3_single_line.py::test_date_fields_too
+        tests/test_t3_single_line.py::test_t3_case_id_with_newline_rejected[LF]
+        tests/test_t3_single_line.py::test_t8_draft_title_with_newline_rejected_content_multiline_ok
+  复原 → 绿：13 passed in 3.23s
+
+[02] 控制字符整段都算（不只换行）
+  改坏 contracts.py → 红：1 failed, 12 passed in 3.79s
+      变红的用例：
+        tests/test_t3_single_line.py::test_t8_draft_title_with_newline_rejected_content_multiline_ok
+  复原 → 绿：13 passed in 3.35s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T3\pytest-单行.txt）
+
+结论：2/2 类防护 改坏即红、复原即绿

@@ -7,12 +7,33 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import tempfile
 import time
 from functools import lru_cache
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError, validators
 from referencing import Registry, Resource
+
+# 带 pattern 的字符串字段（编号、期间、批次名、标题、相对路径……）一律是单行：含换行或其他控制字符
+# （Unicode Cc）就不合契约。Python 正则的 $ 会放过结尾的换行，"2026-09\n" 能匹配 ^…$（T3 小项，
+# 执行令 20261001-1246）。format: date 字段由日期校验整串解析，本来就不收换行。
+# 草稿正文这类多行自由文本字段没有 pattern，不受影响。
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def _single_line(builtin):
+    def check(validator, value, instance, schema):
+        if validator.is_type(instance, "string") and _CONTROL.search(instance):
+            yield ValidationError("含换行或控制字符")
+            return
+        yield from builtin(validator, value, instance, schema)
+    return check
+
+
+_Validator = validators.extend(Draft202012Validator, {
+    "pattern": _single_line(Draft202012Validator.VALIDATORS["pattern"]),
+})
 
 from .config import REPO_ROOT
 
@@ -49,8 +70,7 @@ def registry() -> Registry:
 @lru_cache(maxsize=None)
 def validator(schema_path: str, pointer: str = "") -> Draft202012Validator:
     """schema_path 如 'api/case_open.schema.json'，pointer 如 '#/$defs/request'。"""
-    return Draft202012Validator({"$ref": BASE + schema_path + pointer}, registry=registry(),
-                                format_checker=FormatChecker())
+    return _Validator({"$ref": BASE + schema_path + pointer}, registry=registry(), format_checker=FormatChecker())
 
 
 @lru_cache(maxsize=1)
