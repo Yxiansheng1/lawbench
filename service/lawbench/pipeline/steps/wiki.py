@@ -38,6 +38,8 @@ DEFAULT_FILTER = {"amount_min": 10000, "cash_words": ["取现", "现金"], "pers
 LAWYER_OPEN, LAWYER_CLOSE = "<!-- 律师修改 -->", "<!-- /律师修改 -->"
 _LAWYER = re.compile(re.escape(LAWYER_OPEN) + r".*?" + re.escape(LAWYER_CLOSE), re.S)
 _SHORT = re.compile(r"〔(第[^〔〕]*)〕")
+RETRY_CARD = ("\n\n【注意】上一次输出过长被截断或不是合法 JSON。请精简：每条 text 不超过 60 字，每条最多 2 个出处，"
+              "parties 不超过 20 条，issues 不超过 10 条，key_facts 不超过 15 条；只输出 JSON。")
 ORG_WORDS = ("公司", "超市", "店", "站", "中心", "局", "行", "美团", "拼多多", "物业", "移动", "药房",
              "出行", "餐饮", "医院", "学校", "政府", "ATM", "银行", "支付宝", "财付通", "微信")
 
@@ -65,7 +67,7 @@ def load_materials(root: str, index: dict) -> tuple[list[Mat], list[tuple[dict, 
     ok, skipped = [], []
     for m in index["materials"]:
         if m["status"] == "failed":
-            skipped.append((m, "无法处理"))
+            skipped.append((m, m.get("error") or "无法处理"))      # 照抄导入时记下的原因（加密、识别超时……）
             continue
         try:
             units = texts.split_units(texts.read_text(root, m), m["unit"])
@@ -221,7 +223,7 @@ def table_summary(m: Mat, case_text: str, rule: dict) -> tuple[list[str], int, i
                     rest_where.append(where)
 
     def cite(places: list[str]) -> str:
-        return "〔" + "、".join(f"{m.name} {p}" for p in places[:20]) + "〕"
+        return "〔" + "、".join(f"{m.name} {p}" for p in _ranges(places)[:20]) + "〕"
 
     if calls:
         top = sorted(calls.items(), key=lambda x: -x[1])[:5]
@@ -235,6 +237,21 @@ def table_summary(m: Mat, case_text: str, rule: dict) -> tuple[list[str], int, i
         out.append(f"- 【书证】其余交易 {sum(rest.values())} 笔（{desc}），对方为商户或单位，未逐笔列出（程序统计）"
                    + cite(rest_where))
     return out, kept, total
+
+
+def _ranges(places: list[str]) -> list[str]:
+    """["第1页","第2页","第3页","第5页"] → ["第1-3页","第5页"]；单元格区域原样。"""
+    nums = [re.fullmatch(r"第(\d+)([页段行])", p) for p in places]
+    if not places or not all(nums):
+        return places
+    word = nums[0].group(2)
+    ns = sorted({int(x.group(1)) for x in nums})
+    out, a = [], ns[0]
+    for prev, cur in zip(ns, ns[1:] + [None]):
+        if cur != prev + 1 if cur is not None else True:
+            out.append(f"第{a}{word}" if a == prev else f"第{a}-{prev}{word}")
+            a = cur
+    return out
 
 
 def filter_note(rule: dict) -> str:
@@ -291,6 +308,9 @@ class WikiRun:
         self.today = datetime.now().astimezone().date().isoformat()
         self.written: list[tuple[str, str]] = []     # (节名, 相对路径) 本次写进 wiki 的文章
         self.drafts: list[dict] = []
+        self.prep = None                              # 律师勾选"使用 395 抽取"时由 pipeline.prep.attach 挂上
+        self.prep_refs: dict[str, list[tuple[int, str]]] = {}
+        self.prep_cats: dict[str, str] = {}
 
     # ---- 文件 ----
 
@@ -343,6 +363,9 @@ class WikiRun:
         partial: dict[str, str] = {}
         for m in keep:
             summaries[m.mid] = self._existing_summary(m)
+        if self.prep is not None:
+            p.current = "395 抽取"
+            self.prep_refs, self.prep_cats = self.prep.run([m for m in redo if not m.table])
         items = [(m, i, c) for m in redo if not m.table for i, c in enumerate(m.chunks)]
         for m in redo:
             if m.table:
@@ -404,6 +427,11 @@ class WikiRun:
         header = (f"材料名：{m.name}\n本次给你的是 {first} 至 {last}（全份共 {total} {_word(m.meta['unit'])}）"
                   + ("\n注意：本材料含识别所得的页，■ 和 [看不清] 表示识别不清。" if m.meta.get("is_ocr") not in (None, "none")
                      else ""))
+        lo, hi = int(re.sub(r"\D", "", first)), int(re.sub(r"\D", "", last))
+        refs = [s for no, s in self.prep_refs.get(m.mid, []) if lo <= no <= hi]
+        if refs:
+            header += (f"\n395 分类：{self.prep_cats.get(m.mid, '未分类')}"
+                       "\n【395 抽取的参考字段（已按原文核对，可以直接用，但仍要带出处）】\n" + "\n".join(refs))
         res = self.r.write_checked("材料摘要", header + "\n\n" + src, f"{m.name}#{i + 1}",
                                    expand=lambda t: expand_short(t, m.name), sources=header + "\n\n" + src)
         p.step_index += 1
@@ -427,7 +455,7 @@ class WikiRun:
                                          "原件已删除（保留材料文本）" if m.meta["status"] == "source_deleted" else "") if x)
             rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | 是 | {note} |")
         for meta, why in skipped:
-            rows.append(f"| {meta['name']} | {meta['type']} | {meta.get('unit_count', 0)} | **否** | {why} |")
+            rows.append(f"| {meta['name']} | {meta['type']} | {meta.get('unit_count') or '—'} | **否** | {why} |")
         total = len(mats) + len(skipped)
         coverage = f"共 {total} 份材料，已读 {n_read} 份，未读 {total - n_read} 份。"
         body = ("| 材料 | 类型 | 数量 | 已读 | 备注 |\n|---|---|---|---|---|\n" + "\n".join(rows)
@@ -449,8 +477,15 @@ class WikiRun:
 
     def _card(self, sections: dict[str, str], mats: list[Mat]) -> None:
         user = "\n\n".join(f"# {s}\n{sections[s]}" for s in SECTIONS)
-        raw = self.r.call(self.r.prompts.system("案件卡片"), user, "案件卡片", "案件卡片")
-        data = _json_object(raw)
+        raw, finish = self.r.call_reply(self.r.prompts.system("案件卡片"), user, "案件卡片", "案件卡片")
+        data = _json_object(raw) if finish != "length" else {}
+        if not data:
+            # 输出被截断或不是 JSON：提示精简后重试一次（大卷宗实测：一次输出到 8192 上限被截断）
+            raw, finish = self.r.call_reply(self.r.prompts.system("案件卡片"), user + RETRY_CARD, "案件卡片", "案件卡片重试")
+            data = _json_object(raw) if finish != "length" else {}
+        if not data:
+            # 还是不行：不写空卡片、不覆盖原来的卡片，整次运行记为失败（OUTPUT_TRUNCATED）
+            raise ApiError("OUTPUT_TRUNCATED", "case_card")
         pat = citation_re()
         old = self.old_card()
         n = 0
@@ -465,11 +500,13 @@ class WikiRun:
             for item in (data.get(key) or [])[:40]:
                 if not isinstance(item, dict) or not str(item.get("text", "")).strip():
                     continue
-                cites = [c for c in item.get("citations") or [] if isinstance(c, str) and pat.match(c)
-                         and self._cite_ok(c)]
+                text = str(item["text"]).strip()
+                given = [c for c in item.get("citations") or [] if isinstance(c, str)]
+                cites = [c for c in given if pat.match(c) and self._cite_ok(c, text)]
                 n += 1
-                out.append({"id": f"F{n:04d}", "text": str(item["text"]).strip(), "citations": cites,
-                            "status": "excerpt" if item.get("status") == "excerpt" else "unconfirmed"})
+                excerpt = item.get("status") == "excerpt" and (cites or not given)
+                out.append({"id": f"F{n:04d}", "text": text, "citations": cites,
+                            "status": "excerpt" if excerpt else "unconfirmed"})
             return out
 
         card = {"v": 1, "case_id": self.case_id,
@@ -485,10 +522,11 @@ class WikiRun:
         gate.write_bytes(self.root, f"{WIKI}/case.json", payload.encode("utf-8"), op="pipeline")
         self._draft("案件卡片", payload)
 
-    def _cite_ok(self, cite: str) -> bool:
-        """卡片里的出处：材料要存在、位置要合这份材料（没有 E 类问题）。"""
-        check, _ = checks.check_text("见" + cite, self.r.materials, "excerpt")
-        return not any(p["class"] == "E" for p in check["problems"])
+    def _cite_ok(self, cite: str, text: str) -> bool:
+        """卡片里的一处出处：和条目文字一起核，没有 A–E 类必须修改的问题才留下（大卷宗实测：卡片曾把识别不清的
+        "8■,000.00"所在页当成"80,000元"的出处）。丢掉出处的条目状态改为 unconfirmed。"""
+        check, _ = checks.check_text(text + cite, self.r.materials, "excerpt")
+        return not any(p["class"] in "ABCDE" and p["severity"] == "must_fix" for p in check["problems"])
 
     def _index_and_log(self, mats, summaries, inventory) -> None:
         idx = ["# 案件 wiki 目录", "", "## 案件", "", "| 文章 | 更新日期 |", "|---|---|"]
@@ -501,6 +539,8 @@ class WikiRun:
         cov = inventory.splitlines()[1] if len(inventory.splitlines()) > 1 else ""
         entry = (f"\n## [{self.today}] {what} | 流水线 {self.task_id}\n- 材料：{len(summaries)} 份有摘要页\n"
                  f"- 覆盖：{cov}\n- 改动文章：概览、当事人、时间线、材料清单、争议焦点、案件卡片\n")
+        if self.prep is not None:
+            entry += f"- 395 抽取：{self.prep.note or '已用，核对通过的字段作为摘要的参考输入'}\n"
         gate.write_bytes(self.root, f"{WIKI}/log.md", (old.rstrip("\n") + "\n" + entry).encode("utf-8"),
                          op="pipeline")
 

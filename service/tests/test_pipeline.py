@@ -49,6 +49,10 @@ class Fake6000D:
         self.wrong_first_summary = False      # 第一份摘要故意标错行号，看修改轮
         self.status = 200
         self.block = None                     # threading.Event：摘要调用卡住，等测试放行
+        self.prep_mode = "good"               # 假 395：good 字段都对；bad 字段多数对不上；down 返回 503
+        self.extract: list[dict] = []
+        self.card_cut = 0                     # 卡片这一步前几次回"被截断"（finish_reason=length）
+        self.stubborn = False                 # 修改轮原样交回句子（大卷宗实测出现过）
         self._lock = threading.Lock()
 
     def step_of(self, system: str) -> str:
@@ -57,6 +61,10 @@ class Fake6000D:
     def handler(self, request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/models"):
             return httpx.Response(200, json={"data": [{"id": "qwen38-27b"}]})
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/v1/extract":
+            return self.prep(request)
         body = json.loads(request.content)
         system, user = body["messages"][0]["content"], body["messages"][1]["content"]
         step = self.step_of(system)
@@ -66,13 +74,32 @@ class Fake6000D:
             return httpx.Response(self.status, json={"error": "x"})
         if step == "材料摘要" and self.block is not None:
             self.block.wait(10)
+        if step == "案件卡片" and self.card_cut > 0:
+            self.card_cut -= 1
+            return httpx.Response(200, headers={"content-type": "text/event-stream"},
+                                  content=sse('{"case_type": "civil", "parties": [{"text": "王', finish="length"))
         return httpx.Response(200, headers={"content-type": "text/event-stream", "x-queue-wait-ms": "7"},
                               content=sse(self.answer(step, user)))
+
+    def prep(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        with self._lock:
+            self.extract.append({"body": body, "headers": dict(request.headers)})
+        if self.prep_mode == "down":
+            return httpx.Response(503, json={"error": {"code": "QUEUE_FULL", "message": "满"}})
+        if body["task"] == "classify":
+            return httpx.Response(200, json={"task": "classify", "result": {"category": "书证"}, "elapsed_ms": 5})
+        out = []
+        for n, t in re.findall(r"【第(\d+)行】(.+)", body["text"]):
+            for v in re.findall(r"\d[\d,]*元|\d{4}年\d+月\d+日", t):
+                out.append({"field": "金额" if v.endswith("元") else "日期",
+                            "value": v if self.prep_mode == "good" else v.replace("0", "9"), "loc": f"第{n}行"})
+        return httpx.Response(200, json={"task": "fields", "result": out, "elapsed_ms": 9})
 
     def answer(self, step: str, user: str) -> str:
         if step == "材料摘要":
             lines = [f"- 【书证】{t}〔第{n}行〕" for n, t in re.findall(r"【第(\d+)行】(.+)", user)]
-            if self.wrong_first_summary and lines:
+            if self.wrong_first_summary and lines and user.startswith("材料名：借条"):   # 固定在借条上，不看并行谁先到
                 self.wrong_first_summary = False
                 k, (n, t) = next((k, x) for k, x in enumerate(re.findall(r"【第(\d+)行】(.+)", user))
                                  if re.search(r"\d", x[1]))
@@ -81,14 +108,16 @@ class Fake6000D:
         if step == "修改":
             out = []
             for n, line in re.findall(r"^(\d+)\. (.+)$", user, re.M):
-                out.append(f"{n}. " + re.sub(r"〔[^〔〕]*〕", "〔推断〕", line))
+                out.append(f"{n}. " + (line if self.stubborn else re.sub(r"〔[^〔〕]*〕", "〔推断〕", line)))
             return "\n".join(out)
         if step == "案件卡片":
             cite = re.search(r"〔[^〔〕]+ 第\d+行〕", user)
             return json.dumps({"case_type": "civil", "parties": [{"text": "王某，借款人", "citations": [cite.group(0)],
                                                                  "status": "excerpt"}],
                                "issues": [{"text": "是否还款", "citations": ["〔不存在 第1页〕"], "status": "x"}],
-                               "key_facts": []}, ensure_ascii=False)
+                               "key_facts": [{"text": "借款90,000元", "citations": ["〔借条 第2行〕"], "status": "excerpt"},
+                                             {"text": "借款80,000元", "citations": ["〔借条 第2行〕"], "status": "excerpt"}]},
+                              ensure_ascii=False)
         facts = [ln for ln in user.splitlines() if ln.startswith("- 【")]
         return "\n".join(facts[:6]) or "- 无"
 
@@ -124,8 +153,8 @@ def world(tmp_path):
     shutil.rmtree(appdata, ignore_errors=True)
 
 
-def start(w, step="wiki_build") -> str:
-    return ok(w["client"].post("/api/pipeline/run", json={"case_id": w["cid"], "step": step, "use_prep": False,
+def start(w, step="wiki_build", use_prep=False) -> str:
+    return ok(w["client"].post("/api/pipeline/run", json={"case_id": w["cid"], "step": step, "use_prep": use_prep,
                                                          "params": PARAMS}), "api/pipeline_run.schema.json")["task_id"]
 
 
@@ -165,6 +194,9 @@ def test_build(world):
     assert [f["id"] for f in card["parties"] + card["issues"]] == ["F0001", "F0002"]   # 编号由程序分配
     assert card["issues"][0]["citations"] == [] and card["issues"][0]["status"] == "unconfirmed"  # 不合格出处丢掉
     assert {x["material_id"] for x in card["materials_at_generation"]} == {m["material_id"] for m in mats.values()}
+    # 卡片出处和条目文字一起核：金额写错的那条丢掉出处、改为未确认；写对的保留
+    assert [(f["text"], f["citations"], f["status"]) for f in card["key_facts"]] == [
+        ("借款90,000元", [], "unconfirmed"), ("借款80,000元", ["〔借条 第2行〕"], "excerpt")]
     assert "共 3 份材料，已读 3 份" in wiki_file(w, "案件/材料清单.md")
     assert wiki_file(w, "index.md").startswith("# 案件 wiki 目录") and tid in wiki_file(w, "log.md")
     task = task_json(w, tid, "task.json")
@@ -398,3 +430,158 @@ def test_prompts_file_has_fixed_steps():
     from lawbench.pipeline.prompts import Prompts
     p = Prompts.load([REPO_ROOT / "skills"], "case-wiki-build", wiki.REQUIRED_STEPS)
     assert set(wiki.REQUIRED_STEPS) <= set(p.sections)
+
+
+def test_ranges_and_failed_reason(world):
+    assert wiki._ranges(["第1页", "第2页", "第3页", "第5页"]) == ["第1-3页", "第5页"]
+    assert wiki._ranges(["流水!A3:F3"]) == ["流水!A3:F3"]
+    w = world
+    idx_path = w["root"] / "工作区" / "材料" / "index.json"
+    data = json.loads(idx_path.read_text(encoding="utf-8"))
+    m = next(x for x in data["materials"] if x["name"] == "说明")
+    m.update(status="failed", error="文件已加密，无法打开，请提供未加密版本", unit_count=0)
+    idx_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    finish(w, start(w))
+    row = next(ln for ln in wiki_file(w, "案件/材料清单.md").splitlines() if ln.startswith("| 说明 |"))
+    assert row.endswith("| — | **否** | 文件已加密，无法打开，请提供未加密版本 |")
+
+
+# ---------- 395 的 9B（假 395；真机补测见 9b.txt） ----------
+
+def test_prep_good_fields_go_to_summary(world):
+    w = world
+    tid = start(w, use_prep=True)
+    assert finish(w, tid)["status"] == "completed"
+    ex = w["fake"].extract
+    assert {e["body"]["task"] for e in ex} == {"classify", "fields"}
+    assert all(e["headers"]["authorization"] == f"Bearer {KEY}" for e in ex)
+    assert not any("交易日期" in e["body"]["text"] for e in ex)                # 表格类材料不送 9B
+    sums = {r["user"].split("\n", 1)[0]: r["user"] for r in w["fake"].requests if r["step"] == "材料摘要"}
+    assert "- 金额：80,000元〔借条 第2行〕" in sums["材料名：借条"] and "395 分类：书证" in sums["材料名：借条"]
+    rec = task_json(w, tid, "运行记录.json")
+    assert rec["395"]["提示"] is None and rec["395"]["字段"] >= 3 and rec["395"]["核对不过"] == 0
+    assert "395 抽取：已用" in wiki_file(w, "log.md")
+
+
+@pytest.mark.parametrize("mode,note", [("bad", "高于 20%"), ("down", "395 不可用")])
+def test_prep_skipped(world, mode, note):
+    w = world
+    w["fake"].prep_mode = mode
+    tid = start(w, use_prep=True)
+    assert finish(w, tid)["status"] == "completed"
+    assert not any("395 抽取的参考字段" in r["user"] for r in w["fake"].requests)
+    assert note in task_json(w, tid, "运行记录.json")["395"]["提示"] and note in wiki_file(w, "log.md")
+
+
+def test_prep_not_used_unless_ticked(world):
+    w = world
+    tid = start(w)
+    finish(w, tid)
+    assert w["fake"].extract == [] and task_json(w, tid, "运行记录.json")["395"] is None
+
+
+def test_table_summary_cites_page_ranges():
+    from lawbench.case import texts
+    text = "【第1页】\n| 交易日期 | 摘要 | 收入 | 支出 | 对方户名 |\n|---|---|---|---|---|\n| 2025-03-01 | 消费 |  | 5.00 | 甲超市 |\n\n" \
+           "【第2页】\n| 交易日期 | 摘要 | 收入 | 支出 | 对方户名 |\n| 2025-03-02 | 消费 |  | 6.00 | 乙超市 |\n\n" \
+           "【第3页】\n| 交易日期 | 摘要 | 收入 | 支出 | 对方户名 |\n| 2025-03-03 | 消费 |  | 7.00 | 丙超市 |\n"
+    m = wiki.Mat({"name": "流水", "material_id": "M0009", "unit": "page"}, texts.split_units(text, "page"))
+    lines, kept, total = wiki.table_summary(m, "", dict(wiki.DEFAULT_FILTER))
+    assert (kept, total) == (0, 3) and lines[-1].endswith("〔流水 第1-3页〕")
+
+
+# ---------- 案件卡片被截断（大卷宗实测发现：输出到上限、JSON 不完整时曾写出空卡片） ----------
+
+def test_card_truncated_once_retried(world):
+    w = world
+    w["fake"].card_cut = 1
+    tid = start(w)
+    assert finish(w, tid)["status"] == "completed"
+    cards = [r for r in w["fake"].requests if r["step"] == "案件卡片"]
+    assert len(cards) == 2 and "上一次输出过长被截断" in cards[1]["user"]
+    card = json.loads(wiki_file(w, "case.json"))
+    assert card["parties"] and card["case_type"] == "civil"
+
+
+def test_card_truncated_twice_fails_and_keeps_old_card(world):
+    w = world
+    finish(w, start(w))
+    old = wiki_file(w, "case.json")
+    w["fake"].card_cut = 2
+    tid = start(w)
+    assert finish(w, tid)["status"] == "failed"
+    assert task_json(w, tid, "运行记录.json")["错误"] == "OUTPUT_TRUNCATED"
+    assert wiki_file(w, "case.json") == old                                  # 不写空卡片、不覆盖原来的
+
+
+def test_prep_skips_table_materials_itself():
+    """Prep.run 自己也不把表格类材料送 9B（调用方也筛过一道，这里单独测这一层）。"""
+    from lawbench.case import texts
+    from lawbench.pipeline.prep import Prep
+
+    class Net:
+        calls = 0
+
+        def request(self, *a, **k):
+            Net.calls += 1
+            raise AssertionError("不该发请求")
+
+    m = wiki.Mat({"name": "流水", "material_id": "M0009", "unit": "line"},
+                 texts.split_units("【第1行】\n| 交易日期 | 摘要 |\n| 2025-01-01 | 转账 |", "line"), table=True)
+    assert Prep(Net(), lambda: KEY).run([m]) == ({}, {}) and Net.calls == 0
+
+
+# ---------- 修改轮用完仍有问题：程序兜底 ----------
+
+def test_settle_b_moves_citation_to_actual_place(world):
+    """模型修改时原样交回：B 类（值在别处）由程序把出处改到核对结果里"实际在"的那一处。"""
+    w = world
+    w["fake"].wrong_first_summary = True
+    w["fake"].stubborn = True
+    tid = start(w)
+    assert finish(w, tid)["status"] == "completed"
+    page = wiki_file(w, f"材料/{index(w)['借条']['material_id']}.md")
+    assert "今借到王某人民币80,000元〔借条 第2行〕" in page
+    res = task_json(w, tid, "result.json")
+    assert res["citation_check"]["stats"]["must_fix"] == 0
+    rec = task_json(w, tid, "运行记录.json")
+    assert any(f["轮次"] == "程序兜底" for f in rec["修改记录"])
+
+
+def test_settle_unfixable_marked_not_found():
+    """改不了的（不是 B 类，或改到别处也不过）：出处改标〔未找到依据〕；文号里的〔2026〕不动。"""
+    from lawbench.checks import MaterialSet
+    from lawbench.pipeline.runner import Budget, Progress
+    mats = MaterialSet.from_texts([{"name": "借条", "material_id": "M0001", "sha256": "a" * 64, "unit": "line",
+                                    "text": "【第1行】\n借款80,000元\n"}])
+    r = Runner(llm=None, prompts=None, params={}, materials=mats, task_id="P-20260101000000-abcd",
+               budget=Budget(1), progress=Progress())
+    out = r.settle("- 据虚公刑诉字〔2026〕417号，借款90,000元〔借条 第1行〕\n- 借款80,000元〔借条 第1行〕", "x")
+    assert out == "- 据虚公刑诉字〔2026〕417号，借款90,000元〔未找到依据〕\n- 借款80,000元〔借条 第1行〕"
+    assert r.fixes[0]["轮次"] == "程序兜底" and len(r.fixes[0]["问题"]) == 1
+    # 同一句 B（日期在别处）+ C（金额哪里都没有）：挪了出处还不过，整句改标〔未找到依据〕
+    mats2 = MaterialSet.from_texts([{"name": "借条", "material_id": "M0001", "sha256": "a" * 64, "unit": "line",
+                                     "text": "【第1行】\n2025年3月12日签\n借款80,000元\n"}])
+    r2 = Runner(llm=None, prompts=None, params={}, materials=mats2, task_id="P-20260101000000-abcd",
+                budget=Budget(1), progress=Progress())
+    assert r2.settle("- 借款90,000元于2025年3月12日〔借条 第2行〕", "y") == "- 借款90,000元于2025年3月12日〔未找到依据〕"
+
+
+def test_settle_per_class():
+    """A：不动出处，插注原文的识别不清写法；C：只改有问题的那组出处；G：程序不改。"""
+    from lawbench.checks import MaterialSet
+    from lawbench.pipeline.runner import Budget, Progress
+    mats = MaterialSet.from_texts([
+        {"name": "流水", "material_id": "M0001", "sha256": "a" * 64, "unit": "page",
+         "text": "【第1页】\n| 2025-03-20 | 转账 | 8■,000.00 | 陈美■ |\n\n【第2页】\n| 2025-03-12 | 转账 | 100,000.00 | 陈美华 |\n"}])
+    r = Runner(llm=None, prompts=None, params={}, materials=mats, task_id="P-20260101000000-abcd",
+               budget=Budget(1), progress=Progress())
+    text = ("- 3月20日收到陈美华转账〔流水 第1页〕，3月12日收到100,000.00〔流水 第2页〕\n"
+            "- 借款90,000元〔流水 第2页〕，3月12日陈美华转账100,000.00〔流水 第2页〕\n"
+            "- 周立新显然知情〔流水 第2页〕")
+    out = r.settle(text, "x").splitlines()
+    assert out[0] == ("- 3月20日收到陈美华转账（原文流水 第1页为“陈美■”，识别不清，需核对原件）〔流水 第1页〕，"
+                      "3月12日收到100,000.00〔流水 第2页〕")
+    assert out[1] == "- 借款90,000元〔未找到依据〕，3月12日陈美华转账100,000.00〔流水 第2页〕"
+    assert out[2] == "- 周立新显然知情〔流水 第2页〕"                         # G 程序改不了
+    assert [p["class"] for _, _, ps in r.problem_lines("\n".join(out)) for p in ps] == ["G"]

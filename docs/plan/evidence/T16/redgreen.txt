@@ -1,110 +1,194 @@
-T16 红绿验证：17 类防护
+T16 红绿验证：31 类防护
 
 [01] 律师修改块放回原位置
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.41s
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.65s
       变红的用例：
         tests/test_pipeline.py::test_lawyer_blocks_kept
-  复原 → 绿：1 passed, 20 deselected in 1.06s
+  复原 → 绿：1 passed, 32 deselected in 1.87s
 
 [02] 更新只重跑变化材料
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.87s
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 2.27s
       变红的用例：
         tests/test_pipeline.py::test_update_reruns_only_changed
-  复原 → 绿：1 passed, 20 deselected in 1.32s
+  复原 → 绿：1 passed, 32 deselected in 1.37s
 
 [03] 全新生成重跑全部材料
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.21s
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.29s
       变红的用例：
         tests/test_pipeline.py::test_build_reruns_everything
-  复原 → 绿：1 passed, 20 deselected in 1.20s
+  复原 → 绿：1 passed, 32 deselected in 1.17s
 
 [04] 表格类材料由程序筛选、不经模型
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.34s
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 31 deselected in 1.22s
       变红的用例：
         tests/test_pipeline.py::test_table_material_summarized_by_program
-  复原 → 绿：1 passed, 20 deselected in 0.86s
+  复原 → 绿：2 passed, 31 deselected in 0.94s
 
 [05] 摘要里的出处补上材料名
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 19 deselected in 2.02s
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 31 deselected in 2.12s
       变红的用例：
         tests/test_pipeline.py::test_build
-  复原 → 绿：2 passed, 19 deselected in 1.79s
+  复原 → 绿：2 passed, 31 deselected in 1.92s
 
 [06] 卡片出处不合格的丢掉
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 19 deselected in 2.15s
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 31 deselected in 2.06s
       变红的用例：
         tests/test_pipeline.py::test_build
-  复原 → 绿：2 passed, 19 deselected in 1.98s
+  复原 → 绿：2 passed, 31 deselected in 1.92s
 
-[07] 到预算时保存已完成的部分
-  改坏 pipeline/runner.py → 红：1 failed, 1 passed, 19 deselected in 1.50s
+[07] 卡片出处和条目文字一起核（不只看格式）
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 1 passed, 31 deselected in 2.07s
+      变红的用例：
+        tests/test_pipeline.py::test_build
+  复原 → 绿：2 passed, 31 deselected in 1.87s
+
+[08] 到预算时保存已完成的部分
+  改坏 pipeline/runner.py → 红：1 failed, 1 passed, 31 deselected in 1.50s
       变红的用例：
         tests/test_pipeline.py::test_budget_stop_saves_done_parts[1-2]
-  复原 → 绿：2 passed, 19 deselected in 1.25s
+  复原 → 绿：2 passed, 31 deselected in 1.28s
 
-[08] 调用次数上限
-  改坏 pipeline/runner.py → 红：2 failed, 19 deselected in 1.79s
+[09] 调用次数上限
+  改坏 pipeline/runner.py → 红：2 failed, 31 deselected in 1.84s
       变红的用例：
         tests/test_pipeline.py::test_budget_stop_saves_done_parts[1-2]
         tests/test_pipeline.py::test_budget_stop_saves_done_parts[2-3]
-  复原 → 绿：2 passed, 19 deselected in 1.21s
+  复原 → 绿：2 passed, 31 deselected in 1.34s
 
-[09] 修改只交问题句
-  改坏 pipeline/runner.py → 红：1 failed, 20 deselected in 1.11s
+[10] 修改只交问题句
+  改坏 pipeline/runner.py → 红：1 failed, 32 deselected in 1.14s
       变红的用例：
         tests/test_pipeline.py::test_fix_round_sends_only_problem_sentences
-  复原 → 绿：1 passed, 20 deselected in 0.89s
+  复原 → 绿：1 passed, 32 deselected in 1.02s
 
-[10] 修改结果按序号换回原句
-  改坏 pipeline/runner.py → 红：1 failed, 20 deselected in 0.44s
+[11] 修改结果按序号换回原句
+  改坏 pipeline/runner.py → 红：1 failed, 32 deselected in 0.53s
       变红的用例：
         tests/test_pipeline.py::test_fix_parser_and_apply
-  复原 → 绿：1 passed, 20 deselected in 0.19s
+  复原 → 绿：1 passed, 32 deselected in 0.27s
 
-[11] 取消
-  改坏 pipeline/__init__.py → 红：1 failed, 20 deselected in 1.10s
+[12] 取消
+  改坏 pipeline/__init__.py → 红：1 failed, 32 deselected in 1.24s
       变红的用例：
         tests/test_pipeline.py::test_cancel
-  复原 → 绿：1 passed, 20 deselected in 0.69s
+  复原 → 绿：1 passed, 32 deselected in 0.74s
 
-[12] 服务重启后状态读 result.json
-  改坏 pipeline/__init__.py → 红：1 failed, 20 deselected in 1.16s
+[13] 服务重启后状态读 result.json
+  改坏 pipeline/__init__.py → 红：1 failed, 32 deselected in 1.22s
       变红的用例：
         tests/test_pipeline.py::test_status_after_restart_reads_result
-  复原 → 绿：1 passed, 20 deselected in 0.86s
+  复原 → 绿：1 passed, 32 deselected in 0.98s
 
-[13] 同一案件在跑时不另起一次
-  改坏 pipeline/__init__.py → 红：1 failed, 20 deselected in 1.23s
+[14] 同一案件在跑时不另起一次
+  改坏 pipeline/__init__.py → 红：1 failed, 32 deselected in 1.25s
       变红的用例：
         tests/test_pipeline.py::test_second_run_returns_running_task
-  复原 → 绿：1 passed, 20 deselected in 0.79s
+  复原 → 绿：1 passed, 32 deselected in 0.94s
 
-[14] "高"发 xhigh
-  改坏 pipeline/llm.py → 红：1 failed, 20 deselected in 1.15s
+[15] "高"发 xhigh
+  改坏 pipeline/llm.py → 红：1 failed, 32 deselected in 1.11s
       变红的用例：
         tests/test_pipeline.py::test_request_shape
-  复原 → 绿：1 passed, 20 deselected in 0.82s
+  复原 → 绿：1 passed, 32 deselected in 0.91s
 
-[15] 401 报 KEY_INVALID
-  改坏 pipeline/llm.py → 红：2 failed, 19 deselected in 0.97s
+[16] 401 报 KEY_INVALID
+  改坏 pipeline/llm.py → 红：2 failed, 31 deselected in 0.99s
       变红的用例：
         tests/test_pipeline.py::test_key_invalid_fails
         tests/test_pipeline.py::test_http_error_mapping
-  复原 → 绿：2 passed, 19 deselected in 0.65s
+  复原 → 绿：2 passed, 31 deselected in 0.73s
 
-[16] 采纳与驳回分开记
-  改坏 wiki/suggestions.py → 红：1 failed, 20 deselected in 0.93s
+[17] 采纳与驳回分开记
+  改坏 wiki/suggestions.py → 红：1 failed, 32 deselected in 1.00s
       变红的用例：
         tests/test_pipeline.py::test_wiki_suggestions
-  复原 → 绿：1 passed, 20 deselected in 0.75s
+  复原 → 绿：1 passed, 32 deselected in 0.81s
 
-[17] 原件已删除的材料清单注明
-  改坏 pipeline/steps/wiki.py → 红：1 failed, 20 deselected in 1.49s
+[18] 失败材料照抄导入时的原因
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.11s
+      变红的用例：
+        tests/test_pipeline.py::test_ranges_and_failed_reason
+  复原 → 绿：1 passed, 32 deselected in 0.83s
+
+[19] 程序统计行的出处合并成范围
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 0.49s
+      变红的用例：
+        tests/test_pipeline.py::test_table_summary_cites_page_ranges
+  复原 → 绿：1 passed, 32 deselected in 0.24s
+
+[20] 9B·核对不过超 20% 整体跳过
+  改坏 pipeline/prep.py → 红：1 failed, 1 passed, 31 deselected in 1.67s
+      变红的用例：
+        tests/test_pipeline.py::test_prep_skipped[bad-\u9ad8\u4e8e 20%]
+  复原 → 绿：2 passed, 31 deselected in 1.58s
+
+[21] 9B·字段要在所标位置原样找到
+  改坏 pipeline/prep.py → 红：1 failed, 1 passed, 31 deselected in 1.82s
+      变红的用例：
+        tests/test_pipeline.py::test_prep_skipped[bad-\u9ad8\u4e8e 20%]
+  复原 → 绿：2 passed, 31 deselected in 1.45s
+
+[22] 9B·395 不可用整体跳过
+  改坏 pipeline/prep.py → 红：1 failed, 1 passed, 31 deselected in 1.48s
+      变红的用例：
+        tests/test_pipeline.py::test_prep_skipped[down-395 \u4e0d\u53ef\u7528]
+  复原 → 绿：2 passed, 31 deselected in 1.58s
+
+[23] 9B·表格类材料不送
+  改坏 pipeline/prep.py → 红：1 failed, 32 deselected in 0.49s
+      变红的用例：
+        tests/test_pipeline.py::test_prep_skips_table_materials_itself
+  复原 → 绿：1 passed, 32 deselected in 0.23s
+
+[24] 9B·通过的字段交给摘要步骤
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.17s
+      变红的用例：
+        tests/test_pipeline.py::test_prep_good_fields_go_to_summary
+  复原 → 绿：1 passed, 32 deselected in 0.95s
+
+[25] 卡片被截断时精简重试一次
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.11s
+      变红的用例：
+        tests/test_pipeline.py::test_card_truncated_once_retried
+  复原 → 绿：1 passed, 32 deselected in 0.87s
+
+[26] 卡片还是不行：不写空卡片、记失败
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.43s
+      变红的用例：
+        tests/test_pipeline.py::test_card_truncated_twice_fails_and_keeps_old_card
+  复原 → 绿：1 passed, 32 deselected in 1.14s
+
+[27] 修改轮用完后程序兜底
+  改坏 pipeline/runner.py → 红：1 failed, 32 deselected in 1.27s
+      变红的用例：
+        tests/test_pipeline.py::test_settle_b_moves_citation_to_actual_place
+  复原 → 绿：1 passed, 32 deselected in 0.90s
+
+[28] 兜底·A 类插注原文写法、不动出处
+  改坏 pipeline/runner.py → 红：1 failed, 32 deselected in 0.54s
+      变红的用例：
+        tests/test_pipeline.py::test_settle_per_class
+  复原 → 绿：1 passed, 32 deselected in 0.28s
+
+[29] 兜底·C 类只改有问题的那组出处
+  改坏 pipeline/runner.py → 红：1 failed, 32 deselected in 0.59s
+      变红的用例：
+        tests/test_pipeline.py::test_settle_per_class
+  复原 → 绿：1 passed, 32 deselected in 0.24s
+
+[30] 兜底·还不过时整句改标未找到依据
+  改坏 pipeline/runner.py → 红：1 failed, 32 deselected in 0.57s
+      变红的用例：
+        tests/test_pipeline.py::test_settle_unfixable_marked_not_found
+  复原 → 绿：1 passed, 32 deselected in 0.24s
+
+[31] 原件已删除的材料清单注明
+  改坏 pipeline/steps/wiki.py → 红：1 failed, 32 deselected in 1.60s
       变红的用例：
         tests/test_pipeline.py::test_update_keeps_pages_of_deleted_originals
-  复原 → 绿：1 passed, 20 deselected in 1.26s
+  复原 → 绿：1 passed, 32 deselected in 1.32s
 
 源码与开始时逐字节一致：是
 复原后全量：（本脚本不跑全量，见 T16\pytest.txt）
 
-结论：17/17 类防护 改坏即红、复原即绿
+结论：31/31 类防护 改坏即红、复原即绿

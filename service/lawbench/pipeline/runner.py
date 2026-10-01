@@ -33,6 +33,18 @@ MUST = set("ABCDEG")
 SOURCE_LIMIT = 8
 SOURCE_CHARS = 3000
 _FIX_LINE = re.compile(r"^\s*(\d+)\s*[.．、]\s*(.*)$")
+_AT = re.compile(r"实际在 ([^、，,]+?)(?:、|等|$)")
+_ORIG = re.compile(r"^原文 (.+?) 是“([^”]+)”（识别不清）")
+
+
+def _replace_cites(line: str, repl: str) -> str:
+    """把一行里的出处（T10 解析器认出的〔〕，含不合格的；引号内、文号年份不算）和【】写的出处都换成 repl。"""
+    from ..checks.parse import find_lenticular
+    for c in sorted(find_cites(line), key=lambda c: -c.start):
+        line = line[:c.start] + repl + line[c.end:]
+    for raw in find_lenticular(line):
+        line = line.replace(raw, repl)
+    return re.sub("(" + re.escape(repl) + ")+", lambda m: repl, line)
 
 
 class BudgetStop(Exception):
@@ -119,6 +131,10 @@ class Runner:
     # ---------- 调用 ----------
 
     def call(self, system: str, user: str, step: str, obj: str) -> str:
+        return self.call_reply(system, user, step, obj)[0]
+
+    def call_reply(self, system: str, user: str, step: str, obj: str) -> tuple[str, str | None]:
+        """(清理后的输出, finish_reason)。"""
         if self.llm.cancel.is_set():
             raise Cancelled()
         self.budget.take()
@@ -130,7 +146,7 @@ class Runner:
                                "输入字数": len(system) + len(user), "输入token": reply.prompt_tokens,
                                "输出token": reply.completion_tokens, "结束原因": reply.finish_reason,
                                "排队毫秒": reply.queue_wait_ms})
-        return clean_output(reply.text)
+        return clean_output(reply.text), reply.finish_reason
 
     def map(self, fn, items: list) -> list:
         """并行度 2 跑 fn(item)；任何一个抛 Cancelled / BudgetStop 就让其余的不再发出，并把异常抛给调用方。"""
@@ -179,8 +195,50 @@ class Runner:
             if _same(new, text):
                 break
             text = new
+        text = self.settle(text, obj)
         remaining = [dict(p, line=line) for _, line, ps in self.problem_lines(text) for p in ps]
         return Checked(text, remaining, rounds)
+
+    def settle(self, text: str, obj: str) -> str:
+        """修改轮用完仍有必须修改的句子：程序兜底，不留错误出处（大卷宗实测：模型原样交回、按规定停止后剩 1 条 C）。
+        B 类（值在别处）把这句的出处改成核对结果里"实际在"的那一处；改了还不过，或不是 B 类的，出处改标〔未找到依据〕
+        （仓库草稿版"修改"段的规则："改不了的把出处改为〔未找到依据〕"）。改过的句子记进修改记录，律师可以看到。"""
+        bad = self.problem_lines(text)
+        if not bad:
+            return text
+        lines = text.splitlines()
+        done = []
+        for i, line, ps in bad:
+            new = line
+            for p in ps:
+                if p["class"] == "A":
+                    # 疑似补全：不动出处，句末注明原文的识别不清写法（照原样保留，规则要求的写法）
+                    m = _ORIG.search(p["message"])
+                    if m and m.group(2) not in new:
+                        note = f"（原文{m.group(1)}为“{m.group(2)}”，识别不清，需核对原件）"
+                        cite = p.get("citation")      # 插在那组出处前面：核对看的是出处前面那段文字
+                        new = new.replace(cite, note + cite, 1) if cite and cite in new else new.rstrip() + note
+                elif p["class"] == "B" and p.get("citation"):
+                    at = _AT.search(p["message"])
+                    if at:
+                        new = new.replace(p["citation"], "〔" + at.group(1) + "〕", 1)
+                elif p["class"] in "CE" and p.get("citation"):
+                    new = new.replace(p["citation"], "〔未找到依据〕", 1)
+            left = [q for _, _, qs in self.problem_lines(new) for q in qs if q["class"] != "G"]
+            if left:
+                # 还不过：整句的出处改标〔未找到依据〕（仓库草稿版"修改"段：改不了的把出处改为〔未找到依据〕）
+                new = _replace_cites(line, "〔未找到依据〕")
+                if new == line:                      # 句子里没有认得出的出处，在句末补标
+                    new = line.rstrip() + "〔未找到依据〕"
+            if new == line:
+                continue                             # 只剩 G：程序改不了，留着如实报告
+            lines[i] = new
+            done.append(f"程序改标：{line[:60]} → {new[-50:]}")
+        if not done:
+            return text
+        with self._lock:
+            self.fixes.append({"对象": obj, "轮次": "程序兜底", "问题": done})
+        return "\n".join(lines)
 
     def problem_lines(self, text: str) -> list[tuple[int, str, list[dict]]]:
         out = []

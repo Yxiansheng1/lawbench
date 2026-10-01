@@ -87,7 +87,7 @@ class Pipelines:
         try:
             if d.get("use_prep"):
                 from . import prep
-                prep.attach(run, self.net)
+                prep.attach(run, self.net, self.key_getter)
             run.run()
         except Cancelled:
             status = "cancelled"
@@ -103,7 +103,7 @@ class Pipelines:
         except Exception as e:  # noqa: BLE001
             logs.event("pipeline", "final_check", status="fail", case_id=case_id, error=type(e).__name__)
         try:
-            self._record(root, tid, runner, status, error, self.clock() - t0)
+            self._record(root, tid, runner, run, status, error, self.clock() - t0)
             self.tasks.end_pipeline(root, tid, status, model_calls=len(runner.calls), drafts=run.drafts,
                                     citation_check=check, citations=cites)
         finally:
@@ -112,7 +112,7 @@ class Pipelines:
             logs.event("pipeline", "run", status="ok" if status == "completed" else "fail", case_id=case_id,
                        duration_ms=(self.clock() - t0) * 1000, error=error or (None if status == "completed" else status))
 
-    def _record(self, root, tid, runner: Runner, status, error, elapsed) -> None:
+    def _record(self, root, tid, runner: Runner, run, status, error, elapsed) -> None:
         """运行记录（任务目录里，只有元数据）：调用次数、耗时、最大输入、修改轮次。"""
         ins = [c["输入字数"] for c in runner.calls]
         data = {"状态": status, "错误": error, "模型调用次数": len(runner.calls), "总耗时秒": round(elapsed, 1),
@@ -120,6 +120,7 @@ class Pipelines:
                 "单次最大输入token": max([c["输入token"] or 0 for c in runner.calls], default=0),
                 "输出被截断次数": sum(1 for c in runner.calls if c["结束原因"] == "length"),
                 "预算": {"调用上限": runner.budget.max_calls, "分钟上限": runner.budget.minutes},
+                "395": ({"提示": run.prep.note, **run.prep.stats} if run.prep else None),
                 "修改记录": runner.fixes, "调用": runner.calls}
         gate.write_bytes(root, self.tasks.rel(tid, RECORD), json.dumps(data, ensure_ascii=False, indent=2).encode(),
                          op="pipeline")

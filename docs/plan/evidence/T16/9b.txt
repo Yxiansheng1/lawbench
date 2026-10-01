@@ -1,0 +1,19 @@
+T16 第 4 步 · 使用 395 的 9B：真机补测（留空位）
+
+状态：未测。395 真机侧由主编排 / 用户另排（执行令 20261001-1747 第 4 条）。
+
+本卡已完成的部分：
+- 代码：service\lawbench\pipeline\prep.py（按 Spec 9.1、6.4：页、段、行材料按单元切成不超过 16000 字的段，
+  每份材料第一段 classify、每段 fields；字段值须在所标位置原样找到；核对不过超过 20% 或 395 不可用则整体跳过、
+  记提示；通过的字段作为摘要步骤的参考输入）。
+- 假 395 用例（service\tests\test_pipeline.py）：test_prep_good_fields_go_to_summary、test_prep_skipped[bad]、
+  test_prep_skipped[down]、test_prep_not_used_unless_ticked、test_prep_skips_table_materials_itself。
+
+真机补测时要记的：
+1. 大卷宗跑一次 use_prep=true：395 调用次数、classify 结果、字段总数 / 核对不过数（运行记录.json 的 "395" 一项）、
+   是否被跳过及提示原文。
+2. 与 use_prep=false 的同一份评分对比（要点、扣分、6000D 调用次数、耗时）。
+3. 395 不可用时（停服务）流水线照常完成、wiki 日志里有"395 不可用"提示。
+
+结果：
+（空）

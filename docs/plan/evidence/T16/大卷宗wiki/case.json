@@ -1,0 +1,427 @@
+{
+  "v": 1,
+  "case_id": "afc60d8d-35e9-46ec-8766-2b150b55483d",
+  "case_type": "criminal",
+  "stance": null,
+  "parties": [
+    {
+      "id": "F0001",
+      "text": "周立新，犯罪嫌疑人，被指控诈骗陈美华",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0002",
+      "text": "陈美华，被害人，被周立新骗取投资款",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0003",
+      "text": "赵刚，证人，介绍周立新与陈美华认识",
+      "citations": [
+        "〔证人赵刚询问笔录 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0004",
+      "text": "刘某某，证人，周立新向其借款后还款",
+      "citations": [
+        "〔证人刘某某询问笔录 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0005",
+      "text": "孙丽，证人，鑫达公司会计",
+      "citations": [
+        "〔证人孙丽询问笔录 第1段〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0006",
+      "text": "周某某，案外人，鑫达公司法定代表人",
+      "citations": [
+        "〔企业登记信息 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0007",
+      "text": "王××，侦查人员，本案经办民警",
+      "citations": [
+        "〔受案登记表 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0008",
+      "text": "李××，侦查人员，本案经办民警",
+      "citations": [
+        "〔被害人陈美华询问笔录（第一次） 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0009",
+      "text": "赵××，见证人，辨认程序见证人",
+      "citations": [
+        "〔辨认笔录 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0010",
+      "text": "张某，案外人，与周立新、陈美华有银行转账往来",
+      "citations": [
+        "〔银行交易明细（周立新账户） 第1-14页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0011",
+      "text": "王某某，案外人，与周立新、陈美华有银行转账往来",
+      "citations": [
+        "〔银行交易明细（周立新账户） 第1-7页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0012",
+      "text": "××市鑫达农业科技有限公司，单位，周立新实际控制的公司",
+      "citations": [
+        "〔企业登记信息 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0013",
+      "text": "××市公安局××分局，单位，侦查机关",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0014",
+      "text": "××市××区人民检察院，单位，批准逮捕机关",
+      "citations": [
+        "〔逮捕证 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0015",
+      "text": "××镇人民政府，单位，出具情况说明",
+      "citations": [
+        "〔××镇人民政府情况说明 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0016",
+      "text": "××市市场监督管理局，单位，作出经营异常决定机关",
+      "citations": [
+        "〔企业登记信息 第2页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0017",
+      "text": "××市看守所，单位，羁押场所",
+      "citations": [
+        "〔拘留证 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0018",
+      "text": "××汽车服务有限公司，单位，周立新消费商户",
+      "citations": [
+        "〔银行交易明细（周立新账户） 第7页〕"
+      ],
+      "status": "excerpt"
+    }
+  ],
+  "issues": [
+    {
+      "id": "F0019",
+      "text": "周立新是否向陈美华承诺'保本'",
+      "citations": [
+        "〔被害人陈美华询问笔录（第一次） 第3页〕",
+        "〔犯罪嫌疑人周立新讯问笔录（第三次） 第2页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0020",
+      "text": "周立新是否向陈美华承诺有政府补贴",
+      "citations": [
+        "〔被害人陈美华询问笔录（第一次） 第3页〕",
+        "〔犯罪嫌疑人周立新讯问笔录（第二次） 第2页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0021",
+      "text": "陈美华转账金额及周立新是否还款",
+      "citations": [
+        "〔被害人陈美华询问笔录（第一次） 第4页〕",
+        "〔犯罪嫌疑人周立新讯问笔录（第一次） 第5页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0022",
+      "text": "周立新收到款项后的资金去向",
+      "citations": [
+        "〔犯罪嫌疑人周立新讯问笔录（第一次） 第4页〕",
+        "〔证人孙丽询问笔录 第4段〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0023",
+      "text": "鑫达生态农业项目是否真实存在",
+      "citations": [
+        "〔犯罪嫌疑人周立新讯问笔录（第一次） 第4页〕",
+        "〔××镇人民政府情况说明 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0024",
+      "text": "陈美华与周立新相识时间及方式",
+      "citations": [
+        "〔被害人陈美华询问笔录（第一次） 第3页〕",
+        "〔犯罪嫌疑人周立新讯问笔录（第一次） 第3页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0025",
+      "text": "赵刚与本案的利害关系",
+      "citations": [
+        "〔证人赵刚询问笔录 第4页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0026",
+      "text": "识别不清及未读材料",
+      "citations": [
+        "〔银行交易明细（周立新账户） 第7页〕",
+        "〔微信聊天记录截图 第2页〕"
+      ],
+      "status": "excerpt"
+    }
+  ],
+  "key_facts": [
+    {
+      "id": "F0027",
+      "text": "起诉意见书认定：周立新虚构'鑫达生态农业项目'已获政府补贴、保本且年收益12%的事实，骗取陈美华信任",
+      "citations": [],
+      "status": "unconfirmed"
+    },
+    {
+      "id": "F0028",
+      "text": "起诉意见书认定：周立新于2025年3月12日、3月20日分两次收取陈美华转账共计180,000元",
+      "citations": [],
+      "status": "unconfirmed"
+    },
+    {
+      "id": "F0029",
+      "text": "起诉意见书认定：周立新将款项用于归还个人欠款、汽车维修、日常消费等，未投入任何农业项目",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0030",
+      "text": "起诉意见书认定：周立新涉嫌触犯《中华人民共和国刑法》第二百六十六条（法律依据待律师核实）",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0031",
+      "text": "案件目前处于移送审查起诉阶段",
+      "citations": [
+        "〔起诉意见书 第1页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0032",
+      "text": "陈美华称：经赵刚介绍于2025年3月10日认识周立新，周立新称项目保本、年收益12%",
+      "citations": [
+        "〔被害人陈美华询问笔录（第一次） 第3页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0033",
+      "text": "陈美华称：分两次转账18万元给周立新，周立新未还钱，5月初起不接电话",
+      "citations": [],
+      "status": "unconfirmed"
+    },
+    {
+      "id": "F0034",
+      "text": "陈美华第二次询问称：2025年5月6日收到周立新转账50,000元，但认为系暂存非还款",
+      "citations": [
+        "〔被害人陈美华询问笔录（第二次） 第2页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0035",
+      "text": "周立新称：系公司资金周转困难向陈美华借款18万元，仅称项目前景好，未说过保本",
+      "citations": [],
+      "status": "unconfirmed"
+    },
+    {
+      "id": "F0036",
+      "text": "周立新第三次讯问称：'我当时可能说过保本这类话，是为了让她放心'",
+      "citations": [
+        "〔犯罪嫌疑人周立新讯问笔录（第三次） 第2页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0037",
+      "text": "周立新称：2025年5月6日转账50,000元系归还部分本金和利息",
+      "citations": [
+        "〔犯罪嫌疑人周立新讯问笔录（第一次） 第5页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0038",
+      "text": "赵刚称：2025年3月10日介绍双方认识，周立新称'项目稳赚不赔'",
+      "citations": [
+        "〔证人赵刚询问笔录 第3页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0039",
+      "text": "赵刚称：事后周立新给其2000元感谢费",
+      "citations": [
+        "〔证人赵刚询问笔录 第4页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0040",
+      "text": "刘某某称：2024年11月借给周立新6万元，2025年3月13日收到还款60,000元",
+      "citations": [
+        "〔证人刘某某询问笔录 第3页〕"
+      ],
+      "status": "excerpt"
+    },
+    {
+      "id": "F0041",
+      "text": "孙丽称：公司2025年上半年无经营收入，账上无租地、大棚支出",
+      "citations": [
+        "〔证人孙丽询问笔录 第3段〕"
+      ],
+      "status": "excerpt"
+    }
+  ],
+  "generated_by": "P-20261001185435-fdb0",
+  "generated_at": "2026-10-01T18:57:03+08:00",
+  "materials_at_generation": [
+    {
+      "material_id": "M0001",
+      "sha256": "a804ba717e11b7e6b15dc2d69712f30ce9b8f23778fb3340c2cdbabe1ed26619"
+    },
+    {
+      "material_id": "M0002",
+      "sha256": "432f6cf60b92b8a4e84e804c1d88274df541c510d48cecedfeb919ccffb77c6a"
+    },
+    {
+      "material_id": "M0003",
+      "sha256": "9b744208b1167b5aa731d10ed3ef0338e9a665ba14a055365e9e5b7796f263f1"
+    },
+    {
+      "material_id": "M0004",
+      "sha256": "3dee3605976bb26850d05a162b3d1f241b2e5d09d0d8add13681fafe0aa99a7f"
+    },
+    {
+      "material_id": "M0005",
+      "sha256": "76cc9e26906f09172515a1b8db36dc3ce0a7843b1c8db44604cd8f515f138361"
+    },
+    {
+      "material_id": "M0006",
+      "sha256": "21315ed9c4dee7e713ecc0a247d2873d172d7a8d45272db843fd3c06b495c0ba"
+    },
+    {
+      "material_id": "M0007",
+      "sha256": "cfe6b8ca3a243b9a1601cfe6de280b7e3c143341355d6c007cfbb26db1d50a79"
+    },
+    {
+      "material_id": "M0008",
+      "sha256": "375114f8ee5fb252dc71a337a1dcc3e42af3d1f5106f2b71d0a166bd0b09c507"
+    },
+    {
+      "material_id": "M0009",
+      "sha256": "65a558907612ce7ea13c3e08900e8e768750cee44c855bdc810862ee26d59c3b"
+    },
+    {
+      "material_id": "M0010",
+      "sha256": "c938c4cb43c24d9af80b5d5ed6ac7f8ae1f96a29207ee660d47569733858cb01"
+    },
+    {
+      "material_id": "M0011",
+      "sha256": "f3a7481ed87f38f55086fab95d498ada5e57c177ae6bbbd6bbcc69138ce2ae9c"
+    },
+    {
+      "material_id": "M0012",
+      "sha256": "85853e0f762f9898ddfec7bc904fa25e0a0fdd707b0dd8ce197598fa73082edf"
+    },
+    {
+      "material_id": "M0013",
+      "sha256": "9d4d2ba82e41d7fb4c6e2314115a58ddaf2012c4afcb4acd694ffde2ac7bf0f9"
+    },
+    {
+      "material_id": "M0014",
+      "sha256": "c4a6706eb78efd4a98e9610be8da86b8ff3fd1a7592b31dfa99dff08ddd95425"
+    },
+    {
+      "material_id": "M0015",
+      "sha256": "c44c0329bf1c19130bdfeb6285fff67dd04b57689e534bce8367eb9f958e171a"
+    },
+    {
+      "material_id": "M0016",
+      "sha256": "5eea2d10b5efa7078fae8a5c03ab0011471f1420869800c12ed4448db1b0592b"
+    },
+    {
+      "material_id": "M0017",
+      "sha256": "262d93799a3924400a33d0f606a4a7e6f4e2340c07fe14e8f68bb1ed4342cf7d"
+    },
+    {
+      "material_id": "M0018",
+      "sha256": "5a7450be836dc66f8094289034ceb135afe79005183514982bf13a3048b382aa"
+    },
+    {
+      "material_id": "M0019",
+      "sha256": "e91da18478861fb846ed9937d1f259552e1c11b752a75d21227cc1900e7755ee"
+    },
+    {
+      "material_id": "M0020",
+      "sha256": "14a947dcc49eb116863065e35129c875282c6a8e9903e487436612266a475402"
+    },
+    {
+      "material_id": "M0021",
+      "sha256": "06564f0c4f0a5c65e045fc0b93a6a5b4c1b67cfcac31c98efcc247e65229ee6b"
+    }
+  ]
+}
