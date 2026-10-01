@@ -1,0 +1,160 @@
+T24 红绿验证：19 类防护
+
+[01] 管制羁押 1 日折 2 日
+  改坏 calc/sentence.py → 红：2 failed, 33 passed in 1.69s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S08]
+        tests/test_sentence.py::test_control_continuous_custody_adjusted
+  复原 → 绿：35 passed in 1.25s
+
+[02] 指定居所监视居住：有期徒刑 2 日折 1 日
+  改坏 calc/sentence.py → 红：4 failed, 31 passed in 1.55s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S09]
+        tests/test_sentence.py::test_sentence_cases[S10]
+        tests/test_sentence.py::test_residence_continuous_custody_adjusted
+        tests/test_sentence.py::test_residence_overlapping_detention_counts_as_detention
+  复原 → 绿：35 passed in 1.33s
+
+[03] 不足 1 日的部分写进 notes
+  改坏 calc/sentence.py → 红：3 failed, 32 passed in 1.53s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S10]
+        tests/test_sentence.py::test_residence_continuous_custody_adjusted
+        tests/test_sentence.py::test_residence_overlapping_detention_counts_as_detention
+  复原 → 绿：35 passed in 1.42s
+
+[04] 羁押重叠只算一次
+  改坏 calc/sentence.py → 红：3 failed, 32 passed in 1.42s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S05]
+        tests/test_sentence.py::test_overlap_and_other_kind_notes
+        tests/test_sentence.py::test_residence_overlapping_detention_counts_as_detention
+  复原 → 绿：35 passed in 1.04s
+
+[05] 首尾相接视为连续
+  改坏 calc/sentence.py → 红：4 failed, 31 passed in 1.50s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S01]
+        tests/test_sentence.py::test_sentence_cases[S02]
+        tests/test_sentence.py::test_contract_example
+        tests/test_sentence.py::test_tool_via_core
+  复原 → 绿：35 passed in 1.06s
+
+[06] 羁押不连续又没给执行之日：不算起止并提示
+  改坏 calc/sentence.py → 红：1 failed, 34 passed in 1.23s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S06]
+  复原 → 绿：35 passed in 1.00s
+
+[07] 给了执行之日：止日扣折抵
+  改坏 calc/sentence.py → 红：8 failed, 27 passed in 1.36s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S04]
+        tests/test_sentence.py::test_sentence_cases[S05]
+        tests/test_sentence.py::test_sentence_cases[S07]
+        tests/test_sentence.py::test_sentence_cases[S08]
+        tests/test_sentence.py::test_sentence_cases[S09]
+        tests/test_sentence.py::test_sentence_cases[S10]
+        tests/test_sentence.py::test_sentence_cases[S11]
+        tests/test_sentence.py::test_offset_longer_than_term
+  复原 → 绿：35 passed in 1.10s
+
+[08] 加月对齐到当月最后一天
+  改坏 calc/sentence.py → 红：5 failed, 30 passed in 1.39s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S03]
+        tests/test_sentence.py::test_sentence_cases[S04]
+        tests/test_sentence.py::test_sentence_cases[S12]
+        tests/test_sentence.py::test_add_months[2028-01-31-1-2028-02-29]
+        tests/test_sentence.py::test_add_years_then_months
+  复原 → 绿：35 passed in 1.07s
+
+[09] 先加年、再加月
+  改坏 calc/sentence.py → 红：1 failed, 34 passed in 1.28s
+      变红的用例：
+        tests/test_sentence.py::test_add_years_then_months
+  复原 → 绿：35 passed in 1.12s
+
+[10] 偶数个整月按月折半
+  改坏 calc/sentence.py → 红：8 failed, 27 passed in 1.57s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S07]
+        tests/test_sentence.py::test_sentence_cases[S08]
+        tests/test_sentence.py::test_sentence_cases[S09]
+        tests/test_sentence.py::test_sentence_cases[S11]
+        tests/test_sentence.py::test_sentence_cases[S12]
+        tests/test_sentence.py::test_contract_example
+        tests/test_sentence.py::test_tool_via_core
+        tests/test_sentence.py::test_ratio_one_no_adjust_note
+  复原 → 绿：35 passed in 1.05s
+
+[11] 按天折半向上取整
+  改坏 calc/sentence.py → 红：1 failed, 34 passed in 1.45s
+      变红的用例：
+        tests/test_sentence.py::test_by_day_half_rounds_up
+  复原 → 绿：35 passed in 1.05s
+
+[12] 节点同样扣折抵（取法 a）
+  改坏 calc/sentence.py → 红：8 failed, 27 passed in 1.28s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S04]
+        tests/test_sentence.py::test_sentence_cases[S05]
+        tests/test_sentence.py::test_sentence_cases[S07]
+        tests/test_sentence.py::test_sentence_cases[S08]
+        tests/test_sentence.py::test_sentence_cases[S09]
+        tests/test_sentence.py::test_sentence_cases[S10]
+        tests/test_sentence.py::test_sentence_cases[S11]
+        tests/test_sentence.py::test_control_continuous_custody_adjusted
+  复原 → 绿：35 passed in 1.00s
+
+[13] 取法 f：连续羁押、比例不是 1:1 时调整
+  改坏 calc/sentence.py → 红：2 failed, 33 passed in 1.36s
+      变红的用例：
+        tests/test_sentence.py::test_control_continuous_custody_adjusted
+        tests/test_sentence.py::test_residence_continuous_custody_adjusted
+  复原 → 绿：35 passed in 0.99s
+
+[14] 取法 c：同一天按羁押算
+  改坏 calc/sentence.py → 红：1 failed, 34 passed in 1.39s
+      变红的用例：
+        tests/test_sentence.py::test_residence_overlapping_detention_counts_as_detention
+  复原 → 绿：35 passed in 1.02s
+
+[15] 无期徒刑不算起止
+  改坏 calc/sentence.py → 红：2 failed, 33 passed in 1.35s
+      变红的用例：
+        tests/test_sentence.py::test_sentence_cases[S13]
+        tests/test_sentence.py::test_life_imprisonment
+  复原 → 绿：35 passed in 1.05s
+
+[16] 羁押段起止写反报参数错误
+  改坏 calc/sentence.py → 红：2 failed, 33 passed in 1.30s
+      变红的用例：
+        tests/test_sentence.py::test_tool_via_core
+        tests/test_sentence.py::test_errors_direct
+  复原 → 绿：35 passed in 1.25s
+
+[17] 没有刑期报参数错误
+  改坏 calc/sentence.py → 红：2 failed, 33 passed in 1.29s
+      变红的用例：
+        tests/test_sentence.py::test_tool_via_core
+        tests/test_sentence.py::test_errors_direct
+  复原 → 绿：35 passed in 1.12s
+
+[18] 折抵超过刑期提示
+  改坏 calc/sentence.py → 红：1 failed, 34 passed in 1.37s
+      变红的用例：
+        tests/test_sentence.py::test_offset_longer_than_term
+  复原 → 绿：35 passed in 1.10s
+
+[19] 工具接入 /core/tool
+  改坏 tools/__init__.py → 红：1 failed, 34 passed in 1.43s
+      变红的用例：
+        tests/test_sentence.py::test_tool_via_core
+  复原 → 绿：35 passed in 1.02s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T24\pytest.txt）
+
+结论：19/19 类防护 改坏即红、复原即绿

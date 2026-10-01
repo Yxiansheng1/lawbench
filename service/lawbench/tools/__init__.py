@@ -1,4 +1,4 @@
-"""给 AI 的工具 case_*（Spec 4.4、20.4；契约 contracts/tools/）。本卡实现 8 个；case_calc_sentence 归 T24，
+"""给 AI 的工具 case_*（Spec 4.4、20.4；契约 contracts/tools/）。本卡实现 8 个；case_calc_sentence 由 T24 接入，
 case_archive_match、case_save_archive_plan 归 T23。
 
 所有工具只作用于当前任务所属的案件；参数先按工具契约的 $defs/args 校验（不合格 INVALID_ARGUMENT），
@@ -33,7 +33,7 @@ class ToolContext:
 
 
 def _registry() -> dict[str, Callable[[ToolContext, dict], dict]]:
-    from . import drafts, edit_list, inputs, materials, search
+    from . import drafts, edit_list, inputs, materials, search, sentence
     return {
         "case_list_materials": materials.list_materials,
         "case_read_material": materials.read_material,
@@ -43,6 +43,7 @@ def _registry() -> dict[str, Callable[[ToolContext, dict], dict]]:
         "case_save_draft": drafts.save_draft,
         "case_suggest_wiki": drafts.suggest_wiki,
         "case_save_edit_list": edit_list.save_edit_list,
+        "case_calc_sentence": sentence.calc_sentence,  # T24
     }
 
 
