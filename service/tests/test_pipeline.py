@@ -682,6 +682,7 @@ def test_cancel_closes_connection():
     srv.listen()
     port = srv.getsockname()[1]
     closed = threading.Event()
+    posted = threading.Event()
 
     def handle(c):
         buf = b""
@@ -696,6 +697,7 @@ def test_cancel_closes_connection():
                 if head.startswith(b"GET"):
                     c.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}")
                     continue
+                posted.set()
                 c.settimeout(20)
                 while c.recv(65536):                 # 不回响应头，等客户端断开
                     pass
@@ -721,19 +723,20 @@ def test_cancel_closes_connection():
     box = {}
 
     def go():
-        t0 = time.monotonic()
         try:
             llm_mod.LLM(net, lambda: KEY, cancel).chat("s", "u", PARAMS, "P-20260101000000-abcd")
         except BaseException as e:  # noqa: BLE001
-            box["e"], box["t"] = e, time.monotonic() - t0
+            box["e"], box["end"] = e, time.monotonic()
 
     t = threading.Thread(target=go)
     t.start()
+    assert posted.wait(20)          # 请求真的发到了服务端（机器忙时首次计数、选址可能要几秒），再等 1 秒取消
     time.sleep(1)
+    t0 = time.monotonic()
     cancel.set()
     t.join(5)
     srv.close()
-    assert isinstance(box.get("e"), llm_mod.Cancelled) and box["t"] < 3
+    assert isinstance(box.get("e"), llm_mod.Cancelled) and box["end"] - t0 < 2      # 从取消算起
     assert closed.wait(5)
 
 
@@ -993,6 +996,7 @@ def test_bad_old_card_not_overwritten(world):
     assert finish(w, tid)["status"] == "failed"
     assert task_json(w, tid, "运行记录.json")["错误"] == "INVALID_ARGUMENT" and not w["fake"].requests
     assert p.read_text(encoding="utf-8") == bad
+    assert "case.json 不合契约" in wiki_file(w, "log.md")                # 主编排答复：日志写明是哪个文件坏了
 
 
 def test_index_lawyer_block_kept(world):
@@ -1024,3 +1028,130 @@ def test_key_invalid_stops_other_segments(world, monkeypatch):
     tid = start(w)
     assert finish(w, tid)["status"] == "failed"
     assert len(w["fake"].requests) <= 2
+
+
+# ---------- T16 小项（执行令 20261001-2352） ----------
+
+def test_own_client_allowlist_and_redirect():
+    """P2-A：own_client 是流水线向外发请求的唯一出口：非白名单主机、3xx 都报 HOST_NOT_ALLOWED；update 后新白名单生效。"""
+    from lawbench.errors import ApiError
+    from lawbench.net import Net
+
+    def h(r):
+        if r.url.path == "/jump":
+            return httpx.Response(302, headers={"location": "http://192.168.8.77:8000/v1/models"})
+        return httpx.Response(200)
+
+    s = {"llm_base_url": "http://192.168.8.77:8000/v1", "llm_alt_base_url": None,
+         "prep_base_url": "http://192.168.8.124:9000", "prep_alt_base_url": None}
+    net = Net(s, transport=httpx.MockTransport(h))
+
+    def denied(c, url):
+        with pytest.raises(ApiError) as e:
+            c.get(url)
+        assert e.value.code == "HOST_NOT_ALLOWED", url
+
+    with net.own_client() as c:
+        assert c.get("http://192.168.8.77:8000/v1/models").status_code == 200
+        denied(c, "http://8.8.8.8/v1/models")
+        denied(c, "http://10.126.126.1:8000/v1/models")
+        denied(c, "http://192.168.8.77:8000/jump")                       # 3xx：不跟随、报错
+    net.update(dict(s, llm_base_url="http://10.126.126.1:8000/v1"))
+    with net.own_client() as c:
+        assert c.get("http://10.126.126.1:8000/v1/models").status_code == 200
+        denied(c, "http://192.168.8.77:8000/v1/models")
+
+
+def _partial_page(w, name, k, n):
+    p = w["root"] / "工作区" / "wiki" / "材料" / f"{index(w)[name]['material_id']}.md"
+    p.write_text(f"# {name}\n{wiki.PARTIAL_HEAD}部分（{k}/{n} 段），运行中止，没有读完\n\n## 摘要\n\n- 旧的{k}段\n",
+                 encoding="utf-8")
+    return p
+
+
+def test_old_partial_page_not_replaced_by_fewer(world, monkeypatch):
+    """P3-B：旧页是部分页时，这次段数不比它多就保留旧页，清单按旧页写；这次 0 段时清单也与磁盘一致。"""
+    w = world
+    _small_chunks(monkeypatch)
+    finish(w, start(w))
+    a, b = _partial_page(w, "借条", 3, 4), _partial_page(w, "说明", 1, 2)
+    before = a.read_text(encoding="utf-8"), b.read_text(encoding="utf-8")
+    monkeypatch.setattr("lawbench.pipeline.budget_calls", lambda s, x: 1)       # 只写成借条 1 段
+    assert finish(w, start(w))["status"] == "budget_stopped"
+    assert (a.read_text(encoding="utf-8"), b.read_text(encoding="utf-8")) == before
+    assert "| 部分（3/4 段） |" in _row(w, "借条") and "| 部分（1/2 段） |" in _row(w, "说明")
+
+
+def test_old_partial_page_replaced_by_more(world, monkeypatch):
+    """P3-B：这次段数更多才覆盖旧部分页。"""
+    w = world
+    _small_chunks(monkeypatch)
+    finish(w, start(w))
+    p = _partial_page(w, "借条", 1, 4)
+    monkeypatch.setattr("lawbench.pipeline.budget_calls", lambda s, x: 3)       # 借条前 3 段
+    assert finish(w, start(w))["status"] == "budget_stopped"
+    assert p.read_text(encoding="utf-8").splitlines()[1].startswith(f"{wiki.PARTIAL_HEAD}部分（3/4 段）")
+    assert "| 部分（3/4 段） |" in _row(w, "借条")
+
+
+def test_changed_material_stopped_marks_old_page(world, monkeypatch):
+    """P3-C（主编排定）：材料改过、更新中途停下，旧完整页留着，但清单写"否｜材料已更新，摘要页是旧版本"，不算已读。"""
+    w = world
+    _small_chunks(monkeypatch)
+    finish(w, start(w))
+    page = wiki_file(w, f"材料/{index(w)['借条']['material_id']}.md")
+    (w["root"] / "借条.txt").write_text("借条\n今借到王某人民币90,000元\n借款日期2025年4月1日\n借款人：李某\n", encoding="utf-8")
+    ok(w["client"].post("/api/materials/scan", json={"case_id": w["cid"]}), "api/materials_scan.schema.json")
+    monkeypatch.setattr("lawbench.pipeline.budget_calls", lambda s, x: 1)
+    assert finish(w, start(w, "wiki_update"))["status"] == "budget_stopped"
+    assert wiki_file(w, f"材料/{index(w)['借条']['material_id']}.md") == page
+    assert _row(w, "借条").endswith("| **否** | 材料已更新，摘要页是旧版本 |")
+    assert "已读 2 份" in wiki_file(w, "案件/材料清单.md")                     # 说明（沿用）+ 流水
+
+
+def test_log_written_under_wiki_lock(world):
+    """P3-D：流水线写 log.md 拿 _WIKI_LOCK（与采纳修改建议同一把）：锁被占着时等，放开后照写。"""
+    from lawbench.tools.drafts import _WIKI_LOCK
+    w = world
+    with _WIKI_LOCK:
+        tid = start(w)
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 10 and not any(r["step"] == "案件卡片" for r in w["fake"].requests):
+            time.sleep(0.05)                             # 卡片之后就是写目录和日志
+        time.sleep(1)
+        assert w["st"].pipelines.status(tid)["status"] == "running"
+        assert not (w["root"] / "工作区" / "wiki" / "log.md").exists()
+    assert finish(w, tid)["status"] == "completed" and tid in wiki_file(w, "log.md")
+
+
+def test_waiting_counted_once_by_wall_clock():
+    """NOTE 1：两路同时在等（排队、等名额），按墙钟并集只扣一份。"""
+    from lawbench.pipeline.runner import Budget, BudgetStop
+    now = [0.0]
+    b = Budget(100, 45, lambda: now[0])
+    b.waited(0, 600)
+    b.waited(100, 600)                                   # 与上一段重叠 500 秒：并集 700 秒
+    assert b.queue_s == 700
+    now[0] = 45 * 60 + 650
+    b.take()
+    now[0] = 45 * 60 + 750
+    with pytest.raises(BudgetStop):
+        b.take()
+
+
+def test_slot_wait_not_counted():
+    """NOTE 1：等名额的时间不计入 45 分钟。"""
+    from lawbench.pipeline.runner import Budget, Progress
+    now = [0.0]
+
+    class LLM:
+        cancel = threading.Event()
+
+        def chat(self, *a):
+            now[0] += 46 * 60                            # 这次调用里等名额等了 46 分钟
+            return llm_mod.Reply("x", "stop", None, 1.0, local_wait_ms=46 * 60 * 1000)
+
+    r = Runner(llm=LLM(), prompts=None, params={}, materials=None, task_id="P-20260101000000-abcd",
+               budget=Budget(10, 45, lambda: now[0]), progress=Progress())
+    r.call_reply("s", "u", "材料摘要", "M0001#1")
+    r.call_reply("s", "u", "材料摘要", "M0001#2")             # 没有 BudgetStop

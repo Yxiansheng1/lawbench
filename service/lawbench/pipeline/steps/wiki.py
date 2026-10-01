@@ -364,7 +364,13 @@ class WikiRun:
 
     def run(self) -> None:
         mats, skipped = load_materials(self.root, self.index)
-        card = self.old_card()
+        try:
+            card = self.old_card()
+        except ApiError:
+            # 主编排答复：log.md 写明是哪个文件坏了
+            self._log(f"\n## [{self.today}] 未运行 | 流水线 {self.task_id}\n- {WIKI}/case.json 不合契约（改坏或损坏），"
+                      "没有覆盖；请修正或删掉后重跑\n")
+            raise
         for rel in (f"{WIKI}/材料", f"{WIKI}/案件", self.tasks.rel(self.task_id, "草稿")):
             gate.mkdir_work(self.root, rel, op="pipeline")
         before = {x["material_id"]: x["sha256"] for x in (card or {}).get("materials_at_generation", [])}
@@ -401,6 +407,7 @@ class WikiRun:
             if results is None:
                 raise
         kept_old: set[str] = set()
+        stale: set[str] = set()
         for m in redo:
             if m.table:
                 continue
@@ -410,18 +417,26 @@ class WikiRun:
                 self._write_material(m, summaries[m.mid], None)
                 continue
             k_n = f"部分（{len(parts)}/{len(m.chunks)} 段）"
-            if self._complete_page(m):
-                # 停下时不覆盖已有的完整页（主编排定，P2-4）：半份存任务草稿，清单仍按旧页算已读
+            old = self._old_page(m)                  # None：没有旧页；"full"：完整页；(k, n)：部分页
+            changed = before.get(m.mid) not in (None, m.meta["sha256"])
+            keep = old == "full" or (old is not None and (not parts or (not changed and old[0] >= len(parts))))
+            if keep:
+                # 停下时不覆盖已有的完整页（主编排定，P2-4）；旧部分页只有这次段数更多才覆盖（P3-B）。半份存任务草稿
                 if parts:      # 标题进文件名，不能带"/"
                     self._draft(f"材料摘要 {m.mid} 部分（{len(parts)} 段，共 {len(m.chunks)} 段）", "\n".join(parts))
                 summaries[m.mid] = self._existing_summary(m)
-                kept_old.add(m.mid)
+                if changed:
+                    stale.add(m.mid)                 # 材料改过：旧页是旧版本，清单写否（主编排定，P3-C）
+                elif old == "full":
+                    kept_old.add(m.mid)
+                else:
+                    partial[m.mid] = f"部分（{old[0]}/{old[1]} 段）"     # 清单按磁盘上的旧页写
             elif parts:
                 summaries[m.mid] = "\n".join(parts)
                 partial[m.mid] = k_n
                 self._write_material(m, summaries[m.mid], f"{PARTIAL_HEAD}{k_n}，运行中止，没有读完")
         if stop is not None:
-            self._inventory(mats, skipped, summaries, partial, kept_old, stopped=True)
+            self._inventory(mats, skipped, summaries, partial, kept_old, stopped=True, stale=stale)
             raise stop
         removed = [mid for mid in before if mid not in {m.mid for m in mats}]
         for mid in removed:
@@ -446,8 +461,18 @@ class WikiRun:
         p.step_index += 1
 
     def _complete_page(self, m: Mat) -> bool:
+        return self._old_page(m) == "full"
+
+    def _old_page(self, m: Mat):
+        """磁盘上的摘要页：None 没有；"full" 完整页；(k, n) 部分页（页首"部分（k/n 段）"）。"""
         text = self._read(f"{WIKI}/材料/{m.mid}.md")
-        return text is not None and PARTIAL_HEAD not in "\n".join(text.splitlines()[:3])
+        if text is None:
+            return None
+        head = "\n".join(text.splitlines()[:3])
+        if PARTIAL_HEAD not in head:
+            return "full"
+        got = re.search(r"部分（(\d+)/(\d+) 段）", head)
+        return (int(got.group(1)), int(got.group(2))) if got else (0, 0)
 
     def _existing_summary(self, m: Mat) -> str:
         text = self._read(f"{WIKI}/材料/{m.mid}.md") or ""
@@ -476,9 +501,12 @@ class WikiRun:
         head = f"# {m.name}\n" + (note + "\n" if note else "")
         self._write(f"{WIKI}/材料/{m.mid}.md", head + "\n## 摘要\n\n" + body.strip() + "\n")
 
-    def _inventory(self, mats, skipped, summaries, partial, kept_old=(), stopped=False) -> str:
+    def _inventory(self, mats, skipped, summaries, partial, kept_old=(), stopped=False, stale=()) -> str:
         rows, n_read = [], 0
         for m in mats:
+            if m.mid in stale:
+                rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | **否** | 材料已更新，摘要页是旧版本 |")
+                continue
             if m.mid not in summaries:
                 why = "运行中止，未生成" if stopped else "摘要生成失败"
                 rows.append(f"| {m.name} | {m.meta['type']} | {m.meta['unit_count']} | **否** | {why} |")
@@ -577,6 +605,9 @@ class WikiRun:
                  f"- 覆盖：{cov}\n- 改动文章：概览、当事人、时间线、材料清单、争议焦点、案件卡片\n")
         if self.prep is not None:
             entry += f"- 395 抽取：{self.prep.note or '已用，核对通过的字段作为摘要的参考输入'}\n"
+        self._log(entry)
+
+    def _log(self, entry: str) -> None:
         with _WIKI_LOCK:                             # 与"采纳修改建议"写日志用同一把锁
             old = self._read(f"{WIKI}/log.md") or "# Wiki Log\n"
             gate.write_bytes(self.root, f"{WIKI}/log.md", (old.rstrip("\n") + "\n" + entry).encode("utf-8"),

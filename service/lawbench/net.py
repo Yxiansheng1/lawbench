@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import functools
 import ipaddress
 import json
 import re
@@ -130,6 +131,12 @@ async def _acheck_redirect(response: httpx.Response) -> None:
     _check_redirect(response)
 
 
+@functools.lru_cache(maxsize=1)
+def _ssl_context():
+    """own_client 共用一个 SSL 上下文（每建一个约 1 秒 CPU；地址都是 http，用不上，但 httpx 建 client 时总会建）。"""
+    return httpx.create_ssl_context()
+
+
 class Net:
     def __init__(self, servers: dict, clock=time.monotonic, transport: httpx.BaseTransport | None = None,
                  forward_port: int | None = None):
@@ -150,7 +157,7 @@ class Net:
         """单独的一个 client（钩子、超时与 self.client 相同）：流水线每次请求用一个，取消时整个关掉以断开连接
         （T16 返修 P2-1）。没有注入 transport 时各用各的连接池，关掉它不影响 self.client。"""
         return httpx.Client(
-            follow_redirects=False, trust_env=False, transport=self._transport,
+            follow_redirects=False, trust_env=False, transport=self._transport, verify=_ssl_context(),
             timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),
             event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})
 

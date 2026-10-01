@@ -107,11 +107,11 @@ rg.MUTATIONS += [
      f"{R} -k dirs_made"),
     ("P2-3 锁内按案件占位", I, [("                if other is None:", "                if True:")],
      f"{R} -k same_case_started"),
-    ("P2-4 停下不覆盖完整页", W, [("            if self._complete_page(m):", "            if False:")],
+    ("P2-4 停下不覆盖完整页", W, [('            keep = old == "full" or', '            keep = False and')],
      f"{R} -k stop_keeps_complete"),
     ("P2-4 半份页首注明部分", W, [('f"{PARTIAL_HEAD}{k_n}，运行中止，没有读完")', "None)")],
      f"{R} -k stop_without_old_page"),
-    ("P2-4 停下时重写材料清单", W, [("            self._inventory(mats, skipped, summaries, partial, kept_old, stopped=True)\n", "")],
+    ("P2-4 停下时重写材料清单", W, [("            self._inventory(mats, skipped, summaries, partial, kept_old, stopped=True, stale=stale)\n", "")],
      f"{R} -k stop_without_old_page"),
     ("P3-1 运行记录对象写材料编号", W, [('f"{m.mid}#{i + 1}",', 'f"{m.name}#{i + 1}",')], f"{R} -k run_record"),
     ("P3-1 兜底记录不写原句", N, [('            done.append(f"第{i + 1}行 " + "、".join(dict.fromkeys(acts)))', "            done.append(line)")],
@@ -123,8 +123,8 @@ rg.MUTATIONS += [
      f"{R} -k fix_stops"),
     ("P3-3 45 分钟上限", N, [("            if self.clock() - self.started - self.queue_s > self.minutes * 60:", "            if False:")],
      f"{R} -k minutes_limit"),
-    ("P3-3 排队时间不计时", N, [("        self.budget.queued((reply.queue_wait_ms or 0) + reply.local_wait_ms)",
-                              "        self.budget.queued(0)")], f"{R} -k queue_wait_not"),
+    ("P3-3 排队时间不计时", N, [("        self.budget.waited(t_call + local, (reply.queue_wait_ms or 0) / 1000)", "")],
+     f"{R} -k queue_wait_not"),
     ("P3-3 预算公式", I, [("    return segments * 3 + articles * 3 + 10", "    return segments * 2 + articles * 3 + 10")],
      f"{R} -k test_build"),
     ("P3-3 6000D 地址经 Net 选", L, [('                base, _ = self.net.select("llm", force=attempt > 0)',
@@ -160,6 +160,38 @@ rg.MUTATIONS += [
      f"{R} -k network_errors"),
     ("NOTE 某段 401 后其余不再发", N, [("        except (Cancelled, BudgetStop, ApiError) as e:", "        except (Cancelled, BudgetStop) as e:")],
      f"{R} -k key_invalid_stops"),
+]
+
+# ---- 小项（执行令 20261001-2352） ----
+NET = "net.py"
+rg.MUTATIONS += [
+    ("小项 P2-A own_client 白名单钩子（复核 M1）", NET, [
+        ('transport=self._transport, verify=_ssl_context(),\n            timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),\n'
+         '            event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})',
+         'transport=self._transport, verify=_ssl_context(),\n            timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),\n'
+         '            event_hooks={"request": [], "response": [_check_redirect]})')], f"{R} -k own_client"),
+    ("小项 P2-A own_client 不跟随重定向、3xx 报错（复核 M2）", NET, [
+        ('follow_redirects=False, trust_env=False, transport=self._transport, verify=_ssl_context(),\n'
+         '            timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),\n'
+         '            event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": [_check_redirect]})',
+         'follow_redirects=True, trust_env=False, transport=self._transport, verify=_ssl_context(),\n'
+         '            timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT),\n'
+         '            event_hooks={"request": [lambda r: self.allow.check(r.url)], "response": []})')], f"{R} -k own_client"),
+    ("小项 P3-B 旧部分页只有段数更多才覆盖", W, [
+        ("(not parts or (not changed and old[0] >= len(parts)))", "(not parts)")], f"{R} -k old_partial_page"),
+    ("小项 P3-B 保留旧部分页时清单按旧页写", W, [
+        ('                    partial[m.mid] = f"部分（{old[0]}/{old[1]} 段）"     # 清单按磁盘上的旧页写', "                    pass")],
+     f"{R} -k old_partial_page_not_replaced"),
+    ("小项 P3-C 材料改过的旧页清单写否", W, [("                if changed:\n                    stale.add(m.mid)", "                if False:\n                    stale.add(m.mid)")],
+     f"{R} -k changed_material_stopped"),
+    ("小项 P3-D log.md 拿 _WIKI_LOCK（复核 M19）", W, [("        with _WIKI_LOCK:                             # 与\"采纳修改建议\"写日志用同一把锁",
+                                                  "        if True:")], f"{R} -k log_written_under"),
+    ("小项 NOTE 1 等待按墙钟并集扣", N, [("            if end is None or a > end:\n                total += b - a\n                end = b\n"
+                                       "            elif b > end:\n                total += b - end\n                end = b",
+                                       "            total += b - a")], f"{R} -k waiting_counted_once"),
+    ("小项 NOTE 1 等名额不计时（复核 M14）", N, [("        self.budget.waited(t_call, local)\n", "")], f"{R} -k slot_wait_not"),
+    ("小项 坏卡片在 log.md 写明", W, [("        except ApiError:\n            # 主编排答复：log.md 写明是哪个文件坏了\n", "        except ApiError:\n            raise\n")],
+     f"{R} -k bad_old_card"),
 ]
 
 _run = rg.run

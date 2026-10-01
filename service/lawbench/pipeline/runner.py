@@ -59,12 +59,25 @@ class Budget:
     minutes: int = MINUTES
     clock: object = time.monotonic
     calls: int = 0
-    queue_s: float = 0.0
     started: float = field(default=0.0)
 
     def __post_init__(self):
         self.started = self.clock()
         self._lock = threading.Lock()
+        self._spans: list[tuple[float, float]] = []
+
+    @property
+    def queue_s(self) -> float:
+        """不计时的等待（排队、等名额）按墙钟取并集：两路同时在等只扣一份（T16 小项 NOTE 1）。"""
+        total, end = 0.0, None
+        for a, b in sorted(self._spans):
+            if end is None or a > end:
+                total += b - a
+                end = b
+            elif b > end:
+                total += b - end
+                end = b
+        return total
 
     def take(self) -> None:
         with self._lock:
@@ -74,10 +87,11 @@ class Budget:
                 raise BudgetStop("minutes")
             self.calls += 1
 
-    def queued(self, ms: int | None) -> None:
-        if ms:
+    def waited(self, start: float, seconds: float) -> None:
+        """从 start（本预算的时钟）起等了 seconds 秒，不计入时间上限。"""
+        if seconds > 0:
             with self._lock:
-                self.queue_s += ms / 1000
+                self._spans.append((start, start + seconds))
 
 
 @dataclass
@@ -140,8 +154,11 @@ class Runner:
         if self.llm.cancel.is_set():
             raise Cancelled()
         self.budget.take()
+        t_call = self.budget.clock()
         reply = self.llm.chat(system, user, self.params, self.task_id)
-        self.budget.queued((reply.queue_wait_ms or 0) + reply.local_wait_ms)
+        local = reply.local_wait_ms / 1000                    # 先等名额，再在 6000D 排队
+        self.budget.waited(t_call, local)
+        self.budget.waited(t_call + local, (reply.queue_wait_ms or 0) / 1000)
         with self._lock:
             self.progress.queue_wait_ms = reply.queue_wait_ms
             self.calls.append({"步骤": step, "对象": obj, "耗时秒": round(reply.elapsed_s, 1),
