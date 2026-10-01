@@ -13,7 +13,14 @@ from ..errors import ApiError
 from . import gate
 
 TEXT_DIR = "工作区/材料/文本"
-_MARK = re.compile(r"^【([^】\n]+)】\n?", re.M)
+# 位置标记只认我方写的几种（formats.md 第 2 节），且必须独占一行、按材料的定位方式只认对应的一种：
+# 材料原文里以【开头的行（微信、短信导出的"【2025-03-10 21:14】周立新：…"）一律是正文（注记 20261001-1221）
+_MARKS = {
+    "page": re.compile(r"^【(第[0-9]+页)】(?:\n|$)", re.M),
+    "para": re.compile(r"^【(第[0-9]+段)】(?:\n|$)", re.M),
+    "line": re.compile(r"^【(第[0-9]+行)】(?:\n|$)", re.M),
+    "cell": re.compile(r"^【(表:[^\n]+)】(?:\n|$)", re.M),
+}
 _NUM = re.compile(r"^第(\d+)(页|段|行)$")
 
 
@@ -41,7 +48,10 @@ def read_text(root: str, material: dict) -> str:
 
 
 def split_units(text: str, unit: str) -> list[Unit]:
-    parts = _MARK.split(text)
+    mark = _MARKS.get(unit)
+    if mark is None:
+        return []
+    parts = mark.split(text)
     out: list[Unit] = []
     for i in range(1, len(parts), 2):
         label, body = parts[i], parts[i + 1].rstrip("\n")

@@ -1,0 +1,30 @@
+T5 小项红绿：行首【…】：3 类防护
+
+[01] 只认我方写的标记（改回认所有行首【…】）
+  改坏 case/texts.py → 红：7 failed, 1 passed in 3.16s
+      变红的用例：
+        tests/test_t5_marks.py::test_read_material_keeps_bracket_lines
+        tests/test_t5_marks.py::test_search_finds_bracket_lines
+        tests/test_t5_marks.py::test_citation_check_on_bracket_lines
+        tests/test_t5_marks.py::test_only_own_marks_split[page-\u3010\u7b2c1\u9875\u3011\n\u7532\n\u3010\u7b2c2\u6bb5\u3011\n\u3010\u7b2c3\u9875\u3011 \u540e\u9762\u6709\u5b57\n\u30102025-01-01\u3011\u4e59\n\u3010\u7b2c2\u9875\u3011\n\u4e19-want0]
+        tests/test_t5_marks.py::test_only_own_marks_split[para-\u3010\u7b2c1\u6bb5\u3011\n\u3010\u7b2c1\u9875\u3011\n\u3010\u7b2c2\u6bb5\u3011\n\u4e59-want1]
+        tests/test_t5_marks.py::test_only_own_marks_split[line-\u3010\u7b2c1\u884c\u3011\n\u3010\u8868:\u6d41\u6c34\u3011\n\u3010\u7b2c9\u9875\u3011\nx-want2]
+        tests/test_t5_marks.py::test_cell_marks_only_sheet_labels
+  复原 → 绿：8 passed in 2.67s
+
+[02] 标记必须独占一行
+  改坏 case/texts.py → 红：1 failed, 2 passed, 5 deselected in 0.33s
+      变红的用例：
+        tests/test_t5_marks.py::test_only_own_marks_split[page-\u3010\u7b2c1\u9875\u3011\n\u7532\n\u3010\u7b2c2\u6bb5\u3011\n\u3010\u7b2c3\u9875\u3011 \u540e\u9762\u6709\u5b57\n\u30102025-01-01\u3011\u4e59\n\u3010\u7b2c2\u9875\u3011\n\u4e19-want0]
+  复原 → 绿：3 passed, 5 deselected in 0.07s
+
+[03] 按材料的定位方式只认对应的一种
+  改坏 case/texts.py → 红：1 failed, 2 passed, 5 deselected in 0.34s
+      变红的用例：
+        tests/test_t5_marks.py::test_only_own_marks_split[line-\u3010\u7b2c1\u884c\u3011\n\u3010\u8868:\u6d41\u6c34\u3011\n\u3010\u7b2c9\u9875\u3011\nx-want2]
+  复原 → 绿：3 passed, 5 deselected in 0.07s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T5\pytest-行首标记.txt）
+
+结论：3/3 类防护 改坏即红、复原即绿
