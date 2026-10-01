@@ -56,6 +56,9 @@ MATS = MaterialSet.from_texts([
     {"name": "记录", "material_id": "M0004", "sha256": "d" * 64, "unit": "line",
      "text": "【第1行】\n还款记录\n2025-06-10,20000,手机银行\n3月底结清\n"},
     {"name": "坏件", "material_id": "M0005", "sha256": "e" * 64, "unit": "page", "text": None},
+    {"name": "收条", "material_id": "M0006", "sha256": "f" * 64, "unit": "para",
+     "text": "【第1段】\n二〇二五年三月十二日，今收到人民币捌万元整，年利率百分之十二。\n\n"
+             "【第2段】\n今收到人民币捌万元整（¥80,000）。\n"},
 ])
 
 
@@ -77,6 +80,13 @@ MATS = MaterialSet.from_texts([
     "单元格里是“甲|乙丙丁戊己”〔流水 流水!C3〕。",                    # 单元格里的竖线还原后比
     "| 〔笔录 第1页〕 | 2025年3月12日 转账60,000元 |",                  # 表格行整行算一段（出处在前也算）
     "王某1981年出生〔借条 第1段〕。",                                   # 只写年份也能核到原文的年月
+    "他说“项目稳赚不赔，年底连本带利还你”，我就信了〔笔录 第3页〕。",
+    "证人称“他说‘项目稳赚不赔，年底连本带利还你’，我就信了”〔笔录 第3页〕。",   # 引文套引文：内层换单引号（P2-1）
+    "证人称“他说'项目稳赚不赔，年底连本带利还你'，我就信了”〔笔录 第3页〕。",
+    "借款人写“借款人：王某，１９８１年６月出生”〔借条 第1段〕。",          # 全角半角（P3-5）
+    "据（2025）京0105民初123号判决书，借款80,000元〔借条 第2段〕。",      # 法院案号不当金额（P3-2）
+    "2025年3月12日收到80,000元，年利率12%〔收条 第1段〕。",             # 原文只用中文数字：不比对（裁决 4）
+    "收到80,000元〔收条 第2段〕。",
     "2025年3月底结清〔记录 第3行〕。",                                       # 只写月份（月底、月初、月份）
 ])
 def test_correct_citations_pass(text):
@@ -118,6 +128,9 @@ def test_b_wrong_location(text, where):
     "他说“这句话材料里根本就没有”〔笔录 第1页〕。",
     "2024年1月1日签订〔借条 第2段〕。",
     "> 这一句在材料里并不存在的原话〔笔录 第1页〕",                       # 引用块整段按引语核
+    "他说‘这句话材料里根本就没有’〔笔录 第1页〕。",                       # 单独的单引号（P3-3）
+    "他说＂这句话材料里根本就没有＂〔笔录 第1页〕。",                       # 全角双引号（P3-3）
+    "收到90,000元〔收条 第2段〕。",                                       # 同处也有阿拉伯数字：照常核
     "王某1979年出生〔借条 第1段〕。",
 ])
 def test_c_not_found(text):
@@ -151,6 +164,11 @@ def test_d_undeclared_material():
     ("转账60000元〔流水 别表!B2〕。", "没有名为“别表”的工作表"),
     ("金额〔笔录 第3-1页〕。", "范围写反了"),
     ("转账60000元〔流水 第2行〕。", "工作表!单元格"),
+    ("转账60000元〔流水 流水!B99〕。", "超出工作表范围"),                   # P3-1
+    ("转账60000元〔流水 流水!Z2〕。", "超出工作表范围"),
+    ("转账60000元〔流水 流水!B3:B2〕。", "区域写反了"),
+    ("转账60000元〔流水 流水!C2:B3〕。", "区域写反了"),
+    ("每人5000元〔京政发〔2024〕1号 第1段〕。", "契约 1.4 前无法引用"),     # P2-2：材料名带〔年份〕
 ])
 def test_e_bad_format(text, msg):
     check, _ = run(text)
@@ -190,6 +208,24 @@ def test_g_quotes_and_flagged_lines():
     assert check["problems"] == []
     check, _ = run("构成犯罪与否待律师核实。")                                # 待核实也不豁免定罪判断
     assert classes(check) == ["G"]
+    check, _ = run("证人称‘这显然是骗局’，又称＂显然如此＂。")                  # 单引号、全角双引号内也不算（P3-3）
+    assert "G" not in classes(check)
+
+
+def test_material_name_with_year_bracket():
+    """材料名带〔年份〕（"京政发〔2024〕1号"）：整条报 E，不消失、不被当文号跳过（P2-2）。"""
+    for text in ("每人3000元〔京政发〔2024〕1号 第1段〕。", "每人5000元〔京政发〔2024〕1号 第1段〕，另见〔借条 第2段〕。"):
+        check, cites = run(text)
+        e = [p for p in check["problems"] if p["class"] == "E"]
+        assert e and e[0]["citation"] == "〔京政发〔2024〕1号 第1段〕" and not check["passed"]
+        assert all(c["name"] != "京政发〔2024〕1号" for c in cites)
+    check, _ = run("据京政发〔2024〕1号文，借款80,000元〔借条 第2段〕。")       # 正文提到文号：不报
+    assert check["passed"] and check["problems"] == []
+
+
+def test_cell_errors_not_recorded_as_citations():
+    _, cites = run("转账60000元〔流水 流水!B99〕〔流水 流水!B3:B2〕〔流水 流水!B2〕。")
+    assert [c["loc"]["ref"] for c in cites] == ["B2"]
 
 
 def test_unknown_kind_falls_back_to_analysis():
@@ -227,10 +263,48 @@ def test_code_blocks_and_headings_skipped():
     assert check["problems"] == []
 
 
-def test_citation_regex_comes_from_contract():
-    from lawbench.checks import parse
+def test_no_second_citation_regex_in_code():
+    """出处正则只从契约读：产品代码里没有另一份正则字面量（复核 NOTE：原来的自比测试测不出东西）。"""
     pat = json.loads((REPO_ROOT / "contracts" / "common.schema.json").read_text(encoding="utf-8"))
-    assert parse.citation_re().pattern == pat["$defs"]["citation_text"]["pattern"]
+    src = "".join(p.read_text(encoding="utf-8") for p in (REPO_ROOT / "service" / "lawbench").rglob("*.py"))
+    assert "(未找到依据|推断" not in src and pat["$defs"]["citation_text"]["pattern"][:20] not in src
+
+
+def test_merge_keeps_latest_version():
+    from lawbench.tools.drafts import merge_citations
+    loc = {"unit": "para", "from": 2}
+    old = [{"material_id": "M0002", "material_version": "b" * 64, "name": "借条", "loc": loc}]
+    new = [{"material_id": "M0002", "material_version": "9" * 64, "name": "借条", "loc": dict(loc)}]
+    assert merge_citations(old, new) == new
+
+
+def test_skill_kind_admin_dir_overrides(tmp_path):
+    """Spec 10.1：同名时管理员下发（后一个目录）覆盖安装目录；头部带 BOM、kind 带引号也认（P3-4）。"""
+    install, admin = tmp_path / "install", tmp_path / "admin"
+    for d, kind in ((install, "excerpt"), (admin, "analysis")):
+        (d / "x").mkdir(parents=True)
+        (d / "x" / "SKILL.md").write_text(f"---\nname: x\nkind: {kind}\n---\n", encoding="utf-8")
+    assert skill_kind([install, admin], "x") == "analysis"
+    assert skill_kind([install], "x") == "excerpt"
+    (admin / "x" / "SKILL.md").write_text('\ufeff---\nname: x\nkind: "excerpt"\n---\n', encoding="utf-8")
+    assert skill_kind([install, admin], "x") == "excerpt"
+    (admin / "x" / "SKILL.md").write_text("---\nname: x\nkind: 'draft'\n---\n", encoding="utf-8")
+    assert skill_kind([install, admin], "x") == "draft"
+
+
+def test_large_sheet_wrong_locations_fast():
+    """2 万行×5 列的流水、30 处位置写错（各差一行）：每处都报 B，空闲机器 10 秒内（P2-3）。"""
+    import time
+    rows = "\n".join(f"| {r} | 2025-01-01 | {100000 + r} | 户名{r} | 摘要{r} | 备注 |" for r in range(1, 20001))
+    big = MaterialSet.from_texts([{"name": "大流水", "material_id": "M0099", "sha256": "9" * 64, "unit": "cell",
+                                   "text": "【表:流水】\n| 行 | A | B | C | D | E |\n|---|---|---|---|---|---|\n" + rows}])
+    draft = "\n".join(f"金额{100000 + r}元〔大流水 流水!B{r + 1}〕" for r in range(100, 20000, 664))
+    t0 = time.perf_counter()
+    check, _ = check_text(draft, big, "excerpt")
+    took = time.perf_counter() - t0
+    b = [p for p in check["problems"] if p["class"] == "B"]
+    assert len(draft.splitlines()) == 30 and len(b) == 30 and len(check["problems"]) == 30
+    assert took < 10, took
 
 
 def test_skill_kind():

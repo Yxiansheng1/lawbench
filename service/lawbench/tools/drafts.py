@@ -27,15 +27,12 @@ def citation_check(ctx: ToolContext, content: str) -> tuple[dict, list[dict]]:
 
 
 def merge_citations(old: list[dict], new: list[dict]) -> list[dict]:
-    """本任务全部草稿的出处，按（材料编号、位置）去重（裁决 6）。"""
-    seen = {(c["material_id"], json.dumps(c["loc"], sort_keys=True)) for c in old}
-    out = list(old)
+    """本任务全部草稿的出处，按（材料编号、位置）去重（裁决 6）；同一处以最新这次保存的为准
+    （两次保存之间材料重新导入过，material_version 取新的；复核 NOTE）。"""
+    out = {(c["material_id"], json.dumps(c["loc"], sort_keys=True)): c for c in old}
     for c in new:
-        key = (c["material_id"], json.dumps(c["loc"], sort_keys=True))
-        if key not in seen:
-            seen.add(key)
-            out.append(c)
-    return out
+        out[(c["material_id"], json.dumps(c["loc"], sort_keys=True))] = c
+    return list(out.values())
 
 
 def save_draft(ctx: ToolContext, a: dict) -> dict:

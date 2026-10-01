@@ -18,7 +18,7 @@ rg.TITLE = "T10 红绿验证"
 rg.MUTATIONS = [
     # ---- 解析（parse.py） ----
     ("引号内的〔〕、〔四位数字〕不算出处", "checks/parse.py", [
-        ("        if _inside(m.start(), quotes) or _YEAR.match(body):", "        if False:"),
+        ("        if _inside(m.start(), quotes) or _YEAR.match(body) or any(", "        if any("),
     ], f"{R} -k correct_citations_pass"),
     ("出处正则从契约读（不另写宽的）", "checks/parse.py", [
         ("    return _citation_re(str(contracts._dir))", '    return re.compile(r"^〔.+〕$")'),
@@ -104,8 +104,52 @@ rg.MUTATIONS = [
          '        check, cites = {"passed": True, "problems": [], "stats": {"citations": 0, "must_fix": 0, "hints": 0}}, []'),
     ], f"{R} -k save_draft"),
     ("result.json 的出处按（材料、位置）去重", "tools/drafts.py", [
-        ("        if key not in seen:", "        if True:"),
+        ("    return list(out.values())", "    return list(out.values()) + new"),
     ], f"{R} -k save_draft_returns"),
+    # ---- 返修（执行令 20261001-1246） ----
+    ("P2-1·各种引号算同一个字符", "checks/evidence.py", [
+        ("""    return _QUOTES.sub('"', _WS.sub("", normalize(s)))""", """    return _WS.sub("", normalize(s))"""),
+    ], f"{R} -k correct_citations_pass"),
+    ("P3-5·引语比对前归一化（全角半角）", "checks/evidence.py", [
+        ("""    return _QUOTES.sub('"', _WS.sub("", normalize(s)))""", """    return _QUOTES.sub('"', _WS.sub("", s))"""),
+    ], f"{R} -k correct_citations_pass"),
+    ("P2-2·材料名带〔年份〕整段报 E", "checks/parse.py", [
+        ("        nested.append((i, end))\n", "        continue\n"),
+    ], f"{R} -k 'material_name_with_year or e_bad_format'"),
+    ("P2-3·每份材料只算一次（缓存）", "checks/parse.py", [
+        ("        if key not in self._memo:\n            self._memo[key] = fn(self)\n        return self._memo[key]",
+         "        return fn(self)"),
+    ], f"{R} -k large_sheet"),
+    ("P3-1·单元格越界", "checks/parse.py", [
+        ("            if any(r > max_row or c > max_col for c, r in refs):", "            if False:"),
+    ], f"{R} -k 'e_bad_format or cell_errors_not_recorded'"),
+    ("P3-1·单元格区域写反", "checks/parse.py", [
+        ("            if len(refs) == 2 and (refs[1][0] < refs[0][0] or refs[1][1] < refs[0][1]):", "            if False:"),
+    ], f"{R} -k 'e_bad_format or cell_errors_not_recorded'"),
+    ("P3-2·法院案号不当金额", "checks/citations.py", [
+        ('_DOCNO = re.compile(r"[〔（(][0-9]{4}[〕）)]', '_DOCNO = re.compile(r"[〔][0-9]{4}[〕]'),
+    ], f"{R} -k correct_citations_pass"),
+    ("P3-3·单引号、全角双引号也是引号", "checks/parse.py", [
+        ("|‘[^’\\n]*’|＂[^＂\\n]*＂\")", "\")"),
+    ], f"{R} -k 'c_not_found or g_quotes'"),
+    ("P3-4·管理员目录覆盖安装目录", "checks/__init__.py", [
+        ("    for d in reversed(list(skills_dirs or ())):", "    for d in skills_dirs or ():"),
+    ], f"{R} -k skill_kind_admin"),
+    ("P3-4·SKILL.md 头部去 BOM", "checks/__init__.py", [
+        ('.read_text(encoding="utf-8").lstrip("\\ufeff")', '.read_text(encoding="utf-8")'),
+    ], f"{R} -k skill_kind_admin"),
+    ("裁决 4·所标位置只用中文数字写时不报", "checks/citations.py", [
+        ("        if any(_chinese_only(m.text_at(loc), values_at(m, loc), k, v) for m, loc in targets):",
+         "        if False:"),
+    ], f"{R} -k correct_citations_pass"),
+    ("裁决 4·有阿拉伯数字的同类值时照常核", "checks/citations.py", [
+        ('    return not any(not n.startswith(("%", "年")) for n in nums) and bool(_CN_AMOUNT.search(text))',
+         "    return bool(_CN_AMOUNT.search(text))"),
+    ], f"{R} -k c_not_found"),
+    ("result.json 同一处以最新保存为准", "tools/drafts.py", [
+        ('        out[(c["material_id"], json.dumps(c["loc"], sort_keys=True))] = c',
+         '        out.setdefault((c["material_id"], json.dumps(c["loc"], sort_keys=True)), c)'),
+    ], f"{R} -k merge_keeps_latest"),
     ("工具调用带上 Skill 目录（按 kind 区分 G）", "api/core.py", [
         (",\n                               skills_dirs=tuple(st.config.skills_dirs))", ")"),
     ], f"{R} -k save_draft"),

@@ -28,7 +28,8 @@ WORD_OF = {v: k for k, v in UNIT_OF.items()}
 
 _BRACKET = re.compile(r"〔([^〔〕\n]*)〕")
 _YEAR = re.compile(r"^[0-9]{4}$")
-QUOTE = re.compile(r"“[^”\n]*”|\"[^\"\n]*\"|「[^」\n]*」")
+_YEAR_BRACKET = re.compile(r"〔[0-9]{4}〕")
+QUOTE = re.compile(r"“[^”\n]*”|\"[^\"\n]*\"|「[^」\n]*」|‘[^’\n]*’|＂[^＂\n]*＂")
 _LENTICULAR = re.compile(r"【[^【】\n]+? (?:第[0-9]+(?:-[0-9]+)?[页段行]|[^【】!\n]+![A-Z]{1,3}[0-9]+(?::[A-Z]{1,3}[0-9]+)?)】")
 _ITEM = re.compile(r"^(?P<name>[^〔〕、 ]+) (?:第(?P<a>[0-9]+)(?:-(?P<b>[0-9]+))?(?P<u>[页段行])"
                    r"|(?P<sheet>[^〔〕、!]+)!(?P<ref>[A-Z]{1,3}[0-9]+(?::[A-Z]{1,3}[0-9]+)?))$")
@@ -64,6 +65,7 @@ class Cite:
     ok: bool                      # 符合 citation_text 正则
     fixed: str | None = None      # 〔未找到依据〕〔推断〕
     items: list[Item] = field(default_factory=list)
+    reason: str | None = None     # 不合格时的特别说明
 
 
 def loc_text(loc: dict) -> str:
@@ -86,9 +88,23 @@ def find_cites(line: str) -> list[Cite]:
     quotes = quote_spans(line)
     pat = citation_re()
     out: list[Cite] = []
+    # 〔四位数字〕前面同一行有没闭合的〔：是材料名里带〔年份〕（"京政发〔2024〕1号"），契约 1.4 前写不成合格出处，
+    # 整段报 E（复核 P2-2；N45）。不能当文号年份跳过，否则整条出处消失、值也不核
+    nested: list[tuple[int, int]] = []
+    for y in _YEAR_BRACKET.finditer(line):
+        if _inside(y.start(), quotes) or any(a <= y.start() < b for a, b in nested):
+            continue
+        before = line[:y.start()]
+        i = before.rfind("〔")
+        if i < 0 or "〕" in before[i:]:
+            continue
+        j = line.find("〕", y.end())
+        end = j + 1 if j >= 0 and "〔" not in line[y.end():j] else y.end()
+        nested.append((i, end))
+        out.append(Cite(i, end, line[i:end], ok=False, reason="材料名含〔〕，契约 1.4 前无法引用（N45）"))
     for m in _BRACKET.finditer(line):
         body = m.group(1)
-        if _inside(m.start(), quotes) or _YEAR.match(body):
+        if _inside(m.start(), quotes) or _YEAR.match(body) or any(a <= m.start() < b for a, b in nested):
             continue
         raw = m.group(0)
         if not pat.match(raw):
@@ -108,7 +124,7 @@ def find_cites(line: str) -> list[Cite]:
                     loc["to"] = int(g["b"])
             items.append(Item(g["name"], loc))
         out.append(Cite(m.start(), m.end(), raw, ok=True, items=items))
-    return out
+    return sorted(out, key=lambda c: c.start)
 
 
 def find_lenticular(line: str) -> list[str]:
@@ -153,6 +169,31 @@ class Material:
         self.sha256 = sha256
         self.unit = unit
         self.units = units          # None：没有材料文本（失败、未就绪），不核对内容
+        self._memo: dict[str, list] = {}
+
+    def per_place(self, key: str, fn) -> list[tuple[str, object]]:
+        """[(位置写法, fn(位置文本))]，每份材料每种 fn 只算一次（复核 P2-3：大材料上逐条改错位置时不重复抽取）。"""
+        return self.memo(key, lambda m: [(p.label, fn(p.text)) for p in m.places])
+
+    def memo(self, key: str, fn):
+        """fn(self) 每份材料只算一次。"""
+        if key not in self._memo:
+            self._memo[key] = fn(self)
+        return self._memo[key]
+
+    @functools.cached_property
+    def _rows(self) -> dict[tuple[str, int], str]:
+        """Excel：(工作表, 行号) → 这一行的材料文本。"""
+        return {(u.sheet, u.row): u.text for u in self.units or [] if self.unit == "cell"}
+
+    @functools.cached_property
+    def sheet_bounds(self) -> dict[str, tuple[int, int]]:
+        """Excel：工作表名 → (最大行号, 最大列号)。"""
+        out: dict[str, tuple[int, int]] = {}
+        for u in self.units or []:
+            r, c = out.get(u.sheet, (0, 0))
+            out[u.sheet] = (max(r, u.row), max(c, len(cell_values(u.text))))
+        return out
 
     @functools.cached_property
     def places(self) -> list[Place]:
@@ -178,8 +219,14 @@ class Material:
         if self.unit == "cell":
             if any(int(_REF.match(x).group(2)) < 1 for x in loc["ref"].split(":")):
                 return "行号从 1 起"
-            if not any(u.sheet == loc["sheet"] for u in self.units):
+            if loc["sheet"] not in self.sheet_bounds:
                 return f"没有名为“{loc['sheet']}”的工作表"
+            max_row, max_col = self.sheet_bounds[loc["sheet"]]
+            refs = [(col_index(m.group(1)), int(m.group(2))) for m in (_REF.match(x) for x in loc["ref"].split(":"))]
+            if any(r > max_row or c > max_col for c, r in refs):
+                return f"超出工作表范围（{loc['sheet']} 共 {max_row} 行、{max_col} 列，到 {col_letters(max_col)}{max_row}）"
+            if len(refs) == 2 and (refs[1][0] < refs[0][0] or refs[1][1] < refs[0][1]):
+                return "区域写反了（左上角在前、右下角在后）"
             return None
         a, b = loc["from"], loc.get("to", loc["from"])
         if a < 1:
@@ -202,10 +249,12 @@ class Material:
         (c1, r1), (c2, r2) = [(col_index(m.group(1)), int(m.group(2)))
                               for m in (_REF.match(x) for x in (refs[0], refs[-1]))]
         out = []
-        for u in self.units:
-            if u.sheet == loc["sheet"] and min(r1, r2) <= u.row <= max(r1, r2):
-                vals = cell_values(u.text)
-                out += [vals[c - 1] for c in range(min(c1, c2), max(c1, c2) + 1) if c - 1 < len(vals)]
+        for r in range(min(r1, r2), max(r1, r2) + 1):
+            line = self._rows.get((loc["sheet"], r))
+            if line is None:
+                continue
+            vals = cell_values(line)
+            out += [vals[c - 1] for c in range(min(c1, c2), max(c1, c2) + 1) if c - 1 < len(vals)]
         return "\n".join(out)
 
 

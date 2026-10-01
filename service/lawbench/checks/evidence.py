@@ -16,10 +16,13 @@ from .parse import QUOTE, Material
 
 QUOTE_MIN = 6
 _WS = re.compile(r"\s+")
+# 各种引号比较时算同一个字符：引文里再套引文时内层换单引号是排版惯例（复核 P2-1，大卷宗赵刚引语）
+_QUOTES = re.compile(r"[“”‘’\"'「」『』]")
 
 
 def squash(s: str) -> str:
-    return _WS.sub("", normalize(s))
+    """归一化（全角半角，＂＇已由 NFKC 变成 "'）、去掉全部空白、引号统一成一个字符。"""
+    return _QUOTES.sub('"', _WS.sub("", normalize(s)))
 
 
 def quotes_in(fact: str, blockquote: bool) -> list[str]:
@@ -42,5 +45,5 @@ def locate(quote: str, targets: list[tuple[Material, dict]]) -> tuple[bool, list
         if m.name in seen:
             continue
         seen.add(m.name)
-        elsewhere += [f"{m.name} {p.label}" for p in m.places if q in squash(p.text)]
+        elsewhere += [f"{m.name} {label}" for label, text in m.per_place("squash", squash) if q in text]
     return False, elsewhere

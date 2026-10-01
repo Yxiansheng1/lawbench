@@ -27,6 +27,7 @@ MESSAGES: dict[str, str] = {
     "CONVERTER_UNAVAILABLE": "无法把文件转成 PDF，请在 Word 或 WPS 中另存为 PDF 后放入案件文件夹",
     "TEMPLATE_MISSING": "缺少模板文件，请联系管理员",
     "ENGINE_FAILED": "发票整理未完成，请查看下方的输出信息",
+    "ENGINE_BUSY": "发票整理正在进行中，请等它完成再操作",
     "PLAN_NOT_CONFIRMED": "请先确认办案结果",
 }
 

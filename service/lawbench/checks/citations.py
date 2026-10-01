@@ -53,7 +53,10 @@ _EVAL = re.compile(
 _SKIP_LINE = re.compile(r"^(#|<!--|\|[-:| ]+\|$)")
 _FENCE = re.compile(r"^ {0,3}(```|~~~)")
 _JOIN = " \t；;、，,"
-_DOCNO = re.compile(r"〔[0-9]{4}〕第?[0-9]+号")
+# 公文文号"〔2026〕417号"、法院案号"（2025）京0105民初123号"：不是要核的数值（复核 P3-2）
+_DOCNO = re.compile(r"[〔（(][0-9]{4}[〕）)][^\s，。；、,;〔〕（）()]{0,20}?第?[0-9]+号")
+_CN_AMOUNT = re.compile(r"[零〇一二两三四五六七八九十百千万亿壹贰叁肆伍陆柒捌玖拾佰仟]{2,}(?:元|圆)")
+_CN_DATE = re.compile(r"[〇零一二三四五六七八九]{4}年")
 
 
 # ---------- 抽取值 ----------
@@ -242,8 +245,8 @@ def _check_fact(rep: _Report, fact: str, group: list, materials: MaterialSet, de
     targets: list[tuple[Material, dict]] = []
     for c in group:
         if not c.ok:
-            rep.add("E", excerpt, c.raw, f"出处格式不对：{c.raw}。写法为〔材料名 第N页〕〔材料名 工作表!B12〕等，"
-                                         "每处都写材料名，多处用顿号分隔")
+            rep.add("E", excerpt, c.raw, f"出处格式不对：{c.raw}。" + (c.reason or "写法为〔材料名 第N页〕〔材料名 工作表!B12〕等，"
+                                                                             "每处都写材料名，多处用顿号分隔"))
             continue
         if c.fixed:
             inferred = True
@@ -291,8 +294,9 @@ def _check_fact(rep: _Report, fact: str, group: list, materials: MaterialSet, de
     for k, v in facts:
         if any(_has(values_at(m, loc), k, v) for m, loc in targets):
             continue
-        elsewhere = _elsewhere(targets, lambda p: _has(extract(p.text, source=True), k, v))
-        _b_or_c(rep, excerpt, cite_text, _fmt(k, v), targets, elsewhere)
+        if any(_chinese_only(m.text_at(loc), values_at(m, loc), k, v) for m, loc in targets):
+            continue                     # 所标位置只用中文数字写：第一版不比对、不出问题（裁决 4）
+        _b_or_c(rep, excerpt, cite_text, _fmt(k, v), targets, _elsewhere(targets, k, v))
     # B / C：引语
     for q in evidence.quotes_in(fact, blockquote):
         found, elsewhere = evidence.locate(q, targets)
@@ -304,14 +308,46 @@ def loc_label(loc: dict) -> str:
     return loc_text(loc)
 
 
-def _elsewhere(targets, pred) -> list[str]:
+def _source_values(text: str) -> tuple[set, set]:
+    return extract(text, source=True)
+
+
+def _num_index(m: Material) -> dict[str, list[str]]:
+    idx: dict[str, list[str]] = {}
+    for label, (_, nums) in m.per_place("values", _source_values):
+        for n in nums:
+            idx.setdefault(n, []).append(label)
+    return idx
+
+
+def _date_places(m: Material) -> list[tuple[str, set]]:
+    return [(label, dates) for label, (dates, _) in m.per_place("values", _source_values) if dates]
+
+
+def _elsewhere(targets, kind: str, v) -> list[str]:
+    """所引材料里值所在的位置。各位置的抽取值、数值反查表每份材料只算一次（Material 上缓存，复核 P2-3）。"""
     out, seen = [], set()
     for m, _ in targets:
         if m.name in seen:
             continue
         seen.add(m.name)
-        out += [f"{m.name} {p.label}" for p in m.places if pred(p)]
+        if kind == "num":
+            out += [f"{m.name} {label}" for label in m.memo("num_index", _num_index).get(v, [])]
+        else:
+            out += [f"{m.name} {label}" for label, dates in m.memo("date_places", _date_places)
+                    if any(_date_match(v, r) for r in dates)]
     return out
+
+
+def _chinese_only(text: str, values: tuple[set, set], kind: str, v) -> bool:
+    """所标位置这一类值只用中文数字写（"捌万元""二〇二六年三月""百分之十二"），没有阿拉伯数字写的同类值。
+    有阿拉伯数字的同类值时照常核（"捌万元整（¥80,000）"写错成 90,000 仍报）。"""
+    dates, nums = values
+    if kind == "date":
+        return not dates and bool(_CN_DATE.search(text))
+    if v.startswith("%"):
+        return not any(n.startswith("%") for n in nums) and "百分之" in text
+    return not any(not n.startswith(("%", "年")) for n in nums) and bool(_CN_AMOUNT.search(text))
 
 
 def _b_or_c(rep: _Report, excerpt: str, cite_text: str, what: str, targets, elsewhere: list[str]) -> None:

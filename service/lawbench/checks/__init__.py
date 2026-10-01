@@ -10,7 +10,7 @@ import re
 from .citations import KINDS, check_text
 from .parse import MaterialSet
 
-_KIND = re.compile(r"^kind:\s*([a-z]+)\s*$", re.M)
+_KIND = re.compile(r"""^kind:\s*(["']?)([a-z]+)\1\s*$""", re.M)
 
 __all__ = ["KINDS", "MaterialSet", "check_text", "skill_kind"]
 
@@ -18,15 +18,16 @@ __all__ = ["KINDS", "MaterialSet", "check_text", "skill_kind"]
 def skill_kind(skills_dirs, skill: str | None) -> str:
     if not skill or not re.fullmatch(r"[A-Za-z0-9_-]+", skill):
         return "analysis"
-    for d in skills_dirs or ():
+    # Spec 10.1：两处目录同名时后者（管理员下发）覆盖前者（安装目录），所以倒着找（复核 P3-4）
+    for d in reversed(list(skills_dirs or ())):
         p = pathlib.Path(d) / skill / "SKILL.md"
         try:
-            text = p.read_text(encoding="utf-8")
+            text = p.read_text(encoding="utf-8").lstrip("\ufeff")
         except OSError:
             continue
         head = text.split("---", 2)[1] if text.startswith("---") and text.count("---") >= 2 else ""
         m = _KIND.search(head)
-        if m and m.group(1) in KINDS:
-            return m.group(1)
+        if m and m.group(2) in KINDS:
+            return m.group(2)
         return "analysis"
     return "analysis"
