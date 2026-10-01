@@ -25,6 +25,9 @@ rg.MUTATIONS = [
     ("按材料的定位方式只认对应的一种", "case/texts.py", [
         ('    "line": re.compile(r"^【(第[0-9]+行)】(?:\\n|$)", re.M),', '    "line": re.compile(r"^【(第[0-9]+[页段行])】(?:\\n|$)", re.M),'),
     ], f"{R} -k only_own_marks_split"),
+    ("正文里恰好是标记的整行写入时转义（注记 1354）", "case/materials.py", [
+        ('    return _MARK_LINE.sub("\\u3000", body)', "    return body"),
+    ], f"{R} -k 'line_equal_to_mark or render_escapes'"),
 ]
 
 _run = rg.run

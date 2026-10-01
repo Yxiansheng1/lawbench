@@ -142,8 +142,17 @@ def render(name: str, entry: dict, parsed: Parsed) -> str:
         head.append(f"> Note: {entry['note']}")
     parts = ["\n".join(head)]
     for b in parsed.blocks:
-        parts.append(f"【{b.label}】\n{b.text}" if b.text else f"【{b.label}】")
+        parts.append(f"【{b.label}】\n{escape_marks(b.text)}" if b.text else f"【{b.label}】")
     return "\n\n".join(parts) + "\n"
+
+
+# 正文里恰好与位置标记相同的整行（PDF 原文、识别文本里有一行就是"【第1页】"）：行首加一个全角空格，
+# 读回时不会被当成我方的位置标记（注记 20261001-1354；formats.md 第 2 节）。
+_MARK_LINE = re.compile(r"^(?=【(?:第[0-9]+[页段行]|表:[^\n]+)】$)", re.M)
+
+
+def escape_marks(body: str) -> str:
+    return _MARK_LINE.sub("\u3000", body)
 
 
 class Materials:
