@@ -1,0 +1,232 @@
+T10 红绿验证：29 类防护
+
+[01] 引号内的〔〕、〔四位数字〕不算出处
+  改坏 checks/parse.py → 红：2 failed, 14 passed, 62 deselected in 0.49s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[\u636e\u865a\u516c\u5211\u8bc9\u5b57\u30142026\u3015417\u53f7\u8d77\u8bc9\u610f\u89c1\u4e66\uff0c\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u9644\u4ef6\u540d\u5199\u4f5c\u201c\u3014\u9644\u4ef6\u3015\u201d\uff0c\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.18s
+
+[02] 出处正则从契约读（不另写宽的）
+  改坏 checks/parse.py → 红：4 failed, 8 passed, 66 deselected in 0.53s
+      变红的用例：
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761\u7b2c2\u6bb5\u3015\u3002-\u683c\u5f0f\u4e0d\u5bf9]
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 2\u6bb5\u3015\u3002-\u683c\u5f0f\u4e0d\u5bf9]
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3001\u7b2c3\u6bb5\u3015\u3002-\u683c\u5f0f\u4e0d\u5bf9]
+        tests/test_checks.py::test_citation_regex_comes_from_contract
+  复原 → 绿：12 passed, 66 deselected in 0.17s
+
+[03] 位置号从 1 起
+  改坏 checks/parse.py → 红：1 failed, 10 passed, 67 deselected in 0.46s
+      变红的用例：
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c0\u6bb5\u3015\u3002-\u4ece 1 \u8d77]
+  复原 → 绿：11 passed, 67 deselected in 0.15s
+
+[04] 位置超出材料范围
+  改坏 checks/parse.py → 红：1 failed, 10 passed, 67 deselected in 0.46s
+      变红的用例：
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c9\u6bb5\u3015\u3002-\u8d85\u51fa\u6750\u6599\u8303\u56f4]
+  复原 → 绿：11 passed, 67 deselected in 0.16s
+
+[05] 单元格值还原 \|
+  改坏 checks/parse.py → 红：1 failed, 15 passed, 62 deselected in 0.45s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[\u5355\u5143\u683c\u91cc\u662f\u201c\u7532|\u4e59\u4e19\u4e01\u620a\u5df1\u201d\u3014\u6d41\u6c34 \u6d41\u6c34!C3\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.17s
+
+[06] E·【】写的出处
+  改坏 checks/citations.py → 红：1 failed, 10 passed, 67 deselected in 0.45s
+      变红的用例：
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3010\u501f\u6761 \u7b2c2\u6bb5\u3011\u3002-\u3010\u3011]
+  复原 → 绿：11 passed, 67 deselected in 0.16s
+
+[07] E·材料名不存在
+  改坏 checks/citations.py → 红：1 failed, 10 passed, 67 deselected in 0.43s
+      变红的用例：
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u4e0d\u5b58\u5728 \u7b2c2\u6bb5\u3015\u3002-\u6ca1\u6709\u53eb\u201c\u4e0d\u5b58\u5728\u201d\u7684\u6750\u6599]
+  复原 → 绿：11 passed, 67 deselected in 0.15s
+
+[08] E·位置与材料不合
+  改坏 checks/citations.py → 红：6 failed, 5 passed, 67 deselected in 0.52s
+      变红的用例：
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c9\u6bb5\u3015\u3002-\u8d85\u51fa\u6750\u6599\u8303\u56f4]
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c0\u6bb5\u3015\u3002-\u4ece 1 \u8d77]
+        tests/test_checks.py::test_e_bad_format[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u9875\u3015\u3002-\u7b2cN\u6bb5]
+        tests/test_checks.py::test_e_bad_format[\u8f6c\u8d2660000\u5143\u3014\u6d41\u6c34 \u522b\u8868!B2\u3015\u3002-\u6ca1\u6709\u540d\u4e3a\u201c\u522b\u8868\u201d\u7684\u5de5\u4f5c\u8868]
+        tests/test_checks.py::test_e_bad_format[\u91d1\u989d\u3014\u7b14\u5f55 \u7b2c3-1\u9875\u3015\u3002-\u8303\u56f4\u5199\u53cd\u4e86]
+        tests/test_checks.py::test_e_bad_format[\u8f6c\u8d2660000\u5143\u3014\u6d41\u6c34 \u7b2c2\u884c\u3015\u3002-\u5de5\u4f5c\u8868!\u5355\u5143\u683c]
+  复原 → 绿：11 passed, 67 deselected in 0.15s
+
+[09] A·识别不清的数被写成完整值
+  改坏 checks/citations.py → 红：2 failed, 1 passed, 75 deselected in 0.41s
+      变红的用例：
+        tests/test_checks.py::test_a_filled_in[\u88ab\u5bb3\u4eba\u79f0\u5468\u67d0\u67d0\u501f\u6b3e80,000\u5143\u3014\u7b14\u5f55 \u7b2c2\u9875\u3015\u3002-8\u25a0,000.00]
+        tests/test_checks.py::test_a_filled_in[3\u670820\u65e5\u6536\u516550,000\u5143\u3014\u6d41\u6c34 \u6d41\u6c34!B3\u3015\u3002-5\u25a0,000]
+  复原 → 绿：3 passed, 75 deselected in 0.13s
+
+[10] A·识别不清的姓名被写全
+  改坏 checks/citations.py → 红：1 failed, 2 passed, 75 deselected in 0.39s
+      变红的用例：
+        tests/test_checks.py::test_a_filled_in[\u8bc1\u4eba\u9648\u7f8e\u534e\u5728\u573a\u3014\u7b14\u5f55 \u7b2c2\u9875\u3015\u3002-\u9648\u7f8e\u25a0]
+  复原 → 绿：3 passed, 75 deselected in 0.06s
+
+[11] B·别处找到报 B（不是 C）
+  改坏 checks/citations.py → 红：24 failed, 2 passed, 52 deselected in 16.82s
+      变红的用例：
+        tests/test_checks.py::test_b_wrong_location[2025\u5e743\u670812\u65e5\u8f6c\u8d2660,000\u5143\u3014\u7b14\u5f55 \u7b2c2\u9875\u3015\u3002-\u7b14\u5f55 \u7b2c1\u9875]
+        tests/test_checks.py::test_b_wrong_location[\u4ed6\u8bf4\u201c\u9879\u76ee\u7a33\u8d5a\u4e0d\u8d54\uff0c\u5e74\u5e95\u8fde\u672c\u5e26\u5229\u8fd8\u4f60\u201d\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015\u3002-\u7b14\u5f55 \u7b2c3\u9875]
+        tests/test_checks.py::test_b_wrong_location[3\u670812\u65e5\u8f6c\u8d2660000\u5143\u3014\u6d41\u6c34 \u6d41\u6c34!B3\u3015\u3002-\u6d41\u6c34 \u6d41\u6c34!B2]
+        tests/test_checks.py::test_b_wrong_location[2025\u5e746\u670810\u65e5\u8fd8\u6b3e20,000\u5143\u3014\u8bb0\u5f55 \u7b2c1\u884c\u3015\u3002-\u8bb0\u5f55 \u7b2c2\u884c]
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c1\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c2\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c4\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c5\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c4\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c6\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c7\u6bb5\u3015]
+        …共 24 个
+  复原 → 绿：26 passed, 52 deselected in 11.15s
+
+[12] 金额按值比（万）
+  改坏 checks/citations.py → 红：1 failed, 15 passed, 62 deselected in 0.44s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[2025\u5e743\u670812\u65e5\uff0c\u9648\u7f8e\u534e\u8f6c\u8d266\u4e07\u5143\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.17s
+
+[13] 日期按年月日比
+  改坏 checks/citations.py → 红：1 failed, 15 passed, 62 deselected in 0.41s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[2025\u5e743\u6708\u5e95\u7ed3\u6e05\u3014\u8bb0\u5f55 \u7b2c3\u884c\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.17s
+
+[14] 只写月份的日期（月底、月份）
+  改坏 checks/citations.py → 红：1 failed, 15 passed, 62 deselected in 0.43s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[2025\u5e743\u6708\u5e95\u7ed3\u6e05\u3014\u8bb0\u5f55 \u7b2c3\u884c\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.17s
+
+[15] 只写年份能核到原文的年月
+  改坏 checks/citations.py → 红：1 failed, 15 passed, 62 deselected in 0.42s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[\u738b\u67d01981\u5e74\u51fa\u751f\u3014\u501f\u6761 \u7b2c1\u6bb5\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.17s
+
+[16] 数字中间折行
+  改坏 checks/citations.py → 红：1 failed, 21 passed, 56 deselected in 10.69s
+      变红的用例：
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c4\u9875\u3015]
+  复原 → 绿：22 passed, 56 deselected in 10.63s
+
+[17] 公文文号不当数值核
+  改坏 checks/citations.py → 红：1 failed, 15 passed, 62 deselected in 0.43s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[\u636e\u865a\u516c\u5211\u8bc9\u5b57\u30142026\u3015417\u53f7\u8d77\u8bc9\u610f\u89c1\u4e66\uff0c\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015\u3002]
+  复原 → 绿：16 passed, 62 deselected in 0.17s
+
+[18] D·只在给了 declared 时查
+  改坏 checks/citations.py → 红：17 failed, 61 deselected in 0.63s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[2025\u5e743\u670812\u65e5\uff0c\u9648\u7f8e\u534e\u8f6c\u8d266\u4e07\u5143\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015\uff1b\u540c\u65e5\u8f6c\u8d2660,000\u5143\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u8f6c\u8d2660000\u5143\u3014\u6d41\u6c34 \u6d41\u6c34!B2\u3015\uff0c\u5bf9\u65b9\u9648\u7f8e\u534e\u3014\u6d41\u6c34 \u6d41\u6c34!C2\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[2025-03-12 \u81f3 2025-03-20 \u7684\u6d41\u6c34\u3014\u6d41\u6c34 \u6d41\u6c34!A2:A3\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[2025\u5e746\u670810\u65e5\u8fd8\u6b3e20,000\u5143\u3014\u8bb0\u5f55 \u7b2c2\u884c\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u88ab\u5bb3\u4eba\u79f0\u5468\u67d0\u67d0\u501f\u6b3e8\u25a0,000.00\u5143\u3014\u7b14\u5f55 \u7b2c2\u9875\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u4ed6\u8bf4\u201c\u9879\u76ee\u7a33\u8d5a\u4e0d\u8d54\uff0c\u5e74\u5e95\u8fde\u672c\u5e26\u5229\u8fd8\u4f60\u201d\u3014\u7b14\u5f55 \u7b2c3\u9875\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u91d1\u989d\u517160,000\u5143\u3014\u7b14\u5f55 \u7b2c1-2\u9875\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[| 2025-03-12 | \u8f6c\u8d26 60,000 \u5143 | \u3014\u7b14\u5f55 \u7b2c1\u9875\u3015 |]
+        tests/test_checks.py::test_correct_citations_pass[> 2025\u5e743\u670812\u65e5\uff0c\u9648\u7f8e\u534e\u8f6c\u8d2660,000.00\u5143\u7ed9\u5468\u7acb\u65b0\u3002\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015]
+        tests/test_checks.py::test_correct_citations_pass[\u636e\u865a\u516c\u5211\u8bc9\u5b57\u30142026\u3015417\u53f7\u8d77\u8bc9\u610f\u89c1\u4e66\uff0c\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015\u3002]
+        tests/test_checks.py::test_correct_citations_pass[\u9644\u4ef6\u540d\u5199\u4f5c\u201c\u3014\u9644\u4ef6\u3015\u201d\uff0c\u501f\u6b3e80,000\u5143\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015\u3002]
+        …共 17 个
+  复原 → 绿：17 passed, 61 deselected in 0.23s
+
+[19] F 是提示、G 按成果类型
+  改坏 checks/citations.py → 红：2 failed, 76 deselected in 1.40s
+      变红的用例：
+        tests/test_checks.py::test_g_excerpt_must_fix_analysis_hint
+        tests/test_checks.py::test_save_draft_analysis_kind_g_is_hint
+  复原 → 绿：2 passed, 76 deselected in 1.20s
+
+[20] G·引号内的原文不算
+  改坏 checks/citations.py → 红：1 failed, 77 deselected in 0.38s
+      变红的用例：
+        tests/test_checks.py::test_g_quotes_and_flagged_lines
+  复原 → 绿：1 passed, 77 deselected in 0.12s
+
+[21] 〔推断〕〔未找到依据〕不核 A、B、C
+  改坏 checks/citations.py → 红：1 failed, 77 deselected in 0.41s
+      变红的用例：
+        tests/test_checks.py::test_inferred_skips_value_checks
+  复原 → 绿：1 passed, 77 deselected in 0.13s
+
+[22] 表格行整行算一段
+  改坏 checks/citations.py → 红：1 failed, 15 passed, 62 deselected in 0.43s
+      变红的用例：
+        tests/test_checks.py::test_correct_citations_pass[| \u3014\u7b14\u5f55 \u7b2c1\u9875\u3015 | 2025\u5e743\u670812\u65e5 \u8f6c\u8d2660,000\u5143 |]
+  复原 → 绿：16 passed, 62 deselected in 0.18s
+
+[23] 引语逐字核对
+  改坏 checks/evidence.py → 红：13 failed, 18 passed, 47 deselected in 15.64s
+      变红的用例：
+        tests/test_checks.py::test_b_wrong_location[\u4ed6\u8bf4\u201c\u9879\u76ee\u7a33\u8d5a\u4e0d\u8d54\uff0c\u5e74\u5e95\u8fde\u672c\u5e26\u5229\u8fd8\u4f60\u201d\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015\u3002-\u7b14\u5f55 \u7b2c3\u9875]
+        tests/test_checks.py::test_c_not_found[\u4ed6\u8bf4\u201c\u8fd9\u53e5\u8bdd\u6750\u6599\u91cc\u6839\u672c\u5c31\u6ca1\u6709\u201d\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015\u3002]
+        tests/test_checks.py::test_c_not_found[> \u8fd9\u4e00\u53e5\u5728\u6750\u6599\u91cc\u5e76\u4e0d\u5b58\u5728\u7684\u539f\u8bdd\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c1\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c5\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c2\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c4\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u501f\u6761 \u7b2c6\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u94f6\u884c\u6d41\u6c34 \u6d41\u6c34!F2\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u94f6\u884c\u6d41\u6c34 \u6c47\u603b!C4\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u60c5\u51b5\u8bf4\u660e \u7b2c7\u884c\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u91c7\u8d2d\u5408\u540c \u7b2c12\u6bb5\u3015]
+        …共 13 个
+  复原 → 绿：31 passed, 47 deselected in 10.37s
+
+[24] 短引语也核（阈值 6）
+  改坏 checks/evidence.py → 红：5 failed, 17 passed, 56 deselected in 10.65s
+      变红的用例：
+        tests/test_checks.py::test_cite_cases[\u3014\u8d77\u8bc9\u610f\u89c1\u4e66 \u7b2c5\u9875\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u94f6\u884c\u6d41\u6c34 \u6d41\u6c34!F2\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u94f6\u884c\u6d41\u6c34 \u6c47\u603b!C4\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u91c7\u8d2d\u5408\u540c \u7b2c12\u6bb5\u3015]
+        tests/test_checks.py::test_cite_cases[\u3014\u6c11\u4e8b\u8c03\u89e3\u4e66 \u7b2c2\u9875\u3015]
+  复原 → 绿：22 passed, 56 deselected in 10.27s
+
+[25] 引用块整段按引语核
+  改坏 checks/evidence.py → 红：1 failed, 20 passed, 57 deselected in 0.44s
+      变红的用例：
+        tests/test_checks.py::test_c_not_found[> \u8fd9\u4e00\u53e5\u5728\u6750\u6599\u91cc\u5e76\u4e0d\u5b58\u5728\u7684\u539f\u8bdd\u3014\u7b14\u5f55 \u7b2c1\u9875\u3015]
+  复原 → 绿：21 passed, 57 deselected in 0.18s
+
+[26] kind 不拼路径
+  改坏 checks/__init__.py → 红：1 failed, 77 deselected in 0.40s
+      变红的用例：
+        tests/test_checks.py::test_skill_kind
+  复原 → 绿：1 passed, 77 deselected in 0.13s
+
+[27] case_save_draft 返回真核对
+  改坏 tools/drafts.py → 红：2 failed, 1 passed, 75 deselected in 3.00s
+      变红的用例：
+        tests/test_checks.py::test_save_draft_returns_check_and_records_citations
+        tests/test_checks.py::test_save_draft_analysis_kind_g_is_hint
+  复原 → 绿：3 passed, 75 deselected in 2.73s
+
+[28] result.json 的出处按（材料、位置）去重
+  改坏 tools/drafts.py → 红：1 failed, 77 deselected in 1.47s
+      变红的用例：
+        tests/test_checks.py::test_save_draft_returns_check_and_records_citations
+  复原 → 绿：1 passed, 77 deselected in 1.15s
+
+[29] 工具调用带上 Skill 目录（按 kind 区分 G）
+  改坏 api/core.py → 红：1 failed, 2 passed, 75 deselected in 3.10s
+      变红的用例：
+        tests/test_checks.py::test_save_draft_returns_check_and_records_citations
+  复原 → 绿：3 passed, 75 deselected in 2.74s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T10\pytest.txt）
+
+结论：29/29 类防护 改坏即红、复原即绿

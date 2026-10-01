@@ -4,9 +4,10 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from datetime import datetime
 
-from .. import contracts
+from .. import checks, contracts, logs
 from ..case import gate
 from ..errors import ApiError
 from . import ToolContext
@@ -16,9 +17,25 @@ PENDING_SCHEMA = "files/wiki_pending.schema.json"
 _WIKI_LOCK = threading.Lock()  # 待确认.json 的读-改-写（P2-3）；只是本地读写，跨案件共用一把也不会久等
 
 
-def empty_citation_check() -> dict:
-    """出处核对由 T10 接入；本卡返回空结果（工单 T8 第 4 步）。"""
-    return {"passed": True, "problems": [], "stats": {"citations": 0, "must_fix": 0, "hints": 0}}
+def citation_check(ctx: ToolContext, content: str) -> tuple[dict, list[dict]]:
+    """出处核对（T10）：按任务 Skill 的 kind 区分 G 类；不查 D 类（裁决 1）。日志只记元数据。"""
+    t0 = time.monotonic()
+    kind = checks.skill_kind(ctx.skills_dirs, ctx.task.get("skill"))
+    check, cites = checks.check_text(content, checks.MaterialSet.from_case(ctx.root, ctx.index()), kind)
+    logs.event("checks", "draft", case_id=ctx.case_id, duration_ms=(time.monotonic() - t0) * 1000)
+    return check, cites
+
+
+def merge_citations(old: list[dict], new: list[dict]) -> list[dict]:
+    """本任务全部草稿的出处，按（材料编号、位置）去重（裁决 6）。"""
+    seen = {(c["material_id"], json.dumps(c["loc"], sort_keys=True)) for c in old}
+    out = list(old)
+    for c in new:
+        key = (c["material_id"], json.dumps(c["loc"], sort_keys=True))
+        if key not in seen:
+            seen.add(key)
+            out.append(c)
+    return out
 
 
 def save_draft(ctx: ToolContext, a: dict) -> dict:
@@ -40,11 +57,11 @@ def save_draft(ctx: ToolContext, a: dict) -> dict:
         version = max(existing, default=0) + 1
         rel = f"{drafts_rel}/{title}-v{version}.md"
         gate.write_bytes(ctx.root, rel, a["content"].encode("utf-8"), op="save_draft")  # 标题是设备名等：闸门拒绝
-        check = empty_citation_check()
+        check, cites = citation_check(ctx, a["content"])
         cov = ctx.tasks.coverage(ctx.root, ctx.case_id, tid)
         res = ctx.tasks.result(ctx.root, tid)
         res["drafts"].append({"title": title, "path": rel, "version": version})
-        res.update(citation_check=check, coverage=cov)
+        res.update(citation_check=check, coverage=cov, citations=merge_citations(res["citations"], cites))
         ctx.tasks.save_result(ctx.root, res)
     not_fully = [p["name"] for p in cov["partially_read"]] + cov["not_read"]
     return {"path": rel, "version": version, "citation_check": check, "coverage": cov, "not_fully_read": not_fully}

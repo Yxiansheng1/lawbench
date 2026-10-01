@@ -25,7 +25,8 @@ def routes(st) -> list[Route]:
         case_id, root, task = st.tasks.locate(d["task_id"])
         if task["state"] != "running":
             raise ApiError("TASK_NOT_FOUND", "task_not_running")
-        tc = tools.ToolContext(root=root, case_id=case_id, task=task, tasks=st.tasks, materials=st.materials)
+        tc = tools.ToolContext(root=root, case_id=case_id, task=task, tasks=st.tasks, materials=st.materials,
+                               skills_dirs=tuple(st.config.skills_dirs))
         return tools.run(tc, d["tool"], d["args"], validate_result=st.config.validate_responses)
 
     def progress(d: dict) -> dict:

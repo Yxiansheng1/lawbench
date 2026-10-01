@@ -20,6 +20,7 @@ class ToolContext:
     task: dict
     tasks: object       # case.task.TaskStore
     materials: object   # case.materials.Materials
+    skills_dirs: tuple = ()   # Skill 目录：出处核对按任务 Skill 的 kind 区分 G 类（T10）；空则按 analysis
 
     def index(self) -> dict:
         return self.materials.index(self.case_id)
