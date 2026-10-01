@@ -21,6 +21,9 @@ let seen: Seen[] = []
 let reply: (s: Seen) => unknown = () => ({ ok: true, value: {} })
 /** 回响应头之前等多久（模拟服务等引擎跑完才回头部）。 */
 let delayMs = 0
+/** 回答的状态码（测 3xx）；连接被对方断开的次数（测超时后 Host 关掉请求）。 */
+let status = 200
+let closedEarly = 0
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -37,15 +40,18 @@ beforeAll(async () => {
     if (paths) s.files = paths.filter((p) => existsSync(p))
     seen.push(s)
     const out = reply(s)
+    let gone = false
+    res.on('close', () => { if (!res.writableFinished) { gone = true; closedEarly++ } })
     if (delayMs) await new Promise((r) => setTimeout(r, delayMs))
-    res.writeHead(200, { 'content-type': 'application/json' })
+    if (gone) return
+    res.writeHead(status, { 'content-type': 'application/json', ...(status >= 300 && status < 400 ? { location: 'http://127.0.0.1:1/elsewhere' } : {}) })
     res.end(typeof out === 'string' ? out : JSON.stringify(out))
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()))
   port = (server.address() as { port: number }).port
 })
 afterAll(() => new Promise<void>((r) => server.close(() => r())))
-beforeEach(() => { seen = []; reply = () => ({ ok: true, value: {} }); delayMs = 0 })
+beforeEach(() => { seen = []; reply = () => ({ ok: true, value: {} }); delayMs = 0; status = 200; closedEarly = 0 })
 
 const up = () => ({ endpoint: () => ({ port, token: 'tok-test' }), state: 'running' }) as unknown as Supervisor
 const down = () => ({ endpoint: () => undefined, state: 'starting' }) as unknown as Supervisor
@@ -341,5 +347,20 @@ describe('长路由不被头部时限掐断（T26 复核 P2-1）', () => {
     const t = (m: string) => API_ROUTES.find((x) => x.method === m)!.timeoutMs ?? 0
     expect(t('invoiceRun')).toBeGreaterThan(30 * 60_000)
     for (const m of ['archiveBuild', 'materialsImport', 'materialsScan', 'outputsConfirm', 'redline']) expect(t(m), m).toBeGreaterThanOrEqual(10 * 60_000)
+  })
+
+  it('服务回 302：不跟随，callApi 得 SERVICE_UNAVAILABLE（复核记录项①）', async () => {
+    status = 302
+    reply = () => ({ ok: true, value: VALUE })
+    const r = new LawbenchRemote(up(), appData, () => undefined)
+    expect(await call(r, 'invoiceRun', { action: 'env_check' })).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } })
+    expect(seen).toHaveLength(1)
+  })
+
+  it('超过总时限后 Host 关掉这次请求，服务端看到连接断开（复核记录项①）', async () => {
+    delayMs = 1000
+    await expect(requestJson({ method: 'POST', port, path: '/x', headers: {}, body: '{}', timeoutMs: 200 })).rejects.toBeInstanceOf(RequestTimeout)
+    await new Promise((r) => setTimeout(r, 300))
+    expect(closedEarly).toBe(1)
   })
 })
