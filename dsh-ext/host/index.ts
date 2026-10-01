@@ -16,6 +16,8 @@ import { API_ROUTES, buildRequest, type ApiRoute } from '../shared/api-routes.ts
 import { listSkills, type SkillInfo } from './skills.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
 import { requestJson } from './http-json.ts'
+import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
+import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -35,6 +37,9 @@ export interface Config {
   env?: Record<string, string>
   /** Skill 目录，先后顺序与服务一致（管理员目录在前）；listSkills 读这些目录（T13 执行令 Q4）。 */
   skillDirs?: string[]
+  /** 启动自检：LibreOffice、pandoc 在安装目录里的位置（T20 步骤 3 定）；没给只看 PATH。 */
+  sofficeCandidates?: string[]
+  pandocCandidates?: string[]
 }
 
 type Ctx = {
@@ -119,6 +124,8 @@ export class LawbenchRemote {
     private readonly notices: TurnNotices = new TurnNotices(),
     /** 取 DSH 的服务（工作区登记、会话存储）；不给时 attachCaseSessions 什么也不做。 */
     private readonly service: (name: string) => unknown = () => undefined,
+    /** 启动自检（T20 准备）；不给时 selfCheck 回空。 */
+    private readonly checker: () => Promise<CheckItem[]> = async () => [],
   ) {
     this.typertRemote = Object.freeze({ service: this, serviceKey: LAWBENCH_SERVICE, namespace: LAWBENCH_NAMESPACE })
   }
@@ -246,6 +253,17 @@ export class LawbenchRemote {
     const j = (await r.json()) as { ok: boolean; value?: unknown; error?: { message: string } }
     if (!j.ok) throw new Error(j.error?.message ?? '内部错误，请重试；多次出现请联系技术支持')
     return j.value
+  }
+
+  private selfCheckResult: Promise<CheckItem[]> | undefined
+
+  /** 启动自检里有问题的项（界面首页提示；只跑一次，结果缓存到本次运行结束）。 */
+  async selfCheck(): Promise<{ ok: true; value: { items: CheckItem[] } }> {
+    this.selfCheckResult ??= this.checker().then((items) => {
+      this.log('info', 'selfcheck.done', Object.fromEntries(items.map((i) => [i.id, i.level])))
+      return problems(items)
+    }, () => [])
+    return { ok: true, value: { items: await this.selfCheckResult } }
   }
 
   /** 首次配置状态（执行令 Q3：settings.json 不存在，或凭据管理器没有 Key，就算没配置过）。Host 自己看文件，不经服务。 */
@@ -440,7 +458,13 @@ export function apply(ctx: Ctx, config: Config): void {
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))
-  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices, (name) => ctx.get(name)))
+  // 启动自检：内置 Python 只在启动命令是 Python 时查（开发期用 node 起假服务时不查）
+  const python = /python(w)?(\.exe)?$/i.test(config.command[0] ?? '')
+  const checker = () => selfCheck(nodeSelfCheckDeps({
+    command: python ? config.command : [], serviceDir: config.cwd, appData: config.appData,
+    adminSkillsDir: config.skillDirs?.[0], sofficeCandidates: config.sofficeCandidates, pandocCandidates: config.pandocCandidates,
+  })).then((items) => (python ? items : items.filter((i) => i.id !== 'python')))
+  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices, (name) => ctx.get(name), checker))
   void cleanPasteDir(config.appData).then((n) => { if (n) log('info', 'paste.cleaned', { count: n }) })
   ctx.effect(() => {
     void supervisor.start().catch((e: unknown) => log('error', 'service.start_failed', { error: String((e as Error)?.message ?? e) }))

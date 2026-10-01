@@ -29,6 +29,7 @@ function CapsulesPage() {
           ? <CapsuleManager initial={c} skills={skillList} onDone={() => { setManaging(false); void reload() }} />
           : <CapsuleHome caps={c} skills={skillList} onManage={() => setManaging(true)} />}
         </Loading>
+        {!managing ? <SelfCheckBanner /> : null}
         {!managing ? <RecentCases /> : null}
       </div>
     </div>
@@ -294,3 +295,26 @@ function AddCapsule({ c, skills, installed, onClose, onAdd }: { c: Capsules; ski
 }
 
 export { notice }
+
+type CheckItem = { id: string; level: 'ok' | 'warn' | 'error'; message: string }
+/** 律师点过"知道了"就不再显示（本次运行内）。 */
+let selfCheckDismissed = false
+
+/** 启动自检（T20 准备）：内置 Python、分词文件、LibreOffice、pandoc、管理员 Skill 目录、缓存路径有问题时在首页提示，不拦使用。 */
+export function SelfCheckBanner() {
+  const [items, setItems] = useState<CheckItem[]>([])
+  const [hidden, setHidden] = useState(selfCheckDismissed)
+  useEffect(() => { void call<{ items: CheckItem[] }>('selfCheck').then((r) => { if (r.ok) setItems(r.value.items) }) }, [])
+  if (hidden || items.length === 0) return null
+  return (
+    <div role="alert" style={{ ...S.card, borderColor: items.some((i) => i.level === 'error') ? C.err : C.warn, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={S.between}>
+        <span style={{ fontWeight: 600 }}>启动检查发现 {items.length} 个问题</span>
+        <Button size="sm" variant="outline" onClick={() => { selfCheckDismissed = true; setHidden(true) }}>知道了</Button>
+      </div>
+      <ul style={{ ...S.list, fontSize: 12 }}>
+        {items.map((i) => <li key={i.id} style={{ color: i.level === 'error' ? C.err : C.text }}>{i.message}</li>)}
+      </ul>
+    </div>
+  )
+}

@@ -12,3 +12,8 @@ build/
 Thumbs.db
 # 真实案卷一律不进仓库；测试样本只放 tests/fixtures/（虚构）
 /cases/
+
+# T20 打包：构建暂存、离线 wheel、安装包输出（不提交，安装包记 sha256）
+packaging/stage/
+packaging/wheelhouse/
+packaging/out/

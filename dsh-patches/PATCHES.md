@@ -91,6 +91,7 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 授权记录（凭据服务的 readRecord / modifyRecord 等） | DSH 自己的连接插件启动时要把浏览器会话密钥写成一条记录（`packages/client/connection/lib/index.js:330`），拒绝写入桌面端就起不来。T7 让记录只放进程内存（不落盘、不进凭据管理器），偏离执行令 Q2"写入拒绝"，已落注记件候主编排定 | `致ORCH-A-注记-T7凭据记录只放内存-*.md` |
 | G-2：打开工作区时从 `cwd` 读取的内容 | 归 T17 | 主编排 T4 裁决 |
 | Skill 目录先后（Spec 10.1） | preset 的 `customSkillDirs` 为 `[%ProgramData%\lawbench\skills, 内置目录]`：DSH 同一级内先到先得，管理员目录在前才能覆盖内置同名 Skill | 实测同名 Skill 加载到管理员目录那份（`docs\plan\evidence\T4\rework-runtime-tests.txt`） |
+| 内置 Python（Spec 1.3〔待验证〕，T20 步骤 2） | **复用 DSH 内置的同一份 Python 3.12.14 发行包，但单独解压一份**：取 DSH 构建时按 `scripts\primary-runtime\lock.json` 下载并核过哈希的同一个 python-build-standalone 压缩包（`7c45c962…`，`.desktop-build\downloads\` 下），解压到 `<安装目录>\python\`，我方依赖装进它自己的 `Lib\site-packages`；另放 `sitecustomize.py`（去掉用户目录的 site-packages）和 `lawbench-service.pth`（加上 `<安装目录>\service`）；服务由 Host 以 `<安装目录>\python\python.exe -I -m lawbench` 启动。不往 DSH 的运行时载荷里装东西，也不另带一份 python-build-standalone | ① DSH 运行时把载荷连同 `payloadDigest` 复制到 Harness 目录并核对，装进去要改 DSH 打包脚本。② 共用 DSH 的解释器、依赖放单独目录、用启动壳隔离（`-I -S`）也能跑通服务和测试，但服务另起的子进程（证件识别驱动 `driver.py` 用 `sys.executable`、只带运行必需的环境变量）拿不到单独目录里的依赖（onnxruntime 等），所以改为单独解压一份。③ DSH 的解释器不带 `-I` 时会加用户目录的 site-packages（本机实测），我方用 `-I` 加 `sitecustomize.py` 两头去掉 | `docs\plan\evidence\T20\python-reuse.txt`（两种做法各跑一遍服务全部测试） |
 
 ## 待办
 
