@@ -46,6 +46,12 @@ export class CaseRoots {
 
   list(): readonly string[] { return this.roots }
 
+  /** 这个根（按路径键）在不在名单上。 */
+  has(root: string): boolean {
+    const k = pathKey(root)
+    return this.roots.some((r) => pathKey(r) === k)
+  }
+
   /** cwd 所属的案件根（最长的那个）；不在任何案件里返回 undefined。 */
   match(cwd: string | undefined): string | undefined {
     if (!cwd) return undefined
@@ -57,10 +63,12 @@ export class CaseRoots {
   /**
    * 按 /api/case/recent 的结果把名单整个换掉：只留 exists 为真的根，路径以服务为准、按路径键去重、保持服务给的顺序。
    * 盘拔了（exists 为假）就不在名单里，插回来服务再报 exists 为真时加回。只在刷新成功时调用；刷新失败保留旧名单。
-   * 有变化才写回缓存。
+   * 有变化才写回缓存。服务返回空列表（一个案件也没有）时保留旧名单（第四轮复核 B-F6：服务的案件登记丢了、
+   * 换了数据目录时不把案件会话一下子全藏起来；名单上多出的根读不到会话，没有害处）。
    * @returns 名单是否有变化。
    */
   replace(cases: ReadonlyArray<{ root: string; exists: boolean }>): boolean {
+    if (cases.length === 0) return false
     const byKey = new Map<string, string>()
     for (const c of cases) {
       if (typeof c.root !== 'string' || !c.root || !c.exists) continue

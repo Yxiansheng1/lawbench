@@ -171,7 +171,8 @@ export class LawbenchRemote {
   }
 
   /**
-   * 打开案件后把游离会话挂回该案件的工作区（T17 第三轮复核 B-F2），见 attach-sessions.ts。界面不等结果、不提示；出错只记日志。
+   * 打开案件后把游离会话挂回该案件的工作区（T17 第三轮复核 B-F2），见 attach-sessions.ts。界面等它做完再打开工作区
+   * （先刷新名单，上限 3 秒；再列一次会话，挂住的案件根每个最多 3 秒），不看结果、不提示；出错只记日志。
    * @param request - { root }：刚作为工作区打开的案件根。
    */
   async attachCaseSessions(request: unknown): Promise<ApiResult> {
@@ -186,6 +187,12 @@ export class LawbenchRemote {
       this.log('warn', 'workspace.attach_case_sessions_failed', { error: (error as Error)?.name ?? 'Error' })
       return fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持')
     }
+  }
+
+  /** 请我方会话存储按服务刷新案件根名单（会话存储不在、或不是我方的时什么也不做；出错不影响调用方）。 */
+  async refreshCaseRoots(): Promise<void> {
+    const p = this.service('sessionPersistence') as { refreshCaseRoots?: () => Promise<void> } | undefined
+    await p?.refreshCaseRoots?.().catch(() => undefined)
   }
 
   async listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }> {
@@ -366,7 +373,15 @@ export async function cleanPasteDir(appData: string): Promise<number> {
 for (const route of API_ROUTES) {
   Object.defineProperty(LawbenchRemote.prototype, route.method, {
     configurable: true, writable: true,
-    value: function (this: LawbenchRemote, request: unknown) { return this.callApi(route, request) },
+    value: route.method === 'caseOpen'
+      // 打开（或新建）案件成功后服务才把它列为现在的位置：请会话存储立刻按服务刷新案件根名单并等它回来（上限 3 秒），
+      // 接下来界面打开工作区、挂回会话、律师续写都按新名单走（T17 第四轮复核 B-F1）
+      ? async function (this: LawbenchRemote, request: unknown) {
+        const r = await this.callApi(route, request)
+        if (r.ok) await this.refreshCaseRoots()
+        return r
+      }
+      : function (this: LawbenchRemote, request: unknown) { return this.callApi(route, request) },
   })
 }
 

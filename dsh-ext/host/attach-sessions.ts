@@ -7,7 +7,7 @@
 // 这种也要挂到新位置。同一机制也把"名单缓存丢了、服务还没起时启动"后被剪出工作区的旧会话补回来（W2）。
 // 登记启动时把记录头缓存起来，attach 拿缓存的那份核对 cwd；启动时按旧位置读到的记录头（cwd 是旧位置）会让 attach 失败。
 // 登记没有公开的刷新方法，这里调它的私有方法 indexHeaders 用现在的记录头重建这几个会话的索引（换 DSH 提交时核对，
-// 见 dsh-patches\PATCHES.md"依赖的私有字段"）；方法不在时跳过，这类会话挂不上、只记日志。
+// 见 dsh-patches\PATCHES.md"换 DSH 提交时的核对清单"）。
 // 先从别的工作区 detachSession，再挂到这个案件的工作区（桌面端实测两条）：
 // - 同一编号同时记在两个工作区的登记记录里，DSH 下次启动判"登记不一致"，整个工作区服务（连同会话服务）起不来；
 //   先去掉再挂，中途断掉最多是这个会话暂时不在任何工作区（进"未分组"），下次打开案件再挂回；
@@ -15,7 +15,12 @@
 // 只对登记记录里确实记着这个编号的工作区 detach：DSH 每写一次某个工作区的记录，都会把路径索引里解析不了的编号一并剪掉
 // （桌面端实测：对每个工作区都 detach，不在名单上的案件——比如盘拔了——它的会话就被剪出了工作区）。
 // 看"记着"要读登记的原始记录（私有字段 table）：sessionIds 是按路径索引过滤过的，纯搬家后旧工作区记录里还有、
-// 索引不算，看不出来。私有字段不在时退回看 sessionIds。
+// 索引不算，看不出来。
+// 两处私有写法（indexHeaders、table.get）任一不在：一个也不挂、计为失败、记一条日志（第四轮复核 A-P3-1）。看不到原始记录就
+// 说不准它是否还记在别的工作区，挂上可能记成两处；不重建索引，attach 拿旧记录头核对也挂不上。
+// 某个编号从别的工作区去掉时出错（或工作区没有 detachSession），这个编号不挂、计为失败（第四轮复核 A-P2-1 = B-F2）。
+// 先请会话存储按服务刷新一次案件根名单（第四轮复核 B-F1：服务在律师打开案件之后才只列新位置；Host 在 caseOpen 成功后
+// 已刷过一次，这里再刷一次，覆盖不经 caseOpen 直接打开工作区的路）。
 import { pathKey } from '../session-store/case-roots.ts'
 
 export interface WorkspaceLike {
@@ -33,7 +38,11 @@ export interface RegistryLike {
   /** DSH 工作区登记的私有字段：工作区编号 → 登记的原始记录（sessionIds 未经路径索引过滤）。 */
   readonly table?: { get(id: string): { sessionIds?: readonly string[] } | undefined }
 }
-export interface PersistenceLike { list(): Promise<ReadonlyArray<{ header: HeaderLike }>> }
+export interface PersistenceLike {
+  list(): Promise<ReadonlyArray<{ header: HeaderLike }>>
+  /** 我方会话存储加的：按服务刷新案件根名单并等它回来（上限 3 秒）。 */
+  refreshCaseRoots?(): Promise<void>
+}
 type LogFn = (level: 'info' | 'warn' | 'error', event: string, meta?: Record<string, unknown>) => void
 
 /**
@@ -45,49 +54,46 @@ export async function attachCaseSessions(registry: RegistryLike, persistence: Pe
   const workspaces = registry.list()
   const ws = workspaces.find((w) => pathKey(w.path) === key)
   if (!ws) return { attached: 0, failed: 0 }
+  await persistence.refreshCaseRoots?.().catch(() => undefined)
   const stale = (await persistence.list())
     .map((row) => row.header)
     .filter((h) => h.cwd !== undefined && pathKey(h.cwd) === key && !ws.sessionIds.includes(h.id))
   const todo = stale.map((h) => h.id)
-  /** 登记记录里记着 id 的别的工作区（读原始记录；私有字段不在时看过滤后的 sessionIds）。 */
-  const recordedIn = (id: string) => workspaces.filter((w) => {
-    if (w === ws) return false
-    const raw = w.id === undefined ? undefined : registry.table?.get?.(w.id)?.sessionIds
-    return (raw ?? w.sessionIds).includes(id)
-  })
-  if (stale.length && typeof registry.indexHeaders === 'function') {
-    try {
-      await registry.indexHeaders(stale)
-    } catch (error) {
-      log('warn', 'workspace.reindex_failed', { error: (error as Error)?.name ?? 'Error' })
-    }
+  if (!todo.length) return { attached: 0, failed: 0 }
+  const table = registry.table
+  if (typeof registry.indexHeaders !== 'function' || typeof table?.get !== 'function') {
+    log('warn', 'workspace.attach_unsupported', { count: todo.length })
+    return { attached: 0, failed: todo.length }
   }
+  try {
+    await registry.indexHeaders(stale)
+  } catch (error) {
+    log('warn', 'workspace.reindex_failed', { error: (error as Error)?.name ?? 'Error' })
+  }
+  /** 登记原始记录里记着 id 的别的工作区。 */
+  const recordedIn = (id: string) => workspaces.filter((w) => w !== ws && w.id !== undefined && (table.get(w.id)?.sessionIds ?? []).includes(id))
   const failedIds = new Set<string>()
-  const attach = async (id: string) => {
+  for (const id of todo) {
+    for (const w of recordedIn(id)) {
+      try {
+        if (!w.detachSession) throw new Error('detachSession unavailable')
+        await w.detachSession(id)
+      } catch (error) {
+        failedIds.add(id)
+        log('warn', 'workspace.detach_failed', { error: (error as Error)?.name ?? 'Error' })
+      }
+    }
+    if (failedIds.has(id)) continue // 还记在别处：不挂，免得同一编号记成两处
     try {
       await ws.attachSession(id)
-      failedIds.delete(id)
     } catch (error) {
       failedIds.add(id)
       // 只记错误名，不记路径和编号
       log('warn', 'workspace.attach_failed', { error: (error as Error)?.name ?? 'Error' })
     }
   }
-  for (const id of todo) {
-    for (const w of recordedIn(id)) {
-      try {
-        await w.detachSession?.(id)
-      } catch (error) {
-        log('warn', 'workspace.detach_failed', { error: (error as Error)?.name ?? 'Error' })
-      }
-    }
-  }
-  for (const id of todo) await attach(id)
-  // DSH 的 attachSession 在登记记录里已有这个编号时不重读记录头，写入时又把路径索引里没有的编号剪掉：
-  // 名单缓存丢了以后启动的那种情况（记录里还有、索引里没有），第一个挂的会被剪掉。没挂上的再挂一次（这次会重读记录头）。
-  for (const id of todo) if (!failedIds.has(id) && !ws.sessionIds.includes(id)) await attach(id)
   const attached = todo.filter((id) => ws.sessionIds.includes(id)).length
-  const failed = failedIds.size
+  const failed = todo.length - attached
   if (attached || failed) log('info', 'workspace.case_sessions_attached', { attached, failed })
   return { attached, failed }
 }

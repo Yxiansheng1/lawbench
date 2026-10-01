@@ -169,6 +169,14 @@ describe('案件根名单缓存', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
+  it('第四轮 B-F6：服务返回空列表（一个案件也没有）时保留旧名单', () => {
+    const r = new CaseRoots()
+    r.replace([{ root: A, exists: true }])
+    expect(r.replace([])).toBe(false)
+    expect(r.list()).toEqual([A])
+    expect(r.has('d:/案件/张三诉李四/')).toBe(true)
+  })
+
   it('B-F1：盘拔了（exists 为假）从名单去掉，插回来（exists 为真）加回', () => {
     const r = new CaseRoots()
     r.replace([{ root: A, exists: true }, { root: B, exists: true }])
@@ -263,6 +271,40 @@ describe('第三轮复核返修：路由', () => {
     again.backendOf(A_STORE).sessions = new Map(m2)
     m2.clear()
     expect((await again.router.stat('s2'))?.header.cwd).toBe(A)
+  })
+
+  it('第四轮 A-P2-2（复核员 A 的 X3）：名单换掉后编号表里指向旧根的条目作废：刷新前列过一次、刷新后直接续写，落新实例', async () => {
+    const OLD = 'D:\\桌面\\案丙'; const NEW = 'D:\\案件盘\\案丙'
+    const { router, backendOf, caseRoots } = fakeRouter([OLD])
+    ;(router as unknown as { all(): unknown }).all()
+    backendOf(join(OLD, '工作区', '会话')).sessions.set('s1', H('s1', OLD)) // 复制：两处都有
+    expect((await router.list()).map((r) => r.header.cwd)).toEqual([OLD]) // 缓存还是旧位置时列过一次
+    expect(router.ownerOf('s1')).toBe(OLD)
+    caseRoots.replace([{ root: NEW, exists: true }]) // 服务刷新：只列新位置
+    ;(router as unknown as { all(): unknown }).all()
+    backendOf(join(NEW, '工作区', '会话')).sessions.set('s1', H('s1', OLD))
+    expect(router.ownerOf('s1')).toBeUndefined() // 投影缓存也不再往旧位置写
+    const h = await router.open('s1', 'write')
+    expect(h.header.cwd).toBe(NEW)
+    expect(router.ownerOf('s1')).toBe(NEW)
+    expect((await router.stat('s1'))?.header.cwd).toBe(NEW)
+  })
+
+  it('第四轮 B-F1：哪里都找不到时强制刷新一次名单再找（2 秒内只刷一次）', async () => {
+    const NEW = 'D:\\案件盘\\案丙'
+    let refreshes = 0
+    const { router } = fakeRouter([], { refresh: (r) => { refreshes++; r.replace([{ root: NEW, exists: true }]) } })
+    // 名单刷新后才有新位置：实例在 all() 时建出，记录放在建出后的新位置实例上
+    const origAll = (router as unknown as { all(): Array<{ backend: FakeBackend; caseRoot: string | null }> }).all.bind(router)
+    ;(router as unknown as { all(): unknown }).all = () => {
+      const stores = origAll()
+      for (const st of stores) if (st.caseRoot === NEW) st.backend.sessions.set('s1', H('s1', NEW))
+      return stores
+    }
+    expect((await router.stat('s1'))?.header.cwd).toBe(NEW)
+    expect(refreshes).toBe(1)
+    expect(await router.stat('nope')).toBeUndefined()
+    expect(refreshes).toBe(1) // 2 秒内不再刷
   })
 
   it('A-P3-3：默认根里已有的旧会话只读，续写拒绝并给同一句中文说明（开关打开时照常）', async () => {
@@ -440,6 +482,23 @@ describe('接原版 JSONL 包：记录进案件文件夹；案件搬家后能列
       await w.close()
     } finally { await s.dispose() }
   })
+
+  it('第四轮 B-F4：名单为空、服务一直没起来：只有第一次列表等满上限，之后不再等', async () => {
+    const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions')
+    const ctx = new cordis.Context()
+    ctx.provide('lawbenchCore', { endpoint: () => undefined, onState: () => () => {} }) // 服务一直没起来
+    const fiber = await ctx.plugin({ name: storeName, apply: applyStore }, { backend: Jsonl, defaultRoot: home, appData, compression: 'none' })
+    const p = ctx.sessionPersistence as Backend
+    try {
+      const times: number[] = []
+      for (let i = 0; i < 3; i++) { const t0 = Date.now(); await p.list(); times.push(Date.now() - t0) }
+      expect(times[0]).toBeGreaterThanOrEqual(2900)
+      expect(Math.max(times[1], times[2])).toBeLessThan(500)
+      const t0 = Date.now()
+      await expect(p.create(meta('x', join(tmp, '案件')) as never)).rejects.toThrow(NOT_READY)
+      expect(Date.now() - t0).toBeLessThan(500)
+    } finally { await fiber.dispose() }
+  }, 30000)
 
   it('某个案件根读不出来（路径被占成文件）：列表只跳过它，其余照常', async () => {
     const appData = join(tmp, 'appdata'); const home = join(tmp, 'dsh-home', 'sessions')

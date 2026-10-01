@@ -70,19 +70,25 @@ async function refreshFromService(core: LawbenchCore | undefined, roots: CaseRoo
   }
 }
 
-/** 第一次刷新成功的标记与有上限的等待（第三轮复核 B-F4）。 */
+/**
+ * 第一次刷新成功的标记与有上限的等待（第三轮复核 B-F4）。只等一次：等满一次还没刷新成功（服务一直起不来），
+ * 之后的列表、新建都不再等（第四轮复核 B-F4），同时等的几处共用这一次。
+ */
 function firstRefreshGate(limitMs: number) {
   let done = false
   let open!: () => void
   const opened = new Promise<void>((resolve) => { open = resolve })
+  let waiting: Promise<void> | undefined
   return {
     done: () => done,
     mark: () => { if (!done) { done = true; open() } },
     wait: async (): Promise<boolean> => {
       if (done) return true
-      let timer: ReturnType<typeof setTimeout> | undefined
-      await Promise.race([opened, new Promise<void>((resolve) => { timer = setTimeout(resolve, limitMs) })])
-      clearTimeout(timer)
+      waiting ??= new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, limitMs)
+        void opened.then(() => { clearTimeout(timer); resolve() })
+      })
+      await waiting
       return done
     },
   }
@@ -111,6 +117,14 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
       .finally(() => { lastAt = Date.now(); inFlight = undefined })
     return inFlight
   }
+  /**
+   * 立刻按服务刷新一次名单并等它回来（上限 3 秒，见 refreshFromService）。律师打开案件（caseOpen）之后服务才只列新位置，
+   * Host 在 caseOpen 成功后、挂回游离会话之前调它（第四轮复核 B-F1）。正在途中的那次可能是打开之前发出的，等它完再问一次。
+   */
+  const refreshNow = async (): Promise<void> => {
+    if (inFlight) await inFlight.catch(() => undefined)
+    await refresh(true)
+  }
   const router = new SessionRouter(
     (root) => new Jsonl(ctx.isolate('sessionPersistence'), { root, ...(config.compression ? { compression: config.compression } : {}) }),
     roots,
@@ -124,6 +138,8 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     flush() { return router.flush() }
     stat(id: string, options?: never) { return router.stat(id, options) }
     list(options?: never) { return router.list(options) }
+    /** 我方加的（不在 DSH 的接口里）：Host 打开案件后调，见 refreshNow。 */
+    refreshCaseRoots() { return refreshNow() }
   }
   new LawbenchSessionPersistence(ctx)
   log('info', 'session_store.started', { case_roots: roots.list().length, allow_outside_case: config.allowOutsideCase ?? false })

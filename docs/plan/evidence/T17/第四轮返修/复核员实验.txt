@@ -1,0 +1,119 @@
+# 复核员 B 第四轮实验 zz-rvb21.spec.ts（原样，放进 dsh-ext\tests 跑完即删）
+
+结果：Tests  12 passed (12)
+
+X1 刚刷新过（5 秒节流内） boot members old ["s1"]
+X1 刚刷新过（5 秒节流内） first attach {"attached":0,"failed":0} new [] old ["s1"]
+X1 刚刷新过（5 秒节流内） list right after ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-NxFRr2\\桌面\\案丙"]
+X1 刚刷新过（5 秒节流内） list later ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-NxFRr2\\桌面\\案丙"] ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-NxFRr2\\案件盘\\案丙"]
+X1 刚刷新过（5 秒节流内） after refresh, before reopen: new [] old ["s1"]
+X1 刚刷新过（5 秒节流内） second open attach {"attached":1,"failed":0} new ["s1"] old []
+X1 距上次刷新超过 5 秒 boot members old ["s1"]
+X1 距上次刷新超过 5 秒 first attach {"attached":0,"failed":0} new [] old ["s1"]
+X1 距上次刷新超过 5 秒 list right after ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-wzSGNL\\案件盘\\案丙"]
+X1 距上次刷新超过 5 秒 list later ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-wzSGNL\\案件盘\\案丙"] ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-wzSGNL\\案件盘\\案丙"]
+X1 距上次刷新超过 5 秒 after refresh, before reopen: new [] old ["s1"]
+X1 距上次刷新超过 5 秒 second open attach {"attached":1,"failed":0} new ["s1"] old []
+X1b roots after boot []
+X1b first attach {"attached":0,"failed":0} new []
+X1b listed later ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-QEvQ37\\b\\案甲"] new members []
+X1b second attach {"attached":1,"failed":0} new ["s1"]
+X2 detach 抛错 boot raw old ["s1"] members old []
+X2 detach 抛错 W4 boot raw old ["s1"] members old ["s1"]
+X2 detach 抛错 attach {"attached":0,"failed":1} logs ["workspace.detach_failed","workspace.case_sessions_attached"] raw new [] raw old ["s1"]
+X2 detach 抛错 reboot members [] []
+X2 detach 抛错 reboot ok
+X2 私有字段 table 不在、indexHeaders 在 boot raw old ["s1"] members old []
+X2 私有字段 table 不在、indexHeaders 在 W4 boot raw old ["s1"] members old ["s1"]
+X2 私有字段 table 不在、indexHeaders 在 attach {"attached":0,"failed":1} logs ["workspace.attach_unsupported"] raw new [] raw old ["s1"]
+X2 私有字段 table 不在、indexHeaders 在 reboot members [] []
+X2 私有字段 table 不在、indexHeaders 在 reboot ok
+X3 roots after empty refresh ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-PbUpyF\\案乙"] list ["s1","s2"]
+X3 boot raw ["s1","s2"] members ["s1","s2"]
+X3 first attach {"attached":0,"failed":0}
+X3 after new session raw ["s1","s2","s3"] members ["s1","s2","s3"]
+X3 reopen attach {"attached":0,"failed":0} members ["s1","s2","s3"]
+X4 rows ["cp1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-shnvdT\\案件盘\\民事","u1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-shnvdT\\U盘\\刑事"] handle cwd <tmp>\案件盘\民事
+X4 old unchanged true new store files 1
+X4 unplug list ["cp1"]
+X4 replug list ["cp1","u1"]
+X4 refresh 500 roots 2 list ["cp1","u1"]
+X4 refresh notok roots 2 list ["cp1","u1"]
+X4 hang list ms 7 ids ["cp1","u1"] roots after timeout 2
+X5 list ms [3011,0,0] create NOT_READY create ms 1
+X5 open old SessionPersistenceNotFoundError
+X6 list 3009 ["g1"] stat 3009 undefined open 3002 SessionPersistenceNotFoundError flush 5009 still pending at 5s  logs [["session_store.case_root_skipped",{"index":2,"code":"ETIMEDOUT"}],["session_store.duplicate_id",{"index":1}],["session_store.case_root_skipped",{"index":2,"code":"ETIMEDOUT"}],["session_store.case_root_skipped",{"index":2,"code":"ETIMEDOUT"}]]
+X7 open-before-list cwd <tmp>\b\案
+X7 open-before-list ok roots ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-MsLjz4\\b\\案"]
+X7 open-after-list cwd <tmp>\b\案
+X7 open-after-list ok
+X7 N46 write OUTSIDE_CASE read ok
+X8 copy cwd <tmp>\案件盘\民事 title {"title":"RVB21-SIG-LW7AVSZ4"}
+X8 corrupt ok title null
+X8 missing ok title null
+X8 SIG dsh-home [] appData [] Temp [] oldCase ["\\桌面\\民事\\工作区\\会话缓存\\s1.json","\\桌面\\民事\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb21-RMAbew-~684C~9762-~6C11~4E8B--\\s1\\session.v4.jsonl"] all ["\\桌面\\民事\\工作区\\会话缓存\\s1.json","\\案件盘\\民事\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb21-RMAbew-~684C~9762-~6C11~4E8B--\\s1\\session.v4.jsonl","\\桌面\\民事\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb21-RMAbew-~684C~9762-~6C11~4E8B--\\s1\\session.v4.jsonl"]
+X8 SIG system TEMP top-level files 0
+X9 concurrent attach [{"attached":0,"failed":0},{"attached":0,"failed":0},{"attached":0,"failed":0}] raw ["a0","a1","a2","a3","a4"]
+X9 concurrent list during refresh [5,5,5,5] hits 2
+X9 reboot ok
+
+
+# 同一文件只改一处：attachCaseSessions 的第二个参数由只带 list 的包装改为会话存储本身（7 处），与 Host 实际传的一致
+
+结果：Tests  12 passed (12)
+
+X1 刚刷新过（5 秒节流内） boot members old ["s1"]
+X1 刚刷新过（5 秒节流内） first attach {"attached":1,"failed":0} new ["s1"] old []
+X1 刚刷新过（5 秒节流内） list right after ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-26a9Rk\\案件盘\\案丙"]
+X1 刚刷新过（5 秒节流内） list later ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-26a9Rk\\案件盘\\案丙"] ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-26a9Rk\\案件盘\\案丙"]
+X1 刚刷新过（5 秒节流内） after refresh, before reopen: new ["s1"] old []
+X1 刚刷新过（5 秒节流内） second open attach {"attached":0,"failed":0} new ["s1"] old []
+X1 距上次刷新超过 5 秒 boot members old ["s1"]
+X1 距上次刷新超过 5 秒 first attach {"attached":1,"failed":0} new ["s1"] old []
+X1 距上次刷新超过 5 秒 list right after ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-j3zsvo\\案件盘\\案丙"]
+X1 距上次刷新超过 5 秒 list later ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-j3zsvo\\案件盘\\案丙"] ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-j3zsvo\\案件盘\\案丙"]
+X1 距上次刷新超过 5 秒 after refresh, before reopen: new ["s1"] old []
+X1 距上次刷新超过 5 秒 second open attach {"attached":0,"failed":0} new ["s1"] old []
+X1b roots after boot []
+X1b first attach {"attached":1,"failed":0} new ["s1"]
+X1b listed later ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-y8CdFv\\b\\案甲"] new members ["s1"]
+X1b second attach {"attached":0,"failed":0} new ["s1"]
+X2 detach 抛错 boot raw old ["s1"] members old []
+X2 detach 抛错 W4 boot raw old ["s1"] members old ["s1"]
+X2 detach 抛错 attach {"attached":0,"failed":1} logs ["workspace.detach_failed","workspace.case_sessions_attached"] raw new [] raw old ["s1"]
+X2 detach 抛错 reboot members [] []
+X2 detach 抛错 reboot ok
+X2 私有字段 table 不在、indexHeaders 在 boot raw old ["s1"] members old []
+X2 私有字段 table 不在、indexHeaders 在 W4 boot raw old ["s1"] members old ["s1"]
+X2 私有字段 table 不在、indexHeaders 在 attach {"attached":0,"failed":1} logs ["workspace.attach_unsupported"] raw new [] raw old ["s1"]
+X2 私有字段 table 不在、indexHeaders 在 reboot members [] []
+X2 私有字段 table 不在、indexHeaders 在 reboot ok
+X3 roots after empty refresh ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-L86vIx\\案乙"] list ["s1","s2"]
+X3 boot raw ["s1","s2"] members ["s1","s2"]
+X3 first attach {"attached":0,"failed":0}
+X3 after new session raw ["s1","s2","s3"] members ["s1","s2","s3"]
+X3 reopen attach {"attached":0,"failed":0} members ["s1","s2","s3"]
+X4 rows ["cp1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-YH56sL\\案件盘\\民事","u1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-YH56sL\\U盘\\刑事"] handle cwd <tmp>\案件盘\民事
+X4 old unchanged true new store files 1
+X4 unplug list ["cp1"]
+X4 replug list ["cp1","u1"]
+X4 refresh 500 roots 2 list ["cp1","u1"]
+X4 refresh notok roots 2 list ["cp1","u1"]
+X4 hang list ms 6 ids ["cp1","u1"] roots after timeout 2
+X5 list ms [3008,0,1] create NOT_READY create ms 0
+X5 open old SessionPersistenceNotFoundError
+X6 list 3007 ["g1"] stat 3005 undefined open 3005 SessionPersistenceNotFoundError flush 5004 still pending at 5s  logs [["session_store.case_root_skipped",{"index":2,"code":"ETIMEDOUT"}],["session_store.duplicate_id",{"index":1}],["session_store.case_root_skipped",{"index":2,"code":"ETIMEDOUT"}],["session_store.case_root_skipped",{"index":2,"code":"ETIMEDOUT"}]]
+X7 open-before-list cwd <tmp>\b\案
+X7 open-before-list ok roots ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb21-79J55C\\b\\案"]
+X7 open-after-list cwd <tmp>\b\案
+X7 open-after-list ok
+X7 N46 write OUTSIDE_CASE read ok
+X8 copy cwd <tmp>\案件盘\民事 title {"title":"RVB21-SIG-G8HTGYFG"}
+X8 corrupt ok title null
+X8 missing ok title null
+X8 SIG dsh-home [] appData [] Temp [] oldCase ["\\桌面\\民事\\工作区\\会话缓存\\s1.json","\\桌面\\民事\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb21-1LKHyH-~684C~9762-~6C11~4E8B--\\s1\\session.v4.jsonl"] all ["\\桌面\\民事\\工作区\\会话缓存\\s1.json","\\案件盘\\民事\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb21-1LKHyH-~684C~9762-~6C11~4E8B--\\s1\\session.v4.jsonl","\\桌面\\民事\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb21-1LKHyH-~684C~9762-~6C11~4E8B--\\s1\\session.v4.jsonl"]
+X8 SIG system TEMP top-level files 0
+X9 concurrent attach [{"attached":0,"failed":0},{"attached":0,"failed":0},{"attached":0,"failed":0}] raw ["a0","a1","a2","a3","a4"]
+X9 concurrent list during refresh [5,5,5,5] hits 4
+X9 reboot ok
+

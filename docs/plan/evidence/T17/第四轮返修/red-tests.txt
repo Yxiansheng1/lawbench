@@ -1,0 +1,87 @@
+# T17 第三步最后一轮返修 变异（撤回单处修法）
+
+## B-F1：caseOpen 成功后不刷新名单
+文件：dsh-ext/host/index.ts；跑：tests/case-open.spec.ts
+结果：2 failed | 6 passed (8)
+- X10 复制后在新位置 caseOpen、还没挂回就续写：句柄 cwd 是新位置，续写落新文件夹，旧文件夹字节不变
+- caseOpen 成功后请会话存储刷新名单、等它回来；失败时不刷新
+- tests/case-open.spec.ts > Host 包装（第四轮复核 A-P3-3） > caseOpen 成功后请会话存储刷新名单、等它回来；失败时不刷新
+- tests/case-open.spec.ts > X10 复制后在新位置 caseOpen、还没挂回就续写：句柄 cwd 是新位置，续写落新文件夹，旧文件夹字节不变
+
+## B-F1：挂回之前不刷新名单
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/case-open.spec.ts
+结果：1 failed | 7 passed (8)
+- X1c 不经 caseOpen 直接打开工作区（首页点当前案件那条路）：挂回前先刷新名单，照样挂上
+- tests/case-open.spec.ts > X1c 不经 caseOpen 直接打开工作区（首页点当前案件那条路）：挂回前先刷新名单，照样挂上
+
+## B-F1：会话存储不提供 refreshCaseRoots
+文件：dsh-ext/session-store/index.ts；跑：tests/case-open.spec.ts
+结果：5 failed | 3 passed (8)
+- X1 复制后第一次在新位置打开（刚刷新过（5 秒节流内））：caseOpen → 挂回就挂上，续写落新文件夹，旧文件夹字节不变，重启正常
+- X1 复制后第一次在新位置打开（距上次刷新超过 5 秒）：caseOpen → 挂回就挂上，续写落新文件夹，旧文件夹字节不变，重启正常
+- X10 复制后在新位置 caseOpen、还没挂回就续写：句柄 cwd 是新位置，续写落新文件夹，旧文件夹字节不变
+- X1b 纯搬家后第一次在新位置打开：caseOpen → 挂回就挂上（不进"未分组"）
+- X1c 不经 caseOpen 直接打开工作区（首页点当前案件那条路）：挂回前先刷新名单，照样挂上
+- tests/case-open.spec.ts > X1 复制后第一次在新位置打开（刚刷新过（5 秒节流内））：caseOpen → 挂回就挂上，续写落新文件夹，旧文件夹字节不变，重启正常
+- tests/case-open.spec.ts > X1 复制后第一次在新位置打开（距上次刷新超过 5 秒）：caseOpen → 挂回就挂上，续写落新文件夹，旧文件夹字节不变，重启正常
+- tests/case-open.spec.ts > X10 复制后在新位置 caseOpen、还没挂回就续写：句柄 cwd 是新位置，续写落新文件夹，旧文件夹字节不变
+- tests/case-open.spec.ts > X1b 纯搬家后第一次在新位置打开：caseOpen → 挂回就挂上（不进"未分组"）
+- tests/case-open.spec.ts > X1c 不经 caseOpen 直接打开工作区（首页点当前案件那条路）：挂回前先刷新名单，照样挂上
+
+## B-F1 / B-F3：哪里都找不到时不强制刷新再找（open、stat 四处）
+文件：dsh-ext/session-store/router.ts；跑：tests/case-open.spec.ts、tests/session-store.spec.ts
+结果：2 failed | 92 passed (94)
+- X7 同一进程里案件整个搬走、先打开后列表：找不到时强制刷新名单再找，打开成功、cwd 是新位置
+- tests/case-open.spec.ts > X7 同一进程里案件整个搬走、先打开后列表：找不到时强制刷新名单再找，打开成功、cwd 是新位置
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > 第四轮 B-F1：哪里都找不到时强制刷新一次名单再找（2 秒内只刷一次）
+- 第四轮 B-F1：哪里都找不到时强制刷新一次名单再找（2 秒内只刷一次）
+
+## A-P2-2：编号表里指向旧根的条目不作废
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts、tests/case-open.spec.ts
+结果：2 failed | 92 passed (94)
+- X10 复制后在新位置 caseOpen、还没挂回就续写：句柄 cwd 是新位置，续写落新文件夹，旧文件夹字节不变
+- tests/case-open.spec.ts > X10 复制后在新位置 caseOpen、还没挂回就续写：句柄 cwd 是新位置，续写落新文件夹，旧文件夹字节不变
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > 第四轮 A-P2-2（复核员 A 的 X3）：名单换掉后编号表里指向旧根的条目作废：刷新前列过一次、刷新后直接续写，落新实例
+- 第四轮 A-P2-2（复核员 A 的 X3）：名单换掉后编号表里指向旧根的条目作废：刷新前列过一次、刷新后直接续写，落新实例
+
+## A-P2-2：ownerOf 不看名单（投影缓存仍往旧位置写）
+文件：dsh-ext/session-store/router.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 85 passed (86)
+- tests/session-store.spec.ts > 第三轮复核返修：路由 > 第四轮 A-P2-2（复核员 A 的 X3）：名单换掉后编号表里指向旧根的条目作废：刷新前列过一次、刷新后直接续写，落新实例
+- 第四轮 A-P2-2（复核员 A 的 X3）：名单换掉后编号表里指向旧根的条目作废：刷新前列过一次、刷新后直接续写，落新实例
+
+## A-P2-1 = B-F2：去掉失败照样挂
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 9 passed (10)
+- W6 从旧工作区去掉时出错（写盘失败）：这个会话不挂、计为失败；登记不写成两处，重启正常（第四轮复核 A-P2-1 = B-F2）
+- tests/workspace-attach.spec.ts > W6 从旧工作区去掉时出错（写盘失败）：这个会话不挂、计为失败；登记不写成两处，重启正常（第四轮复核 A-P2-1 = B-F2）
+
+## A-P2-1 = B-F2：私有字段 table 不在时照样挂
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 9 passed (10)
+- W2b 登记的私有写法不全（有 indexHeaders、没有 table）：复制后打开新位置一个也不挂、计为失败、记日志；重启正常、旧工作区照旧
+- tests/workspace-attach.spec.ts > W2b 登记的私有写法不全（有 indexHeaders、没有 table）：复制后打开新位置一个也不挂、计为失败、记日志；重启正常、旧工作区照旧
+
+## A-P2-1 = B-F2：私有方法 indexHeaders 不在时照样挂
+文件：dsh-ext/host/attach-sessions.ts；跑：tests/workspace-attach.spec.ts
+结果：1 failed | 9 passed (10)
+- W2b 登记的私有写法不全（有 table、没有 indexHeaders）：复制后打开新位置一个也不挂、计为失败、记日志；重启正常、旧工作区照旧
+- tests/workspace-attach.spec.ts > W2b 登记的私有写法不全（有 table、没有 indexHeaders）：复制后打开新位置一个也不挂、计为失败、记日志；重启正常、旧工作区照旧
+
+## B-F4：每次都等满首刷上限
+文件：dsh-ext/session-store/index.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 85 passed (86)
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > 第四轮 B-F4：名单为空、服务一直没起来：只有第一次列表等满上限，之后不再等
+- 第四轮 B-F4：名单为空、服务一直没起来：只有第一次列表等满上限，之后不再等
+
+## B-F6：服务返回空列表时名单清空
+文件：dsh-ext/session-store/case-roots.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 85 passed (86)
+- tests/session-store.spec.ts > 案件根名单缓存 > 第四轮 B-F6：服务返回空列表（一个案件也没有）时保留旧名单
+- 第四轮 B-F6：服务返回空列表（一个案件也没有）时保留旧名单
+
+## A-P3-3：Host 包装参数不对也照做
+文件：dsh-ext/host/index.ts；跑：tests/case-open.spec.ts
+结果：1 failed | 7 passed (8)
+- attachCaseSessions：参数不对 → INVALID_ARGUMENT；DSH 的两个服务不在 → 挂回 0 个
+- tests/case-open.spec.ts > Host 包装（第四轮复核 A-P3-3） > attachCaseSessions：参数不对 → INVALID_ARGUMENT；DSH 的两个服务不在 → 挂回 0 个

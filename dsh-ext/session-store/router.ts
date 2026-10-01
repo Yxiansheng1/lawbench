@@ -2,7 +2,8 @@
 // 对外是 DSH 的 sessionPersistence 服务（create / open / flush / stat / list）；内部按根各起一个原版 JSONL 实例：
 // 默认根（$DSH_HOME\sessions，不在案件里的会话）一个，每个已登记案件 <案件>\工作区\会话 一个。
 // - 新建：按 cwd 选实例（cwd 在哪个案件根里就进哪个；都不在的按开关放默认根或拒绝）。
-// - 打开、stat：按"编号 → 实例"表；表里没有的、或表里那个实例说没有（同一进程里案件搬了家）的，逐个实例找。
+// - 打开、stat：按"编号 → 实例"表；表里没有的、表里那个实例说没有（同一进程里案件搬了家）的、或表里那个实例的
+//   案件根已不在名单上的（名单刷新后，第四轮复核 A-P2-2），逐个实例找；哪里都没有时强制刷新一次名单再找（B-F1 第一次打开）。
 // - 列表：合并各实例；某个案件根读不出来（盘拔了、路径不在、没权限）或 3 秒没回应（网络盘挂住）只跳过它、
 //   记一条元数据日志，不连累整体。
 // - 不在案件里的旧会话（默认根）：N46 ② 下只读，续写拒绝（第三轮裁决 A-P3-3）。
@@ -69,6 +70,7 @@ export class SessionRouter {
   private readonly stores = new Map<string, Store>()
   private readonly owner = new Map<string, Store>()
   private readonly defaultStore: Store
+  private lastMissRefresh = 0
 
   constructor(private readonly make: (root: string) => Backend, private readonly roots: CaseRoots, private readonly opts: RouterOptions) {
     this.defaultStore = { root: opts.defaultRoot, caseRoot: null, backend: make(opts.defaultRoot), index: 0 }
@@ -155,10 +157,27 @@ export class SessionRouter {
     return this.handle(s, h)
   }
 
+  /** 实例还在当前名单上（默认根总在）。名单换掉后，表里指向旧根的条目当作没有。 */
+  private current(s: Store): boolean {
+    return !s.caseRoot || this.roots.has(s.caseRoot)
+  }
+
+  /**
+   * 哪里都找不到时强制刷新一次名单（刚复制、搬家的案件在律师打开之后服务才只列新位置）。
+   * 2 秒内只刷一次：DSH 对不存在的编号也会 stat，不能每次都问服务。
+   * @returns 是否刷新过（刷新过才值得再找一遍）。
+   */
+  private async refreshOnMiss(): Promise<boolean> {
+    if (!this.opts.refresh || Date.now() - this.lastMissRefresh < 2000) return false
+    this.lastMissRefresh = Date.now()
+    await this.opts.refresh(true).catch(() => undefined)
+    return true
+  }
+
   /** 会话在哪个实例：先查表，再逐个实例 stat。miss 是表里记的、已知没有这个会话的实例，跳过它。 */
   private async locate(id: string, options?: Opts, miss?: Store): Promise<Store | undefined> {
     const known = this.owner.get(id)
-    if (known && known !== miss) return known
+    if (known && known !== miss && this.current(known)) return known
     if (known) this.owner.delete(id)
     for (const s of this.all()) {
       if (s === miss) continue
@@ -180,6 +199,7 @@ export class SessionRouter {
   async open(id: string, access: 'read' | 'write', options?: Opts): Promise<Handle> {
     const known = this.owner.has(id)
     let s = await this.locate(id, options)
+    if (!s && await this.refreshOnMiss()) s = await this.locate(id, options)
     // 哪里都没有：交给默认实例，由它按原样报"不存在"
     if (!s) return this.defaultStore.backend.open(id, access, options)
     this.checkAccess(s, access)
@@ -188,7 +208,9 @@ export class SessionRouter {
     } catch (error) {
       // 表里记的实例说没有（同一进程里案件搬了家，第三轮复核 B-F6）：去掉这条，换别的实例找
       if (!known || !isNotFound(error)) throw error
-      s = await this.locate(id, options, s)
+      const was = s
+      s = await this.locate(id, options, was)
+      if (!s && await this.refreshOnMiss()) s = await this.locate(id, options, was)
       if (!s) throw error
       this.checkAccess(s, access)
       return this.handle(s, await s.backend.open(id, access, options))
@@ -198,11 +220,14 @@ export class SessionRouter {
   async stat(id: string, options?: Opts): Promise<Snapshot | undefined> {
     const known = this.owner.has(id)
     let s = await this.locate(id, options)
+    if (!s && await this.refreshOnMiss()) s = await this.locate(id, options)
     if (!s) return undefined
     let snap = await this.bounded(s, s.backend.stat(id, options))
     if (!snap && known) {
       // 同上：表里记的实例说没有，换别的实例找
-      s = await this.locate(id, options, s)
+      const was = s
+      s = await this.locate(id, options, was)
+      if (!s && await this.refreshOnMiss()) s = await this.locate(id, options, was)
       if (!s) return undefined
       snap = await this.bounded(s, s.backend.stat(id, options))
     }
@@ -249,8 +274,11 @@ export class SessionRouter {
     if (errors.length) throw new AggregateError(errors, 'lawbench session store flush failed')
   }
 
-  /** 某会话此刻归哪个案件根（默认根为 null，不知道为 undefined）；投影缓存按它决定落盘位置。 */
-  ownerOf(id: string): string | null | undefined { return this.owner.get(id)?.caseRoot }
+  /** 某会话此刻归哪个案件根（默认根为 null，不知道或表里的根已不在名单上为 undefined）；投影缓存按它决定落盘位置。 */
+  ownerOf(id: string): string | null | undefined {
+    const s = this.owner.get(id)
+    return s && this.current(s) ? s.caseRoot : undefined
+  }
 }
 
 export { inside }

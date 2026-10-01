@@ -50,6 +50,8 @@ async function boot(pool: unknown, router: SessionRouter, live: Map<string, { he
 }
 const H = (id: string, cwd: string): Header => ({ id, version: 3, createdAt: 1, isSeeded: false, cwd })
 const members = (reg: any, path: string): string[] => [...(reg.list().find((w: any) => w.path === path)?.sessionIds ?? [])].sort()
+/** 登记的原始记录（未经路径索引过滤）。 */
+const raw = (reg: any, path: string): string[] => { const w = reg.list().find((x: any) => x.path === path); return w ? [...reg.table.get(w.id).sessionIds].sort() : ['<no ws>'] }
 const newRouter = (roots: CaseRoots, tmp: string) => new SessionRouter((r) => new DiskBackend(r), roots, { defaultRoot: join(tmp, 'home'), allowOutsideCase: false })
 
 let tmp: string
@@ -88,7 +90,7 @@ it('W1 搬家（改名）后在新位置打开案件：旧会话挂回新案件�
   await b.dispose()
 })
 
-for (const [label, plain] of [['', false], ['（登记没有私有方法时：退回到没挂上的再挂一次）', true]] as const) it(`W2 名单缓存丢了、服务没起时启动，之后在该案件新建会话：打开案件时旧会话挂回，再重启仍在${label}`, async () => {
+it('W2 名单缓存丢了、服务没起时启动，之后在该案件新建会话：打开案件时旧会话挂回，再重启仍在', async () => {
   const C = join(tmp, '案乙'); mkdirSync(C, { recursive: true })
   const pool = new MemoryMediaPool()
   let roots = new CaseRoots(); roots.replace([{ root: C, exists: true }])
@@ -104,8 +106,7 @@ for (const [label, plain] of [['', false], ['（登记没有私有方法时：�
   b = await boot(pool, router, live)
   roots.replace([{ root: C, exists: true }]) // 服务起来后刷新
   await b.reg.create(C) // 打开案件（界面在这之后请 Host 挂回）
-  const reg = plain ? { list: () => b.reg.list() } : b.reg // 只有公开的 list
-  expect(await attachCaseSessions(reg, b.persistence, C)).toEqual({ attached: 2, failed: 0 })
+  expect(await attachCaseSessions(b.reg, b.persistence, C)).toEqual({ attached: 2, failed: 0 })
   await router.create(H('s3', C)); live.set('s3', { header: H('s3', C) })
   await b.reg.list().find((x: any) => x.path === C).attachSession('s3')
   expect(members(b.reg, C)).toEqual(['s1', 's2', 's3'])
@@ -113,6 +114,38 @@ for (const [label, plain] of [['', false], ['（登记没有私有方法时：�
 
   b = await boot(pool, router, live)
   expect(members(b.reg, C)).toEqual(['s1', 's2', 's3'])
+  await b.dispose()
+})
+
+// 第四轮复核 A-P3-1、B 的 X2：私有写法（indexHeaders、table）任一不在时一个也不挂，登记不会写成两处
+for (const [label, view] of [
+  ['只有公开的 list', (r: any) => ({ list: () => r.list() })],
+  ['有 indexHeaders、没有 table', (r: any) => ({ list: () => r.list(), indexHeaders: (h: any) => r.indexHeaders(h) })],
+  ['有 table、没有 indexHeaders', (r: any) => ({ list: () => r.list(), table: r.table })],
+] as const) it(`W2b 登记的私有写法不全（${label}）：复制后打开新位置一个也不挂、计为失败、记日志；重启正常、旧工作区照旧`, async () => {
+  const oldR = join(tmp, '桌面', '案辛'); const newR = join(tmp, '案件盘', '案辛')
+  mkdirSync(oldR, { recursive: true })
+  const pool = new MemoryMediaPool()
+  const roots = new CaseRoots(); roots.replace([{ root: oldR, exists: true }])
+  const live = new Map<string, { header: Header }>()
+  let router = newRouter(roots, tmp)
+  let b = await boot(pool, router, live)
+  const w = await b.reg.create(oldR)
+  await router.create(H('s1', oldR)); live.set('s1', { header: H('s1', oldR) }); await w.attachSession('s1')
+  await b.dispose(); live.clear()
+
+  cpSync(oldR, newR, { recursive: true }); copyDisk(store(oldR), store(newR), true)
+  router = newRouter(roots, tmp) // 缓存仍是旧位置
+  b = await boot(pool, router, live)
+  roots.replace([{ root: newR, exists: true }])
+  await b.reg.create(newR)
+  const logs: string[] = []
+  expect(await attachCaseSessions(view(b.reg), b.persistence, newR, (_l, e) => { logs.push(e) })).toEqual({ attached: 0, failed: 1 })
+  expect(logs).toContain('workspace.attach_unsupported')
+  expect([raw(b.reg, newR), raw(b.reg, oldR)]).toEqual([[], ['s1']])
+  await b.dispose(); live.clear()
+  b = await boot(pool, router, live) // 起得来（没有同一编号记两处）
+  expect(raw(b.reg, oldR)).toEqual(['s1'])
   await b.dispose()
 })
 
@@ -211,6 +244,40 @@ it('W5 打开一个案件时，不在名单上的别的案件（盘拔了）的�
   roots.replace([{ root: C, exists: true }, { root: D, exists: true }]) // 插回来
   b = await boot(pool, newRouter(roots, tmp), live)
   expect([members(b.reg, C), members(b.reg, D)]).toEqual([['sc'], ['sd']])
+  await b.dispose()
+})
+
+it('W6 从旧工作区去掉时出错（写盘失败）：这个会话不挂、计为失败；登记不写成两处，重启正常（第四轮复核 A-P2-1 = B-F2）', async () => {
+  const oldR = join(tmp, '桌面', '案壬'); const newR = join(tmp, '案件盘', '案壬')
+  mkdirSync(oldR, { recursive: true })
+  const pool = new MemoryMediaPool()
+  const roots = new CaseRoots(); roots.replace([{ root: oldR, exists: true }])
+  const live = new Map<string, { header: Header }>()
+  let router = newRouter(roots, tmp)
+  let b = await boot(pool, router, live)
+  const w = await b.reg.create(oldR)
+  for (const id of ['s1', 's2']) { await router.create(H(id, oldR)); live.set(id, { header: H(id, oldR) }); await w.attachSession(id) }
+  await b.dispose(); live.clear()
+
+  cpSync(oldR, newR, { recursive: true }); copyDisk(store(oldR), store(newR), true)
+  router = newRouter(roots, tmp)
+  b = await boot(pool, router, live)
+  roots.replace([{ root: newR, exists: true }])
+  await b.reg.create(newR)
+  const oldWs = b.reg.list().find((x: any) => x.path === oldR)
+  const detach = oldWs.detachSession.bind(oldWs)
+  oldWs.detachSession = async (id: string) => { if (id === 's1') throw new Error('disk write failed'); await detach(id) }
+  const logs: string[] = []
+  expect(await attachCaseSessions(b.reg, b.persistence, newR, (_l, e) => { logs.push(e) })).toEqual({ attached: 1, failed: 1 })
+  expect(logs).toContain('workspace.detach_failed')
+  // s1 不在新工作区；去掉 s2 那次写旧记录时 DSH 把索引已不指向旧位置的 s1 也剪掉了，s1 暂时不在任何工作区（不是两处）
+  expect([raw(b.reg, newR), raw(b.reg, oldR)]).toEqual([['s2'], []])
+  await b.dispose(); live.clear()
+  b = await boot(pool, router, live)
+  expect(raw(b.reg, newR)).toEqual(['s2'])
+  // 再打开一次案件：s1 挂上
+  expect(await attachCaseSessions(b.reg, b.persistence, newR)).toEqual({ attached: 1, failed: 0 })
+  expect(raw(b.reg, newR)).toEqual(['s1', 's2'])
   await b.dispose()
 })
 
