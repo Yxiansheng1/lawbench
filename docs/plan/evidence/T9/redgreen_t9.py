@@ -82,7 +82,8 @@ rg.MUTATIONS = [
         ("    if col is None or col < 1:", "    if col is None:"),
     ], f"{R} -k escaped_pipe"),
     ("P3-3·归一化去掉控制字符", "search/normalize.py", [
-        ("                continue                           # 控制字符", "                pass"),
+        ("                continue                           # 控制字符、格式字符（零宽空格、BOM）",
+         "                pass                               # 控制字符、格式字符（零宽空格、BOM）"),
     ], f"{R} -k control_chars"),
     ("P3-3·FTS5 不接受的查询串转参数错误", "search/fts.py", [
         ('            raise ApiError("INVALID_ARGUMENT", "bad_query") from None', "            raise"),
@@ -91,7 +92,8 @@ rg.MUTATIONS = [
         ("    if len(keep) < len(out_c):", "    if False:"),
     ], f"{R} -k 'hanzi or hard_line_break'"),
     ("P3-4·完全匹配的判定也按同一规则（跨行命中算完全匹配）", "search/fts.py", [
-        ("    return normalize(s, thousands=False).lower()", '    return " ".join(s.split()).lower()'),
+        ('    return normalize(s.replace("\\\\|", "|"), thousands=False).lower().strip()',
+         '    return " ".join(s.split()).lower()'),
     ], f"{R} -k hard_line_break"),
     ("NOTE 4·短语里的双引号转义", "search/fts.py", [
         ("""    return '"' + q.replace('"', '""') + '"'""", """    return '"' + q + '"'"""),
@@ -100,6 +102,25 @@ rg.MUTATIONS = [
         ('            con.executescript((contracts._dir / "case_db.sql").read_text(encoding="utf-8"))',
          '            raise ApiError("INTERNAL", "search_tables_missing")'),
     ], f"{R} -k tables_recreated"),
+    # ---- T10 令附 T9 小项（执行令 20261001-1127） ----
+    ("小项·完全匹配判定去掉首尾空格", "search/fts.py", [
+        ('    return normalize(s.replace("\\\\|", "|"), thousands=False).lower().strip()',
+         '    return normalize(s.replace("\\\\|", "|"), thousands=False).lower()'),
+    ], f"{R} -k outer_spaces"),
+    ("小项·只有 FTS5 查询串错误才转参数错误", "search/fts.py", [
+        ("            if not any(s in str(e) for s in _QUERY_ERRORS):\n                raise\n", ""),
+    ], f"{R} -k storage_errors_not_reported"),
+    ("小项·单元格里的 \\| 建索引时还原成 |", "search/fts.py", [
+        ('    if unit != "cell" or "\\\\|" not in norm:', "    if True:"),
+    ], f"{R} -k escaped_pipe"),
+    ("小项·完全匹配判定也还原 \\|", "search/fts.py", [
+        ('    return normalize(s.replace("\\\\|", "|"), thousands=False).lower().strip()',
+         "    return normalize(s, thousands=False).lower().strip()"),
+    ], f"{R} -k escaped_pipe"),
+    ("小项·归一化去掉格式字符（Cf）", "search/normalize.py", [
+        ('            if unicodedata.category(c) in ("Cc", "Cf") and not c.isspace():',
+         '            if unicodedata.category(c) == "Cc" and not c.isspace():'),
+    ], f"{R} -k format_chars_dropped"),
 ]
 
 _run = rg.run

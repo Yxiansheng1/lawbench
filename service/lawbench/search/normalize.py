@@ -5,7 +5,8 @@ r"""检索用的归一化（Spec 第 11 节）：全角转半角、去掉数字�
 - 连续空白换成一个空格；两个汉字（或中文标点）之间的空白去掉——PDF、OCR 的材料文本常在句子中间硬换行，
   "下图\n为书桌位置" 要能用"下图为书桌位置"搜到（T9 返修 P3-4，主编排定的规则）。拉丁字母、数字之间的空白保留。
   是不是汉字、中文标点按原文的字判断（NFKC 会把全角逗号、冒号变成半角）；
-- 控制字符（NUL 之类，Unicode 类别 Cc 且不是空白）去掉（T9 返修 P3-3）。
+- 控制字符（NUL 之类，Unicode 类别 Cc 且不是空白）去掉（T9 返修 P3-3）；格式字符（类别 Cf：零宽空格、BOM 等）
+  也去掉（T10 令附 T9 小项）。
 
 normalize_with_map 另给出"归一化后第 i 个字来自原文第几个字"，命中片段从原文截取，律师看到的是原文。
 """
@@ -39,8 +40,8 @@ def normalize_with_map(s: str, thousands: bool = True) -> tuple[str, list[int]]:
     where: list[int] = []
     for i, ch in enumerate(s):
         for c in unicodedata.normalize("NFKC", ch):
-            if unicodedata.category(c) == "Cc" and not c.isspace():
-                continue                           # 控制字符
+            if unicodedata.category(c) in ("Cc", "Cf") and not c.isspace():
+                continue                           # 控制字符、格式字符（零宽空格、BOM）
             chars.append(c)
             where.append(i)
     # 统一空白：连续空白换成一个空格

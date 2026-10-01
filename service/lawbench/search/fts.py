@@ -45,6 +45,18 @@ _locks: dict[str, threading.Lock] = {}
 _state: dict[str, dict[str, tuple]] = {}
 # 单元格行里的列分隔：T5 把单元格内容里的 | 写成 \|（T9 返修 P3-1）
 _CELL_SEP = re.compile(r"(?<!\\)\|")
+# FTS5 不接受查询串时 sqlite 报的信息
+_QUERY_ERRORS = ("fts5:", "syntax error", "unterminated string")
+
+
+def _norm_map(text: str, unit: str) -> tuple[str, list[int]]:
+    """单元文本归一化。Excel 单元里的 \\| 还原成 |（反斜杠去掉，位置映射保留），搜"甲|乙"能命中单元格里的竖线。"""
+    norm, where = normalize_with_map(text)
+    if unit != "cell" or "\\|" not in norm:
+        return norm, where
+    drop = {k for k in range(len(norm) - 1) if norm[k] == "\\" and norm[k + 1] == "|"}
+    return ("".join(c for k, c in enumerate(norm) if k not in drop),
+            [w for k, w in enumerate(where) if k not in drop])
 
 
 def _lock(root: str) -> threading.Lock:
@@ -138,7 +150,7 @@ def _delete_material(con: sqlite3.Connection, mid: str) -> None:
 
 def _add_material(con: sqlite3.Connection, root: str, m: dict) -> None:
     for u in units_of(root, m):
-        norm = normalize_with_map(u["text"])[0]
+        norm = _norm_map(u["text"], u["unit"])[0]
         cur = con.execute(
             "INSERT INTO search_units (material_id, material_version, unit, loc_from, loc_to, sheet, is_ocr, text, "
             "text_norm) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -220,9 +232,10 @@ def _candidates(con: sqlite3.Connection, q: str) -> list[tuple]:
             return con.execute(f"SELECT {cols} FROM search_fts f JOIN search_units u ON u.rowid = f.rowid "
                                "WHERE search_fts MATCH ?", (_fts_phrase(q),)).fetchall()
         except sqlite3.OperationalError as e:
-            if "locked" in str(e) or "busy" in str(e):
+            # 只有 FTS5 不接受的查询串才算参数错误；锁、磁盘 I/O 等照常抛（T9 返修 P3-3，T10 令收窄）
+            if not any(s in str(e) for s in _QUERY_ERRORS):
                 raise
-            raise ApiError("INVALID_ARGUMENT", "bad_query") from None   # FTS5 不接受的查询串（T9 返修 P3-3）
+            raise ApiError("INVALID_ARGUMENT", "bad_query") from None
     return con.execute(f"SELECT {cols} FROM search_units u WHERE instr(lower(u.text_norm), ?) > 0",
                        (q.lower(),)).fetchall()
 
@@ -279,7 +292,7 @@ def _locate(row: tuple, name: str, text: str, where: list[int], k: int) -> tuple
 def _literal(s: str) -> str:
     """只做全角转半角、统一空白（含汉字间的空白去掉）、去控制字符、不分大小写，不去千分位逗号：
     判断命中处的原文与查询是不是逐字同一种写法。"""
-    return normalize(s, thousands=False).lower()
+    return normalize(s.replace("\\|", "|"), thousands=False).lower().strip()
 
 
 def search(root: str, case_id: str, index: dict, query: str, max_hits: int = 20) -> dict:
@@ -302,7 +315,7 @@ def search(root: str, case_id: str, index: dict, query: str, max_hits: int = 20)
                     if mid not in names:
                         continue
                     text = row[7]
-                    norm, where = normalize_with_map(text)
+                    norm, where = _norm_map(text, row[2])
                     for k in _positions(norm, q, bounded):
                         loc = _locate(row, names[mid], text, where, k)
                         if loc is None:

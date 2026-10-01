@@ -383,6 +383,7 @@ def test_refresh_failure_midway_heals(make_client, cases_dir, monkeypatch):
     monkeypatch.setattr(fts, "_add_material", disk_full_on_second(calls))
     ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
     assert calls == ["M0001", "M0002"]
+    assert real_root not in fts._state                                  # 状态已作废，下一次整案重建
     monkeypatch.undo()
     check("旧词", "新词")
 
@@ -397,6 +398,7 @@ def test_refresh_failure_midway_heals(make_client, cases_dir, monkeypatch):
     with pytest.raises(sqlite3.OperationalError):
         fts.search(real_root, cid, index, "阿尔法三词")
     assert calls == ["M0001", "M0002"]
+    assert real_root not in fts._state
     monkeypatch.undo()
     check("新词", "三词")
 
@@ -421,6 +423,8 @@ def test_cell_citation_with_escaped_pipe_and_row_numbers(make_client, cases_dir)
     assert [h["citation"] for h in q(client, cid, "乙")["hits"]] == ["〔t 表一!A2〕"]       # 按原样切会算到 B2
     assert [h["citation"] for h in q(client, cid, "12")["hits"]] == ["〔t 表一!C5〕"]   # 第 12 行的行号不算
     assert q(client, cid, "13")["total"] == 0
+    v = q(client, cid, "甲|乙")                                           # 单元格里的竖线能搜到（T10 令附 T9 小项）
+    assert [(h["citation"], h["match"]) for h in v["hits"]] == [("〔t 表一!A2〕", "exact")]
 
 
 def test_control_chars_and_bad_fts_query(make_client, cases_dir, monkeypatch):
@@ -430,6 +434,37 @@ def test_control_chars_and_bad_fts_query(make_client, cases_dir, monkeypatch):
     fail(client.get("/api/search", params={"case_id": cid, "q": "\x00"}), "INVALID_ARGUMENT")
     monkeypatch.setattr(fts, "_fts_phrase", lambda s: '"' + s)          # 引号不闭合：sqlite 报 unterminated string
     fail(client.get("/api/search", params={"case_id": cid, "q": "借款合同"}), "INVALID_ARGUMENT")
+
+
+@pytest.mark.parametrize("msg", ["database is locked", "database table is locked", "disk I/O error",
+                                 "database or disk is full"])
+def test_storage_errors_not_reported_as_bad_query(small, monkeypatch, msg):
+    """只有 FTS5 不接受的查询串才转参数错误；锁、磁盘错误照常抛（T10 令附 T9 小项）。"""
+    client, _, cid = small
+    real_root = client.app.state.lb.cases.root_of(cid)
+    index = client.app.state.lb.materials.index(cid)
+
+    def boom(s):
+        raise sqlite3.OperationalError(msg)
+
+    monkeypatch.setattr(fts, "_fts_phrase", boom)
+    with pytest.raises(sqlite3.OperationalError):
+        fts.search(real_root, cid, index, "借款180000")
+
+
+def test_query_with_outer_spaces_still_exact(small):
+    """检索词首尾带空格：照常算完全匹配（第二轮复核 P3-A）。"""
+    client, _, cid = small
+    v = q(client, cid, " 借款180000 ")
+    assert [(h["citation"], h["match"]) for h in v["hits"]] == [("〔说明 第2行〕", "exact")]
+
+
+def test_format_chars_dropped():
+    """零宽空格、BOM 等格式字符（Cf）去掉。"""
+    assert normalize("﻿借​款‍合同") == "借款合同"
+    text = "借​款"
+    norm, where = normalize_with_map(text)
+    assert norm == "借款" and where == [0, 2]
 
 
 def test_whitespace_between_hanzi_dropped():
