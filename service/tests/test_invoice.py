@@ -176,18 +176,26 @@ def test_office_dir_not_set(client):
 
 
 def test_exit_code_mapping(tmp_path, monkeypatch):
+    """契约 1.3：0 成功；2 且没有 [BLOCKED] 为 attention；引擎自己报失败（[BLOCKED] 或退出码不是 0/2）返回成功体
+    failed=true、原因在 output（1128 令 A 项裁决）。"""
     r = make_runner(tmp_path)
-    for code, out, expect in [(0, "ok", (0, False)), (2, "重复 1 张", (2, True)),
-                              (2, "[BLOCKED] ValueError 收集任务有待处理", "ENGINE_FAILED"),
-                              (1, "[FATAL] x", "ENGINE_FAILED"), (3, "", "ENGINE_FAILED")]:
+    for code, out, attention, failed in [
+            (0, "ok", False, False),
+            (2, "重复 1 张", True, False),
+            (2, "{...}\n[BLOCKED] ValueError 收集任务有待处理或数量不符项", False, True),
+            (1, "[FATAL] x", False, True),
+            (3, "", False, True)]:
         monkeypatch.setattr(r, "_exec", lambda argv, c=code, o=out: (c, o))
-        if expect == "ENGINE_FAILED":
-            with pytest.raises(ApiError) as e:
-                r.run({"action": "report"})
-            assert e.value.code == "ENGINE_FAILED"
-        else:
-            v = r.run({"action": "report"})
-            assert (v["exit_code"], v["attention"]) == expect and v["output"] == out
+        v = r.run({"action": "report"})
+        assert (v["exit_code"], v["attention"], v["failed"], v["output"]) == (code, attention, failed, out)
+
+
+def test_engine_cannot_start_is_engine_failed(tmp_path):
+    """服务自身故障（引擎起不来）仍走失败体 ENGINE_FAILED。"""
+    r = make_runner(tmp_path, python=str(tmp_path / "没有这个解释器.exe"))
+    with pytest.raises(ApiError) as e:
+        r.run({"action": "report"})
+    assert e.value.code == "ENGINE_FAILED" and e.value.reason == "spawn"
 
 
 def test_timeout_kills_engine_tree(tmp_path, monkeypatch):
@@ -279,6 +287,7 @@ def period(tmp_path_factory):
     step("analyze2", {"action": "analyze", "period": "2026-09"})
     step("prepare", {"action": "prepare", "period": "2026-09", "batch": "九月", "replace": False})
     step("reimburse_preview", {"action": "reimburse", "batch": "2026-09_九月", "apply": False})
+    step("reprint", {"action": "reprint", "batch": "2026-09_九月"})
     step("reimburse", {"action": "reimburse", "batch": "2026-09_九月", "apply": True})
     step("report", {"action": "report"})
     yield base, res
@@ -295,10 +304,12 @@ def test_period_flags_duplicates_and_wrong_buyer(period):
     assert "发票05-购买方不符.pdf,抬头错误," in csv
 
 
-def test_prepare_blocked_while_items_pending_is_engine_failed(period):
-    """有待核项时引擎 [BLOCKED] 退出 2：服务判 ENGINE_FAILED，不当"须看明细"（回写②）。"""
+def test_prepare_blocked_while_items_pending_is_failed(period):
+    """有待核项时引擎 [BLOCKED] 退出 2：failed=true、attention=false，原因原样在 output（不当"须看明细"）。"""
     _, res = period
-    assert isinstance(res["prepare_blocked"], ApiError) and res["prepare_blocked"].code == "ENGINE_FAILED"
+    v = res["prepare_blocked"]
+    assert v["exit_code"] == 2 and v["failed"] is True and v["attention"] is False
+    assert "[BLOCKED]" in v["output"] and "收集任务有待处理" in v["output"]
 
 
 def test_exclude_only_touches_task_dir(period):
@@ -314,10 +325,9 @@ def test_exclude_only_touches_task_dir(period):
 def test_full_period_reimburse(period):
     """排除后一期走完：处理完成、建批次、预览、确认已报；台账里本期已报的是 02、03 两张（1366.50 元）。"""
     base, res = period
-    for s in ("prepare", "reimburse_preview", "reimburse", "report"):
-        assert not isinstance(res[s], ApiError), (s, getattr(res[s], "reason", None))
+    for s in ("prepare", "reimburse_preview", "reprint", "reimburse", "report"):
+        assert not isinstance(res[s], ApiError) and res[s]["failed"] is False, (s, res[s])
     assert '"processing_complete": true' in res["analyze2"]["output"]
-    assert any(f.endswith("贴票清单.html") for f in res["prepare"]["files"])
     import openpyxl
     wb = openpyxl.load_workbook(base / "office" / "发票台账" / "发票主台账.xlsx", read_only=True)
     rows = [r for ws in wb.worksheets for r in ws.iter_rows(values_only=True)]
@@ -349,4 +359,57 @@ def test_api_contract_roundtrip(client, tmp_path, monkeypatch):
     v = ok(client.post("/api/invoice/run", json={"action": "history", "period": "2026-09"}), "invoice_run")
     assert v["attention"] is True and v["exit_code"] == 2
     monkeypatch.setattr(st.invoice, "_exec", lambda argv: (2, "[BLOCKED] ValueError x"))
-    fail(client.post("/api/invoice/run", json={"action": "report"}), "invoice_run", "ENGINE_FAILED")
+    v = ok(client.post("/api/invoice/run", json={"action": "report"}), "invoice_run")
+    assert v["failed"] is True and v["attention"] is False and v["output"] == "[BLOCKED] ValueError x"
+    monkeypatch.setattr(st.invoice, "_exec", lambda argv: (_ for _ in ()).throw(R.subprocess.TimeoutExpired("x", 1)))
+    fail(client.post("/api/invoice/run", json={"action": "report"}), "invoice_run", "ENGINE_FAILED")   # 超时仍是失败体
+
+
+# ---------------------------------------------------------------- N50：贴票清单另存一份
+
+def test_buyer_copy_written_and_original_untouched(period):
+    """设置有购买方：prepare 后同一文件夹多一份"贴票清单（购买方）.html"，不含写死的律所名；返回的 files 用它代替原文件；
+    原文件哈希仍等于批次记录里的值，所以之后的 reprint、reimburse 照常（一期夹具里已跑过）。"""
+    import hashlib
+    base, res = period
+    files = [pathlib.Path(f) for f in res["prepare"]["files"]]
+    copy = [f for f in files if f.name == f"贴票清单（{BUYER}）.html"]
+    assert len(copy) == 1 and not any(f.name == "贴票清单.html" for f in files)
+    text = copy[0].read_text(encoding="utf-8")
+    assert R.HARDCODED_BUYER not in text and f"购买方：{BUYER}" in text
+    original = copy[0].parent / "贴票清单.html"
+    assert R.HARDCODED_BUYER in original.read_text(encoding="utf-8")          # 原文件不动
+    rec = json.loads((base / "office" / "发票台账" / "_报销批次" / "2026-09_九月.json").read_text(encoding="utf-8"))
+    assert rec["artifacts"]["贴票清单.html"] == hashlib.sha256(original.read_bytes()).hexdigest()
+    assert any(pathlib.Path(f).name == f"贴票清单（{BUYER}）.html" for f in res["reprint"]["files"])
+    assert res["reimburse"]["failed"] is False                                 # check_artifacts 之后照常
+
+
+def _fake_batch(tmp_path, html_text: str) -> tuple[pathlib.Path, pathlib.Path]:
+    ledger = tmp_path / "日常办公" / "发票台账"
+    folder = ledger / "_打印包" / "2026-09" / "2026-09_九月" / "v001"
+    folder.mkdir(parents=True)
+    (folder / "贴票清单.html").write_text(html_text, encoding="utf-8")
+    (ledger / "_报销批次").mkdir(parents=True)
+    (ledger / "_报销批次" / "2026-09_九月.json").write_text(json.dumps({"folder": str(folder)}), encoding="utf-8")
+    return ledger, folder
+
+
+@pytest.mark.parametrize("buyer,html_text,made", [
+    (None, f"<p>购买方：{R.HARDCODED_BUYER}。</p>", False),                 # 设置为空：不生成
+    ("", f"<p>购买方：{R.HARDCODED_BUYER}。</p>", False),
+    (BUYER, "<p>购买方：别的写法。</p>", False),                              # 引擎输出里没有那一串：不报错、不生成
+    ("A&B<律所>", f"<p>购买方：{R.HARDCODED_BUYER}。</p>", True),             # 有特殊字符：内容转义、文件名去非法字符
+])
+def test_buyer_copy_cases(tmp_path, buyer, html_text, made):
+    ledger, folder = _fake_batch(tmp_path, html_text)
+    r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公"), buyer=buyer), tmp_path / "ad")
+    orig = str(folder / "贴票清单.html")
+    out = r._with_buyer_copy(ledger, {"action": "reprint", "batch": "2026-09_九月"}, [orig])
+    copies = [f for f in folder.iterdir() if f.name != "贴票清单.html"]
+    assert (folder / "贴票清单.html").read_text(encoding="utf-8") == html_text
+    if not made:
+        assert out == [orig] and copies == []
+    else:
+        assert len(copies) == 1 and out == [str(copies[0])]
+        assert "&lt;律所&gt;" in copies[0].read_text(encoding="utf-8") and "<" not in copies[0].name

@@ -10,8 +10,10 @@
 """
 from __future__ import annotations
 
+import html
 import json
 import os
+import re
 import pathlib
 import subprocess
 import sys
@@ -37,6 +39,9 @@ PASS_ENV = ("SYSTEMROOT", "LOCALAPPDATA", "USERPROFILE", "TEMP", "TMP")
 LEDGER_DIR_NAME = "发票台账"
 # 这两个目录里新出现或改动的文件作为本次产出返回（贴票包、报销批次）
 OUTPUT_DIRS = ("_打印包", "_报销批次")
+# 引擎贴票清单里写死的购买方（engines/invoice-ledger/scripts/reimbursement.py:86）。换引擎版本时重新核对这一串
+HARDCODED_BUYER = "广东连越（深圳）律师事务所"
+LIST_NAME = "贴票清单.html"
 
 
 class InvoiceRunner:
@@ -60,20 +65,51 @@ class InvoiceRunner:
             before = _snapshot(ledger)
             try:
                 code, output = self._exec(argv)
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired:                     # 服务自身故障：失败体
                 logs.event("invoice", action, status="fail", duration_ms=(time.monotonic() - t0) * 1000,
                            error="timeout")
                 raise ApiError("ENGINE_FAILED", "timeout")
+            except OSError:                                       # 引擎起不来（解释器或入口缺失）
+                logs.event("invoice", action, status="fail", duration_ms=(time.monotonic() - t0) * 1000,
+                           error="spawn")
+                raise ApiError("ENGINE_FAILED", "spawn")
             ms = (time.monotonic() - t0) * 1000
             blocked = any(line.startswith("[BLOCKED]") for line in output.splitlines())
-            if code == 0 or (code == 2 and not blocked):
-                logs.event("invoice", action, duration_ms=ms, error=None if code == 0 else "exit_2")
-                produced = [f for f in files if f.exists()] + _changed(ledger, before)
-                return {"exit_code": code, "attention": code == 2, "output": output,
-                        "files": _unique([str(f) for f in produced])}
-            logs.event("invoice", action, status="fail", duration_ms=ms,
-                       error="exit_2_blocked" if code == 2 else f"exit_{code}")
-            raise ApiError("ENGINE_FAILED", "blocked" if code == 2 else "exit")
+            # 契约 1.3 failed：引擎自己报失败（[BLOCKED] 或退出码不是 0/2）→ 成功体 failed=true，原因在 output 给律师看
+            failed = blocked or code not in (0, 2)
+            attention = code == 2 and not failed
+            logs.event("invoice", action, status="fail" if failed else "ok", duration_ms=ms,
+                       error=None if code == 0 and not failed else
+                       ("exit_2_blocked" if code == 2 and blocked else f"exit_{code}"))
+            produced = [f for f in files if f.exists()] + _changed(ledger, before)
+            paths = _unique([str(f) for f in produced])
+            if not failed and action in ("prepare", "reprint"):
+                paths = self._with_buyer_copy(ledger, req, paths)
+            return {"exit_code": code, "attention": attention, "failed": failed, "output": output, "files": paths}
+
+    # ---------------------------------------------------------------- N50：贴票清单另存一份（对引擎输出唯一的后处理）
+
+    def _with_buyer_copy(self, ledger: pathlib.Path, req: dict, paths: list[str]) -> list[str]:
+        """引擎贴票清单里写死了一家律所名（reimbursement.py:86）。原文件不能改：prepare 把打印包每个文件的
+        sha256 记进批次记录，reprint / reimburse 前会核对（check_artifacts）。所以在同一文件夹另写
+        `贴票清单（<购买方>）.html`，返回列表里用它代替原文件；设置里购买方为空、或清单里没有那一串时不生成。"""
+        buyer = (self.settings.get()["office"].get("invoice_buyer") or "").strip()
+        if not buyer:
+            return paths
+        batch = req["batch"] if req["action"] == "reprint" else scoped_batch(req["period"], req["batch"])
+        try:
+            rec = json.loads((ledger / "_报销批次" / f"{batch}.json").read_text(encoding="utf-8"))
+            folder = ledger / rec["folder_relative"] if rec.get("folder_relative") else pathlib.Path(rec["folder"])
+            src = folder / LIST_NAME
+            text = src.read_text(encoding="utf-8")
+        except (OSError, ValueError, KeyError):
+            return paths
+        if HARDCODED_BUYER not in text:
+            return paths
+        dst = folder / f"贴票清单（{_safe_name(buyer)}）.html"
+        dst.write_text(text.replace(HARDCODED_BUYER, html.escape(buyer)), encoding="utf-8")
+        out = [p for p in paths if pathlib.Path(p).name != LIST_NAME and p != str(dst)]
+        return [str(dst)] + out
 
     # ---------------------------------------------------------------- 拼命令
 
@@ -230,3 +266,13 @@ def _changed(ledger: pathlib.Path, before: dict[str, float]) -> list[pathlib.Pat
 def _unique(items: list[str]) -> list[str]:
     seen: set[str] = set()
     return [x for x in items if not (x in seen or seen.add(x))]
+
+
+def scoped_batch(period: str, batch: str) -> str:
+    """与引擎 period_plan.scoped_batch 一致：prepare 的批次名前面加"<报销年月>_"。"""
+    return batch if batch.startswith(period + "_") else f"{period}_{batch}"
+
+
+def _safe_name(name: str) -> str:
+    """购买方名称放进文件名：去掉 Windows 文件名不允许的字符。"""
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")[:60] or "购买方"
