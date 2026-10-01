@@ -529,3 +529,32 @@ def test_buyer_copy_write_failure_returns_original(tmp_path, monkeypatch):
     logs.close()
     assert v["failed"] is False and str(folder / "贴票清单.html") in v["files"]
     assert '"error": "buyer_copy"' in (log_dir / "service.log").read_text(encoding="utf-8")
+
+
+
+def test_run_exit2_does_not_touch_same_name_old_batch(tmp_path, monkeypatch):
+    """run 停在"须看明细"（退出 2，引擎没跑 prepare），同月已有同名已报销批次：files 里没有副本，
+    旧批次文件夹逐字节不变（T25 第二轮复核 B-P3-1）。"""
+    import hashlib
+    ledger, folder = _fake_batch(tmp_path, f"<p>购买方：{R.HARDCODED_BUYER}。</p>")
+    before = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in folder.iterdir()}
+    r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公")), tmp_path / "ad")
+    monkeypatch.setattr(r, "_exec", lambda argv: (2, '{"processing_complete": false}'))
+    v = r.run({"action": "run", "period": "2026-09", "batch": "九月", "src": str(FIXTURES), "channel": "local"})
+    assert (v["exit_code"], v["attention"], v["failed"]) == (2, True, False)
+    assert not any("贴票清单" in pathlib.Path(f).name for f in v["files"])
+    after = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in folder.iterdir()}
+    assert after == before
+
+
+def test_run_exit0_still_writes_copy(tmp_path, monkeypatch):
+    """对照：同样的批次、run 退出 0（本次跑完了 prepare）时照常另存副本。"""
+    ledger, folder = _fake_batch(tmp_path, f"<p>购买方：{R.HARDCODED_BUYER}。</p>")
+    r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公")), tmp_path / "ad")
+
+    def fake_exec(argv):
+        os.utime(folder / "贴票清单.html")
+        return 0, "ok"
+    monkeypatch.setattr(r, "_exec", fake_exec)
+    v = r.run({"action": "run", "period": "2026-09", "batch": "九月", "src": str(FIXTURES), "channel": "local"})
+    assert pathlib.Path(v["files"][0]).name == f"贴票清单（{BUYER}）.html"

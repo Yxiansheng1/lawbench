@@ -209,3 +209,35 @@ def test_stop_leaves_lookalike_that_is_not_ours(drv):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+
+def test_lifespan_exit_closes_driver(appdata, monkeypatch):
+    """服务退出（Starlette lifespan 结束）时调一次 st.retainer.close()（把它换成 pass 会让本用例变红）。"""
+    from starlette.testclient import TestClient
+    from lawbench.app import create_app
+    from lawbench.config import Config
+    app = create_app(Config(token="t" * 43, appdata=appdata), key_getter=lambda: None)
+    calls = []
+    monkeypatch.setattr(app.state.lb.retainer, "close", lambda: calls.append(1))
+    with TestClient(app):
+        assert calls == []
+    assert calls == [1]
+
+
+def test_stop_ours_but_port_not_freed(drv, monkeypatch, tmp_path):
+    """确认是本产品的驱动、已结束进程树，但 5 秒内端口没放开：如实 running:true、"关闭未完成"，日志记失败。"""
+    from lawbench import logs
+    monkeypatch.setattr(drv, "_health", lambda: {"ok": True, "offline": True, "engine": "rapidocr",
+                                                  "maxBytes": 1, "ready": True})
+    monkeypatch.setattr(D, "_listener_pid", lambda port: 4242)
+    monkeypatch.setattr(D, "_is_our_driver", lambda pid, d: True)
+    killed = []
+    monkeypatch.setattr(D.procs, "kill_tree", lambda p, drain=False: killed.append(p.pid))
+    monkeypatch.setattr(drv, "_wait_port_free", lambda seconds=5.0: False)
+    log_dir = logs.setup(tmp_path)
+    v = drv.handle({"action": "stop"})
+    logs.close()
+    assert v == {"running": True, "port": 17801, "message": D.MSG_STOP_PENDING} and killed == [4242]
+    line = (log_dir / "service.log").read_text(encoding="utf-8")
+    assert '"status": "fail"' in line and '"error": "stop_pending"' in line

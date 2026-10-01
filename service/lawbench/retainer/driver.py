@@ -36,6 +36,7 @@ MSG_RUNNING = "证件识别已就绪"
 MSG_REUSED = "证件识别已就绪（沿用已在运行的驱动）"
 MSG_STOPPED = "证件识别已关闭"
 MSG_NOT_OURS = "端口 17801 上的证件识别不是本程序启动的，未关闭"
+MSG_STOP_PENDING = "证件识别关闭未完成，请稍后再试"
 MSG_NOT_RUNNING = "证件识别未运行"
 MSG_PORT_TAKEN = "端口 17801 被其他程序占用，证件识别无法启动；委托材料的其他功能不受影响"
 MSG_START_FAILED = "证件识别启动失败；委托材料的其他功能不受影响，可手工填写"
@@ -56,7 +57,10 @@ class RetainerDriver:
         t0 = time.monotonic()
         with self._lock:
             value = {"start": self.start, "stop": self.stop, "status": self.status}[action]()
-        logs.event("retainer", f"driver_{action}", status="ok" if value["running"] or action == "stop" else "fail",
+        good = (not value["running"]) if action == "stop" else value["running"]
+        error = None if good else {MSG_STOP_PENDING: "stop_pending", MSG_NOT_OURS: "not_ours",
+                                   MSG_PORT_TAKEN: "port_taken"}.get(value["message"], "not_running")
+        logs.event("retainer", f"driver_{action}", status="ok" if good else "fail", error=error,
                    duration_ms=(time.monotonic() - t0) * 1000)
         return value
 
@@ -110,6 +114,7 @@ class RetainerDriver:
                 procs.kill_tree(_Pid(pid))
                 if self._wait_port_free():
                     return self._value(False, MSG_STOPPED)
+                return self._value(True, MSG_STOP_PENDING)            # 是本产品的、已结束，但端口 5 秒内没放开
             return self._value(True, MSG_NOT_OURS)
         return self._value(False, MSG_STOPPED)                      # 端口上是别的程序：驱动本身没在跑
 

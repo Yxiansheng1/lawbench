@@ -94,7 +94,8 @@ class InvoiceRunner:
                    ("exit_2_blocked" if code == 2 and blocked else f"exit_{code}"))
         produced = [f for f in files if f.exists()] + _changed(ledger, before)
         paths = _unique([str(f) for f in produced])
-        if not failed and action in ("prepare", "reprint", "run"):
+        # run 只在退出码 0 时另存：退出 2（import 未处理完）时引擎不跑 prepare，按批次名找到的会是同名旧批次（T25 复核 B-P3-1）
+        if not failed and (action in ("prepare", "reprint") or (action == "run" and code == 0)):
             paths = self._with_buyer_copy(ledger, req, paths)
         return {"exit_code": code, "attention": attention, "failed": failed, "output": output, "files": paths}
 
