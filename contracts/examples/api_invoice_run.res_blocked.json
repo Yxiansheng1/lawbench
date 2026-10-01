@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "value": {
+    "exit_code": 2,
+    "attention": false,
+    "failed": true,
+    "output": "[BLOCKED] ValueError 收集任务有待处理或数量不符项",
+    "files": []
+  }
+}

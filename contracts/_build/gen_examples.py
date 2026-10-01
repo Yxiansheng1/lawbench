@@ -179,6 +179,15 @@ ex("api_invoice_run.req.json", "api/invoice_run.schema.json",
 ex("api_invoice_run.req_imap.json", "api/invoice_run.schema.json",
    {"action": "plan", "period": "2026-09", "channel": "imap", "history": "exclude", "history_numbers": []},
    "#/$defs/request", "invalid")
+ex("api_invoice_run.res.json", "api/invoice_run.schema.json",
+   {"ok": True, "value": {"exit_code": 2, "attention": True, "failed": False, "output": "重复 1 张、抬头不符 1 张，详见明细", "files": []}},
+   "#/$defs/response")
+ex("api_invoice_run.res_blocked.json", "api/invoice_run.schema.json",
+   {"ok": True, "value": {"exit_code": 2, "attention": False, "failed": True, "output": "[BLOCKED] ValueError 收集任务有待处理或数量不符项", "files": []}},
+   "#/$defs/response")
+ex("api_invoice_run.res_exclude.json", "api/invoice_run.schema.json",
+   {"action": "exclude", "period": "2026-09", "item": "6801d571" + "0" * 56, "reason": "分类缺失，人工核定不报销", "reviewer": "张律师", "confirm": True},
+   "#/$defs/request")
 CAPS = {"v": 1, "hint": "提示", "shared": ["pre-issue-check"],
         "groups": [{"id": "office", "name": "日常办公", "hidden": False, "items": [
             {"id": "invoice", "name": "发票整理", "kind": "tool", "tool": "invoice", "hidden": False, "custom": False},

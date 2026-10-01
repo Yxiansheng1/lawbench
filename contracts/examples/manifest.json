@@ -294,6 +294,24 @@
   "expect": "invalid"
  },
  {
+  "file": "api_invoice_run.res.json",
+  "schema": "api/invoice_run.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_invoice_run.res_blocked.json",
+  "schema": "api/invoice_run.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_invoice_run.res_exclude.json",
+  "schema": "api/invoice_run.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
   "file": "skill_capsules.json",
   "schema": "skill/capsules.schema.json",
   "pointer": "",

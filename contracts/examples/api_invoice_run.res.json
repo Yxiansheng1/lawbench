@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "value": {
+    "exit_code": 2,
+    "attention": true,
+    "failed": false,
+    "output": "重复 1 张、抬头不符 1 张，详见明细",
+    "files": []
+  }
+}
