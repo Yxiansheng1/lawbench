@@ -1,0 +1,8 @@
+# T12 service 全量（line-C，含 pdfium 共用锁与启动兜底）
+
+## 2026-10-01 12:43:28 短路径
+856 passed, 6 skipped, 1 warning in 760.87s (0:12:40)
+
+## tests/test_ocr_queue.py 单独连跑 4 遍：每遍 17 passed
+
+说明：12:1x 的一次全量里 test_t3_rework::test_r6_500_keeps_connection 变红——识别队列在启动时读最近案件，该用例让注册表抛异常，服务启动失败。已改为读不了就跳过（新用例 test_broken_registry_does_not_block_startup），复跑全绿。另有一次局部运行出现过 1 个未能复现的失败，之后 7 次连跑未再出现。

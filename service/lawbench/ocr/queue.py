@@ -83,7 +83,12 @@ class OcrQueue:
         if self._threads:
             return
         self._stop.clear()
-        for c in self.cases.recent():
+        try:
+            recent = self.cases.recent()
+        except Exception as e:  # noqa: BLE001 注册表读不了：服务照常起来，识别队列先空着（新提交照常受理）
+            logs.event("ocr", "resume", status="fail", error=type(e).__name__)
+            recent = []
+        for c in recent:
             if c.get("exists"):
                 try:
                     self._resume_case(c["case_id"], c["root"])

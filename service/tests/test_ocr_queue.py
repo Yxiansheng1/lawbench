@@ -388,3 +388,16 @@ def test_stale_flag_cleared_after_reocr(env, fake):
     env.wait(env.submit(m["material_id"], [1])["job_id"], ("done",))
     lst = ok(env.client.get("/api/materials", params={"case_id": env.case_id}), "materials_list")
     assert next(x for x in lst["materials"] if x["material_id"] == m["material_id"])["stale_ocr"] is False
+
+
+def test_broken_registry_does_not_block_startup(tmp_path, monkeypatch):
+    """注册表读不了：识别队列照样启动（服务不能因此起不来）。"""
+    from lawbench.app import create_app
+    app = create_app(Config(token=TOKEN, appdata=tmp_path / "ad"), key_getter=lambda: None)
+    st = app.state.lb
+    monkeypatch.setattr(st.cases, "recent", lambda: (_ for _ in ()).throw(RuntimeError("x")))
+    st.ocr.start()
+    try:
+        assert len(st.ocr._threads) == st.ocr.concurrency + 1
+    finally:
+        st.ocr.stop()

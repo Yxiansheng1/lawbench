@@ -7,13 +7,12 @@ from __future__ import annotations
 
 import io
 import pathlib
-import threading
 
 DPI = 200
 MAX_LONG_EDGE = 2480
 IMAGE_TYPES = ("image",)
 PDF_TYPES = ("pdf",)
-_PDFIUM = threading.Lock()   # pdfium 不是线程安全的；识别队列两个发送线程共用这一把锁
+from ..ingest import PDFIUM_LOCK as _PDFIUM   # pdfium 不是线程安全的：与解析共用同一把锁
 
 
 class RenderError(Exception):
