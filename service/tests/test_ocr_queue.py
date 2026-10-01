@@ -79,7 +79,8 @@ class Fake395:
 class Env:
     def __init__(self, tmp: pathlib.Path, prep_url: str, files: dict[str, pathlib.Path], key: str | None = KEY):
         self.appdata = pathlib.Path(tempfile.mkdtemp(prefix="lbocr-"))
-        self.app = create_app(Config(token=TOKEN, appdata=self.appdata), key_getter=lambda: key)
+        getter = key if callable(key) else (lambda: key)
+        self.app = create_app(Config(token=TOKEN, appdata=self.appdata), key_getter=getter)
         self.st = self.app.state.lb
         self.client = TestClient(self.app, raise_server_exceptions=False)
         self.client.headers["Authorization"] = f"Bearer {TOKEN}"
@@ -214,7 +215,9 @@ def test_resume_after_app_exit_without_resending_done_pages(env, fake):
     shas = fake.page_shas()
     for png in pngs:
         assert hashlib.sha256(png).hexdigest() in shas
-    assert len(shas) <= 4                                              # 最多被作废的那一页重发一次
+    # 退出时在途的页（最多 concurrency 页）作废后重发一次；任何一页最多发两次，没有页被重复写成两份结果
+    assert len(shas) <= 3 + env.st.ocr.concurrency
+    assert all(shas.count(h) <= 2 for h in set(shas))
 
 
 def test_resume_after_hard_kill_state(env, fake):
@@ -401,3 +404,49 @@ def test_broken_registry_does_not_block_startup(tmp_path, monkeypatch):
         assert len(st.ocr._threads) == st.ocr.concurrency + 1
     finally:
         st.ocr.stop()
+
+
+
+# ---------------------------------------------------------------- 401 之后 Key 换了、或保存了设置：自动恢复（1323 注记）
+
+def test_key_change_resumes_key_invalid_job(tmp_path, fake):
+    key = ["sk-bad"]
+    e = Env(tmp_path, fake.url, {"卷一/讯问笔录.pdf": PDF}, key=lambda: key[0])
+    try:
+        fake.script = [(401, {})]
+        e.st.ocr.concurrency = 1
+        e.st.ocr.start()
+        v = e.submit(e.material("讯问笔录")["material_id"], [1, 2])
+        assert e.wait(v["job_id"], ("paused",))["pause_reason"] == "key_invalid"
+        time.sleep(1.5)
+        assert len(fake.calls) == 1                                    # Key 没变：不重试
+        key[0] = "sk-good"                                             # 凭据管理器里换了 Key
+        j = e.wait(v["job_id"], ("done",), timeout=20)
+        assert j["done"] == 2 and fake.calls[-1]["auth"] == "Bearer sk-good"
+    finally:
+        e.close()
+
+
+def test_no_key_then_key_set_resumes(tmp_path, fake):
+    key = [None]
+    e = Env(tmp_path, fake.url, {"卷一/讯问笔录.pdf": PDF}, key=lambda: key[0])
+    try:
+        e.st.ocr.start()
+        v = e.submit(e.material("讯问笔录")["material_id"], [1])
+        assert e.wait(v["job_id"], ("paused",))["pause_reason"] == "key_invalid" and fake.calls == []
+        key[0] = KEY
+        assert e.wait(v["job_id"], ("done",), timeout=20)["done"] == 1
+    finally:
+        e.close()
+
+
+def test_settings_save_resumes_key_invalid_job(env, fake):
+    fake.script = [(401, {})]
+    env.st.ocr.concurrency = 1
+    env.st.ocr.probe_seconds = 3600                                    # 排除定时读 Key 的作用，只看"保存设置"
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    assert env.wait(v["job_id"], ("paused",))["pause_reason"] == "key_invalid"
+    s = ok(env.client.get("/api/settings"), "settings")
+    ok(env.client.put("/api/settings", json=s), "settings")
+    assert env.wait(v["job_id"], ("done",), timeout=20)["done"] == 1

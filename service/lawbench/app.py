@@ -75,6 +75,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
                              key_getter=lambda: st.key_getter(), skills_dirs=config.skills_dirs)
     st.key_getter = key_getter or keyring_key
     st.ocr = OcrQueue(st.cases, st.materials, st.net, st.key_getter)  # 识别队列（Spec 7）；随服务启停
+    st.settings.on_change(lambda s: st.ocr.resume_key_invalid())    # 保存设置后，因 Key 暂停的识别任务再试
     try:
         st.capsules.ensure()  # 首次启动复制默认胶囊配置；已有配置则补进默认配置新增的胶囊
     except Exception as e:  # noqa: BLE001 capsules.json 损坏：服务照常起来，/api/capsules/reset 可恢复

@@ -5,7 +5,8 @@
 - 两个发送线程（每位律师同时 2 页）；每页在内存里渲染成 PNG 直接发 395，不写临时文件（render.py）。
 - 结果写 工作区/材料/识别页/<材料编号>/<页号>.md 再标该页已完成；重发会覆盖同一个文件，写入幂等。
 - 出错与中断按 Spec 7.3：连不上 → 全部暂停（等待 395 恢复），每 30 秒探测 /health，恢复后自动继续；
-  503 → 按 Retry-After 等待后重试、不计失败；504 / 5xx → 该页最多 3 次；401 → 整个任务暂停；
+  503 → 按 Retry-After 等待后重试、不计失败；504 / 5xx → 该页最多 3 次；401 → 整个任务暂停，Key 换了
+  （探测线程每 30 秒读一次凭据管理器，与出 401 时的 Key 不同）或设置保存后自动恢复；
   400 / 413 → 该页失败附原因；取消 → 未发送的页标已取消，正在发送的请求立即断开，已完成的页保留。
 - 整份材料的页都结束（完成、失败或取消）后，把识别结果合并进材料文本、更新检索索引（merge.py）；
   "识别完成"在任务列表里体现为 status=done / partial_failed，由界面轮询后发系统通知（Spec 3.4 U-7）。
@@ -73,6 +74,7 @@ class OcrQueue:
         self._cv = threading.Condition()
         self._stop = threading.Event()
         self._prep_down = threading.Event()
+        self._bad_key: str | None = None        # 出 401 / 没有 Key 时那把 Key 的指纹；Key 换了就恢复 key_invalid 的任务
         self._threads: list[threading.Thread] = []
         materials.after_render = merge.remerge_after_scan    # T5 重新生成文本后把识别结果合并回去
 
@@ -302,6 +304,7 @@ class OcrQueue:
                 return
             except client395.KeyInvalid:
                 self._set_page(job.root, job.job_id, page_no, "pending")
+                self._bad_key = self._key_fp() or ""
                 self._pause(job, "key_invalid")
                 return
             except client395.PageRejected as r:
@@ -407,25 +410,53 @@ class OcrQueue:
             self._pause(job, reason)
 
     def _prober(self) -> None:
-        while not self._stop.wait(timeout=self.probe_seconds if self._prep_down.is_set() else 1.0):
-            if not self._prep_down.is_set():
-                continue
+        """每秒醒一次；395 连不上时每 probe_seconds 探测一次 /health，有任务因 Key 暂停时每 probe_seconds 读一次 Key。"""
+        last_prep = last_key = 0.0
+        while not self._stop.wait(timeout=1.0):
+            t = time.monotonic()
+            if self._prep_down.is_set() and t - last_prep >= self.probe_seconds:
+                last_prep = t
+                self._probe_prep()
+            if self._bad_key is not None and t - last_key >= self.probe_seconds:
+                last_key = t
+                fp = self._key_fp()
+                if fp is not None and fp != self._bad_key:
+                    self.resume_key_invalid("key_changed")
+
+    def _probe_prep(self) -> None:
+        try:
+            self.net.select("prep", force=True)
+        except ApiError:
+            return
+        self._prep_down.clear()
+        self._resume_where("pause_reason IN ('prep_down', 'offline')")
+        logs.event("ocr", "prep_back")
+
+    def resume_key_invalid(self, why: str = "settings") -> None:
+        """Key 可能换了（凭据管理器里的值变了，或律师保存了设置）：因 Key 暂停的任务回到排队；
+        若 Key 仍无效，发一页后会再次暂停。"""
+        self._bad_key = None
+        self._resume_where("pause_reason = 'key_invalid'")
+        logs.event("ocr", "key_resume", error=why)
+
+    def _resume_where(self, cond: str) -> None:
+        for job in list(self._jobs.values()):
             try:
-                self.net.select("prep", force=True)
-            except ApiError:
-                continue
-            self._prep_down.clear()
-            for job in list(self._jobs.values()):
-                try:
-                    with merge.connect(job.root) as con:
-                        con.execute("UPDATE ocr_jobs SET status = 'queued', pause_reason = NULL, updated_at = ? "
-                                    "WHERE job_id = ? AND status = 'paused' AND pause_reason IN ('prep_down', 'offline')",
-                                    (now(), job.job_id))
-                except Exception as e:  # noqa: BLE001
-                    logs.event("ocr", "resume", status="fail", case_id=job.case_id, error=type(e).__name__)
-            logs.event("ocr", "prep_back")
-            with self._cv:
-                self._cv.notify_all()
+                with merge.connect(job.root) as con:
+                    con.execute("UPDATE ocr_jobs SET status = 'queued', pause_reason = NULL, updated_at = ? "
+                                f"WHERE job_id = ? AND status = 'paused' AND {cond}", (now(), job.job_id))
+            except Exception as e:  # noqa: BLE001
+                logs.event("ocr", "resume", status="fail", case_id=job.case_id, error=type(e).__name__)
+        with self._cv:
+            self._cv.notify_all()
+
+    def _key_fp(self) -> str | None:
+        """当前 Key 的指纹（只在内存里比较，不记日志）；读凭据管理器出错返回 None（不当作"换了"）。"""
+        try:
+            key = self.key_getter() or ""
+        except Exception:  # noqa: BLE001
+            return None
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _other_active(root: str, material_id: str, job_id: str) -> bool:
