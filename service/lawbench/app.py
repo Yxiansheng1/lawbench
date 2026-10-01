@@ -17,6 +17,7 @@ from . import contracts, logs
 from .api import core, ui
 from .capsules import CapsuleStore
 from .case.materials import Materials
+from .export.outputs import Exporter
 from .ingest import libreoffice
 from .invoice.runner import InvoiceRunner
 from .ocr.queue import OcrQueue
@@ -58,6 +59,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     st.capsules = CapsuleStore(config.appdata, config.skills_dirs)
     st.invoice = InvoiceRunner(st.settings, config.appdata)
     st.retainer = RetainerDriver()
+    st.exporter = Exporter(st.cases, st.tasks, st.materials, st.settings, config.skills_dirs)  # 确认保存、修订版（T15）
     try:
         servers = st.settings.get()["servers"]
     except Exception as e:  # noqa: BLE001 settings.json 损坏：服务照常起来，先用默认地址，设置接口返回错误

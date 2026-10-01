@@ -131,6 +131,12 @@ def routes(st) -> list[Route]:
     def retainer_driver(d: dict) -> dict:
         return st.retainer.handle(d)
 
+    def outputs_confirm(d: dict) -> dict:
+        return st.exporter.confirm(d)
+
+    def redline(d: dict) -> dict:
+        return st.exporter.redline(d)
+
     def ocr_submit(d: dict) -> dict:
         return st.ocr.submit(d)
 
@@ -157,6 +163,8 @@ def routes(st) -> list[Route]:
         Route("/api/tasks", E("tasks_list", tasks_list, query=True), methods=["GET"]),
         Route("/api/task/current", E("task_current", task_current, query=True), methods=["GET"]),
         Route("/api/outputs", E("outputs_list", outputs_list, query=True), methods=["GET"]),
+        Route("/api/outputs/confirm", E("outputs_confirm", outputs_confirm), methods=["POST"]),
+        Route("/api/redline", E("redline", redline), methods=["POST"]),
         Route("/api/search", E("search", search, query=True), methods=["GET"]),
         Route("/api/pipeline/run", E("pipeline_run", pipeline_run), methods=["POST"]),
         Route("/api/pipeline/{task_id}", E("pipeline_status", pipeline_status, query=True), methods=["GET"]),

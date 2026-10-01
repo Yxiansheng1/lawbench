@@ -46,5 +46,8 @@ retainer = [
 [tool.setuptools.packages.find]
 include = ["lawbench*"]
 
+[tool.setuptools.package-data]
+"lawbench.export" = ["templates/*.docx"]   # 导出用的占位模板（T15）
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
