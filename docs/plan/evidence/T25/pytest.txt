@@ -7,3 +7,7 @@
 839 passed, 6 skipped, 1 warning in 707.16s (0:11:47)
 
 说明：深路径前两次（basetemp 166、131 字符）没先建上级目录，pytest 建不了测试目录，574 个用例在准备阶段报 FileNotFoundError，与代码无关；先建上级目录后重跑，全绿。
+
+## 返修后（line-C f1c0275）· 2026-10-01 13:09:27 · 短路径
+865 passed, 6 skipped, 1 warning in 840.26s (0:14:00)
+（tests/test_invoice.py 66 条、test_retainer_driver.py 10 条全绿；日志用例变异见 mutation-logs.txt）
