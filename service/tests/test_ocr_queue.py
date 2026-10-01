@@ -375,7 +375,8 @@ def test_reparse_after_format_bump_keeps_ocr_text(env, fake):
     env.st.ocr.start()
     env.wait(env.submit(m["material_id"], [1, 2, 3])["job_id"], ("done",))
     status = env.root / "工作区" / "材料" / "_处理状态.md"
-    status.write_text(status.read_text(encoding="utf-8").replace("材料文本格式版本：2", "材料文本格式版本：1"),
+    from lawbench.case import materials as mat_mod
+    status.write_text(status.read_text(encoding="utf-8").replace(f"材料文本格式版本：{mat_mod.TEXT_FORMAT_VERSION}", "材料文本格式版本：1"),
                       encoding="utf-8")
     ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "materials_scan")
     text = env.text(m)

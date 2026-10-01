@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import io
+import re
 import zipfile
 from datetime import datetime, timezone
 
@@ -31,6 +32,9 @@ AUTHOR = "AI审查（待律师确认）"
 INITIALS = "AI"
 R_OVERLAP = "与本清单另一条修改的文字重叠"
 R_STRUCTURE = "find 的文字分属不同的段内结构（如内容控件），无法安全修改"
+R_BAD_CHAR = "修改文字或批注里有 Word 文件不能保存的控制字符"
+R_IN_LINK = "插入点在超链接文字的末尾，插入的文字会成为链接的一部分"
+_BAD_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
 
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
@@ -45,6 +49,7 @@ def q(tag: str) -> str:
 
 _R, _RPR, _T, _DELTEXT = q("r"), q("rPr"), q("t"), q("delText")
 _INS, _DEL = q("ins"), q("del")
+_HYPERLINK = q("hyperlink")
 _INSTR, _DELINSTR = q("instrText"), q("delInstrText")
 _TEXTUAL = {dx._T: None, dx._TAB: "\t", dx._BR: " ", dx._CR: " "}   # 与 edit_list._para_chars 同口径：段内可见字符
 
@@ -208,6 +213,9 @@ def _apply(p, edit: dict, original: str, rev_id, cmt_id: str, date: str) -> str 
     if any(r.getparent() is not parent for r in runs):
         p.getparent().replace(p, backup)
         return R_STRUCTURE
+    if edit["action"] == "insert_after" and parent.tag == _HYPERLINK and runs[-1].getnext() is None:
+        p.getparent().replace(p, backup)                # 复核 NOTE-2：选"进需人工修改"，不猜放在链接里还是外
+        return R_IN_LINK
     attrs = {q("author"): AUTHOR, q("date"): date}
     first, last = runs[0], runs[-1]
     anchor_start, anchor_end = first, last
@@ -275,9 +283,12 @@ def _comments_part(z: zipfile.ZipFile) -> str | None:
 def generate(data: bytes, edits: list[dict], now: datetime | None = None) -> tuple[bytes, list[int], list[dict]]:
     """返回 (新 docx 字节, 已生成修订的条目 id, 需人工修改 [{id, reason}])。原文含修订抛 Revised。"""
     date = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ids = [e["id"] for e in edits]
+    if len(ids) != len(set(ids)):                       # 后一条会盖掉前一条的判定（T15 复核 P3-3）
+        raise ValueError("duplicate_edit_id")
     zin = zipfile.ZipFile(io.BytesIO(data))
     root = dx._parse_xml(zin.read("word/document.xml"))
-    if any(isinstance(e.tag, str) and e.tag in dx._REVISION for e in root.iter()):
+    if el.has_revisions(zin):                           # 正文、页眉页脚、脚注、格式修订都算（P2-2）
         raise Revised()
     body = root.find("w:body", dx.NS)
     items = [(k, e) for k, e in dx._body_items(body)
@@ -296,6 +307,8 @@ def generate(data: bytes, edits: list[dict], now: datetime | None = None) -> tup
     manual: list[dict] = []
     for e in edits:
         reason = reasons[e["id"]]
+        if reason is None and (_BAD_XML.search(e.get("text") or "") or _BAD_XML.search(e["comment"])):
+            reason = R_BAD_CHAR                             # 写不进 XML 的控制字符：不改、不猜（P3-2）
         if reason is None:
             p = items[e["para"] - 1][1]
             cid = cmt_next()

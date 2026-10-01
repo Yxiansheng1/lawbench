@@ -44,9 +44,10 @@ CONVERTED_NOTE = {"doc": "由 doc 转换", "wps": "由 wps 转换", "xls": "由 
 SHORTCUT_EXT = {".lnk", ".url"}
 ZIP_MAX_FILES = 500
 # 材料文本的格式版本（X13）：写在 _处理状态.md 里（那个文件"无固定格式"，不加契约字段）。版本变了，下次扫描时
-# 这几种材料原件没变也重新解析：2 = Excel 按显示值写（N27）、整份待识别的 Source 行写"待识别"（N28）
-TEXT_FORMAT_VERSION = 2
-REFORMAT_TYPES = ("xlsx", "xls", "pdf", "image")
+# 这几种材料原件没变也重新解析：2 = Excel 按显示值写（N27）、整份待识别的 Source 行写"待识别"（N28）；
+# 3 = Word 段落不再把段落制表位定义读成制表符（T15 复核 P2-1）
+TEXT_FORMAT_VERSION = 3
+REFORMAT_TYPES = ("xlsx", "xls", "pdf", "image", "docx", "doc", "wps")
 _FORMAT_LINE = re.compile(r"^材料文本格式版本：(\d+)\s*$", re.M)
 EXTERNAL_NOTE = "有外部链接，未重算公式"  # 契约 1.2 N21
 # 本服务在 工作区/临时/ 下自己建的项的前缀（X6 按前缀清残留）

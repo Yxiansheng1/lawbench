@@ -22,7 +22,8 @@ MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 NS = {"w": W}
 _P, _TBL, _SDT, _R, _T, _TAB, _BR, _CR = (f"{{{W}}}{t}" for t in ("p", "tbl", "sdt", "r", "t", "tab", "br", "cr"))
 _FALLBACK = f"{{{MC}}}Fallback"
-_SKIP = {f"{{{W}}}{t}" for t in ("del", "moveFrom", "delText", "instrText", "delInstrText")} | {_FALLBACK}
+# pPr / rPr：段落、run 的属性子树没有正文，但 pPr 里的制表位定义也叫 w:tab（T15 复核 P2-1）
+_SKIP = {f"{{{W}}}{t}" for t in ("del", "moveFrom", "delText", "instrText", "delInstrText", "pPr", "rPr")} | {_FALLBACK}
 _REVISION = {f"{{{W}}}{t}" for t in ("ins", "del", "moveFrom", "moveTo")}
 NOTE_REVISED = "含修订，已按修订后文本"
 

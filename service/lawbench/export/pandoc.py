@@ -49,7 +49,11 @@ def template_path(name: str, settings: dict) -> pathlib.Path:
 
 # ---------------------------------------------------------------- 去掉指向工作区的链接
 
-_INLINE = re.compile(r"(!?)\[((?:[^\[\]\\]|\\.)*)\]\(\s*<?([^()\s>]*(?:\([^()\s]*\)[^()\s>]*)*)>?(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)")
+_INLINE = re.compile(r"(!?)\[((?:[^\[\]\\]|\\.|!\[(?:[^\[\]\\]|\\.)*\]\([^()\n]*\))*)\]\(\s*(?:<([^<>\n]*)>|([^()\s<>]*(?:\([^()\s]*\)[^()\s<>]*)*))"
+                     r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)")
+_HTML_A = re.compile(r"<a\b[^>]*?\bhref\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a\s*>", re.I | re.S)
+_HTML_SRC = re.compile(r"<(?:img|source|iframe|embed|object)\b[^>]*?\b(?:src|data)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))[^>]*>",
+                       re.I)
 _AUTO = re.compile(r"<([^<>\s]+)>")
 _REFDEF = re.compile(r"^ {0,3}\[([^\]]+)\]:[ \t]*<?(\S+?)>?(?:[ \t]+.*)?$", re.M)
 _REFUSE = re.compile(r"(!?)\[((?:[^\[\]\\]|\\.)*)\]\[([^\]]*)\]")
@@ -71,7 +75,16 @@ def strip_workspace_links(md: str) -> str:
     """[文字](工作区/…) → 文字；![说明](工作区/…) → 说明；<工作区/…> → 去掉；引用式链接同样处理。"""
     refs = {m.group(1).casefold(): m.group(2) for m in _REFDEF.finditer(md)}
     md = _REFDEF.sub(lambda m: "" if _is_workspace(m.group(2)) else m.group(0), md)
-    md = _INLINE.sub(lambda m: m.group(2) if _is_workspace(m.group(3)) else m.group(0), md)
+    while True:                                     # 图片外再套链接 [![图](工作区/a)](工作区/b)：替换到不再变（P3-4）
+        new = _INLINE.sub(lambda m: m.group(2) if _is_workspace(m.group(3) if m.group(3) is not None
+                                                                  else m.group(4)) else m.group(0), md)
+        new = _HTML_A.sub(lambda m: m.group(4) if _is_workspace(next(g for g in m.group(1, 2, 3) if g is not None))
+                          else m.group(0), new)
+        new = _HTML_SRC.sub(lambda m: "" if _is_workspace(next(g for g in m.group(1, 2, 3) if g is not None))
+                            else m.group(0), new)
+        if new == md:
+            break
+        md = new
 
     def ref_use(m):
         key = (m.group(3) or m.group(2)).casefold()
@@ -92,7 +105,8 @@ def to_docx(md: str, reference_doc: pathlib.Path, pandoc: str | None = None) -> 
     exe = pandoc or find_pandoc()
     if not exe:
         raise ApiError("INTERNAL", "pandoc_not_found")
-    args = [exe, "--sandbox", "-f", "markdown", "-t", "docx", f"--reference-doc={reference_doc}", "-o", "-"]
+    # 关掉原始 OpenXML / HTML / TeX 透传：草稿里的 ```{=openxml} 块不原样写进 docx（复核 NOTE-1）
+    args = [exe, "--sandbox", "-f", "markdown-raw_attribute-raw_html-raw_tex", "-t", "docx", f"--reference-doc={reference_doc}", "-o", "-"]
     try:
         proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

@@ -17,6 +17,7 @@ from lxml import etree
 from .. import contracts
 from ..case import gate
 from ..errors import ApiError
+from ..ingest import ParseError
 from ..ingest import docx as dx
 from . import ToolContext
 
@@ -69,13 +70,30 @@ def _para_chars(p) -> list[tuple[str, bool]]:
     return out
 
 
+# 修订痕迹：内容的插入、删除、移动，以及格式、段落、节、表格属性的修改记录（T15 复核 P2-2）
+REVISION_TAGS = dx._REVISION | {f"{{{W}}}{t}" for t in (
+    "rPrChange", "pPrChange", "sectPrChange", "tblPrChange", "tblPrExChange", "trPrChange", "tcPrChange",
+    "tblGridChange", "numberingChange", "cellIns", "cellDel", "cellMerge", "customXmlInsRangeStart",
+    "customXmlDelRangeStart", "customXmlMoveFromRangeStart", "customXmlMoveToRangeStart")}
+
+
+def has_revisions(z: zipfile.ZipFile) -> bool:
+    """word/ 下所有部件（正文、页眉、页脚、脚注、尾注、批注……）有没有未处理的修订。Spec 12.2：有就整份不生成。"""
+    for name in z.namelist():
+        if name.startswith("word/") and name.endswith(".xml") and "/_rels/" not in name:
+            root = dx._parse_xml(z.read(name))
+            if any(isinstance(el.tag, str) and el.tag in REVISION_TAGS for el in root.iter()):
+                return True
+    return False
+
+
 def _paragraphs(path) -> tuple[list, bool, bool]:
     """(按段号排列的正文元素列表, 是否含修订, 是否有页眉页脚段)。"""
     with zipfile.ZipFile(path) as z:
         root = dx._parse_xml(z.read("word/document.xml"))
         has_extras = bool(dx._extras(z))
+        revised = has_revisions(z)
     body = root.find("w:body", dx.NS)
-    revised = any(isinstance(el.tag, str) and el.tag in dx._REVISION for el in root.iter())
     items = []
     for kind, el in dx._body_items(body):
         text = dx._text(el).strip() if kind == "p" else dx._table(el)
@@ -126,7 +144,7 @@ def save_edit_list(ctx: ToolContext, a: dict) -> dict:
         src = gate.resolve_read(ctx.root, m["rel_path"], op="save_edit_list")
         try:
             items, revised, has_extras = _paragraphs(src)
-        except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, OSError):
+        except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, OSError, ParseError):
             raise ApiError("MATERIAL_NOT_READY", "docx_unreadable")
         for e in a["edits"]:
             reason = R_REVISED if revised else _judge(e, items, has_extras)

@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import pathlib
+import re
 import zipfile
 
 import docx as pydocx
@@ -105,7 +106,7 @@ def view(p, mode: str) -> str:
                 out.append("\t")
             elif tag in (f"{{{W}}}br", f"{{{W}}}cr"):
                 out.append(" ")
-            elif tag not in (f"{{{W}}}instrText", f"{{{W}}}delInstrText"):
+            elif tag not in (f"{{{W}}}instrText", f"{{{W}}}delInstrText", f"{{{W}}}pPr", f"{{{W}}}rPr"):
                 walk(ch)
 
     walk(p)
@@ -336,3 +337,126 @@ def test_libreoffice_opens_and_keeps_revisions(tmp_path):
         assert doc.count("<w:ins ") >= 6 and doc.count("<w:del ") >= 6
         assert R.AUTHOR in doc
         assert "word/comments.xml" in z.namelist() and "第9条的理由" in z.read("word/comments.xml").decode()
+
+
+# ---------------------------------------------------------------- 第一轮复核返修（2259 令）
+
+def test_tab_stop_paragraph_replaced():
+    """P2-1：段落设了制表位（w:pPr/w:tabs/w:tab）也能改；制表位定义不再被读成制表符。"""
+    d = pydocx.Document()
+    p = d.add_paragraph()
+    p.paragraph_format.tab_stops.add_tab_stop(pydocx.shared.Cm(8))
+    p.add_run("甲方：青禾建材\t乙方：某某钢构")
+    buf = io.BytesIO()
+    d.save(buf)
+    para = body_paras(buf.getvalue())[0]
+    assert "".join(c for c, _ in el._para_chars(para)) == "甲方：青禾建材\t乙方：某某钢构"
+    assert dx._text(para) == "甲方：青禾建材\t乙方：某某钢构"
+    out, applied, manual = R.generate(buf.getvalue(), [
+        {"id": 1, "para": 1, "action": "replace", "find": "某某钢构", "text": "某某钢构有限公司", "comment": "全称"}])
+    assert applied == [1] and manual == []
+    assert view(body_paras(out)[0], "accept") == "甲方：青禾建材\t乙方：某某钢构有限公司"
+
+
+def _patched(data: bytes, part: str, fn) -> bytes:
+    zin = zipfile.ZipFile(io.BytesIO(data))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for n in zin.namelist():
+            b = zin.read(n)
+            z.writestr(n, fn(b) if n == part else b)
+    return buf.getvalue()
+
+
+W_INS = (b'<w:ins w:id="901" w:author="\xe5\xaf\xb9\xe6\x96\xb9" w:date="2026-01-01T00:00:00Z">'
+         b'<w:r><w:t>X</w:t></w:r></w:ins>')
+
+
+@pytest.mark.parametrize("part,fn", [
+    ("word/header1.xml", lambda b: b.replace(b"</w:p>", W_INS + b"</w:p>", 1)),           # 页眉里的插入
+    ("word/footer1.xml", lambda b: b.replace(b"</w:p>", W_INS + b"</w:p>", 1)),           # 页脚
+    ("word/document.xml", lambda b: re.sub(                                               # 正文的格式修订
+        rb"<w:rPr>", b'<w:rPr><w:rPrChange w:id="902" w:author="x" w:date="2026-01-01T00:00:00Z"><w:rPr/>'
+        b"</w:rPrChange>", b, count=1)),
+    ("word/document.xml", lambda b: re.sub(                                               # 段落属性修订
+        rb"(<w:body><w:p\b[^>]*>)", rb'\1<w:pPr><w:pPrChange w:id="903" w:author="x" w:date="2026-01-01T00:00:00Z">'
+        rb"<w:pPr/></w:pPrChange></w:pPr>", b, count=1)),
+])
+def test_revisions_anywhere_rejected(part, fn):
+    """P2-2：页眉、页脚、正文格式修订、段落属性修订都算"已有修订"，整份拒绝；保存修改清单时也同口径。"""
+    data = _patched(CONTRACT.read_bytes(), part, fn)
+    assert zipfile.ZipFile(io.BytesIO(data)).read(part) != zipfile.ZipFile(CONTRACT).read(part)   # 真的改进去了
+    with pytest.raises(R.Revised):
+        R.generate(data, [dict(id=1, comment="x", **IN_SCOPE[0])])
+    assert el.has_revisions(zipfile.ZipFile(io.BytesIO(data)))
+    assert not el.has_revisions(zipfile.ZipFile(CONTRACT))
+
+
+def test_bad_control_chars_go_manual():
+    """P3-2：修改文字或批注里有 XML 写不了的控制字符：该条进需人工修改，不出 500。"""
+    out, applied, manual = R.generate(CONTRACT.read_bytes(), [
+        {"id": 1, "para": 27, "action": "replace", "find": "九十日", "text": "三十\x0b日", "comment": "c"},
+        {"id": 2, "para": 23, "action": "replace", "find": "七日", "text": "十五日", "comment": "理由\x01"},
+        {"id": 3, "para": 31, "action": "replace", "find": "万分之五", "text": "万分之三", "comment": "正常"}])
+    assert applied == [3] and manual == [{"id": 1, "reason": R.R_BAD_CHAR}, {"id": 2, "reason": R.R_BAD_CHAR}]
+
+
+def test_duplicate_ids_rejected(env, tid):
+    """P3-3：清单 id 重复：库层抛错、接口 INVALID_ARGUMENT，不会把表格里那条也改了。"""
+    edits = [dict(id=1, comment="x", **IN_SCOPE[0]), dict(id=1, comment="y", **OUT_OF_SCOPE[0][0])]
+    with pytest.raises(ValueError):
+        R.generate(CONTRACT.read_bytes(), edits)
+    lst = env.task_dir(tid) / "修改清单"
+    lst.mkdir(parents=True, exist_ok=True)
+    (lst / "重复.json").write_text(json.dumps({"name": "采购合同", "edits": edits}, ensure_ascii=False), encoding="utf-8")
+    fail(redline(env, tid, f"工作区/任务/{tid}/修改清单/重复.json"), "INVALID_ARGUMENT")
+
+
+def test_doctype_docx_not_ready(env, tid):
+    """P3-1：document.xml 带 DOCTYPE 的损坏 docx：保存修改清单和生成修订版都回 MATERIAL_NOT_READY，不出 500。"""
+    bad = _patched(CONTRACT.read_bytes(), "word/document.xml",
+                   lambda b: b.replace(b"<w:document", b'<!DOCTYPE x [<!ENTITY a "b">]><w:document', 1))
+    (env.root / "合同" / "坏合同.docx").write_bytes(bad)
+    try:
+        ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+        fail(env.tool(tid, "case_save_edit_list", {"name": "坏合同", "edits": [dict(id=1, comment="x", **IN_SCOPE[0])]}),
+             "MATERIAL_NOT_READY")
+        lst = env.task_dir(tid) / "修改清单"
+        lst.mkdir(parents=True, exist_ok=True)
+        (lst / "坏合同.json").write_text(json.dumps({"name": "坏合同", "edits": [dict(id=1, comment="x", **IN_SCOPE[0])]},
+                                                  ensure_ascii=False), encoding="utf-8")
+        r = redline(env, tid, f"工作区/任务/{tid}/修改清单/坏合同.json")
+        assert r.status_code == 200 and r.json()["error"]["code"] in ("MATERIAL_NOT_READY", "INVALID_ARGUMENT")
+    finally:
+        (env.root / "合同" / "坏合同.docx").unlink()
+        ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+
+
+def test_insert_after_whole_link_goes_manual():
+    """NOTE-2（线 C 选"进需人工修改"）：insert_after 的 find 落在超链接末尾，插入的文字会进链接 → 不改。"""
+    data = CONTRACT.read_bytes()
+    link = "".join(t.text for t in body_paras(data)[38].find(f".//{{{W}}}hyperlink").iter(f"{{{W}}}t"))
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 39, "action": "insert_after", "find": link[-6:], "text": "（附件二）", "comment": "c"},
+        {"id": 2, "para": 39, "action": "replace", "find": link[-6:], "text": "x", "comment": "替换照做"}])
+    assert manual == [{"id": 1, "reason": R.R_IN_LINK}] and applied == [2]
+
+
+def test_author_and_date_fixed():
+    """P3-5：作者固定"AI审查（待律师确认）"、不取本机用户名；日期是 UTC 带 Z。"""
+    out, applied, _ = R.generate(CONTRACT.read_bytes(), [dict(id=1, comment="x", **IN_SCOPE[0])])
+    z = zipfile.ZipFile(io.BytesIO(out))
+    doc = dx._parse_xml(z.read("word/document.xml"))
+    marks = list(doc.iter(f"{{{W}}}ins")) + list(doc.iter(f"{{{W}}}del")) + \
+        list(dx._parse_xml(z.read("word/comments.xml")))
+    assert R.AUTHOR == "AI审查（待律师确认）"
+    for m in marks:
+        assert m.get(f"{{{W}}}author") == "AI审查（待律师确认）"
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", m.get(f"{{{W}}}date"))
+
+
+def test_run_text_must_equal_judged_text(monkeypatch):
+    """P3-5：按 run 数出的原文与判范围时的原文不一致（少见结构）就不改，进需人工。"""
+    monkeypatch.setattr(R, "_slot_text", lambda slots: "对不上")
+    out, applied, manual = R.generate(CONTRACT.read_bytes(), [dict(id=1, comment="x", **IN_SCOPE[0])])
+    assert applied == [] and manual == [{"id": 1, "reason": R.R_STRUCTURE}]

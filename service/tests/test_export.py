@@ -264,3 +264,77 @@ def test_strip_workspace_links_unit():
     assert s("[网](https://example.com) <https://example.com> <br> [锚](#一)") == \
         "[网](https://example.com) <https://example.com> <br> [锚](#一)"
     assert s("〔借条 第1段〕【待补充：金额】") == "〔借条 第1段〕【待补充：金额】"
+
+
+# ---------------------------------------------------------------- 第一轮复核返修（2259 令）
+
+def test_strip_three_more_forms():
+    """P3-4：尖括号目标带空格、原始 HTML 的 href / src、图片外再套链接。"""
+    s = P.strip_workspace_links
+    assert s("[x](<工作区/材料/文本/M 1.md>)") == "x"
+    assert s('<a href="工作区/材料/a.md">原文</a>与<a href=\'https://example.com\'>网</a>') == \
+        "原文与<a href='https://example.com'>网</a>"
+    assert s('前<img src="工作区/临时/a.png">后') == "前后"
+    assert s("[![图](工作区/a.png)](工作区/b.md)") == "图"
+    assert s("[![图](https://example.com/a.png)](工作区/b.md)") == "![图](https://example.com/a.png)"
+
+
+@needs_pandoc
+def test_raw_openxml_not_passed_through(env, tid):
+    """NOTE-1：草稿里的 ```{=openxml} 块（INCLUDEPICTURE 外链）不原样写进 docx。"""
+    raw = ('<w:p><w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r><w:r><w:instrText>'
+           ' INCLUDEPICTURE "http://127.0.0.1:9/x.png" \\\\d </w:instrText></w:r>'
+           '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>')
+    rel = draft(env, tid, "原始块", f"正文〔推断〕\n\n```{{=openxml}}\n{raw}\n```\n\n`<w:p/>`{{=openxml}}\n")
+    v = ok(confirm(env, tid, rel, formats=["docx"]), "api/outputs_confirm.schema.json")
+    _text, xml, _rels = docx_text((env.root / v["outputs"][0]["path"]).read_bytes())
+    # 原始块只会作为普通文字（代码样式）出现，不会成为真正的域
+    assert "<w:instrText" not in xml and "<w:fldChar" not in xml and "<w:fldSimple" not in xml
+
+
+@needs_pandoc
+def test_concurrent_confirms_distinct_versions(env, tid):
+    """P3-5：同一案件并发确认 4 次，版本 v1–v4 不撞（案件锁）。"""
+    import concurrent.futures
+    rel = draft(env, tid, "并发", "正文〔推断〕")
+    with concurrent.futures.ThreadPoolExecutor(4) as ex:
+        rs = list(ex.map(lambda _i: confirm(env, tid, rel, formats=["md", "docx"]), range(4)))
+    versions = sorted(ok(r, "api/outputs_confirm.schema.json")["outputs"][0]["version"] for r in rs)
+    assert versions == [1, 2, 3, 4]
+    entries = [o for o in index(env)["outputs"] if o["title"] == "并发"]
+    assert sorted(o["version"] for o in entries) == [1, 2, 3, 4]
+
+
+def test_index_write_failure_rolls_back(env, tid, monkeypatch):
+    """P3-5：写 成果/索引.json 失败：刚导出的成果文件也删掉，索引不变。"""
+    from lawbench.export import outputs as O
+    rel = draft(env, tid, "写索引失败", "正文〔推断〕")
+    real = O.gate.write_bytes
+
+    def boom(root, r, data, op="write"):
+        if r == O.OUTPUTS_REL:
+            raise OSError(28, "disk full")
+        return real(root, r, data, op=op)
+    monkeypatch.setattr(O.gate, "write_bytes", boom)
+    before = (env.root / "成果" / "索引.json").read_bytes() if (env.root / "成果" / "索引.json").exists() else None
+    r = confirm(env, tid, rel, formats=["md"])
+    assert r.json()["ok"] is False
+    assert not list((env.root / "成果").glob("写索引失败-v*"))
+    after = (env.root / "成果" / "索引.json").read_bytes() if (env.root / "成果" / "索引.json").exists() else None
+    assert after == before
+
+
+def test_logs_have_no_titles_or_content(env, tid):
+    """P3-5：确认保存与修订版之后，服务日志里没有标题、正文、材料名、修改内容。"""
+    from lawbench import logs
+    logs.setup(pathlib.Path(env.appdata))                  # 别的模块建的服务会把日志改指到它的目录：指回本服务
+    rel = draft(env, tid, "日志核对标题甲", "日志核对正文乙〔推断〕")
+    ok(confirm(env, tid, rel, formats=["md"]), "api/outputs_confirm.schema.json")
+    path = env.tool_ok(tid, "case_save_edit_list", {"name": "采购合同", "edits": [
+        {"id": 1, "para": 27, "action": "replace", "find": "九十日", "text": "日志核对新文字丙", "comment": "日志核对批注丁"}]})["path"]
+    ok(env.client.post("/api/redline", json={"case_id": env.case_id, "task_id": tid, "edit_list": path}),
+       "api/redline.schema.json")
+    log = "".join(p.read_text(encoding="utf-8") for p in (pathlib.Path(env.appdata) / "logs").glob("service.log*"))
+    assert '"op": "confirm"' in log and '"op": "redline"' in log
+    for word in ("日志核对标题甲", "日志核对正文乙", "日志核对新文字丙", "日志核对批注丁", "采购合同", "修订版", "九十日"):
+        assert word not in log, word

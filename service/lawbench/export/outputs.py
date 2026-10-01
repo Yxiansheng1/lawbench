@@ -21,6 +21,7 @@ from .. import checks, contracts, logs
 from ..case import gate
 from ..case.task import OUTPUTS_REL, now_iso, sha256_file
 from ..errors import ApiError
+from ..ingest import ParseError
 from . import pandoc, redline
 
 OUTPUT_DIR = "成果"
@@ -188,11 +189,15 @@ class Exporter:
         src = gate.resolve_read(root, m["rel_path"], op="redline")
         if not src.is_file() or sha256_file(src) != m["sha256"]:   # 原件在保存修改清单之后改过：段号可能对不上
             raise ApiError("INPUT_CHANGED", "original_changed")
+        ids = [e["id"] for e in edits["edits"]]
+        if len(ids) != len(set(ids)):
+            raise ApiError("INVALID_ARGUMENT", "duplicate_edit_id")
         try:
             data, applied, manual = redline.generate(src.read_bytes(), edits["edits"])
         except redline.Revised:
+            # 契约 1.4 加专用码 ORIGINAL_HAS_REVISIONS（主编排 2259 定）；1.4 之前过渡用 INVALID_ARGUMENT
             raise ApiError("INVALID_ARGUMENT", "original_has_revisions")
-        except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError):
+        except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, ParseError):
             raise ApiError("MATERIAL_NOT_READY", "docx_unreadable")
 
         title = m["name"].replace("/", "_").replace("\\", "_") + "-修订版"
