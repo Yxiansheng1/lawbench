@@ -21,6 +21,14 @@ rg.MUTATIONS = [
     ("控制字符整段都算（不只换行）", "contracts.py", [
         ('_CONTROL = re.compile(r"[\\x00-\\x1f\\x7f-\\x9f]")', '_CONTROL = re.compile(r"[\\n]")'),
     ], R),
+    # ---- 第二轮复核小项（注记 20261001-1644） ----
+    ("P3-a·沿 $ref 进整份文档仍用扩展校验器（去掉 $schema）", "contracts.py", [
+        ('        body = {k: v for k, v in sch.items() if k != "$schema"}', "        body = sch"),
+    ], f"{R} -k ref_into_whole_documents"),
+    ("P3-b·rel_path 放行 DEL 与 C1", "contracts.py", [
+        ("        ctrl = _CONTROL_REL_PATH if value == _rel_path_pattern(str(_dir)) else _CONTROL",
+         "        ctrl = _CONTROL"),
+    ], f"{R} -k 'rel_path_allows or c1_file_name'"),
 ]
 
 _run = rg.run

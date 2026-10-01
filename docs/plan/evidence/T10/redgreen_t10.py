@@ -136,7 +136,7 @@ rg.MUTATIONS = [
         ("    for d in reversed(list(skills_dirs or ())):", "    for d in skills_dirs or ():"),
     ], f"{R} -k skill_kind_admin"),
     ("P3-4·SKILL.md 头部去 BOM", "checks/__init__.py", [
-        ('.read_text(encoding="utf-8").lstrip("\\ufeff")', '.read_text(encoding="utf-8")'),
+        ('.read_text(encoding="utf-8", errors="replace").lstrip("\\ufeff")', '.read_text(encoding="utf-8", errors="replace")'),
     ], f"{R} -k skill_kind_admin"),
     ("裁决 4·所标位置只用中文数字写时不报", "checks/citations.py", [
         ("        if any(_chinese_only(m.text_at(loc), values_at(m, loc), k, v) for m, loc in targets):",

@@ -1,0 +1,18 @@
+T10 第二轮复核小项红绿：2 类防护
+
+[01] P3-c·只写年份：同处有阿拉伯数字年份就照常核
+  改坏 checks/citations.py → 红：1 failed, 99 deselected in 0.39s
+      变红的用例：
+        tests/test_checks.py::test_year_only_not_exempted_by_chinese_amount
+  复原 → 绿：1 passed, 99 deselected in 0.14s
+
+[02] SKILL.md 不是 UTF-8 时不抛
+  改坏 checks/__init__.py → 红：1 failed, 99 deselected in 0.58s
+      变红的用例：
+        tests/test_checks.py::test_skill_md_not_utf8
+  复原 → 绿：1 passed, 99 deselected in 0.20s
+
+源码与开始时逐字节一致：是
+复原后全量：（本脚本不跑全量，见 T3\pytest-单行.txt）
+
+结论：2/2 类防护 改坏即红、复原即绿

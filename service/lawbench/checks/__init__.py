@@ -22,7 +22,7 @@ def skill_kind(skills_dirs, skill: str | None) -> str:
     for d in reversed(list(skills_dirs or ())):
         p = pathlib.Path(d) / skill / "SKILL.md"
         try:
-            text = p.read_text(encoding="utf-8").lstrip("\ufeff")
+            text = p.read_text(encoding="utf-8", errors="replace").lstrip("\ufeff")   # \u4e0d\u662f UTF-8 \u4e5f\u4e0d\u629b
         except OSError:
             continue
         head = text.split("---", 2)[1] if text.startswith("---") and text.count("---") >= 2 else ""

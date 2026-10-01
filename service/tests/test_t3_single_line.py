@@ -63,3 +63,51 @@ def test_t8_draft_title_with_newline_rejected_content_multiline_ok(env):
     assert not (env.task_dir(tid) / "草稿").exists() or not list((env.task_dir(tid) / "草稿").iterdir())
     v = env.tool_ok(tid, "case_save_draft", {"title": "报告", "content": "第一行\n第二行\r\n\t第三行\n"})
     assert v["version"] == 1
+
+
+# ---------- 第二轮复核 P3-a、P3-b（注记 20261001-1644） ----------
+
+def test_ref_into_whole_documents_keeps_check():
+    """沿 $ref 进到写了 "$schema" 的整份文档时照样拦（P3-a）：文件级 schema、capsules 请求。"""
+    import json
+    from lawbench.config import REPO_ROOT
+    ex = json.loads((REPO_ROOT / "contracts" / "examples" / "file_material_index.json").read_text(encoding="utf-8"))
+    assert not contracts.errors("files/material_index.schema.json", "", ex)
+    ex["materials"][0]["rel_path"] += "\n"
+    assert contracts.errors("files/material_index.schema.json", "", ex)
+    caps = json.loads((REPO_ROOT / "contracts" / "examples" / "skill_capsules.json").read_text(encoding="utf-8"))
+    assert not contracts.errors("api/capsules.schema.json", "#/$defs/request", caps)
+    caps["groups"][0]["items"][0]["id"] += "\n"
+    assert contracts.errors("api/capsules.schema.json", "#/$defs/request", caps)
+
+
+@pytest.mark.parametrize("ch", ["\x7f", "\x85", "\x9f"], ids=["DEL", "NEL", "x9f"])
+def test_rel_path_allows_del_and_c1(ch):
+    """rel_path 只拦 0x00–0x1f，放行 Windows 文件名允许的 DEL 与 C1（P3-b，主编排定）；别的字段照旧全拦。"""
+    assert not contracts.errors("common.schema.json", "#/$defs/rel_path", f"证据/借{ch}条.txt")
+    assert contracts.errors("common.schema.json", "#/$defs/rel_path", "证据/借条.txt\n")
+    assert contracts.errors("common.schema.json", "#/$defs/rel_path", "证据/借\x01条.txt")
+    assert contracts.errors("tools/case_save_draft.schema.json", "#/$defs/args", {"title": f"报{ch}告", "content": "x"})
+
+
+@pytest.mark.parametrize("validate", [True, False], ids=["开发测试-校验返回", "生产-不校验返回"])
+def test_c1_file_name_listed_and_importable(make_client, cases_dir, tmp_path, validate):
+    """原件区有"借\\x85条.txt"：扫描、列表 200（开发测试模式校验返回、生产模式不校验，两种都过）；
+    导入到名字含 \\x85 的文件夹也能导入（P3-b）。"""
+    client = make_client(validate_responses=validate)
+    root = cases_dir / "C1文件名"
+    root.mkdir()
+    (root / "借\x85条.txt").write_text("借款80,000元\n", encoding="utf-8")
+    cid = ok(client.post("/api/case/open", json={"path": str(root)}), "api/case_open.schema.json")["case_id"]
+    ok(client.post("/api/materials/scan", json={"case_id": cid}), "api/materials_scan.schema.json")
+    r = client.get("/api/materials", params={"case_id": cid})
+    assert r.status_code == 200
+    v = ok(r, "api/materials_list.schema.json")
+    assert any(m["rel_path"] == "借\x85条.txt" for m in v["materials"])
+    src = tmp_path / "外部"
+    src.mkdir()
+    (src / "收据.txt").write_text("收到\n", encoding="utf-8")
+    r = client.post("/api/materials/import", json={"case_id": cid, "paths": [str(src / "收据.txt")],
+                                                  "target": "收\x85件", "unzip": False})
+    assert r.status_code == 200 and r.json()["ok"] is True, r.text
+    assert (root / "收\x85件" / "收据.txt").is_file()

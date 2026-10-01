@@ -347,6 +347,8 @@ def _chinese_only(text: str, values: tuple[set, set], kind: str, v) -> bool:
         return not dates and bool(_CN_DATE.search(text))
     if v.startswith("%"):
         return not any(n.startswith("%") for n in nums) and "百分之" in text
+    if v.startswith("年"):          # 只写年份：同处有阿拉伯数字的年份就照常核（第二轮复核 P3-c）
+        return not any(n.startswith("年") for n in nums) and bool(_CN_DATE.search(text))
     return not any(not n.startswith(("%", "年")) for n in nums) and bool(_CN_AMOUNT.search(text))
 
 

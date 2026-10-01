@@ -58,7 +58,8 @@ MATS = MaterialSet.from_texts([
     {"name": "坏件", "material_id": "M0005", "sha256": "e" * 64, "unit": "page", "text": None},
     {"name": "收条", "material_id": "M0006", "sha256": "f" * 64, "unit": "para",
      "text": "【第1段】\n二〇二五年三月十二日，今收到人民币捌万元整，年利率百分之十二。\n\n"
-             "【第2段】\n今收到人民币捌万元整（¥80,000）。\n"},
+             "【第2段】\n今收到人民币捌万元整（¥80,000）。\n\n"
+             "【第3段】\n2025年收到人民币捌万元整。\n"},
 ])
 
 
@@ -268,6 +269,21 @@ def test_no_second_citation_regex_in_code():
     pat = json.loads((REPO_ROOT / "contracts" / "common.schema.json").read_text(encoding="utf-8"))
     src = "".join(p.read_text(encoding="utf-8") for p in (REPO_ROOT / "service" / "lawbench").rglob("*.py"))
     assert "(未找到依据|推断" not in src and pat["$defs"]["citation_text"]["pattern"][:20] not in src
+
+
+def test_year_only_not_exempted_by_chinese_amount():
+    """所标位置有阿拉伯数字年份、金额是中文：年份写错照常报，金额不比对（第二轮复核 P3-c，cn6/cn7）。"""
+    check, _ = run("2024年收到〔收条 第3段〕。")
+    assert classes(check) == ["C"] and not check["passed"]                  # cn6
+    check, _ = run("2025年收到80,000元〔收条 第3段〕。")
+    assert check["passed"] and check["problems"] == []                      # cn7
+
+
+def test_skill_md_not_utf8(tmp_path):
+    """SKILL.md 不是 UTF-8 时不抛（save_draft 先写草稿后核对，抛了会留下没登记的草稿）。"""
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "SKILL.md").write_bytes("---\nname: x\nkind: excerpt\ndescription: 中文说明\n---\n".encode("gbk"))
+    assert skill_kind([tmp_path], "x") == "excerpt"
 
 
 def test_merge_keeps_latest_version():

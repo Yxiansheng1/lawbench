@@ -13,18 +13,29 @@ import time
 from functools import lru_cache
 
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError, validators
-from referencing import Registry, Resource
+from referencing import Registry
+from referencing.jsonschema import DRAFT202012
 
 # 带 pattern 的字符串字段（编号、期间、批次名、标题、相对路径……）一律是单行：含换行或其他控制字符
 # （Unicode Cc）就不合契约。Python 正则的 $ 会放过结尾的换行，"2026-09\n" 能匹配 ^…$（T3 小项，
 # 执行令 20261001-1246）。format: date 字段由日期校验整串解析，本来就不收换行。
 # 草稿正文这类多行自由文本字段没有 pattern，不受影响。
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+# rel_path（原件区相对路径）由扫描产生、不是律师输入；Windows 文件名允许 DEL 与 C1（0x7f–0x9f），
+# 只拦 0x00–0x1f（主编排定，T10/T3 第二轮复核 P3-b）
+_CONTROL_REL_PATH = re.compile(r"[\x00-\x1f]")
+
+
+@lru_cache(maxsize=4)
+def _rel_path_pattern(contracts_dir: str) -> str:
+    return json.loads((pathlib.Path(contracts_dir) / "common.schema.json").read_text(encoding="utf-8"))[
+        "$defs"]["rel_path"]["pattern"]
 
 
 def _single_line(builtin):
     def check(validator, value, instance, schema):
-        if validator.is_type(instance, "string") and _CONTROL.search(instance):
+        ctrl = _CONTROL_REL_PATH if value == _rel_path_pattern(str(_dir)) else _CONTROL
+        if validator.is_type(instance, "string") and ctrl.search(instance):
             yield ValidationError("含换行或控制字符")
             return
         yield from builtin(validator, value, instance, schema)
@@ -63,7 +74,10 @@ def registry() -> Registry:
     reg = Registry()
     for p in sorted(_dir.rglob("*.schema.json")):
         sch = json.loads(p.read_text(encoding="utf-8"))
-        reg = reg.with_resource(sch["$id"], Resource.from_contents(sch))
+        # 去掉 "$schema"、按 2020-12 登记：jsonschema 沿 $ref 进到写了 "$schema" 的整份文档时会换回自带的
+        # Draft202012Validator，_Validator 的单行检查就丢了（T10/T3 第二轮复核 P3-a）
+        body = {k: v for k, v in sch.items() if k != "$schema"}
+        reg = reg.with_resource(sch["$id"], DRAFT202012.create_resource(body))
     return reg
 
 
