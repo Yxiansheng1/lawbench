@@ -79,7 +79,7 @@ def test_command_details(tmp_path):
     job = str(tmp_path / "日常办公" / "发票台账" / "_任务" / "2026-09")
     assert argv_of(r, {"action": "env_check"}) == ["env_check.py", "--deep", "--ocr"]
     assert argv_of(r, {"action": "reprint", "batch": "九月"}) == ["workflow.py", "reprint", "--ledger", ledger,
-                                                                 "--batch", "九月"]       # reprint 不带 --apply
+                                                                 "--batch=九月"]          # reprint 不带 --apply
     assert argv_of(r, {"action": "cancel", "batch": "九月", "apply": False})[-1] == "--apply"  # 回写③：一律带
     assert "--apply" not in argv_of(r, {"action": "reimburse", "batch": "九月", "apply": False})
     run = argv_of(r, {"action": "run", "period": "2026-09", "batch": "九月", "src": str(FIXTURES), "channel": "eml"})
@@ -118,7 +118,7 @@ def test_refused_commands(argv):
 
 def test_batch_value_named_like_subcommand_is_fine(tmp_path):
     """参数值不在拒绝范围：批次叫 attach 也照常（只挡子命令位置和参数名）。"""
-    assert "attach" in argv_of(make_runner(tmp_path), {"action": "reprint", "batch": "attach"})
+    assert "--batch=attach" in argv_of(make_runner(tmp_path), {"action": "reprint", "batch": "attach"})
 
 
 @pytest.mark.parametrize("body", [
@@ -266,6 +266,8 @@ def period(tmp_path_factory):
     r = R.InvoiceRunner(FakeSettings(str(base / "office")), base / "ad")
     ledger = base / "office" / "发票台账"
     res: dict = {}
+    from lawbench import logs
+    res["log_dir"] = logs.setup(base / "logs")                       # 全程的服务日志（A-P2-3）
 
     def step(name, req):
         try:
@@ -290,6 +292,8 @@ def period(tmp_path_factory):
     step("reprint", {"action": "reprint", "batch": "2026-09_九月"})
     step("reimburse", {"action": "reimburse", "batch": "2026-09_九月", "apply": True})
     step("report", {"action": "report"})
+    step("dash_batch", {"action": "reprint", "batch": "-x"})         # 以 - 开头的值不被当成参数
+    logs.close()
     yield base, res
     shutil.rmtree("\\\\?\\" + str(base), ignore_errors=True)
 
@@ -335,17 +339,18 @@ def test_full_period_reimburse(period):
     assert paid == {"26999000000000410002", "26999000000000410003"}
 
 
-def test_logs_have_no_invoice_details(period, tmp_path):
-    """日志只有动作名、退出码、耗时：票号、金额、购买方名称都不出现。"""
-    from lawbench import logs
-    log_dir = logs.setup(tmp_path)
-    r = R.InvoiceRunner(FakeSettings(str(period[0] / "office")), period[0] / "ad")
-    r.run({"action": "report"})
-    logs.close()
-    text = (log_dir / "service.log").read_text(encoding="utf-8")
-    assert '"module": "invoice"' in text and '"op": "report"' in text
-    for s in SECRETS:
-        assert s not in text
+def test_logs_have_no_invoice_details(period):
+    """一期全程（plan、run、analyze、exclude、prepare、reimburse、report……）的服务日志：每行只有固定字段，
+    票号、金额、购买方名称、文件名都不出现（把引擎输出写进日志的变异会让它变红）。"""
+    _, res = period
+    text = (res["log_dir"] / "service.log").read_text(encoding="utf-8")
+    rows = [json.loads(x) for x in text.splitlines() if x.strip()]
+    ops = {r_["op"] for r_ in rows if r_["module"] == "invoice"}
+    assert {"plan", "run", "analyze", "exclude", "prepare", "reimburse", "report"} <= ops
+    for row in rows:
+        assert set(row) <= {"t", "module", "op", "status", "case_id", "ms", "error"}, row
+    for secret in (*SECRETS, "发票01", "办公用品", "收集任务有待处理"):
+        assert secret not in text
 
 
 def test_api_contract_roundtrip(client, tmp_path, monkeypatch):
@@ -413,3 +418,114 @@ def test_buyer_copy_cases(tmp_path, buyer, html_text, made):
     else:
         assert len(copies) == 1 and out == [str(copies[0])]
         assert "&lt;律所&gt;" in copies[0].read_text(encoding="utf-8") and "<" not in copies[0].name
+
+
+
+# ---------------------------------------------------------------- T25 返修
+
+def test_dash_leading_value_not_taken_as_option(period):
+    """批次名以 - 开头：拼成 --batch=-x，引擎当值处理（报批次不存在），不是"用法错误"被当成须看明细。"""
+    _, res = period
+    v = res["dash_batch"]
+    assert v["failed"] is True and v["attention"] is False
+    assert "usage:" not in v["output"].lower() and "[BLOCKED]" in v["output"]
+
+
+def test_free_text_values_use_equals_form(tmp_path):
+    r = make_runner(tmp_path)
+    ex = argv_of(r, {"action": "exclude", "period": "2026-09", "item": "b" * 64, "reason": "-理由", "reviewer": "-x",
+                     "confirm": True})
+    assert "--reason=-理由" in ex and "--reviewer=-x" in ex
+    assert "--batch=-x" in argv_of(r, {"action": "reprint", "batch": "-x"})
+    rv = argv_of(r, {"action": "review", "sha256": "a" * 64, "reviewer": "-y", "confirm": False})
+    assert "--reviewer=-y" in rv
+
+
+def test_busy_returns_engine_busy_without_starting_engine(tmp_path, monkeypatch):
+    """前一个动作在跑：第二个请求等 2 秒后得 ENGINE_BUSY，且它的引擎根本没起（不排队执行不可逆动作，B-P2-1）。"""
+    import threading
+    import time
+    r = make_runner(tmp_path)
+    started, release = [], threading.Event()
+
+    def slow(argv):
+        started.append(argv[1] if len(argv) > 1 else argv[0])
+        release.wait(20)
+        return 0, ""
+    monkeypatch.setattr(r, "_exec", slow)
+    t = threading.Thread(target=r.run, args=({"action": "report"},))
+    t.start()
+    while not started:
+        time.sleep(0.01)
+    t0 = time.monotonic()
+    with pytest.raises(ApiError) as e:
+        r.run({"action": "cancel", "batch": "九月", "apply": True})
+    waited = time.monotonic() - t0
+    release.set()
+    t.join()
+    assert e.value.code == "ENGINE_BUSY" and 1.8 <= waited < 5
+    assert started == ["report"]                                   # cancel 没有启动
+
+
+def test_api_busy_contract(client, tmp_path, monkeypatch):
+    import threading
+    s = ok(client.get("/api/settings"), "settings")
+    s["office"]["dir"] = str(tmp_path / "日常办公")
+    ok(client.put("/api/settings", json=s), "settings")
+    st = client.app.state.lb
+    st.invoice._lock.acquire()
+    try:
+        fail(client.post("/api/invoice/run", json={"action": "report"}), "invoice_run", "ENGINE_BUSY")
+    finally:
+        st.invoice._lock.release()
+
+
+def test_missing_entry_is_engine_failed_spawn(tmp_path):
+    eng = tmp_path / "eng"
+    (eng / "scripts").mkdir(parents=True)                            # 没有 invoke.py
+    r = make_runner(tmp_path, engine_dir=eng)
+    with pytest.raises(ApiError) as e:
+        r.run({"action": "report"})
+    assert e.value.code == "ENGINE_FAILED" and e.value.reason == "spawn"
+
+
+@pytest.fixture(scope="module")
+def period_clean(tmp_path_factory):
+    """只有发票 02、03 的一期：没有待核项，run 一口气走到 prepare（A-P2-1）。"""
+    base = pathlib.Path(os.environ.get("TEMP", tmp_path_factory.getbasetemp())) / f"lbiw{os.getpid()}"
+    shutil.rmtree(base, ignore_errors=True)
+    (base / "src").mkdir(parents=True)
+    for name in ("发票02-差旅住宿.pdf", "发票03-交通.pdf"):
+        shutil.copy(FIXTURES / name, base / "src")
+    r = R.InvoiceRunner(FakeSettings(str(base / "office")), base / "ad")
+    r.run({"action": "plan", "period": "2026-09", "channel": "local", "history": "exclude", "history_numbers": []})
+    v = r.run({"action": "run", "period": "2026-09", "batch": "九月", "src": str(base / "src"), "channel": "local"})
+    yield base, v
+    shutil.rmtree("\\\\?\\" + str(base), ignore_errors=True)
+
+
+def test_run_also_writes_buyer_copy(period_clean):
+    base, v = period_clean
+    assert v["failed"] is False and v["exit_code"] == 0, v["output"][-500:]
+    names = [pathlib.Path(f).name for f in v["files"]]
+    assert f"贴票清单（{BUYER}）.html" in names and "贴票清单.html" not in names
+    copy = next(pathlib.Path(f) for f in v["files"] if pathlib.Path(f).name == f"贴票清单（{BUYER}）.html")
+    assert R.HARDCODED_BUYER not in copy.read_text(encoding="utf-8")
+
+
+def test_buyer_copy_write_failure_returns_original(tmp_path, monkeypatch):
+    """副本的位置被同名目录占住：run 照常返回成功体，files 是原清单，记一条 buyer_copy 日志。"""
+    from lawbench import logs
+    ledger, folder = _fake_batch(tmp_path, f"<p>购买方：{R.HARDCODED_BUYER}。</p>")
+    (folder / f"贴票清单（{BUYER}）.html").mkdir()
+    r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公")), tmp_path / "ad")
+
+    def fake_exec(argv):
+        os.utime(folder / "贴票清单.html")                            # 让它算作本次改动的产出
+        return 0, "ok"
+    monkeypatch.setattr(r, "_exec", fake_exec)
+    log_dir = logs.setup(tmp_path / "lg")
+    v = r.run({"action": "run", "period": "2026-09", "batch": "九月", "src": str(FIXTURES), "channel": "local"})
+    logs.close()
+    assert v["failed"] is False and str(folder / "贴票清单.html") in v["files"]
+    assert '"error": "buyer_copy"' in (log_dir / "service.log").read_text(encoding="utf-8")

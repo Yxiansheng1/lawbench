@@ -90,6 +90,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
             yield
         finally:
             st.ocr.stop()                # 未完成的任务标"已暂停（退出软件）"，下次启动接着做
+            st.retainer.close()          # 证件识别驱动随服务退出（T25 复核 A-P2-2）
 
     app = Starlette(routes=[Route("/health", health, methods=["GET"]), *ui.routes(st), *core.routes(st)],
                     lifespan=lifespan)

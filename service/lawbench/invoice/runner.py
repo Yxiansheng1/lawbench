@@ -4,8 +4,11 @@
   请求里的字段只作为参数值；绝不拼 --download-links、--imap-host、collect、attach（都要联网）。
 - 台账目录 <日常办公文件夹>/发票台账，任务目录 发票台账/_任务/<报销年月>（formats.md 1.2）。
 - 子进程环境清空，只传 Spec 13.3 名单里的变量（含 2026-09-30 回写的 INVOICE_RUNTIME_CACHE）。
-- 同一时间只运行一个动作；单个动作 30 分钟超时（连同引擎自己起的子进程一起结束）。
-- 退出码 0 成功；2 且输出没有 [BLOCKED] 为"须看明细"（attention）；其余为 ENGINE_FAILED。
+- 同一时间只运行一个动作：后到的等锁最多 2 秒，超过返回 ENGINE_BUSY（不排队——排队中的不可逆动作会在律师
+  放弃后照样执行，T25 复核 B-P2-1）；单个动作 30 分钟超时（连同引擎自己起的子进程一起结束）。
+- 退出码 0 成功；2 且没有以 [BLOCKED] 开头的行为"须看明细"（attention）；引擎自己报失败（[BLOCKED] 或退出码
+  不是 0/2）返回成功体 failed=true、原因在 output；引擎起不来、超时为 ENGINE_FAILED（契约 1.3）。
+- 律师能填的自由文本（批次名、理由、核验人）一律拼成 --参数=值：以 - 开头的值也不会被引擎当成参数。
 - 日志只记动作名、退出码、耗时；引擎输出只返回给界面，不写日志。
 """
 from __future__ import annotations
@@ -21,13 +24,14 @@ import threading
 import time
 from datetime import datetime
 
-from .. import logs
+from .. import logs, procs
 from ..case import gate
 from ..config import REPO_ROOT
 from ..errors import ApiError
 
 ENGINE_DIR = REPO_ROOT / "engines" / "invoice-ledger"
 TIMEOUT_S = 30 * 60
+BUSY_WAIT_S = 2.0
 SCRIPTS = ("env_check.py", "workflow.py", "invoice_db.py")      # 只允许这三个脚本
 # 每个脚本允许的子命令（env_check.py 没有子命令）；Spec 13.3 白名单
 SUBCOMMANDS = {"workflow.py": ("history", "plan", "run", "analyze", "import", "prepare", "reprint", "cancel",
@@ -59,33 +63,40 @@ class InvoiceRunner:
     def run(self, req: dict) -> dict:
         ledger = self._ledger_dir()
         action = req["action"]
-        with self._lock:                                          # 一次一个动作；后到的请求排队
-            t0 = time.monotonic()
-            argv, files = self._argv(action, req, ledger)
-            before = _snapshot(ledger)
-            try:
-                code, output = self._exec(argv)
-            except subprocess.TimeoutExpired:                     # 服务自身故障：失败体
-                logs.event("invoice", action, status="fail", duration_ms=(time.monotonic() - t0) * 1000,
-                           error="timeout")
-                raise ApiError("ENGINE_FAILED", "timeout")
-            except OSError:                                       # 引擎起不来（解释器或入口缺失）
-                logs.event("invoice", action, status="fail", duration_ms=(time.monotonic() - t0) * 1000,
-                           error="spawn")
-                raise ApiError("ENGINE_FAILED", "spawn")
-            ms = (time.monotonic() - t0) * 1000
-            blocked = any(line.startswith("[BLOCKED]") for line in output.splitlines())
-            # 契约 1.3 failed：引擎自己报失败（[BLOCKED] 或退出码不是 0/2）→ 成功体 failed=true，原因在 output 给律师看
-            failed = blocked or code not in (0, 2)
-            attention = code == 2 and not failed
-            logs.event("invoice", action, status="fail" if failed else "ok", duration_ms=ms,
-                       error=None if code == 0 and not failed else
-                       ("exit_2_blocked" if code == 2 and blocked else f"exit_{code}"))
-            produced = [f for f in files if f.exists()] + _changed(ledger, before)
-            paths = _unique([str(f) for f in produced])
-            if not failed and action in ("prepare", "reprint"):
-                paths = self._with_buyer_copy(ledger, req, paths)
-            return {"exit_code": code, "attention": attention, "failed": failed, "output": output, "files": paths}
+        if not self._lock.acquire(timeout=BUSY_WAIT_S):           # 一次一个动作；后到的最多等 2 秒
+            raise ApiError("ENGINE_BUSY", action)
+        try:
+            return self._run_locked(action, req, ledger)
+        finally:
+            self._lock.release()
+
+    def _run_locked(self, action: str, req: dict, ledger: pathlib.Path) -> dict:
+        t0 = time.monotonic()
+        argv, files = self._argv(action, req, ledger)
+        before = _snapshot(ledger)
+        try:
+            code, output = self._exec(argv)
+        except subprocess.TimeoutExpired:                     # 服务自身故障：失败体
+            logs.event("invoice", action, status="fail", duration_ms=(time.monotonic() - t0) * 1000,
+                       error="timeout")
+            raise ApiError("ENGINE_FAILED", "timeout")
+        except OSError:                                       # 引擎起不来（解释器或入口缺失）
+            logs.event("invoice", action, status="fail", duration_ms=(time.monotonic() - t0) * 1000,
+                       error="spawn")
+            raise ApiError("ENGINE_FAILED", "spawn")
+        ms = (time.monotonic() - t0) * 1000
+        blocked = any(line.startswith("[BLOCKED]") for line in output.splitlines())
+        # 契约 1.3 failed：引擎自己报失败（[BLOCKED] 或退出码不是 0/2）→ 成功体 failed=true，原因在 output 给律师看
+        failed = blocked or code not in (0, 2)
+        attention = code == 2 and not failed
+        logs.event("invoice", action, status="fail" if failed else "ok", duration_ms=ms,
+                   error=None if code == 0 and not failed else
+                   ("exit_2_blocked" if code == 2 and blocked else f"exit_{code}"))
+        produced = [f for f in files if f.exists()] + _changed(ledger, before)
+        paths = _unique([str(f) for f in produced])
+        if not failed and action in ("prepare", "reprint", "run"):
+            paths = self._with_buyer_copy(ledger, req, paths)
+        return {"exit_code": code, "attention": attention, "failed": failed, "output": output, "files": paths}
 
     # ---------------------------------------------------------------- N50：贴票清单另存一份（对引擎输出唯一的后处理）
 
@@ -96,6 +107,7 @@ class InvoiceRunner:
         buyer = (self.settings.get()["office"].get("invoice_buyer") or "").strip()
         if not buyer:
             return paths
+        # prepare 与 run（run 的最后一步就是 prepare）的批次名前面要加报销年月，与引擎一致；reprint 用律师给的全名
         batch = req["batch"] if req["action"] == "reprint" else scoped_batch(req["period"], req["batch"])
         try:
             rec = json.loads((ledger / "_报销批次" / f"{batch}.json").read_text(encoding="utf-8"))
@@ -107,7 +119,11 @@ class InvoiceRunner:
         if HARDCODED_BUYER not in text:
             return paths
         dst = folder / f"贴票清单（{_safe_name(buyer)}）.html"
-        dst.write_text(text.replace(HARDCODED_BUYER, html.escape(buyer)), encoding="utf-8")
+        try:
+            dst.write_text(text.replace(HARDCODED_BUYER, html.escape(buyer)), encoding="utf-8")
+        except OSError:                                          # 写不了（如同名目录占着）：只记一条，照常返回原清单
+            logs.event("invoice", req["action"], status="fail", error="buyer_copy")
+            return paths
         out = [p for p in paths if pathlib.Path(p).name != LIST_NAME and p != str(dst)]
         return [str(dst)] + out
 
@@ -159,7 +175,7 @@ class InvoiceRunner:
             if not src.is_absolute() or not src.exists():
                 raise ApiError("INVALID_ARGUMENT", "src_missing")
             J = job(req["period"])
-            argv = ["workflow.py", "run", "--job", J, "--batch", req["batch"], "--ledger", L,
+            argv = ["workflow.py", "run", "--job", J, f"--batch={req['batch']}", "--ledger", L,
                     "--eml" if req["channel"] == "eml" else "--src", str(src)]
             files.append(pathlib.Path(J) / "收集对账表.csv")
         elif action in ("analyze", "import"):
@@ -167,26 +183,26 @@ class InvoiceRunner:
             argv = ["workflow.py", action, "--job", J, "--ledger", L]
             files.append(pathlib.Path(J) / "收集对账表.csv")
         elif action == "prepare":
-            argv = ["workflow.py", "prepare", "--job", job(req["period"]), "--ledger", L, "--batch", req["batch"]]
+            argv = ["workflow.py", "prepare", "--job", job(req["period"]), "--ledger", L, f"--batch={req['batch']}"]
             if req["replace"]:
                 argv.append("--replace")
         elif action == "reprint":
-            argv = ["workflow.py", "reprint", "--ledger", L, "--batch", req["batch"]]
+            argv = ["workflow.py", "reprint", "--ledger", L, f"--batch={req['batch']}"]
         elif action == "cancel":
             # 引擎不支持取消预览：界面先用 report / reprint 展示批次内容再确认，这里一律带 --apply（Spec 13.3 回写③）
-            argv = ["workflow.py", "cancel", "--ledger", L, "--batch", req["batch"], "--apply"]
+            argv = ["workflow.py", "cancel", "--ledger", L, f"--batch={req['batch']}", "--apply"]
         elif action == "reimburse":
-            argv = ["workflow.py", "reimburse", "--ledger", L, "--batch", req["batch"]]
+            argv = ["workflow.py", "reimburse", "--ledger", L, f"--batch={req['batch']}"]
             if req["apply"]:
                 argv.append("--apply")
         elif action == "exclude":
             # 契约 1.3：只改任务目录内的 collection.json 与对账表，不碰台账、不联网、不可逆；确认在界面做，一律带 --confirm
             J = job(req["period"])
-            argv = ["workflow.py", "exclude", "--job", J, "--item", req["item"], "--reason", req["reason"],
-                    "--reviewer", req["reviewer"], "--confirm"]
+            argv = ["workflow.py", "exclude", "--job", J, "--item", req["item"], f"--reason={req['reason']}",
+                    f"--reviewer={req['reviewer']}", "--confirm"]
             files.append(pathlib.Path(J) / "收集对账表.csv")
         elif action == "review":
-            argv = ["workflow.py", "review", "--ledger", L, "--sha256", req["sha256"], "--reviewer", req["reviewer"]]
+            argv = ["workflow.py", "review", "--ledger", L, "--sha256", req["sha256"], f"--reviewer={req['reviewer']}"]
             if req["confirm"]:
                 argv.append("--confirm")
         else:                                                       # 契约已挡住，这里再挡一次
@@ -207,14 +223,17 @@ class InvoiceRunner:
         return env
 
     def _exec(self, argv: list[str]) -> tuple[int, str]:
-        cmd = [self.python, str(self.engine_dir / "scripts" / "invoke.py"), *argv]
+        entry = self.engine_dir / "scripts" / "invoke.py"
+        if not entry.is_file():                                  # 引擎入口缺失：按"起不来"处理
+            raise FileNotFoundError(str(entry))
+        cmd = [self.python, str(entry), *argv]
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         p = subprocess.Popen(cmd, env=self.env(), cwd=str(self.engine_dir), stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=flags)
         try:
             out, _ = p.communicate(timeout=self.timeout_s)
         except subprocess.TimeoutExpired:
-            _kill_tree(p)
+            procs.kill_tree(p, drain=True)
             raise
         return p.returncode, out.decode("utf-8", errors="replace")
 
@@ -232,19 +251,6 @@ def assert_allowed(argv: list[str]) -> None:
             raise ApiError("INVALID_ARGUMENT", "forbidden_arg")
     if "--channel" in argv and argv[argv.index("--channel") + 1] not in ("local", "eml"):
         raise ApiError("INVALID_ARGUMENT", "channel")
-
-
-def _kill_tree(p: subprocess.Popen) -> None:
-    """引擎 invoke.py 会再起缓存里的 Python：连子进程一起结束。"""
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    else:
-        p.kill()
-    try:
-        p.communicate(timeout=10)
-    except subprocess.TimeoutExpired:
-        p.kill()
 
 
 def _snapshot(ledger: pathlib.Path) -> dict[str, float]:

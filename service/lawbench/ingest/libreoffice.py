@@ -22,7 +22,7 @@ import time
 import uuid
 from contextlib import contextmanager
 
-from .. import logs
+from .. import logs, procs
 from . import LO_TIMEOUT, ParseError
 
 _LOCK = threading.Lock()
@@ -119,15 +119,7 @@ def write_profile(profile_dir: pathlib.Path) -> None:
 
 def kill_tree(proc: subprocess.Popen) -> None:
     """只结束本次启动的进程及其子进程（soffice.exe 会再拉起 soffice.bin），不动律师自己开着的程序。"""
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    else:
-        proc.kill()
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    procs.kill_tree(proc)
 
 
 class _Session:

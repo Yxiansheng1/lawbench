@@ -13,6 +13,12 @@ import pytest
 
 from lawbench.retainer import driver as D
 
+import importlib.util
+
+# 起真驱动的用例要 onnxruntime 等（service 的 [retainer] 依赖组）；没装的解释器上跳过并写明原因
+needs_ort = pytest.mark.skipif(importlib.util.find_spec("onnxruntime") is None,
+                               reason="本解释器没装证件识别驱动的依赖（pip install .[retainer]）")
+
 from test_api_case import ok
 
 
@@ -70,6 +76,7 @@ def test_damaged_model_refuses_to_start(tmp_path):
     assert not D.models_ok(fake)
 
 
+@needs_ort
 def test_start_ocr_status_stop(drv):
     """真驱动：启动 → 就绪 → 识别一张虚构图片 → 停止；只监听 127.0.0.1。"""
     v = drv.start()
@@ -96,14 +103,15 @@ def test_start_ocr_status_stop(drv):
     assert drv.status()["running"] is False
 
 
-def test_reuse_existing_driver_and_do_not_stop_it(drv):
+@needs_ort
+def test_restart_reuses_then_stop_really_stops(drv):
+    """模拟服务重启：新实例 start 复用上次留下的驱动；stop 核对确是本产品的驱动后真的停掉、端口放开（A-P2-2）。"""
     assert drv.start()["running"] is True
-    other = D.RetainerDriver(port=drv.port)
-    assert other.start() == {"running": True, "port": 17801, "message": D.MSG_REUSED}
-    other.stop()                                               # 不是它起的，不停
-    assert listening(drv.port) and drv.status()["running"] is True
-    drv.stop()
-    assert not listening(drv.port)
+    fresh = D.RetainerDriver(port=drv.port)                         # 重启后的服务：内存里没有那个进程
+    assert fresh.start() == {"running": True, "port": 17801, "message": D.MSG_REUSED}
+    assert fresh.stop() == {"running": False, "port": 17801, "message": D.MSG_STOPPED}
+    assert fresh.status()["running"] is False and not listening(drv.port)
+    assert drv._proc.poll() is not None                              # 原进程确实结束了
 
 
 def test_port_taken_by_something_else(drv):
@@ -151,3 +159,53 @@ def test_api_contract(client, monkeypatch):
     assert v["running"] is False
     r = client.post("/api/retainer/driver", json={"action": "restart"})
     assert r.json()["error"]["code"] == "INVALID_ARGUMENT"
+
+
+
+def test_driver_command_has_engine_rapidocr(monkeypatch):
+    """起驱动的命令固定带 --engine rapidocr（RapidOCR 起不来时不退到会联网下模型的 PaddleOCR）。"""
+    seen = {}
+
+    class Dead:
+        pid = 0
+
+        def poll(self):
+            return 1
+
+        def wait(self, timeout=None):
+            return 1
+
+    def fake_popen(cmd, **kw):
+        seen["cmd"] = cmd
+        return Dead()
+    monkeypatch.setattr(D.subprocess, "Popen", fake_popen)
+    d = D.RetainerDriver(port=free_port(), ready_timeout_s=0.5)
+    assert d.start()["running"] is False
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--engine") + 1] == "rapidocr"
+    assert cmd[cmd.index("--host") + 1] == "127.0.0.1"
+
+
+def test_stop_leaves_lookalike_that_is_not_ours(drv):
+    """端口上有个长得像驱动的 HTTP 服务、但不是本产品的 driver.py：stop 不动它，如实返回 running:true。"""
+    import json as _json
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(_json.dumps({"ok": True, "offline": True, "engine": "x", "maxBytes": 1,
+                                          "ready": True}).encode())
+
+        def log_message(self, *a):
+            pass
+    srv = http.server.HTTPServer(("127.0.0.1", drv.port), H)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        assert drv.stop() == {"running": True, "port": 17801, "message": D.MSG_NOT_OURS}
+        assert listening(drv.port)
+    finally:
+        srv.shutdown()
+        srv.server_close()

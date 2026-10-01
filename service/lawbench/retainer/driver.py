@@ -5,7 +5,10 @@
 - 启动前核对驱动自带的三个模型文件的 sha256（与驱动自己的 default_models.yaml 一致）：缺失或损坏时驱动会
   自己去 modelscope.cn 重新下载，所以这种情况下不启动，提示重装（Spec 14.1"运行时不下载任何东西"）。
 - 子进程环境清空、只传运行必需的变量（不传代理）；驱动的输出丢弃（它的访问日志可能带文件名），不写日志。
-- 端口已被占用：探测 /health，是驱动就复用（不归我们停），不是就不启动并说明。
+- 端口已被占用：探测 /health，是驱动就复用，不是就不启动并说明。复用的驱动多半是本产品上次运行起的
+  （服务崩溃或被结束后留下）：stop 时核对监听该端口的进程命令行确是本产品的 ocr-driver/driver.py，
+  就连同子进程一起结束（T25 复核 A-P2-2）；核对不上就不动，并如实返回 running:true。
+- 服务退出（Starlette lifespan）时 close()，与 stop 相同。
 """
 from __future__ import annotations
 
@@ -20,7 +23,7 @@ import time
 
 import httpx
 
-from .. import logs
+from .. import logs, procs
 from ..config import REPO_ROOT
 from ..errors import ApiError
 
@@ -32,6 +35,7 @@ PASS_ENV = ("SYSTEMROOT", "LOCALAPPDATA", "USERPROFILE", "TEMP", "TMP")
 MSG_RUNNING = "证件识别已就绪"
 MSG_REUSED = "证件识别已就绪（沿用已在运行的驱动）"
 MSG_STOPPED = "证件识别已关闭"
+MSG_NOT_OURS = "端口 17801 上的证件识别不是本程序启动的，未关闭"
 MSG_NOT_RUNNING = "证件识别未运行"
 MSG_PORT_TAKEN = "端口 17801 被其他程序占用，证件识别无法启动；委托材料的其他功能不受影响"
 MSG_START_FAILED = "证件识别启动失败；委托材料的其他功能不受影响，可手工填写"
@@ -95,16 +99,27 @@ class RetainerDriver:
         return self._value(False, MSG_START_FAILED)
 
     def stop(self) -> dict:
-        """只停自己起的进程；复用的别人起的驱动不动。"""
-        if self._proc is None or self._proc.poll() is not None:
-            self._proc = None
-            return self._value(False, MSG_STOPPED)
+        """停自己起的进程；端口上还有复用来的驱动时，核对确是本产品的驱动再停。返回停之后的真实状态。"""
         self._terminate()
-        return self._value(False, MSG_STOPPED)
+        h = self._health()
+        if h is None:
+            return self._value(False, MSG_STOPPED)
+        if is_driver(h):
+            pid = _listener_pid(self.port)
+            if pid and _is_our_driver(pid, self.driver_dir):
+                procs.kill_tree(_Pid(pid))
+                if self._wait_port_free():
+                    return self._value(False, MSG_STOPPED)
+            return self._value(True, MSG_NOT_OURS)
+        return self._value(False, MSG_STOPPED)                      # 端口上是别的程序：驱动本身没在跑
 
     def close(self) -> None:
+        """服务退出时调用。"""
         with self._lock:
-            self._terminate()
+            try:
+                self.stop()
+            except Exception as e:  # noqa: BLE001 退出时尽力而为，不挡服务退出
+                logs.event("retainer", "driver_close", status="fail", error=type(e).__name__)
 
     # ---------------------------------------------------------------- 内部
 
@@ -138,20 +153,16 @@ class RetainerDriver:
         p, self._proc = self._proc, None
         if p is None:
             return
-        if p.poll() is None:
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True,
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            else:
-                p.terminate()
-            try:
-                p.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                p.kill()
-                p.wait(timeout=5)
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and self._health() is not None:
+        procs.kill_tree(p)
+        self._wait_port_free()
+
+    def _wait_port_free(self, seconds: float = 5.0) -> bool:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if self._health() is None:
+                return True
             time.sleep(0.1)
+        return False
 
 
 def is_driver(h: dict) -> bool:
@@ -188,3 +199,47 @@ def models_ok(driver_dir: pathlib.Path) -> bool:
         return True
     except OSError:
         return False
+
+
+class _Pid:
+    """procs.kill_tree 只用到 pid / poll / wait；复用来的驱动没有 Popen 对象，用这个顶上。"""
+
+    def __init__(self, pid: int):
+        self.pid = pid
+
+    def poll(self):
+        return None
+
+    def wait(self, timeout=None):
+        return 0
+
+    def kill(self):
+        if os.name != "nt":
+            os.kill(self.pid, 9)
+
+
+def _listener_pid(port: int) -> int | None:
+    """监听 127.0.0.1:<port> 的进程号（netstat -ano）。"""
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, timeout=10,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[1] == f"{HOST}:{port}" and parts[3].upper() == "LISTENING":
+            return int(parts[4]) if parts[4].isdigit() else None
+    return None
+
+
+def _is_our_driver(pid: int, driver_dir: pathlib.Path) -> bool:
+    """进程命令行里有本产品的 ocr-driver/driver.py（按完整路径比，不认别处的同名脚本）。"""
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                              f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+                             capture_output=True, text=True, timeout=15,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    want = str((driver_dir / "driver.py").resolve()).casefold()
+    return want in out.casefold()
