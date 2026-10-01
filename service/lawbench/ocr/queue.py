@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
+import sqlite3
 import secrets
 import threading
 import time
@@ -37,6 +39,10 @@ UNFINISHED = ("queued", "running", "paused")
 MSG_5XX = "395 处理出错，已重试 3 次"
 MSG_RENDER = "原件无法读取这一页"
 MSG_CHANGED = "原件已改动，请重新提交识别"
+MSG_WRITE = "识别结果写不进案件文件夹（磁盘已满或没有写权限）"
+MAX_WRITE_FAIL = 3
+LOCKED_BACKOFF_S = 5.0        # case.db 被占：这个任务 5 秒后再挑，不挡别的案件
+ERROR_BACKOFF_S = 30.0
 
 
 def now() -> str:
@@ -58,6 +64,7 @@ class Job:
     kind: str
     checked: bool = False                        # 本进程里是否已核过原件没改
     claimed: set = field(default_factory=set)     # 正在发送的页号
+    skip_until: float = 0.0                       # 案件暂时打不开（case.db 被占等）：到这个时刻前不挑它
 
 
 class OcrQueue:
@@ -126,12 +133,24 @@ class OcrQueue:
                 logs.event("ocr", "stop", status="fail", case_id=job.case_id, error=type(e).__name__)
         self._jobs.clear()
 
+    def resume_case(self, case_id: str) -> None:
+        """打开案件时调用（案件文件夹在移动盘上、拔掉又插回等）：把该案件里未完成、内存里还没有的任务接着做。"""
+        if not self._threads:
+            return
+        try:
+            self._resume_case(case_id, self.cases.root_of(case_id))
+        except Exception as e:  # noqa: BLE001 打不开：不影响打开案件本身
+            logs.event("ocr", "resume_case", status="fail", case_id=case_id, error=type(e).__name__)
+        with self._cv:
+            self._cv.notify_all()
+
     def _resume_case(self, case_id: str, root: str) -> None:
         index = self.materials.index(case_id)
         by_id = {m["material_id"]: m for m in index["materials"]}
         with merge.connect(root) as con:
-            rows = con.execute(f"SELECT job_id, material_id, material_version FROM ocr_jobs WHERE status IN "
-                               f"({','.join('?' * len(UNFINISHED))})", UNFINISHED).fetchall()
+            rows = [r for r in con.execute(f"SELECT job_id, material_id, material_version FROM ocr_jobs WHERE "
+                                           f"status IN ({','.join('?' * len(UNFINISHED))})", UNFINISHED).fetchall()
+                    if r[0] not in self._jobs]                             # 正在做的不动
             for job_id, mid, ver in rows:
                 # 上次运行中断时"发送中"的页重新发送（Spec 7.2 表）
                 con.execute("UPDATE ocr_pages SET status = 'pending' WHERE job_id = ? AND status = 'sending'",
@@ -229,16 +248,31 @@ class OcrQueue:
     # ================================================================ 发送线程
 
     def _next(self):
-        """挑下一页：按任务提交顺序，跳过暂停中的任务和已被另一个线程领走的页。返回 (Job, 页号) 或 None。"""
+        """挑下一页：按任务提交顺序，跳过暂停中的任务、已被另一个线程领走的页、暂时打不开的案件。
+        每个任务单独兜住：一个案件出问题（文件夹没了、case.db 被占或坏了）不挡别的案件（T12 复核 P2-2）。"""
+        t = time.monotonic()
         for job in sorted(self._jobs.values(), key=lambda j: j.job_id):
-            with merge.connect(job.root) as con:
-                st = con.execute("SELECT status FROM ocr_jobs WHERE job_id = ?", (job.job_id,)).fetchone()
-                if st is None or st[0] not in ("queued", "running"):
-                    continue
-                for (page_no,) in con.execute("SELECT page_no FROM ocr_pages WHERE job_id = ? AND status = 'pending' "
-                                              "ORDER BY page_no", (job.job_id,)):
-                    if page_no not in job.claimed:
-                        return job, page_no
+            if job.skip_until > t:
+                continue
+            if not os.path.isdir(job.root):                           # 文件夹被移走、移动盘拔了：先放下，重开案件时再接
+                self._jobs.pop(job.job_id, None)
+                logs.event("ocr", "case_gone", status="fail", case_id=job.case_id)
+                continue
+            try:
+                with merge.connect(job.root, timeout=0.5) as con:
+                    st = con.execute("SELECT status FROM ocr_jobs WHERE job_id = ?", (job.job_id,)).fetchone()
+                    if st is None or st[0] not in ("queued", "running"):
+                        continue
+                    for (page_no,) in con.execute("SELECT page_no FROM ocr_pages WHERE job_id = ? AND "
+                                                  "status = 'pending' ORDER BY page_no", (job.job_id,)):
+                        if page_no not in job.claimed:
+                            return job, page_no
+            except sqlite3.OperationalError as e:                     # 多半是被占（database is locked）
+                job.skip_until = t + LOCKED_BACKOFF_S
+                logs.event("ocr", "next", status="fail", case_id=job.case_id, error=type(e).__name__)
+            except Exception as e:  # noqa: BLE001
+                job.skip_until = t + ERROR_BACKOFF_S
+                logs.event("ocr", "next", status="fail", case_id=job.case_id, error=type(e).__name__)
         return None
 
     def _worker(self) -> None:
@@ -254,10 +288,13 @@ class OcrQueue:
                 self._senders[(job.job_id, page_no)] = sender
             try:
                 self._process(job, page_no, sender)
-            except Exception as e:  # noqa: BLE001 意外错误：该页回到待发送，记日志，不让线程退出
+            except Exception as e:  # noqa: BLE001 意外错误：该页回到待发送，记日志，不让线程退出（T12 复核 P2-1）
                 logs.event("ocr", "page", status="fail", case_id=job.case_id, error=type(e).__name__)
-                self._set_page(job.root, job.job_id, page_no, "pending")
-                time.sleep(1.0)
+                job.skip_until = time.monotonic() + LOCKED_BACKOFF_S
+                try:
+                    self._set_page(job.root, job.job_id, page_no, "pending", timeout=1.0)
+                except Exception as e2:  # noqa: BLE001 case.db 还是写不了：留在"发送中"，重开案件或重启时回到待发送
+                    logs.event("ocr", "page_reset", status="fail", case_id=job.case_id, error=type(e2).__name__)
             finally:
                 with self._cv:
                     job.claimed.discard(page_no)
@@ -272,12 +309,17 @@ class OcrQueue:
             return None
 
     def _process(self, job: Job, page_no: int, sender: client395.PageSender) -> None:
+        if not os.path.isdir(job.root):                               # 发送前案件文件夹没了
+            with self._cv:
+                self._jobs.pop(job.job_id, None)
+            logs.event("ocr", "case_gone", status="fail", case_id=job.case_id)
+            return
         if not job.checked and not self._original_unchanged(job):
             self._finish_pages(job.root, job.job_id, "failed", MSG_CHANGED)
             self._finalize(job.case_id, job.root, job.job_id, job.material_id)
             return
         job.checked = True
-        with merge.connect(job.root) as con:
+        with merge.connect(job.root, timeout=1.0) as con:              # 被占就很快放弃、这个任务退避，不卡住发送线程
             cur = con.execute("UPDATE ocr_pages SET status = 'sending' WHERE job_id = ? AND page_no = ? "
                               "AND status = 'pending'", (job.job_id, page_no))
             if cur.rowcount == 0:                                     # 刚被取消
@@ -318,7 +360,18 @@ class OcrQueue:
                     self._page_failed(job, page_no, MSG_5XX)
                     return
         rel = merge.result_rel(job.material_id, page_no)
-        gate.write_bytes(job.root, rel, (result["markdown"].rstrip("\n") + "\n").encode("utf-8"), op="ocr_result")
+        try:
+            gate.write_bytes(job.root, rel, (result["markdown"].rstrip("\n") + "\n").encode("utf-8"), op="ocr_result")
+        except (OSError, ApiError) as e:                              # 盘满、没有写权限：计次，3 次后该页失败，不无限重发
+            logs.event("ocr", "write_result", status="fail", case_id=job.case_id, error=type(e).__name__)
+            with merge.connect(job.root) as con:
+                n = con.execute("UPDATE ocr_pages SET attempts = attempts + 1 WHERE job_id = ? AND page_no = ? "
+                                "RETURNING attempts", (job.job_id, page_no)).fetchone()[0]
+            if n >= MAX_WRITE_FAIL:
+                self._page_failed(job, page_no, MSG_WRITE)
+            else:
+                self._set_page(job.root, job.job_id, page_no, "pending")
+            return
         with merge.connect(job.root) as con:
             cur = con.execute("UPDATE ocr_pages SET status = 'done', result_path = ?, error = NULL WHERE job_id = ? "
                               "AND page_no = ? AND status = 'sending'", (rel, job.job_id, page_no))
@@ -355,8 +408,8 @@ class OcrQueue:
 
     # ================================================================ 状态
 
-    def _set_page(self, root: str, job_id: str, page_no: int, status: str) -> None:
-        with merge.connect(root) as con:
+    def _set_page(self, root: str, job_id: str, page_no: int, status: str, timeout: float = 10) -> None:
+        with merge.connect(root, timeout=timeout) as con:
             con.execute("UPDATE ocr_pages SET status = ? WHERE job_id = ? AND page_no = ? AND status = 'sending'",
                         (status, job_id, page_no))
 

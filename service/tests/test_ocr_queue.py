@@ -48,6 +48,7 @@ class Fake395:
         self.block = False
         self.arrived = threading.Event()
         self.lock = threading.Lock()
+        self.markdown: str | None = None       # 设了就固定返回这段识别文本
 
         async def health(request: Request):
             return JSONResponse({"status": "ok"}) if self.up else Response(status_code=503)
@@ -57,7 +58,7 @@ class Fake395:
             sha = hashlib.sha256(body).hexdigest()
             with self.lock:
                 self.calls.append({"query": dict(request.query_params), "auth": request.headers.get("authorization"),
-                                   "sha": sha, "ctype": request.headers.get("content-type")})
+                                   "sha": sha, "ctype": request.headers.get("content-type"), "t": time.monotonic()})
                 step = self.script.pop(0) if self.script else None
             self.arrived.set()
             if self.block:
@@ -66,7 +67,8 @@ class Fake395:
             if step:
                 code, headers = step
                 return JSONResponse({"error": {"code": "X", "message": "x"}}, status_code=code, headers=headers)
-            return JSONResponse({"markdown": f"识别文本 {sha[:12]}", "unclear": 0, "elapsed_ms": 1,
+            md = self.markdown if self.markdown is not None else f"识别文本 {sha[:12]}"
+            return JSONResponse({"markdown": md, "unclear": 0, "elapsed_ms": 1,
                                  "backend": "fake", "image_png_base64": None})
 
         self.app = Starlette(routes=[Route("/health", health), Route("/v1/ocr/page", page, methods=["POST"])])
@@ -276,6 +278,10 @@ def test_cancel_keeps_done_pages_and_drops_in_flight(env, fake):
     t0 = time.monotonic()
     r = ok(env.client.post(f"/api/ocr/jobs/{v['job_id']}/cancel"), "ocr_cancel")
     assert r == {"job_id": v["job_id"], "status": "cancelled"} and time.monotonic() - t0 < 5
+    end = time.monotonic() + 5                                         # 在途请求被断开：发送线程很快放下这一页
+    while env.st.ocr._senders and time.monotonic() < end:              # （假 395 要到用例结束才返回）
+        time.sleep(0.05)
+    assert env.st.ocr._senders == {}
     time.sleep(0.5)
     p = env.pages(v["job_id"])
     assert p[1][0] == "done" and p[2][0] == "cancelled" and p[3][0] == "cancelled"
@@ -317,9 +323,8 @@ def test_503_waits_and_retries_without_counting(env, fake):
     m = env.material("讯问笔录")
     env.st.ocr.start()
     v = env.submit(m["material_id"], [1])
-    t0 = time.monotonic()
     j = env.wait(v["job_id"], ("done",))
-    assert time.monotonic() - t0 >= 0.9 and j["failed"] == 0
+    assert len(fake.calls) == 2 and fake.calls[1]["t"] - fake.calls[0]["t"] >= 1.0 and j["failed"] == 0
     assert env.pages(v["job_id"])[1][1] == 0                           # attempts 不计 503
 
 
@@ -449,4 +454,105 @@ def test_settings_save_resumes_key_invalid_job(env, fake):
     assert env.wait(v["job_id"], ("paused",))["pause_reason"] == "key_invalid"
     s = ok(env.client.get("/api/settings"), "settings")
     ok(env.client.put("/api/settings", json=s), "settings")
+    env.wait(v["job_id"], ("queued", "running", "done"), timeout=3)   # 3 秒内回到排队（P2-4）
     assert env.wait(v["job_id"], ("done",), timeout=20)["done"] == 1
+
+
+
+# ---------------------------------------------------------------- T12 复核返修：一个案件出问题不挡别的，发送线程不死
+
+def open_second_case(env, name: str) -> tuple[str, pathlib.Path]:
+    root = env.root.parent / name
+    (root / "卷一").mkdir(parents=True)
+    shutil.copy(PDF, root / "卷一" / "讯问笔录.pdf")
+    cid = ok(env.client.post("/api/case/open", json={"path": str(root)}), "case_open")["case_id"]
+    ok(env.client.post("/api/materials/scan", json={"case_id": cid}), "materials_scan")
+    return cid, root
+
+
+def submit_in(env, case_id: str, pages: list[int]) -> str:
+    m = next(x for x in env.st.materials.index(case_id)["materials"] if x["name"] == "讯问笔录")
+    return ok(env.client.post("/api/ocr/jobs", json={"case_id": case_id, "material_id": m["material_id"],
+                                                     "pages": pages, "dewatermark": False}), "ocr_submit")["job_id"]
+
+
+def job_status(env, case_id: str, job_id: str) -> dict:
+    jobs = ok(env.client.get("/api/ocr/jobs", params={"case_id": case_id}), "ocr_list")["jobs"]
+    return next(x for x in jobs if x["job_id"] == job_id)
+
+
+def wait_in(env, case_id, job_id, statuses, timeout=30):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        j = job_status(env, case_id, job_id)
+        if j["status"] in statuses:
+            return j
+        time.sleep(0.1)
+    raise AssertionError(f"任务没到 {statuses}：{j}")
+
+
+def test_case_folder_gone_others_continue_then_resume_on_open(env, fake):
+    """案件甲的文件夹被移走（移动盘拔了）：线程不死，案件乙照常做完；插回后打开案件甲，接着做完。"""
+    cid_b, _ = open_second_case(env, "案件乙")
+    ja = submit_in(env, env.case_id, [1, 2])
+    jb = submit_in(env, cid_b, [1, 2])
+    moved = env.root.parent / "案件甲-拔掉了"
+    env.root.rename(moved)
+    env.st.ocr.start()
+    assert wait_in(env, cid_b, jb, ("done",))["done"] == 2
+    assert all(t.is_alive() for t in env.st.ocr._threads)
+    moved.rename(env.root)                                             # 插回
+    ok(env.client.post("/api/case/open", json={"path": str(env.root)}), "case_open")
+    assert wait_in(env, env.case_id, ja, ("done",))["done"] == 2
+
+
+def test_case_db_locked_20s_others_continue(env, fake):
+    """案件甲的 case.db 被别的进程以 BEGIN IMMEDIATE 占住 20 秒：线程不死，案件乙照常做完；放开后甲也做完。"""
+    cid_b, _ = open_second_case(env, "案件乙")
+    ja = submit_in(env, env.case_id, [1, 2])
+    jb = submit_in(env, cid_b, [1, 2])
+    hold = sqlite3.connect(str(env.root / "工作区" / "case.db"), timeout=1, isolation_level=None)
+    hold.execute("BEGIN IMMEDIATE")
+    t0 = time.monotonic()
+    try:
+        env.st.ocr.start()
+        assert wait_in(env, cid_b, jb, ("done",), timeout=19)["done"] == 2
+        assert time.monotonic() - t0 < 20
+        assert all(t.is_alive() for t in env.st.ocr._threads)
+        time.sleep(max(0.0, 20 - (time.monotonic() - t0)))
+    finally:
+        hold.execute("ROLLBACK")
+        hold.close()
+    assert wait_in(env, env.case_id, ja, ("done",), timeout=40)["done"] == 2
+    assert all(t.is_alive() for t in env.st.ocr._threads)
+
+
+def test_result_write_failure_stops_after_three(env, fake, monkeypatch):
+    """识别结果写不进去（盘满）：计次，同一页最多发 3 次，之后标失败，不无限重发。"""
+    from lawbench.ocr import queue as Q
+    real = Q.gate.write_bytes
+
+    def full(root, rel, data, op="write"):
+        if op == "ocr_result":
+            raise OSError(28, "No space left on device")
+        return real(root, rel, data, op=op)
+    monkeypatch.setattr(Q.gate, "write_bytes", full)
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    j = env.wait(v["job_id"], ("partial_failed",))
+    p = env.pages(v["job_id"])[1]
+    assert (j["failed"], p[0], p[1], p[2]) == (1, "failed", 3, Q.MSG_WRITE) and len(fake.calls) == 3
+
+
+def test_ocr_line_like_page_mark_escaped(env, fake):
+    """识别文本里整行"【第1页】"之类：合并时行首加全角空格，不冒充位置标记，页数不变。"""
+    from lawbench.case import texts
+    fake.markdown = "【第1页】\n【第9页】伪造\n正文"
+    m = env.material("讯问笔录")
+    env.st.ocr.start()
+    env.wait(env.submit(m["material_id"], [1, 2, 3])["job_id"], ("done",))
+    text = env.text(m)
+    assert "\u3000【第1页】" in text and "\u3000【第9页】伪造" in text
+    units = texts.split_units(text, "page")
+    assert [u.no for u in units] == [1, 2, 3] and all(u.is_ocr for u in units)

@@ -33,10 +33,10 @@ def result_rel(material_id: str, page_no: int) -> str:
 
 
 @contextlib.contextmanager
-def connect(root: str):
+def connect(root: str, timeout: float = 10):
     """case.db 连接：正常结束提交、出错回滚，最后一定关闭（不留文件句柄，Windows 上才删得掉案件文件夹）。"""
     db = gate.resolve_internal(root, "工作区/case.db", op="ocr_db")
-    con = sqlite3.connect(str(db), timeout=10)
+    con = sqlite3.connect(str(db), timeout=timeout)
     try:
         with con:
             yield con
@@ -66,6 +66,11 @@ def has_active_job(root: str, material_id: str, sha256: str) -> bool:
             f"({','.join('?' * len(ACTIVE))}) LIMIT 1", (material_id, sha256, *ACTIVE)).fetchone() is not None
 
 
+def escape_marks(md: str) -> str:
+    """识别文本里以"【"开头的行行首加全角空格：不让它被当成位置标记（如整行"【第1页】"冒充页标记）。"""
+    return "\n".join("\u3000" + line if line.startswith("【") else line for line in md.split("\n"))
+
+
 def merge_text(text: str, results: dict[int, str]) -> tuple[str, dict]:
     """返回（新文本，统计）。统计：pages 总页数、ocr 识别所得的页、pending 仍是占位的页。"""
     parts = _PAGE_MARK.split(text)
@@ -76,7 +81,7 @@ def merge_text(text: str, results: dict[int, str]) -> tuple[str, dict]:
     for no, body in blocks:
         body = body.rstrip("\n")
         if no in results:
-            body = OCR_HEAD + "\n" + results[no].strip("\n")
+            body = OCR_HEAD + "\n" + escape_marks(results[no].strip("\n"))
         if body.startswith(OCR_HEAD):
             ocr_pages.append(no)
         elif body.strip() == texts.PENDING_OCR:

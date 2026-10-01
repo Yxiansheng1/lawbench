@@ -62,6 +62,7 @@ def routes(st) -> list[Route]:
     def case_open(d: dict) -> dict:
         value = st.cases.open(d["path"], d.get("template"))
         st.tasks.mark_abnormal(value["case_id"])  # 上次硬退出时仍在执行的任务标"异常中断"（Spec 9.2）
+        st.ocr.resume_case(value["case_id"])      # 案件文件夹拔掉又插回等：接着做它未完成的识别任务（T12 复核）
         return value
 
     def task_create(d: dict) -> dict:
