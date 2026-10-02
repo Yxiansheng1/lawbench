@@ -1,0 +1,554 @@
+"""修订版 Word（Spec 12.2；工单 T15 第 3–5 步）。
+
+contract-01 上 14 条修改：替换、插入、删除各 3 条（范围内），另有表格内、页眉页脚、跨超链接、找不到、出现多次各 1 条
+（范围外）。范围内的全部生成修订和批注；范围外的 5 条全部进"需人工修改"；含修订的副本整份拒绝。
+生成的 docx：全部接受 = 改后的文字，全部拒绝 = 原文（逐段核对），格式属性跟着原 run 走；LibreOffice 能打开并转 PDF。
+"""
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import pathlib
+import re
+import zipfile
+
+import docx as pydocx
+import pytest
+from lxml import etree
+
+from lawbench.export import redline as R
+from lawbench.ingest import docx as dx
+from lawbench.ingest import libreoffice
+from lawbench.tools import edit_list as el
+
+from conftest import short_dir
+from t8_helpers import FIXTURES, Env, fail, ok, validator
+
+W = dx.W
+CONTRACT = FIXTURES / "contract-01" / "采购合同.docx"
+FILES = {"合同/采购合同.docx": CONTRACT,
+         "合同/采购合同-含未处理修订.docx": FIXTURES / "contract-01" / "采购合同-含未处理修订.docx",
+         "起诉意见书.pdf": FIXTURES / "criminal-01" / "起诉意见书.pdf"}
+
+IN_SCOPE = [
+    {"para": 27, "action": "replace", "find": "九十日", "text": "三十日"},
+    {"para": 23, "action": "replace", "find": "七日", "text": "十五日"},
+    {"para": 31, "action": "replace", "find": "万分之五", "text": "万分之三"},
+    {"para": 21, "action": "insert_after", "find": "通知甲方收货", "text": "（书面通知）"},
+    {"para": 17, "action": "insert_after", "find": "甲方有权拒收该批货物", "text": "，并有权解除合同"},
+    {"para": 42, "action": "insert_after", "find": "签字盖章", "text": "（法定代表人或授权代表签字）"},
+    {"para": 24, "action": "delete", "find": "隐蔽瑕疵的"},
+    {"para": 32, "action": "delete", "find": "还应"},
+    {"para": 16, "action": "delete", "find": "，检测费用先由青禾建材垫付"},
+]
+OUT_OF_SCOPE = [
+    ({"para": 12, "action": "replace", "find": "HW200", "text": "HW300"}, "表格"),
+    ({"para": 47, "action": "delete", "find": "虚构"}, "页眉页脚"),
+    ({"para": 39, "action": "replace", "find": "电子版可在http", "text": "电子版可在"}, "超链接"),
+    ({"para": 28, "action": "replace", "find": "不存在的原文", "text": "x"}, "找不到"),
+    ({"para": 30, "action": "replace", "find": "逾期", "text": "迟延"}, "多次"),
+]
+EXPECTED = {   # 全部接受后的段落文字
+    16: "2.2 青禾建材有权委托第三方检测机构对标的物进行抽检。",
+    17: "2.3 抽检不合格的，检测费用由乙方承担，甲方有权拒收该批货物，并有权解除合同。",
+    21: "3.3 乙方应提前两日通知甲方收货（书面通知），甲方应安排人员清点签收。",
+    23: "4.1 甲方应于到货后十五日内完成验收，逾期未提出书面异议的，视为验收合格。",
+    24: "4.2 异议期为验收合格之日起六个月。",
+    27: "5.2 甲方应于收到货物后三十日内付款。",
+    31: "6.2 甲方逾期付款的，每逾期一日，按逾期付款金额的万分之三向乙方支付违约金。",
+    32: "6.3 违约金不足以弥补损失的，违约方赔偿损失。",
+    42: "10.1 本合同自双方签字盖章（法定代表人或授权代表签字）之日起生效。",
+}
+
+
+def all_edits() -> list[dict]:
+    items = IN_SCOPE + [e for e, _ in OUT_OF_SCOPE]
+    return [dict(id=i, comment=f"第{i}条的理由", **e) for i, e in enumerate(items, 1)]
+
+
+@pytest.fixture(scope="module")
+def env(tmp_path_factory):
+    e = Env(tmp_path_factory.mktemp("t15red"), FILES)
+    yield e
+    e.close()
+
+
+@pytest.fixture
+def tid(env, request):
+    return env.begin(f"sess-{request.node.name}")["task_id"]
+
+
+def save_list(env, tid, name: str, edits: list[dict]) -> str:
+    return env.tool_ok(tid, "case_save_edit_list", {"name": name, "edits": edits})["path"]
+
+
+def redline(env, tid, edit_list: str):
+    return env.client.post("/api/redline", json={"case_id": env.case_id, "task_id": tid, "edit_list": edit_list})
+
+
+# ---------------------------------------------------------------- 读生成的 docx
+
+def view(p, mode: str) -> str:
+    """段落文字：accept = 跳过 w:del、算 w:ins；reject = 跳过 w:ins、w:delText 当原文。"""
+    out: list[str] = []
+
+    def walk(node):
+        for ch in node:
+            tag = ch.tag
+            if not isinstance(tag, str):
+                continue
+            if tag == f"{{{W}}}ins" and mode == "reject" or tag == f"{{{W}}}del" and mode == "accept":
+                continue
+            if tag in (f"{{{W}}}t",) or tag == f"{{{W}}}delText" and mode == "reject":
+                out.append(ch.text or "")
+            elif tag == f"{{{W}}}tab":
+                out.append("\t")
+            elif tag in (f"{{{W}}}br", f"{{{W}}}cr"):
+                out.append(" ")
+            elif tag not in (f"{{{W}}}instrText", f"{{{W}}}delInstrText", f"{{{W}}}pPr", f"{{{W}}}rPr"):
+                walk(ch)
+
+    walk(p)
+    return "".join(out)
+
+
+def body_paras(data: bytes) -> list:
+    root = dx._parse_xml(zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml"))
+    body = root.find("w:body", dx.NS)
+    return [e for k, e in dx._body_items(body) if (dx._text(e).strip() if k == "p" else dx._table(e))]
+
+
+# ---------------------------------------------------------------- 接口：contract-01 的 14 条
+
+def test_contract01_fourteen_edits(env, tid):
+    edits = all_edits()
+    saved = env.tool_ok(tid, "case_save_edit_list", {"name": "采购合同", "edits": edits})
+    assert saved["accepted"] == 9 and len(saved["out_of_scope"]) == 5
+    v = ok(redline(env, tid, saved["path"]), "api/redline.schema.json")
+    assert v["path"] == f"工作区/任务/{tid}/草稿/采购合同-修订版-v1.docx"
+    assert v["applied"] == 9
+    manual = {m["id"]: m["reason"] for m in v["manual"]}
+    assert sorted(manual) == [10, 11, 12, 13, 14]
+    for i, (_e, word) in enumerate(OUT_OF_SCOPE, 10):
+        assert word in manual[i], (i, manual[i])
+    assert manual == {o["id"]: o["reason"] for o in saved["out_of_scope"]}   # 与保存修改清单时说的一致
+
+    data = (env.root / v["path"]).read_bytes()
+    orig = body_paras(CONTRACT.read_bytes())
+    new = body_paras(data)
+    assert len(new) == len(orig) == 46
+    for n, (a, b) in enumerate(zip(orig, new), 1):
+        assert view(b, "reject") == view(a, "reject"), n                  # 全部拒绝 = 原文，逐段
+        assert view(b, "accept") == EXPECTED.get(n, view(a, "accept")), n  # 全部接受 = 改后
+
+    z = zipfile.ZipFile(io.BytesIO(data))
+    doc = dx._parse_xml(z.read("word/document.xml"))
+    ins = doc.findall(f".//{{{W}}}ins")
+    dels = doc.findall(f".//{{{W}}}del")
+    assert len(ins) == 6 and len(dels) == 6                               # 替换 3（各一删一插）+ 插入 3 + 删除 3
+    assert {x.get(f"{{{W}}}author") for x in ins + dels} == {R.AUTHOR}
+    ids = [x.get(f"{{{W}}}id") for x in ins + dels]
+    assert len(set(ids)) == len(ids)
+    assert all(t.tag == f"{{{W}}}delText" for d in dels for t in d.iter() if t.tag in
+               (f"{{{W}}}t", f"{{{W}}}delText"))
+    comments = dx._parse_xml(z.read("word/comments.xml"))
+    texts = ["".join(c.itertext()) for c in comments]
+    assert texts == [f"第{i}条的理由" for i in range(1, 10)]
+    cids = {c.get(f"{{{W}}}id") for c in comments}
+    for tag in ("commentRangeStart", "commentRangeEnd", "commentReference"):
+        assert {x.get(f"{{{W}}}id") for x in doc.iter(f"{{{W}}}{tag}")} == cids
+    rels = z.read("word/_rels/document.xml.rels").decode()
+    assert R.COMMENTS_REL in rels and 'Target="comments.xml"' in rels
+    assert "/word/comments.xml" in z.read("[Content_Types].xml").decode()
+    # 页眉页脚、表格等未改的部件逐字节不变
+    zo = zipfile.ZipFile(CONTRACT)
+    for n in zo.namelist():
+        if n not in ("word/document.xml", "word/_rels/document.xml.rels", "[Content_Types].xml"):
+            assert z.read(n) == zo.read(n), n
+    # 修订版登进 result.json 的草稿列表
+    res = env.read_json(tid, "result.json", "files/result.schema.json")
+    assert {"title": "采购合同-修订版", "path": v["path"], "version": 1} in res["drafts"]
+
+
+def test_original_untouched_and_version_increments(env, tid):
+    before = hashlib.sha256((env.root / "合同" / "采购合同.docx").read_bytes()).hexdigest()
+    p = save_list(env, tid, "采购合同", [dict(id=1, comment="理由", **IN_SCOPE[0])])
+    a = ok(redline(env, tid, p), "api/redline.schema.json")
+    b = ok(redline(env, tid, p), "api/redline.schema.json")
+    assert a["path"].endswith("采购合同-修订版-v1.docx") and b["path"].endswith("采购合同-修订版-v2.docx")
+    assert (env.root / a["path"]).is_file() and (env.root / b["path"]).is_file()
+    assert hashlib.sha256((env.root / "合同" / "采购合同.docx").read_bytes()).hexdigest() == before
+
+
+def test_revised_original_rejected_whole(env, tid):
+    p = save_list(env, tid, "采购合同-含未处理修订", [dict(id=1, comment="理由", **IN_SCOPE[0])])
+    fail(redline(env, tid, p), "INVALID_ARGUMENT")
+    assert not (env.task_dir(tid) / "草稿").exists() or \
+        not list((env.task_dir(tid) / "草稿").glob("*修订版*"))
+    with pytest.raises(R.Revised):
+        R.generate((FIXTURES / "contract-01" / "采购合同-含未处理修订.docx").read_bytes(),
+                   [dict(id=1, comment="x", **IN_SCOPE[0])])
+
+
+def test_original_changed_after_scan(env, tid, tmp_path):
+    p = save_list(env, tid, "采购合同", [dict(id=1, comment="理由", **IN_SCOPE[0])])
+    src = env.root / "合同" / "采购合同.docx"
+    keep = src.read_bytes()
+    try:
+        d = pydocx.Document(io.BytesIO(keep))
+        d.paragraphs[0].insert_paragraph_before("新加的一段")              # 段号整体后移
+        d.save(str(src))
+        fail(redline(env, tid, p), "INPUT_CHANGED")
+    finally:
+        src.write_bytes(keep)
+
+
+@pytest.mark.parametrize("rel", [
+    "工作区/任务/{tid}/修改清单/../task.json", "工作区/任务/{tid}/草稿/x.json", "合同/采购合同.docx",
+    "工作区/任务/T-20260101000000-0000/修改清单/采购合同.json", "工作区/任务/{tid}/修改清单/没有.json",
+])
+def test_bad_edit_list_path(env, tid, rel):
+    r = redline(env, tid, rel.format(tid=tid))
+    assert r.json()["ok"] is False and r.json()["error"]["code"] in ("INVALID_ARGUMENT", "OUT_OF_CASE")
+
+
+def test_not_docx_and_other_case(env, tid):
+    lst = env.task_dir(tid) / "修改清单"
+    lst.mkdir(parents=True, exist_ok=True)
+    (lst / "起诉意见书.json").write_text(json.dumps({"name": "起诉意见书", "edits": [
+        {"id": 1, "para": 1, "action": "delete", "find": "x", "comment": "y"}]}, ensure_ascii=False), encoding="utf-8")
+    fail(redline(env, tid, f"工作区/任务/{tid}/修改清单/起诉意见书.json"), "INVALID_ARGUMENT")
+    (lst / "坏.json").write_text('{"name": "采购合同", "edits": []}', encoding="utf-8")
+    fail(redline(env, tid, f"工作区/任务/{tid}/修改清单/坏.json"), "INVALID_ARGUMENT")
+    r = env.client.post("/api/redline", json={"case_id": "00000000-0000-4000-8000-000000000000", "task_id": tid,
+                                              "edit_list": f"工作区/任务/{tid}/修改清单/坏.json"})
+    assert r.json()["ok"] is False
+
+
+# ---------------------------------------------------------------- 库：格式、拆 run、重叠、已有批注
+
+def make_docx(paras: list[list[tuple[str, dict]]], comments: bool = False) -> bytes:
+    """每段若干 run：(文字, {"bold": True, "italic": True, "size": 14})。"""
+    d = pydocx.Document()
+    for runs in paras:
+        p = d.add_paragraph()
+        for text, fmt in runs:
+            r = p.add_run(text)
+            r.bold = fmt.get("bold")
+            r.italic = fmt.get("italic")
+            if fmt.get("size"):
+                r.font.size = pydocx.shared.Pt(fmt["size"])
+    if comments:
+        d.add_comment(d.paragraphs[0].runs[0], text="律师原有批注", author="张律师")
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def run_fmt(r) -> tuple:
+    rpr = r.find(f"{{{W}}}rPr")
+    return (rpr is not None and rpr.find(f"{{{W}}}b") is not None,
+            rpr is not None and rpr.find(f"{{{W}}}i") is not None)
+
+
+def test_split_runs_keep_formatting():
+    """find 跨三个不同格式的 run、两头都在 run 中间：拆开后每一截都带原来的格式；新文字取相邻原 run 的格式。"""
+    data = make_docx([[("甲方应于", {}), ("收到货物后九十日", {"bold": True}), ("内付款。", {"italic": True})]])
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 1, "action": "replace", "find": "于收到货物后九十日内", "text": "验收后三十日内",
+         "comment": "c"}])
+    assert applied == [1] and manual == []
+    p = body_paras(out)[0]
+    assert view(p, "accept") == "甲方应验收后三十日内付款。" and view(p, "reject") == "甲方应于收到货物后九十日内付款。"
+    d = p.find(f"{{{W}}}del")
+    deleted = [("".join(t.text for t in r.iter(f"{{{W}}}delText")), run_fmt(r)) for r in d.iter(f"{{{W}}}r")]
+    assert deleted == [("于", (False, False)), ("收到货物后九十日", (True, False)), ("内", (False, True))]
+    kept = [("".join(t.text for t in r.iter(f"{{{W}}}t")), run_fmt(r)) for r in p if r.tag == f"{{{W}}}r"
+            and r.find(f"{{{W}}}t") is not None]
+    assert kept == [("甲方应", (False, False)), ("付款。", (False, True))]
+    new = p.find(f"{{{W}}}ins").find(f"{{{W}}}r")
+    assert run_fmt(new) == (False, True)                                   # 取最后一个被删 run 的格式
+
+
+def test_overlap_and_same_paragraph():
+    data = make_docx([[("甲方应于收到货物后九十日内付款，乙方应开具发票。", {})]])
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 1, "action": "replace", "find": "九十日", "text": "三十日", "comment": "a"},
+        {"id": 2, "para": 1, "action": "delete", "find": "九十日内", "comment": "b"},           # 与 1 重叠
+        {"id": 3, "para": 1, "action": "insert_after", "find": "开具发票", "text": "（增值税专用发票）", "comment": "c"},
+        {"id": 4, "para": 1, "action": "delete", "find": "收到货物后", "comment": "d"},          # 紧挨着 1，不重叠
+    ])
+    assert applied == [1, 3, 4] and manual == [{"id": 2, "reason": R.R_OVERLAP}]
+    p = body_paras(out)[0]
+    assert view(p, "accept") == "甲方应于三十日内付款，乙方应开具发票（增值税专用发票）。"
+    assert view(p, "reject") == "甲方应于收到货物后九十日内付款，乙方应开具发票。"
+
+
+def test_existing_comments_appended():
+    data = make_docx([[("甲方应于收到货物后九十日内付款。", {})]], comments=True)
+    out, applied, _ = R.generate(data, [
+        {"id": 1, "para": 1, "action": "replace", "find": "九十日", "text": "三十日", "comment": "新批注"}])
+    z = zipfile.ZipFile(io.BytesIO(out))
+    names = [n for n in z.namelist() if n.startswith("word/comments")]
+    assert names == ["word/comments.xml"]
+    comments = dx._parse_xml(z.read("word/comments.xml"))
+    assert [c.get(f"{{{W}}}author") for c in comments] == ["张律师", R.AUTHOR]
+    assert len({c.get(f"{{{W}}}id") for c in comments}) == 2
+    assert z.read("word/_rels/document.xml.rels").decode().count(R.COMMENTS_REL) == 1
+
+
+def test_multiline_insert_and_tab():
+    data = make_docx([[("第一条\t付款方式：转账。", {})]])
+    out, applied, _ = R.generate(data, [
+        {"id": 1, "para": 1, "action": "insert_after", "find": "\t付款方式", "text": "及期限", "comment": "c"},
+        {"id": 2, "para": 1, "action": "insert_after", "find": "转账。", "text": "\n另附：账户信息", "comment": "多行"}])
+    assert applied == [1, 2]
+    p = body_paras(out)[0]
+    assert view(p, "accept") == "第一条\t付款方式及期限：转账。 另附：账户信息"
+
+
+def test_hyperlink_inside_find_applied_cross_rejected():
+    """find 整个在超链接文字里：可以改（修订包在超链接里面）；跨出超链接：进需人工修改。"""
+    data = CONTRACT.read_bytes()
+    p39 = body_paras(data)[38]
+    link_text = "".join(t.text for t in p39.find(f".//{{{W}}}hyperlink").iter(f"{{{W}}}t"))
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 39, "action": "delete", "find": link_text[-5:], "comment": "c"},
+        {"id": 2, "para": 39, "action": "delete", "find": "电子版可在" + link_text[:4], "comment": "d"}])
+    assert applied == [1] and [m["id"] for m in manual] == [2]
+    d = body_paras(out)[38].find(f".//{{{W}}}hyperlink/{{{W}}}del")
+    assert d is not None
+
+
+# ---------------------------------------------------------------- LibreOffice 能打开（结构有效）
+
+@pytest.mark.skipif(libreoffice.find_soffice() is None, reason="本机没有 LibreOffice")
+def test_libreoffice_opens_and_keeps_revisions(tmp_path):
+    out, applied, _ = R.generate(CONTRACT.read_bytes(), all_edits())
+    src = tmp_path / "修订版.docx"
+    src.write_bytes(out)
+    with short_dir("lblo-") as lb, libreoffice.Converter(tmp_path / "t", lo_base=lb).session() as s:
+        pdf = s.convert(src, "pdf")
+        assert pdf.read_bytes().startswith(b"%PDF") and pdf.stat().st_size > 1000
+        back = s.convert(src, "docx")                                       # LibreOffice 读进再存：修订和批注还在
+        z = zipfile.ZipFile(back)
+        doc = z.read("word/document.xml").decode()
+        assert doc.count("<w:ins ") >= 6 and doc.count("<w:del ") >= 6
+        assert R.AUTHOR in doc
+        assert "word/comments.xml" in z.namelist() and "第9条的理由" in z.read("word/comments.xml").decode()
+
+
+# ---------------------------------------------------------------- 第一轮复核返修（2259 令）
+
+def test_tab_stop_paragraph_replaced():
+    """P2-1：段落设了制表位（w:pPr/w:tabs/w:tab）也能改；制表位定义不再被读成制表符。"""
+    d = pydocx.Document()
+    p = d.add_paragraph()
+    p.paragraph_format.tab_stops.add_tab_stop(pydocx.shared.Cm(8))
+    p.add_run("甲方：青禾建材\t乙方：某某钢构")
+    buf = io.BytesIO()
+    d.save(buf)
+    para = body_paras(buf.getvalue())[0]
+    assert "".join(c for c, _ in el._para_chars(para)) == "甲方：青禾建材\t乙方：某某钢构"
+    assert dx._text(para) == "甲方：青禾建材\t乙方：某某钢构"
+    out, applied, manual = R.generate(buf.getvalue(), [
+        {"id": 1, "para": 1, "action": "replace", "find": "某某钢构", "text": "某某钢构有限公司", "comment": "全称"}])
+    assert applied == [1] and manual == []
+    assert view(body_paras(out)[0], "accept") == "甲方：青禾建材\t乙方：某某钢构有限公司"
+
+
+def _patched(data: bytes, part: str, fn) -> bytes:
+    zin = zipfile.ZipFile(io.BytesIO(data))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for n in zin.namelist():
+            b = zin.read(n)
+            z.writestr(n, fn(b) if n == part else b)
+    return buf.getvalue()
+
+
+W_INS = (b'<w:ins w:id="901" w:author="\xe5\xaf\xb9\xe6\x96\xb9" w:date="2026-01-01T00:00:00Z">'
+         b'<w:r><w:t>X</w:t></w:r></w:ins>')
+
+
+@pytest.mark.parametrize("part,fn", [
+    ("word/header1.xml", lambda b: b.replace(b"</w:p>", W_INS + b"</w:p>", 1)),           # 页眉里的插入
+    ("word/footer1.xml", lambda b: b.replace(b"</w:p>", W_INS + b"</w:p>", 1)),           # 页脚
+    ("word/document.xml", lambda b: re.sub(                                               # 正文的格式修订
+        rb"<w:rPr>", b'<w:rPr><w:rPrChange w:id="902" w:author="x" w:date="2026-01-01T00:00:00Z"><w:rPr/>'
+        b"</w:rPrChange>", b, count=1)),
+    ("word/document.xml", lambda b: re.sub(                                               # 段落属性修订
+        rb"(<w:body><w:p\b[^>]*>)", rb'\1<w:pPr><w:pPrChange w:id="903" w:author="x" w:date="2026-01-01T00:00:00Z">'
+        rb"<w:pPr/></w:pPrChange></w:pPr>", b, count=1)),
+])
+def test_revisions_anywhere_rejected(part, fn, tmp_path):
+    """P2-2：页眉、页脚、正文格式修订、段落属性修订都算"已有修订"，整份拒绝；保存修改清单时也同口径。"""
+    data = _patched(CONTRACT.read_bytes(), part, fn)
+    assert zipfile.ZipFile(io.BytesIO(data)).read(part) != zipfile.ZipFile(CONTRACT).read(part)   # 真的改进去了
+    with pytest.raises(R.Revised):
+        R.generate(data, [dict(id=1, comment="x", **IN_SCOPE[0])])
+    assert el.has_revisions(zipfile.ZipFile(io.BytesIO(data)))
+    assert not el.has_revisions(zipfile.ZipFile(CONTRACT))
+    p = tmp_path / "有修订.docx"                       # 保存修改清单时同口径（记录项 2）
+    p.write_bytes(data)
+    _items, revised, _extras = el._paragraphs(p)
+    assert revised
+
+
+def test_bad_control_chars_go_manual():
+    """P3-2：修改文字或批注里有 XML 写不了的控制字符：该条进需人工修改，不出 500。"""
+    out, applied, manual = R.generate(CONTRACT.read_bytes(), [
+        {"id": 1, "para": 27, "action": "replace", "find": "九十日", "text": "三十\x0b日", "comment": "c"},
+        {"id": 2, "para": 23, "action": "replace", "find": "七日", "text": "十五日", "comment": "理由\x01"},
+        {"id": 3, "para": 31, "action": "replace", "find": "万分之五", "text": "万分之三", "comment": "正常"}])
+    assert applied == [3] and manual == [{"id": 1, "reason": R.R_BAD_CHAR}, {"id": 2, "reason": R.R_BAD_CHAR}]
+
+
+def test_duplicate_ids_rejected(env, tid):
+    """P3-3：清单 id 重复：库层抛错、接口 INVALID_ARGUMENT，不会把表格里那条也改了。"""
+    edits = [dict(id=1, comment="x", **IN_SCOPE[0]), dict(id=1, comment="y", **OUT_OF_SCOPE[0][0])]
+    with pytest.raises(ValueError):
+        R.generate(CONTRACT.read_bytes(), edits)
+    lst = env.task_dir(tid) / "修改清单"
+    lst.mkdir(parents=True, exist_ok=True)
+    (lst / "重复.json").write_text(json.dumps({"name": "采购合同", "edits": edits}, ensure_ascii=False), encoding="utf-8")
+    fail(redline(env, tid, f"工作区/任务/{tid}/修改清单/重复.json"), "INVALID_ARGUMENT")
+
+
+def test_doctype_docx_not_ready(env, tid):
+    """P3-1：document.xml 带 DOCTYPE 的损坏 docx：保存修改清单和生成修订版都回 MATERIAL_NOT_READY，不出 500。"""
+    bad = _patched(CONTRACT.read_bytes(), "word/document.xml",
+                   lambda b: b.replace(b"<w:document", b'<!DOCTYPE x [<!ENTITY a "b">]><w:document', 1))
+    (env.root / "合同" / "坏合同.docx").write_bytes(bad)
+    try:
+        ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+        fail(env.tool(tid, "case_save_edit_list", {"name": "坏合同", "edits": [dict(id=1, comment="x", **IN_SCOPE[0])]}),
+             "MATERIAL_NOT_READY")
+        lst = env.task_dir(tid) / "修改清单"
+        lst.mkdir(parents=True, exist_ok=True)
+        (lst / "坏合同.json").write_text(json.dumps({"name": "坏合同", "edits": [dict(id=1, comment="x", **IN_SCOPE[0])]},
+                                                  ensure_ascii=False), encoding="utf-8")
+        r = redline(env, tid, f"工作区/任务/{tid}/修改清单/坏合同.json")
+        assert r.status_code == 200 and r.json()["error"]["code"] in ("MATERIAL_NOT_READY", "INVALID_ARGUMENT")
+    finally:
+        (env.root / "合同" / "坏合同.docx").unlink()
+        ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+
+
+def test_insert_after_whole_link_goes_manual():
+    """NOTE-2（线 C 选"进需人工修改"）：insert_after 的 find 落在超链接末尾，插入的文字会进链接 → 不改。"""
+    data = CONTRACT.read_bytes()
+    link = "".join(t.text for t in body_paras(data)[38].find(f".//{{{W}}}hyperlink").iter(f"{{{W}}}t"))
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 39, "action": "insert_after", "find": link[-6:], "text": "（附件二）", "comment": "c"},
+        {"id": 2, "para": 39, "action": "replace", "find": link[-6:], "text": "x", "comment": "替换照做"}])
+    assert manual == [{"id": 1, "reason": R.R_IN_LINK}] and applied == [2]
+
+
+def test_author_and_date_fixed():
+    """P3-5：作者固定"AI审查（待律师确认）"、不取本机用户名；日期是 UTC 带 Z。"""
+    out, applied, _ = R.generate(CONTRACT.read_bytes(), [dict(id=1, comment="x", **IN_SCOPE[0])])
+    z = zipfile.ZipFile(io.BytesIO(out))
+    doc = dx._parse_xml(z.read("word/document.xml"))
+    marks = list(doc.iter(f"{{{W}}}ins")) + list(doc.iter(f"{{{W}}}del")) + \
+        list(dx._parse_xml(z.read("word/comments.xml")))
+    assert R.AUTHOR == "AI审查（待律师确认）"
+    for m in marks:
+        assert m.get(f"{{{W}}}author") == "AI审查（待律师确认）"
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", m.get(f"{{{W}}}date"))
+
+
+def test_run_text_must_equal_judged_text(monkeypatch):
+    """P3-5：按 run 数出的原文与判范围时的原文不一致（少见结构）就不改，进需人工。"""
+    monkeypatch.setattr(R, "_slot_text", lambda slots: "对不上")
+    out, applied, manual = R.generate(CONTRACT.read_bytes(), [dict(id=1, comment="x", **IN_SCOPE[0])])
+    assert applied == [] and manual == [{"id": 1, "reason": R.R_STRUCTURE}]
+
+
+# ---------------------------------------------------------------- 第二轮复核记录项（0110 注记）
+
+def _link_doc(kind: str) -> bytes:
+    """一段：前文 + 链接文字"附件清单" + （链接末尾后跟书签结束 / 校对标记）+ 后文。kind：hyperlink / fldsimple / complex。"""
+    d = pydocx.Document()
+    p = d.add_paragraph()
+    p.add_run("详见")
+    tail = '<w:bookmarkEnd w:id="7"/><w:proofErr w:type="spellEnd"/>'
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' \
+         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    if kind == "hyperlink":
+        xml = f'<w:hyperlink {ns} r:id="rId99"><w:r><w:t>附件清单</w:t></w:r>{tail}</w:hyperlink>'
+    elif kind == "fldsimple":
+        xml = f'<w:fldSimple {ns} w:instr=\' HYPERLINK "http://127.0.0.1:9/x" \'><w:r><w:t>附件清单</w:t></w:r>{tail}</w:fldSimple>'
+    else:
+        xml = None
+    from lxml import etree as ET
+    if xml:
+        p._p.append(ET.fromstring(xml))
+    else:
+        for frag in ('<w:r {ns}><w:fldChar w:fldCharType="begin"/></w:r>',
+                     '<w:r {ns}><w:instrText xml:space="preserve"> HYPERLINK "http://127.0.0.1:9/x" </w:instrText></w:r>',
+                     '<w:r {ns}><w:fldChar w:fldCharType="separate"/></w:r>', '<w:r {ns}><w:t>附件清单</w:t></w:r>',
+                     '<w:bookmarkEnd {ns} w:id="7"/>', '<w:r {ns}><w:fldChar w:fldCharType="end"/></w:r>'):
+            p._p.append(ET.fromstring(frag.format(ns=ns)))
+    p.add_run("。")
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("kind", ["hyperlink", "fldsimple", "complex"])
+def test_insert_after_link_end_variants(kind):
+    """记录项 1：链接末尾跟着书签结束 / 校对标记；HYPERLINK 简单域、复杂域：insert_after 都进需人工。"""
+    data = _link_doc(kind)
+    assert el._para_chars(body_paras(data)[0])
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 1, "action": "insert_after", "find": "附件清单", "text": "（另附）", "comment": "c"}])
+    assert applied == [] and manual == [{"id": 1, "reason": R.R_IN_LINK}], kind
+
+
+def test_insert_after_inside_link_not_at_end_still_applied():
+    data = _link_doc("hyperlink")
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 1, "action": "insert_after", "find": "附件", "text": "一", "comment": "c"}])
+    assert applied == [1] and manual == []
+
+
+def test_lone_surrogate_goes_manual():
+    """记录项 4：孤立代理字符也写不进 XML：进需人工，不出 500。"""
+    out, applied, manual = R.generate(CONTRACT.read_bytes(), [
+        {"id": 1, "para": 27, "action": "replace", "find": "九十日", "text": "三十\ud800日", "comment": "c"}])
+    assert applied == [] and manual == [{"id": 1, "reason": R.R_BAD_CHAR}]
+
+
+def test_text_format_version_guard():
+    """记录项 3：段落属性子树不再读成正文后，材料文本格式版本是 3（撤回到 2 应变红）；Word 类在重解析的类型里。"""
+    from lawbench.case import materials as M
+    assert M.TEXT_FORMAT_VERSION == 3
+    assert {"docx", "doc", "wps"} <= set(M.REFORMAT_TYPES)
+
+
+
+def test_insert_after_link_end_with_empty_runs():
+    """记录项 9：复杂域 HYPERLINK、w:hyperlink 里链接文字后跟空 run：仍认作链接末尾，insert_after 进需人工。"""
+    from lxml import etree as ET
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' \
+         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    for frags in (
+        ['<w:r {ns}><w:fldChar w:fldCharType="begin"/></w:r>',
+         '<w:r {ns}><w:instrText xml:space="preserve"> HYPERLINK "http://127.0.0.1:9/x" </w:instrText></w:r>',
+         '<w:r {ns}><w:fldChar w:fldCharType="separate"/></w:r>', '<w:r {ns}><w:t>附件清单</w:t></w:r>',
+         '<w:r {ns}><w:rPr><w:b/></w:rPr></w:r>', '<w:r {ns}><w:fldChar w:fldCharType="end"/></w:r>'],
+        ['<w:hyperlink {ns} r:id="rId99"><w:r><w:t>附件清单</w:t></w:r><w:r><w:rPr><w:b/></w:rPr></w:r></w:hyperlink>'],
+    ):
+        d = pydocx.Document()
+        p = d.add_paragraph()
+        p.add_run("详见")
+        for f in frags:
+            p._p.append(ET.fromstring(f.format(ns=ns)))
+        p.add_run("。")
+        buf = io.BytesIO()
+        d.save(buf)
+        out, applied, manual = R.generate(buf.getvalue(), [
+            {"id": 1, "para": 1, "action": "insert_after", "find": "附件清单", "text": "（另附）", "comment": "c"}])
+        assert applied == [] and manual == [{"id": 1, "reason": R.R_IN_LINK}]

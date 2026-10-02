@@ -23,13 +23,36 @@ dependencies = [
   "olefile>=0.47,<0.48",
   # 真 token 计数（llm/tokens.py）：只用 Tokenizer.from_file 读本地 tokenizer.json，不联网
   "tokenizers>=0.23.2,<0.24",
+  # 案卷归档（T23，Spec 12.3、12.4）：卷宗合并、页码层、结案报告与立卷申请书、Word / WPS 自动化
+  "pypdf>=6.19,<7",
+  "reportlab>=5.0,<6",
+  "python-docx>=1.2,<2",
+  "pywin32>=312,<313; sys_platform == 'win32'",   # pywin32 按构建号发版，没有主版本：钉在 312
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=9.1,<10"]
+test = ["pytest>=9.1,<10", "python-docx>=1.2,<2"]   # test_redline 用它造样本（复核 NOTE-3）
+retainer = [
+  # 委托材料的证件识别驱动（engines/retainer/tools/ocr-driver，Spec 13.5）：rapidocr 3.9.2 由驱动 vendor/ 自带，
+  # 这里是它运行和导入时要的包（T25 调研：requests 在导入阶段就会加载，PDF 要 PyMuPDF）。pywin32 驱动不用，不装。
+  # 单列一组：服务代码本身不用这些（R15 不许服务依赖 PyYAML），打包时随客户端 Python 一起装（pip install .[retainer]）。
+  "onnxruntime>=1.24.4,<1.25",
+  "opencv-python-headless>=5.0,<6",
+  "pyclipper>=1.4,<2",
+  "shapely>=2.1,<3",
+  "six>=1.17,<2",
+  "PyYAML>=6.0,<7",
+  "tqdm>=4.70,<5",
+  "colorlog>=6.12,<7",
+  "requests>=2.34,<3",
+  "PyMuPDF>=1.28,<2",
+]
 
 [tool.setuptools.packages.find]
 include = ["lawbench*"]
+
+[tool.setuptools.package-data]
+"lawbench.export" = ["templates/*.docx"]   # 导出用的占位模板（T15）
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

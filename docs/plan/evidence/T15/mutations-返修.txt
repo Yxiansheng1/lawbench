@@ -1,0 +1,15 @@
+作者取本机用户名: 红（1 failed, 1 warning in 1.06s）
+日期用本地时间不带 Z: 红（1 failed, 1 warning in 0.94s）
+日志记标题: 红（1 failed, 1 warning in 19.14s）
+去掉案件锁: 红（1 failed, 1 warning in 9.84s）
+写索引失败不回滚: 红（1 failed, 1 warning in 9.48s）
+去掉 run 原文一致检查: 红（1 failed, 1 warning in 0.98s）
+P2-1 不跳 pPr: 红（1 failed, 1 warning in 0.92s）
+P2-2 只查 document.xml: 红（2 failed, 2 passed, 1 warning in 0.96s）
+P2-2 不查 *PrChange: 红（2 failed, 2 passed, 1 warning in 1.45s）
+P3-2 不查控制字符: 红（1 failed, 1 warning in 1.03s）
+P3-3 不查重复 id: 红（1 failed, 1 warning in 6.54s）
+P3-4 只替换一遍: 红（1 failed, 1 warning in 0.87s）
+P3-4 不处理 href: 红（1 failed, 1 warning in 0.78s）
+NOTE-1 透传原始块: 红（1 failed, 1 warning in 9.82s）
+NOTE-2 链接末尾照插: 红（1 failed, 1 warning in 0.91s）

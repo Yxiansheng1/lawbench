@@ -1,0 +1,24 @@
+# T23 真 Word 实测（本开发机，2026-10-01 夜，无人值守窗）
+
+## 环境
+COM 注册：Word.Application=True；KWPS.Application=False；WPS.Application=False
+Word：C:\Program Files\Microsoft Office\Root\Office16\WINWORD.EXE（Microsoft 365 / Office16）；WPS：未安装
+打印机：
+  OneNote (Desktop)|Default=False|Network=False|WorkOffline=False
+  NPI2319EF (HP Color LaserJet M255dw)|Default=False|Network=False|WorkOffline=False
+  Microsoft Print to PDF|Default=True|Network=False|WorkOffline=False
+  Canon MF660C Series|Default=False|Network=False|WorkOffline=False
+说明：本机默认打印机是本地的 Microsoft Print to PDF，不是"连不上的网络打印机"，所以"等待打印机连接"弹窗场景在本机复现不了；转换代码不改默认打印机，这一项候 owner 在默认打印机为网络打印机的律所电脑上实测（Spec 第 16 节）。弹窗卡住时的超时换程序由 test_convert 用假 COM 子进程测（3 秒超时后子进程与孙进程都已结束、换到 LibreOffice）。
+
+## 实测
+- closed-01 民事起诉状.docx：选 word → 实际 word，13.7 秒，PDF 45791 字节；转完本次 COM 启动的 Word 进程残留 0 个；未出现可见窗口（Visible=False，子进程正常退出、未超时）
+- 同上（auto）：选 auto → 实际 word，14.0 秒，PDF 45791 字节；转完本次 COM 启动的 Word 进程残留 0 个；未出现可见窗口（Visible=False，子进程正常退出、未超时）
+- 绕过外链检查直接交给 Word（UpdateLinksAtOpen 已关）：链接到文件的图片（r:link + TargetMode=External） → Word 向本机监听发了 8 个请求
+  - 走正式流程（auto）：外链检查拦下，实际 libreoffice，监听 0 个请求
+- 绕过外链检查直接交给 Word（UpdateLinksAtOpen 已关）：INCLUDEPICTURE 域指向外部地址 → Word 向本机监听发了 0 个请求
+  - 走正式流程（auto）：外链检查拦下，实际 libreoffice，监听 0 个请求
+
+## 结论
+- Word 能用：普通 docx 约 9 秒导出、加等 Word 退出最多 5 秒；转完不留 Word 进程（没自己退出的按进程号结束，只结束本次 COM 启动的）。
+- **Word 会按文档里的链接取图，关掉 UpdateLinksAtOpen 也一样**（上面的请求数）。所以交给 Word / WPS 之前先查外链（convert.word_has_external），有外链或查不了就只走 LibreOffice（BlockUntrustedRefererLinks）；设置里只选了 word / wps 的这类文档报 CONVERTER_UNAVAILABLE。已通知主编排（交付说明"需要主编排知道的"第 1 条）。
+- 打印机弹窗场景、Word / WPS 转换后的全盘留痕搜索（find_leaks）：候 owner / 真机，见 convert-leaks.txt。

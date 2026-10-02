@@ -1,0 +1,22 @@
+原件：tests\fixtures\contract-01\采购合同.docx sha256=16ea49cb8e539ed2d3485673ac9eef76184248a6b75edbf8fd7de3179fd4181a
+样本：redline-sample.docx sha256=78f48e65a086f7e7bd7c79d0abe1ef07beee2a776748419abe3893bb588fb491  40911 字节
+修改清单 14 条；生成修订 9 条：[1, 2, 3, 4, 5, 6, 7, 8, 9]
+需人工修改：10 目标段落在表格中；11 目标段落在页眉页脚中；12 find 跨越域代码或超链接；13 find 在该段中找不到；14 find 在该段中出现多次
+   1 段27  replace      find='九十日' text='三十日'
+   2 段23  replace      find='七日' text='十五日'
+   3 段31  replace      find='万分之五' text='万分之三'
+   4 段21  insert_after find='通知甲方收货' text='（书面通知）'
+   5 段17  insert_after find='甲方有权拒收该批货物' text='，并有权解除合同'
+   6 段42  insert_after find='签字盖章' text='（法定代表人或授权代表签字）'
+   7 段24  delete       find='隐蔽瑕疵的' text=None
+   8 段32  delete       find='还应' text=None
+   9 段16  delete       find='，检测费用先由青禾建材垫付' text=None
+  10 段12  replace      find='HW200' text='HW300'
+  11 段47  delete       find='虚构' text=None
+  12 段39  replace      find='电子版可在http' text='电子版可在'
+  13 段28  replace      find='不存在的原文' text='x'
+  14 段30  replace      find='逾期' text='迟延'
+document.xml：w:ins 6 个，w:del 6 个；comments.xml 批注 9 条
+LibreOffice（C:\Program Files\LibreOffice\program\soffice.exe）转 PDF：成功，101682 字节，文件头 b'%PDF-1.7'
+LibreOffice 读进再存 docx：w:ins 6 个，w:del 6 个，作者 AI审查（待律师确认） 在
+G-10（Word、WPS 中逐条接受/拒绝）按工单放到 T22 真人核对。

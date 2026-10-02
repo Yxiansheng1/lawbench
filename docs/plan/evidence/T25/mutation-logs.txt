@@ -1,0 +1,5 @@
+# T25 返修 A-P2-3：日志用例的变异测试（2026-10-01）
+用例：tests/test_invoice.py::test_logs_have_no_invoice_details（看真引擎一期全程——plan、run、analyze、prepare(BLOCKED)、exclude×2、analyze、prepare、reimburse 预览、reprint、reimburse --apply、report、-x 批次 reprint——的 service.log：每行只许 t/module/op/status/case_id/ms/error 七个字段，且不含票号、金额、购买方、文件名、引擎原因文字）
+变异：runner._run_locked 里多记一条 logs.event("invoice", action, error=output[:300])（把引擎输出写进日志）
+变异后：1 failed
+还原后：1 passed

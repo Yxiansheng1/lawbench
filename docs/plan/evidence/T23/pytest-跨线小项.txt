@@ -1,0 +1,93 @@
+........................................................................ [  6%]
+........................................................................ [ 12%]
+.............................................s.......................... [ 18%]
+...................................................................ss... [ 24%]
+...........s............................................................ [ 30%]
+................................................FF...................... [ 36%]
+........................................................................ [ 42%]
+........................................................................ [ 48%]
+.............F.......................................................... [ 55%]
+........................................................................ [ 61%]
+........................................................................ [ 67%]
+........................................................................ [ 73%]
+........................................................................ [ 79%]
+........................................................................ [ 85%]
+........................................................................ [ 91%]
+.................................................sss.................... [ 97%]
+.........................                                                [100%]
+================================== FAILURES ===================================
+__________________________ test_env_only_whitelisted __________________________
+
+tmp_path = WindowsPath('C:/Users/19705/AppData/Local/Temp/pytest-of-19705/pytest-1829/test_env_only_whitelisted0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000023EAA73E030>
+
+    def test_env_only_whitelisted(tmp_path, monkeypatch):
+        monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:8080")
+        monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+        monkeypatch.setenv("LAWFIRM_KEY", "sk-should-not-pass")
+        monkeypatch.setenv("PYTHONPATH", "C:\\evil")
+        env = make_runner(tmp_path).env()
+>       assert set(env) <= set(R.PASS_ENV) | {"PYTHONUTF8", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE"}
+E       AssertionError: assert {'INVOICE_BUY...TEMROOT', ...} <= {'INVOICE_BUY..., 'TEMP', ...}
+E         
+E         Extra items in the left set:
+E         'PYTHONNOUSERSITE'
+
+tests\test_invoice.py:149: AssertionError
+________________ test_child_process_sees_only_whitelisted_env _________________
+
+tmp_path = WindowsPath('C:/Users/19705/AppData/Local/Temp/pytest-of-19705/pytest-1829/test_child_process_sees_only_w0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000023EA205E990>
+
+    def test_child_process_sees_only_whitelisted_env(tmp_path, monkeypatch):
+        """真起子进程：塞一个 LB_CANARY 和代理变量，子进程看不到（Spec 13.3 回写⑤）。"""
+        eng = tmp_path / "eng"
+        (eng / "scripts").mkdir(parents=True)
+        (eng / "scripts" / "invoke.py").write_text(
+            "import json, os\nprint(json.dumps(sorted(os.environ)))\n", encoding="utf-8")
+        monkeypatch.setenv("LB_CANARY", "canary-should-not-pass")
+        monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+        r = make_runner(tmp_path, engine_dir=eng)
+        v = r.run({"action": "report"})
+        seen = set(json.loads(v["output"]))
+        assert "LB_CANARY" not in seen and "HTTPS_PROXY" not in seen
+        # Windows 会给每个进程自动补几项（如 SystemRoot 的大小写变体），除此之外只有名单里的
+        allowed = {k.upper() for k in (*R.PASS_ENV, "PYTHONUTF8", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE")}
+        extra = {k for k in seen if k.upper() not in allowed}
+>       assert extra <= {"__PYVENV_LAUNCHER__"}, extra
+E       AssertionError: {'PYTHONNOUSERSITE'}
+E       assert {'PYTHONNOUSERSITE'} <= {'__PYVENV_LAUNCHER__'}
+E         
+E         Extra items in the left set:
+E         'PYTHONNOUSERSITE'
+
+tests\test_invoice.py:171: AssertionError
+------------------------------ Captured log call ------------------------------
+INFO     lawbench.events:logs.py:53 {"t": "2026-10-02T10:39:43+08:00", "module": "invoice", "op": "report", "status": "ok", "ms": 297}
+_________________________ test_child_env_has_no_proxy _________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000023EAA784BF0>
+
+    def test_child_env_has_no_proxy(monkeypatch):
+        monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:8080")
+        monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+        monkeypatch.setenv("PYTHONPATH", "C:\\evil")
+        env = D.child_env()
+>       assert set(env) <= set(D.PASS_ENV) | {"PYTHONUTF8"}
+E       AssertionError: assert {'LOCALAPPDAT...', 'TMP', ...} <= {'LOCALAPPDAT...'USERPROFILE'}
+E         
+E         Extra items in the left set:
+E         'PYTHONNOUSERSITE'
+
+tests\test_retainer_driver.py:152: AssertionError
+============================== warnings summary ===============================
+tests\conftest.py:17
+  D:\lawbench-C\service\tests\conftest.py:17: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_invoice.py::test_env_only_whitelisted - AssertionError: ass...
+FAILED tests/test_invoice.py::test_child_process_sees_only_whitelisted_env - ...
+FAILED tests/test_retainer_driver.py::test_child_env_has_no_proxy - Assertion...
+3 failed, 1167 passed, 7 skipped, 1 warning in 1219.12s (0:20:19)

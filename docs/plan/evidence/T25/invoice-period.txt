@@ -1,0 +1,369 @@
+# T25 一期（虚构样本 invoices-01，经服务的 InvoiceRunner，2026-10-01；plan → run → analyze → exclude 待核两项 → analyze → prepare → reimburse 预览 → reimburse --apply → report）
+
+## env_check：exit 0，attention False，27.9 秒
+[ENV] 校验并展开到外部缓存 ...
+期望指纹：c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189
+缓存：\\?\<临时>\ad\ivc\win-amd64\c872e5bf9135da37a5ae4392ecadf291c76087849ee67b63a2bc61ae279b7189\gen-a235911ac782489981e300c7c742950f
+[OCR] Windows 已安装语言：en-US, zh-Hans-CN
+[结论] 环境健康（只读诊断通过）
+
+## plan：exit 0，attention False，3.0 秒
+{
+  "period": "2026-09",
+  "channel": "local",
+  "mail_start": null,
+  "mail_end_exclusive": null,
+  "history": "exclude",
+  "history_numbers": []
+}
+
+## run：exit 2，attention True，13.3 秒
+{
+  "total_objects": 8,
+  "statuses": {
+    "已下载": 7,
+    "已展开": 1
+  },
+  "count_discrepancies": [],
+  "processing_complete": false,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "0",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "0",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [],
+  "historical_unpaid_not_automatically_selected": true
+}
+{
+  "total_objects": 8,
+  "statuses": {
+    "待核": 2,
+    "历史未报": 2,
+    "抬头错误": 1,
+    "已展开": 1,
+    "重复": 2
+  },
+  "count_discrepancies": [],
+  "processing_complete": false,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "1366.50",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "1366.50",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [
+    "26999000000000410002",
+    "26999000000000410003"
+  ],
+  "historical_unpaid_not_automatically_selected": true
+}
+
+## analyze：exit 2，attention True，4.6 秒
+{
+  "total_objects": 8,
+  "statuses": {
+    "待核": 2,
+    "历史未报": 2,
+    "抬头错误": 1,
+    "已展开": 1,
+    "重复": 2
+  },
+  "count_discrepancies": [],
+  "processing_complete": false,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "1366.50",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "1366.50",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [
+    "26999000000000410002",
+    "26999000000000410003"
+  ],
+  "historical_unpaid_not_automatically_selected": true
+}
+
+## exclude：exit 0，attention False，3.0 秒
+
+
+## exclude：exit 0，attention False，2.8 秒
+
+
+## analyze：exit 0，attention False，4.4 秒
+{
+  "total_objects": 8,
+  "statuses": {
+    "人工排除": 2,
+    "历史未报": 2,
+    "抬头错误": 1,
+    "已展开": 1,
+    "重复": 2
+  },
+  "count_discrepancies": [],
+  "processing_complete": true,
+  "mailbox_scope_complete": false,
+  "new_recorded_amount": "1366.50",
+  "historical_unpaid_amount": "0",
+  "eligible_unpaid_amount": "1366.50",
+  "reimbursement_plan": {
+    "period": "2026-09",
+    "channel": "local",
+    "mail_start": null,
+    "mail_end_exclusive": null,
+    "history": "exclude",
+    "history_numbers": []
+  },
+  "selected_numbers": [
+    "26999000000000410002",
+    "26999000000000410003"
+  ],
+  "historical_unpaid_not_automatically_selected": true
+}
+
+## prepare：exit 0，attention False，4.9 秒
+{
+  "schema": 1,
+  "batch": "2026-09_九月",
+  "version": 1,
+  "status": "ready",
+  "created_at": "2026-10-01T11:26:37.240444",
+  "folder": "D:\\lbt25c\\office\\发票台账\\_打印包\\2026-09\\2026-09_九月\\v001",
+  "members": [
+    {
+      "seq": 1,
+      "number": "26999000000000410002",
+      "category": "差旅费",
+      "date": "2026-08-11",
+      "amount": "1280.00",
+      "ledger_snapshot": [
+        null,
+        "差旅费",
+        "2026-08-11",
+        "1280.00",
+        "10002",
+        "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9.pdf",
+        "2026-09_九月",
+        "26999000000000410002",
+        "未报"
+      ],
+      "source_sha256": "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9",
+      "file": "差旅费\\001_差旅费_2026-08-11_1280.00_26999000000000410002.pdf",
+      "start_page": 1,
+      "end_page": 1
+    },
+    {
+      "seq": 2,
+      "number": "26999000000000410003",
+      "category": "差旅费",
+      "date": "2026-08-12",
+      "amount": "86.50",
+      "ledger_snapshot": [
+        null,
+        "差旅费",
+        "2026-08-12",
+        "86.50",
+        "10003",
+        "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c.pdf",
+        "2026-09_九月",
+        "26999000000000410003",
+        "未报"
+      ],
+      "source_sha256": "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c",
+      "file": "差旅费\\002_差旅费_2026-08-12_86.50_26999000000000410003.pdf",
+      "start_page": 2,
+      "end_page": 2
+    }
+  ],
+  "categories": {
+    "差旅费": "1366.50"
+  },
+  "total": "1366.50",
+  "page_count": 2,
+  "folder_relative": "_打印包\\2026-09\\2026-09_九月\\v001",
+  "reimbursement_period": "2026-09",
+  "artifacts": {
+    "贴票打印.pdf": "72e88099c0244484ce1eb6bb55838f9ac496f04ec0f1cf0e43a9d4e5fbe2affc",
+    "贴票清单.html": "eb811f33566e478f168b3c1e37cb4f965151bb0ae7447bca96292c8bc3add0ea",
+    "贴票顺序清单.csv": "60b093d373648109cee23613cecfb79582080853d09295c1819148885e61fb12",
+    "差旅费\\001_差旅费_2026-08-11_1280.00_26999000000000410002.pdf": "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9",
+    "差旅费\\002_差旅费_2026-08-12_86.50_26999000000000410003.pdf": "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c"
+  }
+}
+
+## reimburse：exit 0，attention False，3.9 秒
+{
+  "schema": 1,
+  "batch": "2026-09_九月",
+  "version": 1,
+  "status": "ready",
+  "created_at": "2026-10-01T11:26:37.240444",
+  "folder": "D:\\lbt25c\\office\\发票台账\\_打印包\\2026-09\\2026-09_九月\\v001",
+  "members": [
+    {
+      "seq": 1,
+      "number": "26999000000000410002",
+      "category": "差旅费",
+      "date": "2026-08-11",
+      "amount": "1280.00",
+      "ledger_snapshot": [
+        null,
+        "差旅费",
+        "2026-08-11",
+        "1280.00",
+        "10002",
+        "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9.pdf",
+        "2026-09_九月",
+        "26999000000000410002",
+        "未报"
+      ],
+      "source_sha256": "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9",
+      "file": "差旅费\\001_差旅费_2026-08-11_1280.00_26999000000000410002.pdf",
+      "start_page": 1,
+      "end_page": 1
+    },
+    {
+      "seq": 2,
+      "number": "26999000000000410003",
+      "category": "差旅费",
+      "date": "2026-08-12",
+      "amount": "86.50",
+      "ledger_snapshot": [
+        null,
+        "差旅费",
+        "2026-08-12",
+        "86.50",
+        "10003",
+        "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c.pdf",
+        "2026-09_九月",
+        "26999000000000410003",
+        "未报"
+      ],
+      "source_sha256": "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c",
+      "file": "差旅费\\002_差旅费_2026-08-12_86.50_26999000000000410003.pdf",
+      "start_page": 2,
+      "end_page": 2
+    }
+  ],
+  "categories": {
+    "差旅费": "1366.50"
+  },
+  "total": "1366.50",
+  "page_count": 2,
+  "folder_relative": "_打印包\\2026-09\\2026-09_九月\\v001",
+  "reimbursement_period": "2026-09",
+  "artifacts": {
+    "贴票打印.pdf": "72e88099c0244484ce1eb6bb55838f9ac496f04ec0f1cf0e43a9d4e5fbe2affc",
+    "贴票清单.html": "eb811f33566e478f168b3c1e37cb4f965151bb0ae7447bca96292c8bc3add0ea",
+    "贴票顺序清单.csv": "60b093d373648109cee23613cecfb79582080853d09295c1819148885e61fb12",
+    "差旅费\\001_差旅费_2026-08-11_1280.00_26999000000000410002.pdf": "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9",
+    "差旅费\\002_差旅费_2026-08-12_86.50_26999000000000410003.pdf": "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c"
+  },
+  "dry_run": true
+}
+
+## reimburse：exit 0，attention False，3.8 秒
+{
+  "schema": 1,
+  "batch": "2026-09_九月",
+  "version": 1,
+  "status": "paid",
+  "created_at": "2026-10-01T11:26:37.240444",
+  "folder": "D:\\lbt25c\\office\\发票台账\\_打印包\\2026-09\\2026-09_九月\\v001",
+  "members": [
+    {
+      "seq": 1,
+      "number": "26999000000000410002",
+      "category": "差旅费",
+      "date": "2026-08-11",
+      "amount": "1280.00",
+      "ledger_snapshot": [
+        null,
+        "差旅费",
+        "2026-08-11",
+        "1280.00",
+        "10002",
+        "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9.pdf",
+        "2026-09_九月",
+        "26999000000000410002",
+        "未报"
+      ],
+      "source_sha256": "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9",
+      "file": "差旅费\\001_差旅费_2026-08-11_1280.00_26999000000000410002.pdf",
+      "start_page": 1,
+      "end_page": 1
+    },
+    {
+      "seq": 2,
+      "number": "26999000000000410003",
+      "category": "差旅费",
+      "date": "2026-08-12",
+      "amount": "86.50",
+      "ledger_snapshot": [
+        null,
+        "差旅费",
+        "2026-08-12",
+        "86.50",
+        "10003",
+        "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c.pdf",
+        "2026-09_九月",
+        "26999000000000410003",
+        "未报"
+      ],
+      "source_sha256": "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c",
+      "file": "差旅费\\002_差旅费_2026-08-12_86.50_26999000000000410003.pdf",
+      "start_page": 2,
+      "end_page": 2
+    }
+  ],
+  "categories": {
+    "差旅费": "1366.50"
+  },
+  "total": "1366.50",
+  "page_count": 2,
+  "folder_relative": "_打印包\\2026-09\\2026-09_九月\\v001",
+  "reimbursement_period": "2026-09",
+  "artifacts": {
+    "贴票打印.pdf": "72e88099c0244484ce1eb6bb55838f9ac496f04ec0f1cf0e43a9d4e5fbe2affc",
+    "贴票清单.html": "eb811f33566e478f168b3c1e37cb4f965151bb0ae7447bca96292c8bc3add0ea",
+    "贴票顺序清单.csv": "60b093d373648109cee23613cecfb79582080853d09295c1819148885e61fb12",
+    "差旅费\\001_差旅费_2026-08-11_1280.00_26999000000000410002.pdf": "d4868cc0ce22a0b3c1b0e8954364e39f1062d6e48318bca9d0d8407d37885ce9",
+    "差旅费\\002_差旅费_2026-08-12_86.50_26999000000000410003.pdf": "45f026df7638cd1df0d378aaac39e20758d714ea6188b30d02929d4d62e43c8c"
+  },
+  "paid_at": "2026-10-01T11:26:44.917864"
+}
+
+## report：exit 0，attention False，3.8 秒
+
+==================================================
+发票主台账统计
+==================================================
+  总记录：2
+  金额合计（筛选，不含冲突/已取代）：1,366.50 元
+
+  状态分布：
+    已报: 2
+
+  批次分布：
+    2026-09_九月: 2
+
+  冲突记录：待裁 0 条 / 已归档 0 条
+

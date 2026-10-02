@@ -1,0 +1,12 @@
+# T23 初步留痕搜索（2026-10-01 23:02）
+
+特征串：LBFX-CLSD01-P6V3（closed-01；民事起诉状.docx 里有），UTF-8 与 UTF-16LE 都搜。
+范围：%TEMP%、%APPDATA%、%LOCALAPPDATA% 下最近 3 小时改过、小于 64MB 的文件；不含测试自己建的案件副本目录（%TEMP%\pytest-of-<用户>）和本会话草稿区（%TEMP%\claude）。
+前提：本机刚用真 Word 转过 closed-01 的民事起诉状 4 次以上（printer.txt）。
+
+查了 2408 个文件（去重）；跳过案件目录 3918 个（有“工作区”的文件夹，都是各测试自己建的虚构案件副本，案件目录内允许出现）；案件目录外命中 1 个。
+  %USERPROFILE%\AppData\Local\Temp\lbdp-ol3xujtp\甲某诉乙某买卖合同纠纷一审二审再审全部卷宗材料整理甲某诉乙某买卖合同纠纷一审二审再审全部卷宗材料整理\pt\test_same_name_different_conte0\外部\第三份\起诉意见书.pdf
+  ↑ 这一个是另一组用例（test_same_name_different_content，T5 导入）自己放的“外部导入源”夹具副本，不是 Word 留下的。
+结论：Word 自己的目录（%APPDATA%\Microsoft\Word、%LOCALAPPDATA%\Microsoft\Office 等）和 %TEMP% 里没有搜到特征串。
+
+说明：这只是初步搜索。Word 的临时文件多是压缩的 docx 片段，特征串在压缩流里搜不到；正式验收用 T17 的 find_leaks（全盘、含 $DSH_HOME 等），在有 Word / WPS 的律所电脑上做，候 owner / T17 合并后补跑。

@@ -33,7 +33,7 @@ class ToolContext:
 
 
 def _registry() -> dict[str, Callable[[ToolContext, dict], dict]]:
-    from . import drafts, edit_list, inputs, materials, search, sentence
+    from . import archive, drafts, edit_list, inputs, materials, search, sentence
     return {
         "case_list_materials": materials.list_materials,
         "case_read_material": materials.read_material,
@@ -44,6 +44,8 @@ def _registry() -> dict[str, Callable[[ToolContext, dict], dict]]:
         "case_suggest_wiki": drafts.suggest_wiki,
         "case_save_edit_list": edit_list.save_edit_list,
         "case_calc_sentence": sentence.calc_sentence,  # T24
+        "case_archive_match": archive.archive_match,  # T23
+        "case_save_archive_plan": archive.save_archive_plan,
     }
 
 

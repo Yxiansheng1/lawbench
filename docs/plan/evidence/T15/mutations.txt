@@ -1,0 +1,11 @@
+去掉 --sandbox: 红（1 failed, 1 warning in 14.55s）
+不去工作区链接: 红（2 failed, 1 warning in 9.23s）
+版本号不递增（恒为 1）: 红（1 failed, 1 warning in 9.06s）
+设置里的模板缺失时悄悄用内置: 红（1 failed, 1 warning in 9.14s）
+拆 run 时右半个不带 rPr: 红（1 failed, 1 warning in 0.82s）
+原文有修订也照做: 红（1 failed, 1 warning in 1.93s）
+不查与前一条重叠: 红（1 failed, 1 warning in 1.04s）
+w:t 不改 w:delText: 红（1 failed, 1 warning in 1.83s）
+不判范围（全部照做）: 红（1 failed, 1 warning in 1.90s）
+不补批注关系: 红（1 failed, 1 warning in 1.85s）
+原件改过不拦: 红（1 failed, 1 warning in 1.90s）

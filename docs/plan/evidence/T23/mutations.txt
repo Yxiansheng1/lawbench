@@ -1,0 +1,15 @@
+超时后不杀子进程树: 红（1 failed, 1 warning in 616.12s (0:10:16)）
+不分辨 COM 启动（新出现的同名进程都杀）: 红（1 failed, 1 warning in 0.82s）
+指定程序时也换别的: 红（1 failed, 1 warning in 1.49s）
+不查外链就交 Word: 红（1 failed, 1 warning in 1.67s）
+关键词多项命中不先看文件夹: 红（1 failed, 1 warning in 0.89s）
+文件夹对应多项也归入: 红（1 failed, 1 warning in 1.31s）
+generated 项参与匹配: 红（1 failed, 1 warning in 0.87s）
+不扫 ~$ 临时文件: 红（1 failed, 1 warning in 2.34s）
+办案结果为空也生成: 红（1 failed, 1 warning in 25.23s）
+页码层不加: 红（1 failed, 1 warning in 21.52s）
+页码范围少算一页: 红（1 failed, 1 warning in 20.86s）
+临时目录不清: 红（1 failed, 1 warning in 20.87s）
+同名文件夹不加 -v2（覆盖）: 红（1 failed, 1 warning in 47.05s）
+常法卷不重新编号: 红（1 failed, 1 warning in 0.86s）
+立卷申请书内容行不改字体: 红（1 failed, 1 warning in 22.38s）

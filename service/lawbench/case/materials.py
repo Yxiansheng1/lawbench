@@ -44,9 +44,10 @@ CONVERTED_NOTE = {"doc": "由 doc 转换", "wps": "由 wps 转换", "xls": "由 
 SHORTCUT_EXT = {".lnk", ".url"}
 ZIP_MAX_FILES = 500
 # 材料文本的格式版本（X13）：写在 _处理状态.md 里（那个文件"无固定格式"，不加契约字段）。版本变了，下次扫描时
-# 这几种材料原件没变也重新解析：2 = Excel 按显示值写（N27）、整份待识别的 Source 行写"待识别"（N28）
-TEXT_FORMAT_VERSION = 2
-REFORMAT_TYPES = ("xlsx", "xls", "pdf", "image")
+# 这几种材料原件没变也重新解析：2 = Excel 按显示值写（N27）、整份待识别的 Source 行写"待识别"（N28）；
+# 3 = Word 段落不再把段落制表位定义读成制表符（T15 复核 P2-1）
+TEXT_FORMAT_VERSION = 3
+REFORMAT_TYPES = ("xlsx", "xls", "pdf", "image", "docx", "doc", "wps")
 _FORMAT_LINE = re.compile(r"^材料文本格式版本：(\d+)\s*$", re.M)
 EXTERNAL_NOTE = "有外部链接，未重算公式"  # 契约 1.2 N21
 # 本服务在 工作区/临时/ 下自己建的项的前缀（X6 按前缀清残留）
@@ -161,6 +162,8 @@ class Materials:
         self.cases = cases
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+        # 识别队列（T12）挂上：重新生成文本后把已有识别结果合并回去，签名 (root, index, material_ids)；持锁调用
+        self.after_render = None
 
     def _lock(self, case_id: str) -> threading.Lock:
         with self._guard:
@@ -413,6 +416,8 @@ class Materials:
                                  op="materials_text")
         for m in renamed:
             self._retitle(root, m)
+        if self.after_render is not None:
+            self.after_render(root, index, [mid for mid, p in parsed_now.items() if p is not None])
 
         self._save_index(root, index)
         self._write_status(root, index, unreadable_dirs)
@@ -504,7 +509,8 @@ class Materials:
 
     @staticmethod
     def _stale_ocr(root: str, index: dict) -> set[str]:
-        """原件变了而识别结果还是旧版本：case.db 里有该材料的识别任务，但 material_version 不是当前 sha256。"""
+        """原件变了而识别结果还是旧版本：该材料有已完成页的识别任务，但没有一个是当前 sha256 的
+        （T12：原件改过后重新识别过，就不再算过期）。"""
         db = gate.resolve_internal(root, "工作区/case.db", op="materials_list")
         if not db.exists():
             return set()
@@ -516,7 +522,8 @@ class Materials:
             rows = []
         finally:
             con.close()
-        return {mid for mid, ver in rows if mid in cur and cur[mid] != ver}
+        current = {mid for mid, ver in rows if mid in cur and cur[mid] == ver}
+        return {mid for mid, ver in rows if mid in cur and cur[mid] != ver and mid not in current}
 
     stale_ocr = _stale_ocr  # 工具 case_list_materials 也用
 

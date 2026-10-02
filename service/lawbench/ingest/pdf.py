@@ -6,7 +6,7 @@ import pathlib
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
 
-from . import MAX_PAGES, PDF_MIN_CHARS, PDF_MIXED_IMAGE_RATIO, Block, Parsed, ParseError
+from . import MAX_PAGES, PDF_MIN_CHARS, PDF_MIXED_IMAGE_RATIO, PDFIUM_LOCK, Block, Parsed, ParseError
 
 NEEDS_OCR = "（本页需识别）"
 
@@ -45,6 +45,11 @@ def page_kind(text: str, image_ratio: float) -> str:
 
 
 def parse(path: pathlib.Path) -> Parsed:
+    with PDFIUM_LOCK:                 # 与识别队列的渲染互斥（pdfium 不是线程安全的）
+        return _parse(path)
+
+
+def _parse(path: pathlib.Path) -> Parsed:
     doc = _open(path)
     try:
         n = len(doc)

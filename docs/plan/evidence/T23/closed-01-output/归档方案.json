@@ -1,0 +1,60 @@
+{
+  "catalog": "民事行政卷",
+  "client": "赵某丁",
+  "opponent": "钱某戊",
+  "cause": "买卖合同纠纷",
+  "lawyer": null,
+  "entrust_date": "2026-01-05",
+  "close_date": "2026-06-30",
+  "jzl_no": "（2026）粤连越深圳民字第0001号",
+  "result": "调解",
+  "summary": "委托人与钱某戊因货款发生争议，委托人起诉要求支付货款。",
+  "opinion": "委托人有权向钱某戊主张货款，经法院主持达成调解。",
+  "fee_settled": true,
+  "items": [
+    {
+      "code": 1,
+      "name": "民事委托代理合同",
+      "materials": [
+        "委托代理合同"
+      ]
+    },
+    {
+      "code": 2,
+      "name": "收费发票",
+      "materials": [
+        "律师费发票"
+      ]
+    },
+    {
+      "code": 3,
+      "name": "授权委托书",
+      "materials": [
+        "授权委托书"
+      ]
+    },
+    {
+      "code": 4,
+      "name": "民事起诉状",
+      "materials": [
+        "民事起诉状"
+      ]
+    },
+    {
+      "code": 7,
+      "name": "证据材料",
+      "materials": [
+        "聊天记录",
+        "送货单",
+        "对账单"
+      ]
+    },
+    {
+      "code": 14,
+      "name": "民事调解书",
+      "materials": [
+        "民事调解书"
+      ]
+    }
+  ]
+}

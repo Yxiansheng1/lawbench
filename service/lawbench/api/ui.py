@@ -23,7 +23,7 @@ KEY_TIMEOUT = 10.0
 
 
 def _endpoint(app_state, name: str, fn: Callable[[dict], dict], *, query: bool = False,
-              no_input: bool = False, family: str = "api"):
+              no_input: bool = False, family: str = "api", path_params: bool = False):
     """family：契约目录（api 或 core）；日志的模块名也用它。"""
     schema = f"{family}/{name}.schema.json"
 
@@ -62,6 +62,7 @@ def routes(st) -> list[Route]:
     def case_open(d: dict) -> dict:
         value = st.cases.open(d["path"], d.get("template"))
         st.tasks.mark_abnormal(value["case_id"])  # 上次硬退出时仍在执行的任务标"异常中断"（Spec 9.2）
+        st.ocr.resume_case(value["case_id"])      # 案件文件夹拔掉又插回等：接着做它未完成的识别任务（T12 复核）
         return value
 
     def task_create(d: dict) -> dict:
@@ -124,6 +125,29 @@ def routes(st) -> list[Route]:
     def wiki_suggestions(d: dict) -> dict:
         from ..wiki import suggestions
         return suggestions.handle(st.cases.root_of(d["case_id"]), d.get("id"), d.get("accept"))
+    def invoice_run(d: dict) -> dict:
+        return st.invoice.run(d)
+
+    def retainer_driver(d: dict) -> dict:
+        return st.retainer.handle(d)
+
+    def outputs_confirm(d: dict) -> dict:
+        return st.exporter.confirm(d)
+
+    def redline(d: dict) -> dict:
+        return st.exporter.redline(d)
+
+    def archive_build(d: dict) -> dict:
+        return st.archive.build(d)
+
+    def ocr_submit(d: dict) -> dict:
+        return st.ocr.submit(d)
+
+    def ocr_list(d: dict) -> dict:
+        return st.ocr.list(d["case_id"])
+
+    def ocr_cancel(d: dict) -> dict:
+        return st.ocr.cancel(d["job_id"])
 
     E = lambda name, fn, **kw: _endpoint(st, name, fn, **kw)  # noqa: E731
     return [
@@ -142,12 +166,20 @@ def routes(st) -> list[Route]:
         Route("/api/tasks", E("tasks_list", tasks_list, query=True), methods=["GET"]),
         Route("/api/task/current", E("task_current", task_current, query=True), methods=["GET"]),
         Route("/api/outputs", E("outputs_list", outputs_list, query=True), methods=["GET"]),
+        Route("/api/outputs/confirm", E("outputs_confirm", outputs_confirm), methods=["POST"]),
+        Route("/api/redline", E("redline", redline), methods=["POST"]),
+        Route("/api/archive/build", E("archive_build", archive_build), methods=["POST"]),
         Route("/api/search", E("search", search, query=True), methods=["GET"]),
         Route("/api/pipeline/run", E("pipeline_run", pipeline_run), methods=["POST"]),
         Route("/api/pipeline/{task_id}", E("pipeline_status", pipeline_status, query=True), methods=["GET"]),
         Route("/api/pipeline/{task_id}/cancel", E("pipeline_cancel", pipeline_cancel), methods=["POST"]),
         Route("/api/wiki/suggestions", E("wiki_suggestions", wiki_suggestions, query=True), methods=["GET"]),
         Route("/api/wiki/suggestions/{id}", E("wiki_suggestions", wiki_suggestions), methods=["POST"]),
+        Route("/api/invoice/run", E("invoice_run", invoice_run), methods=["POST"]),
+        Route("/api/retainer/driver", E("retainer_driver", retainer_driver), methods=["POST"]),
+        Route("/api/ocr/jobs", E("ocr_submit", ocr_submit), methods=["POST"]),
+        Route("/api/ocr/jobs", E("ocr_list", ocr_list, query=True), methods=["GET"]),
+        Route("/api/ocr/jobs/{job_id}/cancel", E("ocr_cancel", ocr_cancel, path_params=True), methods=["POST"]),
     ]
 
 

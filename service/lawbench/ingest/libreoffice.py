@@ -22,7 +22,7 @@ import time
 import uuid
 from contextlib import contextmanager
 
-from .. import logs
+from .. import logs, procs
 from . import LO_TIMEOUT, ParseError
 
 _LOCK = threading.Lock()
@@ -37,7 +37,11 @@ CANDIDATES = [
 
 
 def find_soffice() -> str | None:
-    """查找顺序：PATH → 默认安装位置。"""
+    """查找顺序：环境变量 LAWBENCH_SOFFICE（设了且文件在；打包后 Host 传随包的 <安装目录>\\tools\\…）→ PATH →
+    默认安装位置。"""
+    env = os.environ.get("LAWBENCH_SOFFICE")
+    if env and os.path.isfile(env):
+        return env
     found = shutil.which("soffice")
     if found:
         return found
@@ -119,15 +123,7 @@ def write_profile(profile_dir: pathlib.Path) -> None:
 
 def kill_tree(proc: subprocess.Popen) -> None:
     """只结束本次启动的进程及其子进程（soffice.exe 会再拉起 soffice.bin），不动律师自己开着的程序。"""
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    else:
-        proc.kill()
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    procs.kill_tree(proc)
 
 
 class _Session:
@@ -171,7 +167,7 @@ class _Session:
                 f"-env:UserInstallation={profile_dir.as_uri()}", "--convert-to", fmt, "--outdir", str(job / "out"),
                 str(local)]
         # LibreOffice 自己的临时文件也落在本次的配置目录旁边，会话结束一起删掉；系统临时目录不留材料副本
-        env = dict(os.environ, TMP=str(tmp), TEMP=str(tmp), TMPDIR=str(tmp))
+        env = procs.python_env(dict(os.environ, TMP=str(tmp), TEMP=str(tmp), TMPDIR=str(tmp)))   # LibreOffice 自带 Python
         with _LOCK:
             try:
                 proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,

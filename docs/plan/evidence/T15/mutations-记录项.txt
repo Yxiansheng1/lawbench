@@ -1,0 +1,6 @@
+1 链接末尾按 getnext 判断（旧写法）: 红（2 failed, 1 passed, 1 warning in 1.32s）
+1 不认复杂域: 红（1 failed, 2 passed, 1 warning in 1.04s）
+2 _paragraphs 只查正文: 红（2 failed, 2 passed, 1 warning in 1.26s）
+3 版本撤回到 2: 红（1 failed, 1 warning in 0.83s）
+4 不查代理字符: 红（1 failed, 1 warning in 0.91s）
+6 iframe 只去开始标签: 红（1 failed, 1 warning in 0.84s）

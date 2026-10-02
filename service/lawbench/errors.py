@@ -35,17 +35,19 @@ MESSAGES: dict[str, str] = {
 class ApiError(Exception):
     """业务错误：接口按 HTTP 200 + 失败体返回。`reason` 只给日志用，不含路径和内容。"""
 
-    def __init__(self, code: str, reason: str | None = None):
+    def __init__(self, code: str, reason: str | None = None, detail: str | None = None):
+        """detail：给律师看的具体说明（如哪份材料、为什么），替换该码的通用提示；不进日志。"""
         if code not in MESSAGES:
             raise ValueError(f"未知错误码 {code}")
         super().__init__(code)
         self.code = code
         self.reason = reason
+        self.detail = detail
 
     @property
     def message(self) -> str:
-        return MESSAGES[self.code]
+        return self.detail or MESSAGES[self.code]
 
 
-def fail_body(code: str) -> dict:
-    return {"ok": False, "error": {"code": code, "message": MESSAGES[code]}}
+def fail_body(code: str, message: str | None = None) -> dict:
+    return {"ok": False, "error": {"code": code, "message": message or MESSAGES[code]}}

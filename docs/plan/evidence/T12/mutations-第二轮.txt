@@ -1,0 +1,7 @@
+M-A1 不改回孤页: 红  (test_db_locked_while_page_in_flight_recovers_without_reopen, test_folder_moved_while_page_in_flight_then_back)
+M-A2 不补收尾: 红  (test_finalize_db_failure_then_job_still_finishes)
+M-A3 P3-A 撤回（请求线程同步动库、10 秒超时）: 红  (test_settings_save_fast_while_case_db_locked)
+M-A4 保存设置不再请探测线程恢复: 红  (test_settings_save_resumes_key_invalid_job)
+M-B1 合并器拆页正则改回行首口径: 红  (test_text_layer_line_starting_with_mark_not_split, test_ocr_line_like_page_mark_escaped)
+M-B2 识别文本不转义: 红  (test_ocr_line_like_page_mark_escaped)
+M3 撤回 _next 的文件夹检查与逐任务兜底（复核员原替换串）: 红（1 failed, 1 passed, 1 warning in 57.03s） / 红（1 failed, 1 passed, 1 warning in 62.08s (0:01:02)） / 红（1 failed, 1 passed, 1 warning in 57.08s） / 红（1 failed, 1 passed, 1 warning in 57.07s）

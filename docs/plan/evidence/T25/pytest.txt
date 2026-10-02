@@ -1,0 +1,13 @@
+# T25 service 全量（line-C 6ed730c，rebase 到 main 6cf499e 之后）
+
+## 短路径（默认 basetemp）· 2026-10-01 11:27:34
+839 passed, 6 skipped, 1 warning in 760.96s (0:12:40)
+
+## 深路径 --basetemp（109 字符，含中文；做法同 T5/T9：先建上级目录 lbdp-<随机>\<重复两遍的案件名>\pt）· 2026-10-01 11:44:54
+839 passed, 6 skipped, 1 warning in 707.16s (0:11:47)
+
+说明：深路径前两次（basetemp 166、131 字符）没先建上级目录，pytest 建不了测试目录，574 个用例在准备阶段报 FileNotFoundError，与代码无关；先建上级目录后重跑，全绿。
+
+## 返修后（line-C f1c0275）· 2026-10-01 13:09:27 · 短路径
+865 passed, 6 skipped, 1 warning in 840.26s (0:14:00)
+（tests/test_invoice.py 66 条、test_retainer_driver.py 10 条全绿；日志用例变异见 mutation-logs.txt）

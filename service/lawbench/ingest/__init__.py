@@ -6,7 +6,11 @@
 """
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
+
+# pdfium 不是线程安全的：解析（pdf.py）和识别队列的渲染（ocr/render.py）在不同线程里，共用这一把锁（T12）
+PDFIUM_LOCK = threading.Lock()
 
 # 阈值（Spec 5.2 "无法处理的文件"、5.4 页面类型判断；用 G-8 样本校准）
 PDF_MIN_CHARS = 30           # 可提取文字少于这么多字 → 需识别
