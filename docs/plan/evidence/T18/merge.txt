@@ -1,0 +1,6 @@
+﻿merge gate T27 操作单 + T3/T12 小项 @ 0f1b3f1 2026-10-02 15:02
+[对] case-archiving/catalogs/民事行政卷.json
+结果：✔ 通过
+1253 passed, 7 skipped, 1 warning in 1338.17s (0:22:18)
+
+随后 cherry-pick 8e2fb48（T18 第一阶段，只有 skills 与文档）：check_examples 通过、build_skills --check 通过、--strict 仅 owner 未指定。
