@@ -55,6 +55,49 @@ index 174ebfa28b..2795bc053b 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
+diff --git a/apps/desktop/renderer/update-dialog.css b/apps/desktop/renderer/update-dialog.css
+index 98183989a5..9db70a3695 100644
+--- a/apps/desktop/renderer/update-dialog.css
++++ b/apps/desktop/renderer/update-dialog.css
+@@ -20,6 +20,9 @@ button { min-height: 44px; padding: 9px 16px; border: 0; border-radius: 12px; fo
+ .close img { width: 14px; height: 14px; }
+ button:hover { filter: brightness(0.95); }
+ button:focus-visible, summary:focus-visible, pre:focus-visible { outline: 2px solid #4d6bfe; outline-offset: 3px; }
++.vendor { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
++.vendor[hidden] { display: none; }
++.vendor img { height: 28px; width: auto; flex: none; }
+ details { margin-top: 12px; font-size: 13px; line-height: 20px; }
+ summary { cursor: pointer; color: #5b6472; }
+ pre { margin: 8px 0 0; padding: 10px; max-height: min(180px, 30vh); overflow: auto; border-radius: 8px; background: #f5f5f5; font: 12px/18px monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+diff --git a/apps/desktop/renderer/update-dialog.html b/apps/desktop/renderer/update-dialog.html
+index 85a0f20abd..c825d00ec4 100644
+--- a/apps/desktop/renderer/update-dialog.html
++++ b/apps/desktop/renderer/update-dialog.html
+@@ -11,6 +11,7 @@
+     <main id="dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="title" aria-describedby="detail" hidden>
+       <header><h1 id="title"></h1><button id="close" class="close" type="button"><img src="update-close.svg" alt=""></button></header>
+       <p id="detail"></p>
++      <p id="vendor" class="vendor" hidden><img id="vendor-logo" alt=""><span id="vendor-label"></span></p>
+       <details id="technical-details" hidden>
+         <summary id="technical-details-label"></summary>
+         <pre id="technical-details-content" tabindex="0"></pre>
+diff --git a/apps/desktop/renderer/update-dialog.js b/apps/desktop/renderer/update-dialog.js
+index d03eadadf7..ed10696d1e 100644
+--- a/apps/desktop/renderer/update-dialog.js
++++ b/apps/desktop/renderer/update-dialog.js
+@@ -32,6 +32,12 @@ function render(state) {
+   document.getElementById('title').textContent = state.message
+   document.getElementById('detail').textContent = state.detail
+   document.getElementById('detail').hidden = state.detail === ''
++  // lawbench P-4: vendor line (About); the logo must be a relative path inside the renderer folder
++  const vendor = state.vendor && /^[\w./-]+$/.test(state.vendor.logo) && !state.vendor.logo.includes('..') ? state.vendor : null
++  document.getElementById('vendor').hidden = vendor === null
++  document.getElementById('vendor-label').textContent = vendor ? vendor.label : ''
++  if (vendor) document.getElementById('vendor-logo').src = vendor.logo
++  else document.getElementById('vendor-logo').removeAttribute('src')
+   document.getElementById('close').setAttribute('aria-label', state.closeLabel)
+   document.getElementById('technical-details').hidden = state.technicalDetails === ''
+   document.getElementById('technical-details-label').textContent = state.technicalDetailsLabel
 diff --git a/apps/desktop/scripts/development-app.ts b/apps/desktop/scripts/development-app.ts
 index ff09b8b783..bbeb22f823 100644
 --- a/apps/desktop/scripts/development-app.ts
@@ -214,16 +257,17 @@ index 106830b5ad..30d680f57d 100644
    resolveDesktopPackageTarget(target))
  if (windows && !values.unsigned) await verifyWindowsCode(application)
 diff --git a/apps/desktop/src/locale.ts b/apps/desktop/src/locale.ts
-index b3f9e535c9..4cac1a4859 100644
+index b3f9e535c9..6413d619ac 100644
 --- a/apps/desktop/src/locale.ts
 +++ b/apps/desktop/src/locale.ts
-@@ -1,24 +1,33 @@
+@@ -1,24 +1,36 @@
  /** Typed English and Chinese copy owned by the Electron shell. */
  
 +/**
 + * lawbench P-4: names shown by the desktop shell, in one place. The software name is a placeholder until the owner
 + * decides (N58; build scripts use scripts/lawbench-product.mjs, keep both equal). The vendor line ("技术支持") was
-+ * read from the logo and awaits the owner's confirmation (N58).
++ * confirmed by the owner (N58) and is shown next to the vendor logo (renderer/assets/vendor-logo.png, from
++ * packaging\brand\make_brand.py).
 + */
 +export const LAWBENCH_PRODUCT = '连越律师工作台'
 +export const LAWBENCH_FIRM = { zh: '广东连越（深圳）律师事务所', en: 'Guangdong Lianyue (Shenzhen) Law Firm' } as const
@@ -239,7 +283,9 @@ index b3f9e535c9..4cac1a4859 100644
 -  hideApplication: 'Hide DeepSeek Harness',
 +  aboutMenu: `About ${LAWBENCH_PRODUCT}`,
 +  aboutProduct: `${LAWBENCH_PRODUCT}`,
-+  aboutVersion: `Version V{version}\n${LAWBENCH_FIRM.en}\nTechnical support: ${LAWBENCH_VENDOR.en}`,
++  aboutVersion: `Version V{version}\n${LAWBENCH_FIRM.en}`,
++  // lawbench P-4: the "technical support" line sits next to the vendor logo (owner N58)
++  aboutVendor: `Technical support: ${LAWBENCH_VENDOR.en}`,
 +  hideApplication: `Hide ${LAWBENCH_PRODUCT}`,
    hideOtherApplications: 'Hide Others',
    showAllApplications: 'Show All',
@@ -259,7 +305,7 @@ index b3f9e535c9..4cac1a4859 100644
    backgroundNoticeConfirm: 'Confirm',
    edit: 'Edit',
    menuBar: 'Application menu',
-@@ -29,7 +38,7 @@ export const en = {
+@@ -29,7 +41,7 @@ export const en = {
    copy: 'Copy',
    paste: 'Paste',
    selectAll: 'Select All',
@@ -268,7 +314,7 @@ index b3f9e535c9..4cac1a4859 100644
    fatalSummary: 'The application could not start or stopped unexpectedly.',
    startupAddressInUse: 'Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.',
    diagnosticTruncated: '… Error details shortened.',
-@@ -39,10 +48,10 @@ export const en = {
+@@ -39,10 +51,10 @@ export const en = {
    restartApplication: 'Restart',
    recoveryOperationFailed: 'The recovery operation failed',
    disableThirdPartyPlugins: 'Disable third-party plugins, back up profile patch, and restart',
@@ -282,7 +328,7 @@ index b3f9e535c9..4cac1a4859 100644
    welcomeTaglineAfter: '',
    welcomeDescription: 'Build potential. Explore intelligence.',
    welcomeAuthStarting: 'Opening sign in…',
-@@ -85,7 +94,7 @@ export const en = {
+@@ -85,7 +97,7 @@ export const en = {
    updateCurrent: 'No updates available. Current version: V{version}',
    updateChecking: 'Checking for updates…',
    updateDownload: 'Download update',
@@ -291,7 +337,7 @@ index b3f9e535c9..4cac1a4859 100644
    updateDownloadedDetail: 'The update package has downloaded. Select “Install and Restart” to restart the app and begin installation.',
    updateDownloadedTitleWindows: 'New version v{version} is ready',
    updateDownloadedDetailWindows: 'The app will close temporarily during the update and reopen automatically when it is complete.\n\nThe update may take some time. Please wait and do not launch the app again during installation.',
-@@ -103,9 +112,9 @@ export const en = {
+@@ -103,9 +115,9 @@ export const en = {
    updateTasksUnavailable: 'Task status is unavailable. Try updating again when the workspace is ready.',
    updateStopFailed: 'Tasks could not be stopped safely. The update was not installed. Please try again later.',
    updateTechnicalDetails: 'View technical details',
@@ -303,7 +349,7 @@ index b3f9e535c9..4cac1a4859 100644
    installAndRestart: 'Install and Restart',
    later: 'Later',
    updateFailedTitle: 'Update Failed',
-@@ -148,21 +157,23 @@ export const zh = {
+@@ -148,21 +160,24 @@ export const zh = {
    application: '应用',
    fileMenu: '文件',
    closePage: '关闭页面或窗口',
@@ -313,8 +359,9 @@ index b3f9e535c9..4cac1a4859 100644
 -  hideApplication: '隐藏 DeepSeek Harness',
 +  aboutMenu: `关于 ${LAWBENCH_PRODUCT}`,
 +  aboutProduct: `${LAWBENCH_PRODUCT}`,
-+  // lawbench P-4：关于面板写律所和"技术支持"
-+  aboutVersion: `版本 V{version}\n${LAWBENCH_FIRM.zh}\n技术支持：${LAWBENCH_VENDOR.zh}`,
++  // lawbench P-4：关于面板写律所；"技术支持"一行在技术公司 logo 旁边（用户 N58）
++  aboutVersion: `版本 V{version}\n${LAWBENCH_FIRM.zh}`,
++  aboutVendor: `技术支持：${LAWBENCH_VENDOR.zh}`,
 +  hideApplication: `隐藏 ${LAWBENCH_PRODUCT}`,
    hideOtherApplications: '隐藏其他',
    showAllApplications: '显示全部',
@@ -335,7 +382,7 @@ index b3f9e535c9..4cac1a4859 100644
    backgroundNoticeConfirm: '确认',
    edit: '编辑',
    menuBar: '应用菜单',
-@@ -173,7 +184,7 @@ export const zh = {
+@@ -173,7 +188,7 @@ export const zh = {
    copy: '复制',
    paste: '粘贴',
    selectAll: '全选',
@@ -344,7 +391,7 @@ index b3f9e535c9..4cac1a4859 100644
    fatalSummary: '应用无法启动或已意外停止。',
    startupAddressInUse: '有其他正在运行的 DSH（如其他 dsh web、桌面端），无法同时启动，请退出其他正在运行的 DSH 后重启。',
    diagnosticTruncated: '… 错误详情已截短。',
-@@ -183,10 +194,10 @@ export const zh = {
+@@ -183,10 +198,10 @@ export const zh = {
    restartApplication: '重启',
    recoveryOperationFailed: '恢复操作失败',
    disableThirdPartyPlugins: '禁用第三方插件、备份 profile patch 并重启',
@@ -358,7 +405,7 @@ index b3f9e535c9..4cac1a4859 100644
    welcomeTaglineAfter: '',
    welcomeDescription: '组装无限可能，共探智能上限',
    welcomeAuthStarting: '正在打开登录…',
-@@ -229,7 +240,7 @@ export const zh = {
+@@ -229,7 +244,7 @@ export const zh = {
    updateCurrent: '当前暂无可用更新。当前版本：V{version}',
    updateChecking: '正在检查更新…',
    updateDownload: '下载更新',
@@ -367,7 +414,7 @@ index b3f9e535c9..4cac1a4859 100644
    updateDownloadedDetail: '安装包已下载完毕，点击“安装并重启”，即刻重启客户端，开始部署。',
    updateDownloadedTitleWindows: '新版本 v{version} 已准备就绪',
    updateDownloadedDetailWindows: '更新期间应用将暂时关闭，完成后会自动打开。\n\n更新可能需要一些时间，请耐心等待，期间请勿重复启动应用。',
-@@ -247,9 +258,9 @@ export const zh = {
+@@ -247,9 +262,9 @@ export const zh = {
    updateTasksUnavailable: '无法确认任务状态，请在工作区就绪后重试更新。',
    updateStopFailed: '未能安全停止任务，更新未安装。请稍后重试。',
    updateTechnicalDetails: '查看技术详情',
@@ -380,7 +427,7 @@ index b3f9e535c9..4cac1a4859 100644
    later: '稍后',
    updateFailedTitle: '更新失败',
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index bae6af8ad7..8632bce346 100644
+index bae6af8ad7..456a736b9e 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -27,7 +27,7 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'
@@ -392,7 +439,15 @@ index bae6af8ad7..8632bce346 100644
  import { claimDesktopSingleInstance } from './single-instance.ts'
  import { DesktopUpdateCoordinator } from './update-coordinator.ts'
  import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
-@@ -825,7 +825,7 @@ async function main(): Promise<void> {
+@@ -354,6 +354,7 @@ async function main(): Promise<void> {
+   const showAbout = async (): Promise<void> => {
+     await ordinaryMessageBox({ type: 'info', title: locale.messages.aboutMenu, message: locale.messages.aboutProduct,
+       detail: formatDesktopMessage(locale.messages.aboutVersion, { version: app.getVersion() }),
++      vendor: { label: locale.messages.aboutVendor, logo: 'assets/vendor-logo.png' }, // lawbench P-4
+       buttons: [locale.messages.updateAcknowledge], cancelId: 0 })
+   }
+   const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
+@@ -825,7 +826,7 @@ async function main(): Promise<void> {
    const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
      : join(process.resourcesPath, 'icon.png')
    app.setAboutPanelOptions({
@@ -401,6 +456,41 @@ index bae6af8ad7..8632bce346 100644
      applicationVersion: app.getVersion(),
      // The release has no separate build number; omit Electron's bundle version.
      version: '',
+diff --git a/apps/desktop/src/update-dialog.ts b/apps/desktop/src/update-dialog.ts
+index 249294f8ae..cd0976bc17 100644
+--- a/apps/desktop/src/update-dialog.ts
++++ b/apps/desktop/src/update-dialog.ts
+@@ -19,11 +19,20 @@ export interface UpdateDialogView {
+   readonly closeLabel: string
+   readonly technicalDetails: string
+   readonly technicalDetailsLabel: string
++  /** lawbench P-4: an optional logo-and-text line under the detail (About: "技术支持" with the vendor logo). */
++  readonly vendor?: UpdateDialogVendor
++}
++
++/** lawbench P-4: `logo` is a path under the renderer folder (served by the shell route), never a remote address. */
++export interface UpdateDialogVendor {
++  readonly label: string
++  readonly logo: string
+ }
+ 
+ /** Electron message options with separately expandable, main-owned diagnostics. */
+ export interface UpdateDialogOptions extends MessageBoxOptions {
+   readonly technicalDetails?: string
++  readonly vendor?: UpdateDialogVendor
+ }
+ 
+ /** The document can select only a displayed response index. */
+@@ -93,7 +102,8 @@ export class DesktopUpdateDialog {
+     this.parent = parent
+     const view: UpdateDialogView = { revision: ++this.revision, locale: locale.id, title: options.title ?? '', message: options.message,
+       detail: options.detail ?? '', buttons, cancelId, closeLabel: locale.messages.updateClose,
+-      technicalDetails: options.technicalDetails ?? '', technicalDetailsLabel: locale.messages.updateTechnicalDetails }
++      technicalDetails: options.technicalDetails ?? '', technicalDetailsLabel: locale.messages.updateTechnicalDetails,
++      ...options.vendor === undefined ? {} : { vendor: options.vendor } }
+     return new Promise((resolve) => {
+       const abort = (): void => { finish(cancelId) }
+       const finish = (response: number, retain = false): void => {
 diff --git a/apps/desktop/tests/background-notice.spec.ts b/apps/desktop/tests/background-notice.spec.ts
 index cfccf81dd3..ee005900ff 100644
 --- a/apps/desktop/tests/background-notice.spec.ts
@@ -682,23 +772,25 @@ index 8ce24c2250..78b0af7da5 100644
      expect(config.mac.extendInfo.NSMicrophoneUsageDescription).toContain('microphone')
      expect(config.extraResources).toHaveLength(2)
 diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
-index 07f5d6ec74..ddb355d81d 100644
+index 07f5d6ec74..047949555b 100644
 --- a/apps/desktop/tests/main-startup.spec.ts
 +++ b/apps/desktop/tests/main-startup.spec.ts
-@@ -501,8 +501,10 @@ describe('desktop main startup', () => {
+@@ -501,8 +501,12 @@ describe('desktop main startup', () => {
      await vi.advanceTimersByTimeAsync(0)
      const zh = locale === 'zh-CN'
      expect(harness.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
 -      type: 'info', title: zh ? '关于 DeepSeek Harness' : 'About DeepSeek Harness', message: 'DeepSeek Harness',
 -      detail: zh ? '版本 V1.0.0' : 'Version V1.0.0', buttons: [zh ? '确定' : 'OK'], cancelId: 0,
 +      type: 'info', title: zh ? '关于 连越律师工作台' : 'About 连越律师工作台', message: '连越律师工作台',
-+      // lawbench P-4：关于面板写律所和"技术支持"
-+      detail: zh ? '版本 V1.0.0\n广东连越（深圳）律师事务所\n技术支持：上海莫莱特智能科技有限公司'
-+        : 'Version V1.0.0\nGuangdong Lianyue (Shenzhen) Law Firm\nTechnical support: Shanghai Morelite Intelligent Technology Co., Ltd.', buttons: [zh ? '确定' : 'OK'], cancelId: 0,
++      // lawbench P-4：关于面板写律所；"技术支持"一行在技术公司 logo 旁边（用户 N58）
++      detail: zh ? '版本 V1.0.0\n广东连越（深圳）律师事务所' : 'Version V1.0.0\nGuangdong Lianyue (Shenzhen) Law Firm',
++      vendor: { label: zh ? '技术支持：上海莫莱特智能科技有限公司' : 'Technical support: Shanghai Morelite Intelligent Technology Co., Ltd.',
++        logo: 'assets/vendor-logo.png' },
++      buttons: [zh ? '确定' : 'OK'], cancelId: 0,
      }))
      // A dialog that cannot open is logged, not surfaced as an unhandled rejection.
      harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
-@@ -823,7 +825,7 @@ describe('desktop main startup', () => {
+@@ -823,7 +827,7 @@ describe('desktop main startup', () => {
      expect(() => handler(event, 'application', NaN, 34)).toThrow('invalid popup request')
      const application = handler(event, 'application', 48, 34)
      expect(harness.menu.buildFromTemplate.mock.lastCall![0].map(item => item.label ?? item.type)).toEqual([
@@ -775,6 +867,55 @@ index 11c3a48865..146f207438 100644
    f.tray.dispose()
    f.tray.dispose()
    expect(f.native.destroy).toHaveBeenCalledOnce()
+diff --git a/apps/desktop/tests/update-error-renderer.spec.ts b/apps/desktop/tests/update-error-renderer.spec.ts
+index ad92f2df8f..148cc18909 100644
+--- a/apps/desktop/tests/update-error-renderer.spec.ts
++++ b/apps/desktop/tests/update-error-renderer.spec.ts
+@@ -215,3 +215,30 @@ it('renders server markup literally in a dedicated safety case', async () => {
+   expect(p.element('title').childElementCount).toBe(0)
+   expect(p.element('detail').childElementCount).toBe(0)
+ })
++
++// lawbench P-4: About shows "technical support" next to the vendor logo (owner N58); the logo is a renderer-relative path only
++it('shows the vendor line with its logo only for a renderer-relative path', async () => {
++  const p = page('update-dialog')
++  const locale = resolveDesktopLocale('zh-CN')
++  const state: UpdateDialogView = { revision: 1, locale: locale.id, title: locale.messages.aboutMenu,
++    message: locale.messages.aboutProduct, detail: 'V1', buttons: [locale.messages.updateAcknowledge], cancelId: 0,
++    closeLabel: locale.messages.updateClose, technicalDetailsLabel: locale.messages.updateTechnicalDetails, technicalDetails: '',
++    vendor: { label: locale.messages.aboutVendor, logo: 'assets/vendor-logo.png' } }
++  let publish!: (view: UpdateDialogView | null) => void
++  const api: UpdateDialogApi = { status: async () => state, respond: vi.fn(async () => {}), subscribe: (listener) => { publish = listener; return () => {} } }
++  Object.defineProperty(p.dom.window, 'dshUpdateDialog', { value: api })
++  p.run()
++  await expect.poll(() => p.element('dialog').hidden).toBe(false)
++  expect(p.element('vendor').hidden).toBe(false)
++  expect(p.element('vendor-label').textContent).toBe(locale.messages.aboutVendor)
++  expect(p.element('vendor-label').textContent).toContain('技术支持')
++  expect(p.element('vendor-logo').getAttribute('src')).toBe('assets/vendor-logo.png')
++  for (const logo of ['https://example.com/x.png', '../x.png', 'file:///C:/x.png']) {
++    publish({ ...state, revision: state.revision + 1 + ['https://example.com/x.png', '../x.png', 'file:///C:/x.png'].indexOf(logo), vendor: { label: 'x', logo } })
++    expect(p.element('vendor').hidden).toBe(true)
++    expect(p.element('vendor-logo').hasAttribute('src')).toBe(false)
++  }
++  const { vendor: _vendor, ...withoutVendor } = state
++  publish({ ...withoutVendor, revision: 10 })
++  expect(p.element('vendor').hidden).toBe(true)
++})
+diff --git a/apps/desktop/tests/windows-installer-smoke.ps1 b/apps/desktop/tests/windows-installer-smoke.ps1
+index 67a8aa38df..637c021545 100644
+--- a/apps/desktop/tests/windows-installer-smoke.ps1
++++ b/apps/desktop/tests/windows-installer-smoke.ps1
+@@ -16,7 +16,8 @@ $expected = Get-Content (Join-Path $PSScriptRoot 'expected/windows-installer.jso
+ $localizedCopy = @{ ENGLISH = @{}; SIMPCHINESE = @{} }
+ Get-Content (Join-Path $PSScriptRoot '../installer/strings.nsh') -Encoding UTF8 | ForEach-Object {
+     if ($_ -match '^LangString (INSTALLER_\w+) \$\{LANG_(ENGLISH|SIMPCHINESE)\} "(.*)"$') {
+-        $localizedCopy[$Matches[2]][$Matches[1]] = $Matches[3]
++        # lawbench P-4: installer copy uses ${PRODUCT_NAME}; the compiled installer shows the real product name
++        $localizedCopy[$Matches[2]][$Matches[1]] = $Matches[3].Replace('${PRODUCT_NAME}', $ProductName)
+     }
+ }
+ function Wait-Control([Diagnostics.Process]$Process, [string]$Text, [switch]$Dialog) {
 diff --git a/apps/desktop/tests/windows-update-publisher.spec.ts b/apps/desktop/tests/windows-update-publisher.spec.ts
 index a1af8d5416..cbc30ca585 100644
 --- a/apps/desktop/tests/windows-update-publisher.spec.ts

@@ -74,14 +74,22 @@ describe('打包后的固定布局', () => {
 
   it('apply 用的分支（复核 NOTE）：装好的客户端按安装目录、查内置 Python；开发期照配置，命令是 node 时不查、是 python 时查', () => {
     const { inst, exe } = installed()
-    const p = effectiveConfig(DEV, exe, exists, 'C:\\ProgramData')
+    const BASE = 'C:\\Windows\\system32;C:\\Windows'
+    const p = effectiveConfig(DEV, exe, exists, 'C:\\ProgramData', BASE)
     expect(p.packaged).toBe(true)
     expect(p.config.command[0]).toBe(join(inst, 'python', 'python.exe'))
     expect(p.checkPython).toBe(true)
-    const node = effectiveConfig({ ...DEV, command: ['D:\\node\\node.exe', 'fake-service.mjs'] }, development(), exists, 'C:\\ProgramData')
+    // 装好的客户端：工具目录在前、交进来的原 PATH 整个接在后面（T20 第三轮复核 P3-c：原 PATH 丢了，服务进程就没有 System32）
+    const path = (p.config.env as Record<string, string>).PATH
+    expect(path.startsWith(join(inst, 'tools', 'libreoffice', 'program'))).toBe(true)
+    expect(path.endsWith(`;${BASE}`)).toBe(true)
+    const devCfg: Config = { ...DEV, command: ['D:\\node\\node.exe', 'fake-service.mjs'] }
+    const node = effectiveConfig(devCfg, development(), exists, 'C:\\ProgramData', BASE)
     expect(node).toMatchObject({ packaged: false, checkPython: false })
-    expect(node.config.command[0]).toBe('D:\\node\\node.exe')
-    const py = effectiveConfig({ ...DEV, command: ['C:\\Py\\python.exe', '-m', 'lawbench'] }, development(), exists, 'C:\\ProgramData')
+    // 开发期：配置原样交回（同一个对象），环境变量里没有 LAWBENCH_* 工具变量、PATH 也不动
+    expect(node.config).toBe(devCfg)
+    expect(Object.keys(node.config.env ?? {}).filter((k) => k.startsWith('LAWBENCH_') || k === 'PATH')).toEqual([])
+    const py = effectiveConfig({ ...DEV, command: ['C:\\Py\\python.exe', '-m', 'lawbench'] }, development(), exists, 'C:\\ProgramData', BASE)
     expect(py).toMatchObject({ packaged: false, checkPython: true })
   })
 })

@@ -17,3 +17,5 @@ smoke-packaged-runtime.ts、tests/package-macos.spec.ts 五处 import './lawbenc
    构建机要先把 store 备齐或指定 --store-dir。）
 4. corepack pnpm@11.7.0 run build：退出码 0，全量日志里 TS7016 0 处。
 清理：.tmp-demo\dc 不入库（.tmp-demo 本来就不提交）。
+
+补记（2026-10-02 晚，P-4 加关于面板技术公司标志、冒烟脚本后重跑）：第一次 build 报 TS2379（新测试 vendor: undefined），改测试后再跑：13 个补丁无错，install 退出码 0，build 退出码 0，TS 报错 0 处。

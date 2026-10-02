@@ -62,6 +62,7 @@
 | pymupdf | 1.28.2 | Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License |
 | pypdf | 6.19.0 | BSD-3-Clause |
 | pypdfium2 | 5.13.0 | BSD-3-Clause, Apache-2.0, dependency licenses |
+| python-docx | 1.2.0 | MIT |
 | pywin32 | 312 | PSF |
 | pywin32-ctypes | 0.2.3 | BSD-3-Clause |
 | PyYAML | 6.0.3 | MIT |

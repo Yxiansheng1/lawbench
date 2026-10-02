@@ -126,8 +126,13 @@ $Steps = [ordered]@{
     # The service finds contracts\ at <install>\contracts (REPO_ROOT = parents[2] of service\lawbench\config.py)
     Reset-Dir (Join-Path $Stage 'contracts')
     Copy-Item -Recurse -Force (Join-Path $Root 'contracts\*') (Join-Path $Stage 'contracts')
+    # Bytecode caches left by local test runs are not part of the payload (T20 third review NOTE)
+    foreach ($d in 'service', 'contracts') {
+      Get-ChildItem -Recurse -Force -Directory -Filter '__pycache__' (Join-Path $Stage $d) | Remove-Item -Recurse -Force
+      Get-ChildItem -Recurse -Force -File -Include '*.pyc', '*.pyo' (Join-Path $Stage $d) | Remove-Item -Force
+    }
     # The Host starts the service as: <install>\python\python.exe -I -m lawbench
-    Run $py @('-I', '-m', 'lawbench', '--help')
+    Run $py @('-I', '-B', '-m', 'lawbench', '--help')  # -B: the check itself must not leave __pycache__ behind
   }
   tools = {
     $missing = @()
@@ -167,12 +172,15 @@ $Steps = [ordered]@{
     $files | Group-Object { $_.FullName.Substring($Stage.Length + 1).Split('\')[0] } | Sort-Object Name | ForEach-Object {
       Say ("  {0,-10} {1,7} files {2,9:N1} MB" -f $_.Name, $_.Count, (($_.Group | Measure-Object -Sum Length).Sum / 1MB))
     }
+    $missingPayload = @()
     foreach ($need in 'python\python.exe', 'python\python312._pth', 'service\lawbench\__main__.py', 'service\lawbench\llm\tokenizer.json',
                       'contracts\VERSION', 'skills', 'engines', 'tools\libreoffice\program\soffice.exe', 'tools\pandoc\pandoc.exe',
                       'installer\set-skills-acl.ps1') {
-      if (-not (Test-Path (Join-Path $Stage $need))) { Say "  MISSING: $need" }
+      if (-not (Test-Path (Join-Path $Stage $need))) { Say "  MISSING: $need"; $missingPayload += $need }
     }
     Say 'admin Skill folder: run packaging\installer\set-skills-acl.ps1 elevated once per machine (the NSIS installer is per-user)'
+    # A missing payload item fails the step, -DryRun included (T20 third review NOTE: it used to exit 0)
+    if ($missingPayload) { throw ('payload incomplete: ' + ($missingPayload -join ', ')) }
     if ($DryRun) { return }
     Pending 'real installer build: run after T20 step 3 payloads are final and with the owner present (step 6)'
     $env:DSH_DESKTOP_APP_ID = $AppId

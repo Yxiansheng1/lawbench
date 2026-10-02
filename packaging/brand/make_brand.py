@@ -3,7 +3,8 @@ r"""从仓库根 logo\ 的原件生成 packaging\brand\ 下的品牌素材（T20
 用法（仓库根下，任一装了 Pillow 的 Python）：python packaging\brand\make_brand.py
 产出（都可重复生成，与原件一一对应）：
   firm-logo.png      律所 logo，裁掉四周透明边，宽 1024（原件 1830×666 透明 PNG）
-  vendor-logo.png    我方 logo（"技术支持"），原件是白底 RGB：近白色转透明、裁边，宽 768
+  vendor-logo.png    技术公司 logo（"技术支持"，用户 N58 定用 logo\技术公司-logo2.jpg）：原件是白底 JPG，近白色转透明、裁边，宽 768
+  vendor-mark.png    同上去掉下方的标语行，只留圆形标志和"Ai"（小尺寸用：关于面板、安装界面角标），高 256
   app-icon.png       律所标志里左侧的红色图形裁成方形，1024×1024 透明
   app-icon.ico       同上，16/24/32/48/64/128/256 七个尺寸
   installer-sidebar.bmp  NSIS 安装向导左侧图（164×314，白底，律所标志居中）
@@ -11,7 +12,8 @@ r"""从仓库根 logo\ 的原件生成 packaging\brand\ 下的品牌素材（T20
   desktop\          桌面端 P-4 要换的图（尺寸与 DSH 原图一致，补丁 P-4 把它们放进 dsh\apps\desktop）：
                      resources\icon-windows.png、icon-macos.png（1024）、icon.png（1104）、tray-windows.ico（64）；
                      installer\assets\brand.png（600×196）、brand-2x.png（1200×392）、brand-dark*.png（深色：黑字换白）、
-                     uninstaller-sidebar.png（164×314）
+                     uninstaller-sidebar.png（164×314）；安装界面品牌图右下角放技术公司角标（用户 N58）；
+                     renderer\assets\vendor-logo.png（关于面板"技术支持"一行旁的技术公司标志，高 56，界面按 28 显示）
 """
 from __future__ import annotations
 
@@ -63,8 +65,9 @@ def square(im: Image.Image, size: int, pad: float = 0.08) -> Image.Image:
     return out
 
 
-def banner(firm: Image.Image, size: tuple[int, int], dark: bool) -> Image.Image:
-    """安装界面顶部的品牌图：透明底，律所 logo 居中，高度占 60%；深色版把黑字换成白字。"""
+def banner(firm: Image.Image, size: tuple[int, int], dark: bool, vendor: Image.Image | None = None) -> Image.Image:
+    """安装界面顶部的品牌图：透明底，律所 logo 居中，高度占 60%；深色版把黑字换成白字。
+    给了 vendor 时在右下角放技术公司角标（高度为图高的 16%，留边 3%；用户 N58：安装程序欢迎页、完成页角标）。"""
     logo = firm.copy()
     if dark:
         px = logo.load()
@@ -81,10 +84,24 @@ def banner(firm: Image.Image, size: tuple[int, int], dark: bool) -> Image.Image:
         logo = width_to(logo, round(size[0] * 0.9))
     out = Image.new("RGBA", size, (0, 0, 0, 0))
     out.paste(logo, ((size[0] - logo.width) // 2, (size[1] - logo.height) // 2), logo)
+    if vendor is not None:
+        vh = round(size[1] * 0.16)
+        mark = vendor.resize((round(vendor.width * vh / vendor.height), vh), Image.LANCZOS)
+        m = round(size[1] * 0.03)
+        out.paste(mark, (size[0] - mark.width - m, size[1] - mark.height - m), mark)
     return out
 
 
-def desktop_assets(firm: Image.Image, mark: Image.Image) -> None:
+def drop_tagline(im: Image.Image) -> Image.Image:
+    """去掉标志下方的标语行：从高度一半往下找第一整行透明处，只留上面一段。"""
+    alpha = im.getchannel("A")
+    for y in range(im.height // 2, im.height):
+        if not any(alpha.getpixel((x, y)) > 16 for x in range(0, im.width, 2)):
+            return trim(im.crop((0, 0, im.width, y)))
+    return im
+
+
+def desktop_assets(firm: Image.Image, mark: Image.Image, vendor_mark: Image.Image) -> None:
     d = OUT / "desktop"
     (d / "resources").mkdir(parents=True, exist_ok=True)
     (d / "installer" / "assets").mkdir(parents=True, exist_ok=True)
@@ -93,10 +110,13 @@ def desktop_assets(firm: Image.Image, mark: Image.Image) -> None:
     square(mark, 1104).save(d / "resources" / "icon.png", optimize=True)
     square(mark, 64, pad=0.04).save(d / "resources" / "tray-windows.ico", sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64)])
     a = d / "installer" / "assets"
-    banner(firm, (600, 196), False).save(a / "brand.png", optimize=True)
-    banner(firm, (1200, 392), False).save(a / "brand-2x.png", optimize=True)
-    banner(firm, (600, 196), True).save(a / "brand-dark.png", optimize=True)
-    banner(firm, (1200, 392), True).save(a / "brand-dark-2x.png", optimize=True)
+    banner(firm, (600, 196), False, vendor_mark).save(a / "brand.png", optimize=True)
+    banner(firm, (1200, 392), False, vendor_mark).save(a / "brand-2x.png", optimize=True)
+    banner(firm, (600, 196), True, vendor_mark).save(a / "brand-dark.png", optimize=True)
+    banner(firm, (1200, 392), True, vendor_mark).save(a / "brand-dark-2x.png", optimize=True)
+    (d / "renderer" / "assets").mkdir(parents=True, exist_ok=True)
+    vendor_mark.resize((round(vendor_mark.width * 56 / vendor_mark.height), 56), Image.LANCZOS).save(
+        d / "renderer" / "assets" / "vendor-logo.png", optimize=True)
     side = Image.new("RGB", (164, 314), (255, 255, 255))
     small = square(mark, 120, pad=0.0)
     side.paste(small, ((164 - 120) // 2, 60), small)
@@ -107,8 +127,11 @@ def main() -> None:
     firm = trim(Image.open(LOGO / "连越律师事务所-logo.png").convert("RGBA"))
     width_to(firm, 1024).save(OUT / "firm-logo.png", optimize=True)
 
-    vendor = trim(white_to_alpha(Image.open(LOGO / "技术公司-logo.png")))
+    # 用户 N58（2026-10-02）：技术公司 logo 用 logo\技术公司-logo2.jpg（白底 JPG，无透明通道：近白色转透明）
+    vendor = trim(white_to_alpha(Image.open(LOGO / "技术公司-logo2.jpg")))
     width_to(vendor, 768).save(OUT / "vendor-logo.png", optimize=True)
+    vendor_mark = drop_tagline(vendor)
+    vendor_mark.resize((round(vendor_mark.width * 256 / vendor_mark.height), 256), Image.LANCZOS).save(OUT / "vendor-mark.png", optimize=True)
 
     # 律所标志：左侧红色图形约占原件宽度的 46%（文字"连越 LIANYUE"在右）；按透明列切开，取第一段
     alpha = firm.getchannel("A")
@@ -124,7 +147,7 @@ def main() -> None:
     side.paste(small, ((164 - 120) // 2, 60), small)
     side.save(OUT / "installer-sidebar.bmp")
 
-    desktop_assets(firm, mark)
+    desktop_assets(firm, mark, vendor_mark)
     (OUT / "names.txt").write_text(f"{FIRM_FULL_NAME}\n{PRODUCT_NAME_PLACEHOLDER}\n", encoding="utf-8", newline="\n")
     for p in sorted(OUT.rglob("*")):
         if p.suffix in (".png", ".ico", ".bmp"):
