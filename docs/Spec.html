@@ -2347,7 +2347,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 </tr>
 <tr>
 <td>其他子进程（LibreOffice、pandoc、Word / WPS 转换）</td>
-<td><strong>会按文档里的链接去取图，必须关掉</strong>（2026-09-29 T19 复核实测）：pandoc 处理 Markdown 里的远程图片、LibreOffice 处理 docx 里以外部链接引用的图片时，会向链接指向的地址发请求；对方提交的文档里埋一个链接，律师一转换或一导入就把本机地址和打开时间发了出去。做法：①pandoc 每次调用都带 <code>--sandbox</code>（同时也不读 <code>file://</code> 和相对路径的本机图片）；②LibreOffice 每次用的独立用户配置目录里，启动前写入 <code>user\registrymodifications.xcu</code>，把 <code>/org.openoffice.Office.Common/Security/Scripting</code> 下的 <code>BlockUntrustedRefererLinks</code> 设为 <code>true</code>；②a 旧版二进制格式（<code>.doc</code>、<code>.wps</code>）里的外链图片，上面的设置拦不住（2026-09-29 T19 返修实测：链接不更新、代理指向连不上的地址都无效），所以交给 LibreOffice 之前先检查文件里有没有指向 <code>http://</code>、<code>https://</code>、<code>\\</code> 开头地址的图片链接，有就<strong>拒绝转换</strong>并提示&quot;文档里有指向外部地址的图片，为避免联网没有转换；请在 Word 或 WPS 里断开链接（或另存为 docx）后再试&quot;。检查方法（2026-09-29 T19 第二轮复核后）：只在域指令范围内（域开始符 0x13 到分隔符 0x14 或结束符 0x15 之间）找链接类域名（<code>INCLUDEPICTURE</code>、<code>INCLUDETEXT</code>、<code>LINK</code>、<code>IMPORT</code>、<code>DDE</code>、<code>DDEAUTO</code>），域名之后、同一段域指令之内<strong>任意位置</strong>出现外部地址前缀就算，不管开关写在地址前面还是后面；UTF-16LE 和单字节两种解码都查；另查 Data 流里单字节存放的地址前缀。正文里的普通网址文字和超链接不触发。<strong>已知残留风险</strong>：这是对二进制格式做模式匹配，域代码被拆开存放、用图形属性引用外链图片等写法可能漏判（未造出样本，未证实能联网）；记在候 owner 清单；②b <code>xlsx</code>、<code>xlsm</code>、<code>fods</code> 交给 LibreOffice 之前（材料解析里公式没有缓存值要重算时），先查压缩包里的关系文件（<code>xl/**/_rels/*.rels</code>）有没有 <code>TargetMode=&quot;External&quot;</code> 的图片或对象关系，有就不交给 LibreOffice，该材料按&quot;公式没有缓存值&quot;处理：没有缓存值的单元格在材料文本里写公式本身（契约 1.1 的 <code>note</code> 枚举里没有对应取值，<code>note</code> 留空；要不要加取值见候 owner 清单 N21）——实测 Calc 导入时会去取这类外链图片，上面的设置拦不住；③Word / WPS 自动化打开文档时不更新链接（<code>Documents.Open</code> 的 <code>UpdateLinks</code> 相关设置关掉，T23 实测确认）。适用于所有调用这三类程序的地方：材料导入（第 5.2 节）、导出（第 12.1 节）、Word 转 PDF（第 12.3 节）、小工具（第 13.2 节）。每处都要有测试：文档里放一个指向 <code>127.0.0.1</code> 本机监听的图片链接，转换后监听收到 0 个请求</td>
+<td><strong>会按文档里的链接去取图，必须关掉</strong>（2026-09-29 T19 复核实测）：pandoc 处理 Markdown 里的远程图片、LibreOffice 处理 docx 里以外部链接引用的图片时，会向链接指向的地址发请求；对方提交的文档里埋一个链接，律师一转换或一导入就把本机地址和打开时间发了出去。做法：①pandoc 每次调用都带 <code>--sandbox</code>（同时也不读 <code>file://</code> 和相对路径的本机图片）；②LibreOffice 每次用的独立用户配置目录里，启动前写入 <code>user\registrymodifications.xcu</code>，把 <code>/org.openoffice.Office.Common/Security/Scripting</code> 下的 <code>BlockUntrustedRefererLinks</code> 设为 <code>true</code>；②a 旧版二进制格式（<code>.doc</code>、<code>.wps</code>）里的外链图片，上面的设置拦不住（2026-09-29 T19 返修实测：链接不更新、代理指向连不上的地址都无效），所以交给 LibreOffice 之前先检查文件里有没有指向 <code>http://</code>、<code>https://</code>、<code>\\</code> 开头地址的图片链接，有就<strong>拒绝转换</strong>并提示&quot;文档里有指向外部地址的图片，为避免联网没有转换；请在 Word 或 WPS 里断开链接（或另存为 docx）后再试&quot;。检查方法（2026-09-29 T19 第二轮复核后）：只在域指令范围内（域开始符 0x13 到分隔符 0x14 或结束符 0x15 之间）找链接类域名（<code>INCLUDEPICTURE</code>、<code>INCLUDETEXT</code>、<code>LINK</code>、<code>IMPORT</code>、<code>DDE</code>、<code>DDEAUTO</code>），域名之后、同一段域指令之内<strong>任意位置</strong>出现外部地址前缀就算，不管开关写在地址前面还是后面；UTF-16LE 和单字节两种解码都查；另查 Data 流里单字节存放的地址前缀。正文里的普通网址文字和超链接不触发。<strong>已知残留风险</strong>：这是对二进制格式做模式匹配，域代码被拆开存放、用图形属性引用外链图片等写法可能漏判（未造出样本，未证实能联网）；记在候 owner 清单；②b <code>xlsx</code>、<code>xlsm</code>、<code>fods</code> 交给 LibreOffice 之前（材料解析里公式没有缓存值要重算时），先查压缩包里的关系文件（<code>xl/**/_rels/*.rels</code>）有没有 <code>TargetMode=&quot;External&quot;</code> 的图片或对象关系，有就不交给 LibreOffice，该材料按&quot;公式没有缓存值&quot;处理：没有缓存值的单元格在材料文本里写公式本身（契约 1.1 的 <code>note</code> 枚举里没有对应取值，<code>note</code> 留空；要不要加取值见候 owner 清单 N21）——实测 Calc 导入时会去取这类外链图片，上面的设置拦不住；③Word / WPS 自动化打开文档时不更新链接（<code>Documents.Open</code> 的 <code>UpdateLinks</code> 相关设置关掉）——<strong>2026-10-02 T23 实测：真 Word 关了 <code>UpdateLinksAtOpen</code> 仍按 <code>r:link</code> 取图（8 个请求），这一项拦不住</strong>，所以改为：交给 Word / WPS <strong>之前</strong>先按<strong>文件头</strong>（不按扩展名——改名 <code>.doc</code>/<code>.wps</code> 曾绕过）分流检查：OOXML 压缩包查全部部件的外部关系与 altChunk（有 <code>aFChunk</code> 关系一律不交 Word / WPS，只走 LibreOffice）、OLE 二进制按 ②a 查、其他内容（RTF、HTML 冒充）一律不交；有外链就只走 LibreOffice（受 ② 的设置保护），LibreOffice 也不行的材料按&quot;因安全原因不转&quot;跳过并写明。导入时因外链被拒（<code>failed</code>）的材料归档生成时同样跳过。残留风险（<code>.doc</code> 附加模板、RTF 模板、altChunk 内 <code>.bin</code>/MHT/实体编码/<code>//host</code>/RTF 部件等写法预检查不到，Word 是否联网未实测）记候 owner 清单 N57，T22 真机抓包核。适用于所有调用这三类程序的地方：材料导入（第 5.2 节）、导出（第 12.1 节）、Word 转 PDF（第 12.3 节）、小工具（第 13.2 节）。每处都要有测试：文档里放一个指向 <code>127.0.0.1</code> 本机监听的图片链接，转换后监听收到 0 个请求</td>
 </tr>
 <tr>
 <td>发票引擎子进程</td>
@@ -3064,6 +3064,18 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <td><code>tools/case_save_archive_plan.schema.json#/$defs/plan</code></td>
 <td><code>case_save_archive_plan</code></td>
 <td>归档面板、<code>/api/archive/build</code></td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/运行记录.json</code>（流水线任务 <code>P-…</code>）</td>
+<td>无契约（只有元数据：步骤、材料编号、耗时、token；2026-10-02 T16 复核后登记）</td>
+<td>wiki 流水线</td>
+<td>人工排查</td>
+</tr>
+<tr>
+<td><code>工作区/任务/&lt;ID&gt;/草稿/</code>（流水线中止时的半份摘要）</td>
+<td><code>formats.md</code> 第 4 节</td>
+<td>wiki 流水线（预算到顶或取消时不覆盖完整页，半份存此）</td>
+<td>人工</td>
 </tr>
 <tr>
 <td><code>成果/归档/&lt;…&gt;案件归档/</code></td>

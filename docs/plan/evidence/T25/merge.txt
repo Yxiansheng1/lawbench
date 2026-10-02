@@ -1,0 +1,5 @@
+﻿merge gate line-C（T12/T25/T15/T23）@ ae6a617 2026-10-02 13:13
+[对] case-archiving/catalogs/民事行政卷.json
+结果：✔ 通过
+1253 passed, 7 skipped, 1 warning in 1317.30s (0:21:57)
+92 passed, 1 warning in 83.05s (0:01:23)
