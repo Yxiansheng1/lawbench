@@ -1,0 +1,31 @@
+T14 服务端预联调（tools\t14_smoke.py）  开始 2026-10-02 18:07:53  总耗时 67 秒
+结果：通过
+格式：[步骤] 接口  耗时  返回码  关键元数据（不含材料名、检索词、文本、Key）
+
+[1] 起服务  2.88s  -  方式=本脚本 serve（.env.local 测试 Key）
+[2] GET /api/settings  0.02s  200  servers=llm_alt_base_url:有,llm_base_url:有,prep_alt_base_url:有,prep_base_url:有
+[2] POST /api/connection/test  0.06s  200  llm reachable=True key_valid=True route=primary latency_ms=15
+[2] POST /api/connection/test  0.09s  200  prep reachable=True key_valid=None route=primary latency_ms=78
+[3] POST /api/case/open  0.11s  200  created=True folders=0
+[4] POST /api/materials/import  0.36s  200  copied=4 skipped=0 scan={"added": 4, "changed": 0, "removed": 0, "failed": 0, "review_needed": true}
+[4] GET /api/materials  0.03s  200  materials=M0001 pdf parsed page×1 need_ocr=[] mixed=[1]；M0002 pdf needs_ocr page×3 need_ocr=[1, 2, 3] mixed=[]；M0003 pdf parsed page×5 need_ocr=[] mixed=[]；M0004 image needs_ocr page×1 need_ocr=[1] mixed=[]
+[5] POST /api/ocr/jobs  0.11s  200  M0002 job pages=3 est_min=1
+[5] POST /api/ocr/jobs  0.08s  200  M0004 job pages=1 est_min=1
+[5] 强杀服务进程  0.00s  -  关停时 {'done': 2, 'sending': 2, 'pending': 0}；ocr_pages 行数=4 状态=['done', 'sending']
+[5] 重新起服务  4.84s  -  
+[5] GET /api/ocr/jobs  0.03s  200  jobs=M0002 running 2/3 failed=0 pause=None；M0004 done 1/1 failed=0 pause=None
+[5] GET /api/ocr/jobs  0.02s  200  jobs=M0002 done 3/3 failed=0 pause=None；M0004 done 1/1 failed=0 pause=None
+[5] 核对 ocr_pages  0.00s  -  关停前已完成 2 页、重启后被改动 0 页；全部 4 页、未完成 0；最大 attempts=0；识别页文件 4
+[4] GET /api/materials  0.02s  200  materials=M0001 pdf parsed page×1 need_ocr=[] mixed=[1]；M0002 pdf parsed page×3 need_ocr=[] mixed=[]；M0003 pdf parsed page×5 need_ocr=[] mixed=[]；M0004 image parsed page×1 need_ocr=[] mixed=[]
+[6] GET /api/search  0.05s  200  hits=1 total=1 M0002 第2页 is_ocr=True exact
+[7] POST /api/task  0.02s  200  task_id=T-20261002180859-053b
+[8] POST /core/task/begin  0.03s  200  task_id=T-20261002180859-9293 skill=criminal-reading-notes budget={"model_calls": 8, "tool_calls": 24, "minutes": 45}
+[8] POST /core/tool  0.03s  200  case_list_materials materials=4
+[8] POST /core/tool  0.05s  200  case_read_material has_more=False chars=416
+[8] POST /core/tool  0.03s  200  case_search hits=1
+[8] POST /core/tool  0.09s  200  case_save_draft citation_check={"passed": false, "citations": 3, "must_fix": 1, "hints": 0, "classes": ["B"]}
+[8] POST /core/task/end  0.05s  200  status=completed
+[9] POST /api/outputs/confirm  0.45s  200  outputs=md v1；docx v1
+[9] docx 结构校验  0.16s  -  段落=4 带出处的段落=3/3 document.xml=True
+[10] 日志泄漏自检  0.00s  -  日志文件 3 个、6174 字；材料名/识别文本/检索词/Key 命中 0
+[10] 原件 sha256  0.00s  -  fixtures 不变=True；导入源不变=True；案件原件区与导入源一致=True
