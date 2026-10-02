@@ -83,7 +83,8 @@ interface Writer {
   seen: boolean
 }
 /** 原版给会话编号编成目录名的写法（session-persistence-jsonl/src/format.ts 的 encodeSegment）。 */
-const encodeSegment = (raw: string): string => {
+export const encodeSegment = (raw: string): string => {
+  if (raw.length === 0) throw new Error('cannot encode an empty path segment')
   if (raw === '.') return '~002E'
   if (raw === '..') return '~002E~002E'
   let out = ''
@@ -213,9 +214,13 @@ export class SessionRouter {
     return !this.onDisk(w)
   }
 
-  /** 要放下：根已不在名单上、但还在盘上（复制后在新位置打开）。根不在盘上（拔盘、搬家）不放下，见 recheck。 */
+  /**
+   * 要放下：根已不在名单上、但还在盘上（复制后在新位置打开）。根不在盘上（拔盘、搬家）不放下，见 recheck。
+   * 原版还没落过盘的写入者（新建、还没说话的会话，如进案件时 DSH 默认建的空白对话）根不在盘上也放下：它缓冲里没有东西可丢，
+   * 不放下的话被拒那一轮的事件会让原版落盘时把旧路径整条重建、把话写进去（第十轮 R10-1）。
+   */
   private toDetach(w: Writer): boolean {
-    return !w.detached && !this.current(w.at) && existsSync(w.at.caseRoot!)
+    return !w.detached && !this.current(w.at) && (!w.seen || existsSync(w.at.caseRoot!))
   }
 
   /**
@@ -245,8 +250,34 @@ export class SessionRouter {
    * 接不上，整段对话静默不落盘）。不一样长（放下期间又被拒过一轮，这几条只在内存里）就一直算位置失效，重启后从盘上读。
    */
   recheck(id: string): Promise<void> {
-    // 同一会话同时只做一次（打开案件后的刷新与后台刷新可能同时触发），后来的排在后面
-    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(() => this.recheckOnce(id))
+    return this.queue(id, () => this.recheckOnce(id))
+  }
+
+  /**
+   * 我方 Agent 插件拒绝一轮之前调（第十轮 R10-1）：这个会话位置失效、写入者原版还没落过盘，就立刻放下（关句柄最多等 3 秒）。
+   * 律师这一句在拒绝之前已进了原版写入者的缓冲（`agent/inbox/spliced` 先于 `agent/pre-step`），关句柄会先把缓冲落盘——
+   * 没落过盘的会话落盘时原版 mkdir 整条路径，旧路径就被重建、话写进去（复核员 B 第九轮 M1b）；它的批量计时器几十毫秒后
+   * 也会自己落盘。所以先清空缓冲再关：这里面只有被拒这一轮的事件，本来就不保存（10.4）。缓冲是原版句柄的私有字段
+   * `buffered`（PATCHES.md 核对清单 ⑩）；没有这个字段时照常关并记一条日志。
+   * 放下后一直算位置失效，接回时打开找不到这个会话就不接回。
+   */
+  releaseMoved(id: string): Promise<void> {
+    return this.queue(id, async () => {
+      const w = this.writers.get(id)
+      if (!w || w.detached || w.seen || !this.caseMoved(id)) return
+      const raw = w.cur as unknown as { buffered?: unknown }
+      if (Array.isArray(raw.buffered)) raw.buffered.length = 0
+      else this.opts.log?.('warn', 'session_store.buffer_drop_unsupported', { index: w.at.index })
+      await within(closeHandle(w.cur), this.opts.caseRootTimeoutMs ?? 3000)
+        .catch((e: unknown) => this.opts.log?.('warn', 'session_store.writer_detach_failed', { index: w.at.index, error: (e as Error)?.name ?? 'Error' }))
+      w.detached = true
+      this.opts.log?.('info', 'session_store.writer_detached', { index: w.at.index })
+    })
+  }
+
+  /** 同一会话的放下、接回排成一队（打开案件后的刷新、后台刷新、拒绝前的放下可能同时来）。 */
+  private queue(id: string, fn: () => Promise<void>): Promise<void> {
+    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(fn)
     const tail = run.catch(() => undefined)
     this.rechecking.set(id, tail)
     void tail.then(() => { if (this.rechecking.get(id) === tail) this.rechecking.delete(id) })
@@ -269,14 +300,24 @@ export class SessionRouter {
       this.opts.log?.('info', 'session_store.writer_detached', { index: w.at.index })
     } else if (w.detached && !this.invalid(w) && this.opts.liveSeq) {
       let fresh: Handle
+      const opening = w.at.backend.open(id, 'write')
       try {
-        fresh = await within(w.at.backend.open(id, 'write'), this.opts.caseRootTimeoutMs ?? 3000)
-      } catch (e) { fail('session_store.writer_reattach_failed', e); return }
+        fresh = await within(opening, this.opts.caseRootTimeoutMs ?? 3000)
+      } catch (e) {
+        fail('session_store.writer_reattach_failed', e)
+        // 到时之后那次打开迟到返回的句柄没人用，关掉（第九轮复核 B-F5）
+        void opening.then((h) => closeHandle(h).catch(() => undefined), () => undefined)
+        return
+      }
       let n = -1
       try {
         n = (await within((fresh.read as () => Promise<{ events: unknown[] }>).call(fresh), this.opts.caseRootTimeoutMs ?? 3000)).events.length
       } catch (e) { fail('session_store.writer_reattach_failed', e) }
-      if (n !== this.opts.liveSeq(id) || this.writers.get(id) !== w) { await closeHandle(fresh).catch(() => undefined); return }
+      if (n !== this.opts.liveSeq(id) || this.writers.get(id) !== w) {
+        // 关新句柄也设上限：读到时之后关也可能挂住，recheck 不返回，打开案件就一直等（第十轮 R10-2）
+        await within(closeHandle(fresh), this.opts.caseRootTimeoutMs ?? 3000).catch(() => undefined)
+        return
+      }
       w.cur = fresh
       w.detached = false
       this.opts.log?.('info', 'session_store.writer_reattached', { index: w.at.index })

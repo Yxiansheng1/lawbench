@@ -12,7 +12,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CACHE_FILE, CaseRoots, inside } from '../session-store/case-roots.ts'
-import { NOT_READY, OUTSIDE_CASE, SessionRouter, type Backend, type Handle, type Header, type Snapshot } from '../session-store/router.ts'
+import { NOT_READY, OUTSIDE_CASE, SessionRouter, encodeSegment, type Backend, type Handle, type Header, type Snapshot } from '../session-store/router.ts'
 import { apply as applyStore, name as storeName } from '../session-store/index.ts'
 
 
@@ -660,3 +660,75 @@ for (const [label, sub] of [['案件根', ''], ['案件根下子目录（记录�
     } as never
   })
 }
+
+// ── 第十轮（改编自复核员 B 第九轮 zz-rvb31-f5：F5a、F5b）与编号编码 ─────────────────────
+describe('第十轮：接回的上限与迟到句柄、记录目录编码', () => {
+  /** 一个根、一份"已落盘"的会话 s1；第二次起的打开可迟到、读可挂住、关可挂住（第一次是交给 DSH 的写句柄）。 */
+  function lab(mode: { openDelay?: number; readHang?: boolean; closeHang?: boolean }) {
+    const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'lb-r10-')))
+    const OLD = join(tmp, 'old')
+    mkdirSync(join(OLD, '工作区', '会话', 'proj', 's1'), { recursive: true })
+    const caseRoots = new CaseRoots()
+    caseRoots.replace([{ root: OLD, exists: true }])
+    let n = 0
+    let closes = 0
+    const opened: number[] = []
+    const backend = (root: string): Backend => ({
+      async create(h: Header) { return { id: h.id, header: h, access: 'write', close: async () => { closes++ }, read: async () => ({ events: [] }) } },
+      async open(id: string, access: 'read' | 'write') {
+        const k = ++n
+        if (k > 1 && mode.openDelay) await new Promise((r) => setTimeout(r, mode.openDelay))
+        opened.push(k)
+        return {
+          id, header: H(id, OLD), access,
+          close: async () => { if (mode.closeHang && k > 1) await new Promise(() => {}); closes++ },
+          read: async () => { if (mode.readHang && k > 1) await new Promise(() => {}); return { events: [] } },
+        }
+      },
+      async flush() {},
+      async stat(id: string) { return root.includes('工作区') ? { header: H(id, OLD) } : undefined },
+      async list() { return [] },
+    })
+    const logs: string[] = []
+    const router = new SessionRouter(backend, caseRoots, {
+      defaultRoot: join(tmp, 'home'), allowOutsideCase: false, caseRootTimeoutMs: 100, liveSeq: () => 0, log: (_l, e) => { logs.push(e) },
+    })
+    return { tmp, OLD, router, caseRoots, logs, opened, closes: () => closes }
+  }
+
+  it('F5b / R10-2：接回时读挂住、关新句柄也挂住 → recheck 到时返回，同一会话下一次 recheck 不被卡住', async () => {
+    const { tmp, OLD, router, caseRoots, logs } = lab({ readHang: true, closeHang: true })
+    try {
+      await router.open('s1', 'write')
+      caseRoots.replace([{ root: join(tmp, 'other'), exists: true }]); await router.recheck('s1') // 根不在名单上、还在盘上 → 放下（空名单会被名单保护挡下，换一个根）
+      caseRoots.replace([{ root: OLD, exists: true }])
+      const race = (p: Promise<void>, ms: number) => Promise.race([p.then(() => 'returned'), new Promise((r) => setTimeout(() => r('STUCK'), ms))])
+      expect(await race(router.recheck('s1'), 1500)).toBe('returned')
+      expect(await race(router.recheck('s1'), 1500)).toBe('returned')
+      expect(router.caseMoved('s1')).toBe(true) // 没接回
+      expect(logs).toContain('session_store.writer_reattach_failed') // 读到时（第九轮复核 A-P3-2）
+    } finally { rmSync(tmp, { recursive: true, force: true }) }
+  })
+
+  it('F5a / 第九轮 B-F5：接回时打开到时 → 不接回；那次打开迟到返回的句柄随后被关掉', async () => {
+    const { tmp, OLD, router, caseRoots, closes } = lab({ openDelay: 400 })
+    try {
+      await router.open('s1', 'write')
+      caseRoots.replace([{ root: join(tmp, 'other'), exists: true }]); await router.recheck('s1')
+      expect(router.caseMoved('s1')).toBe(true)
+      const afterDetach = closes()
+      caseRoots.replace([{ root: OLD, exists: true }])
+      await router.recheck('s1')
+      expect(router.caseMoved('s1')).toBe(true)
+      await new Promise((r) => setTimeout(r, 600))
+      expect(closes()).toBe(afterDetach + 1)
+    } finally { rmSync(tmp, { recursive: true, force: true }) }
+  })
+
+  it('A-P3-3：记录目录名的编码与原版 encodeSegment 一致（含 ~、中文、点、空格、. 与 ..）；空串报错', async () => {
+    const orig = (await import(/* @vite-ignore */ join(__dirname, '..', '..', 'dsh', 'packages', 'session', 'session-persistence-jsonl', 'src', 'format.ts'))) as { encodeSegment(raw: string): string }
+    for (const raw of ['s1', 'a~b', '会话-01', 'x.y', 'a b', '.', '..', '…~.', 'A_z-9.0']) expect([raw, encodeSegment(raw)]).toEqual([raw, orig.encodeSegment(raw)])
+    expect(() => encodeSegment('')).toThrow()
+    expect(() => orig.encodeSegment('')).toThrow()
+  })
+})

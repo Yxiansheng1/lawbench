@@ -53,18 +53,23 @@ export class LegalAgent {
    */
   constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly caseMoved: (sessionId: string) => boolean = () => false) {}
 
+  /**
+   * 案件文件夹已不在原处（N55 ②）：整轮拒绝，不写旧处；界面提示重启软件后在这个对话里继续，或新开一个对话。
+   * 排在最前的那个 pre-step 和下面的 preStep 都走这一处（第九轮复核 B-NOTE）。
+   */
+  rejectMoved(sessionId: string): PreStepDecision {
+    this.log('warn', 'agent.case_moved', {})
+    this.noteBlocked(sessionId, 'CASE_MOVED')
+    this.tasks.delete(sessionId)
+    return { kind: 'reject' }
+  }
+
   /** agent/pre-step。step 1 取任务和上下文；每步检查模型调用预算。 */
   async preStep(agent: AgentLike, step: number, decision: PreStepDecision): Promise<PreStepDecision> {
     if (decision.kind === 'reject') return decision
     let state = this.tasks.get(agent.id)
     const added: UserMessage[] = []
-    if (step === 1 && this.caseMoved(agent.id)) {
-      // 案件文件夹已不在原处（N55 ②）：整轮拒绝，不写旧处；界面提示重启软件后在这个对话里继续，或新开一个对话
-      this.log('warn', 'agent.case_moved', {})
-      this.noteBlocked(agent.id, 'CASE_MOVED')
-      this.tasks.delete(agent.id)
-      return { kind: 'reject' }
-    }
+    if (step === 1 && this.caseMoved(agent.id)) return this.rejectMoved(agent.id)
     if (step === 1 || !state) {
       const begin = await this.core.call<{ task_id: string; params: Params; budget: Budget }>('task/begin', {
         session_id: agent.id, cwd: agent.session?.header?.cwd ?? '',
@@ -178,8 +183,9 @@ type Ctx = {
 export function apply(ctx: Ctx, config: Config = {}): void {
   const log: Logger = makeLogger('agent', config.appData ?? defaultAppData(), ctx.logger?.('lawbench-agent'))
   const core = new CoreClient(() => ctx.lawbenchCore.endpoint(), log, config.validateContracts ?? true)
-  const caseMoved = (sessionId: string): boolean =>
-    (ctx.get?.('sessionPersistence') as { caseMoved?(id: string): boolean } | undefined)?.caseMoved?.(sessionId) === true
+  type Store = { caseMoved?(id: string): boolean; releaseMoved?(id: string): Promise<void> } | undefined
+  const store = (): Store => ctx.get?.('sessionPersistence') as Store
+  const caseMoved = (sessionId: string): boolean => store()?.caseMoved?.(sessionId) === true
   const agent = new LegalAgent(core, log,
     (sessionId, code) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code),
     (sessionId) => ctx.lawbenchCore.clearTurnBlocked?.(sessionId),
@@ -201,11 +207,13 @@ export function apply(ctx: Ctx, config: Config = {}): void {
 
   // 会话所在的案件文件夹已不在原位置（N55 ②）：排在最前，不调 next() 直接整轮拒绝。别的 pre-step 可能先动存储——
   // DSH 生产插件树里的 session-checkpoint-policy 每步前先 sessions.flush，搬家后旧路径写不进去就抛错、整轮按 agent/error
-  // 结束，走不到上面那个先 next() 再判的处理，律师只看到含完整路径的英文错（T17 第八轮复核 B-F1）
-  ctx.on('agent/pre-step', (async (payload: { agent: AgentLike; step: number }, next: () => Promise<PreStepDecision>) =>
-    (payload.step === 1 && caseMoved(payload.agent.id)
-      ? agent.preStep(payload.agent, 1, { kind: 'enter', messages: [] })
-      : next())) as never, { prepend: true })
+  // 结束，走不到上面那个先 next() 再判的处理，律师只看到含完整路径的英文错（T17 第八轮复核 B-F1）。
+  // 拒绝之前请会话存储放下还没落过盘的写入者（第十轮 R10-1：否则被拒这一轮的事件让原版把旧路径整条重建、写进去）
+  ctx.on('agent/pre-step', (async (payload: { agent: AgentLike; step: number }, next: () => Promise<PreStepDecision>) => {
+    if (payload.step !== 1 || !caseMoved(payload.agent.id)) return next()
+    await store()?.releaseMoved?.(payload.agent.id).catch(() => undefined)
+    return agent.rejectMoved(payload.agent.id)
+  }) as never, { prepend: true })
 
   ctx.on('agent/request', (async (payload: { agent: AgentLike }, next: () => Promise<LlmCallConfig>) =>
     agent.request(payload.agent.id, await next())) as never)

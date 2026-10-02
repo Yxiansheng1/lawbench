@@ -363,8 +363,9 @@ it('X2（复核员 A 第七轮）接回核对内存事件数之后律师立刻�
   await ctx.fiber.dispose()
 }, 60000)
 
-it('C4（复核员 B 第八轮）搬家 → 新位置打开 → 原路径上又建了另一个案件并打开 → 回老会话说一句：会话自己的记录已不在原处，整轮拒绝、记 CASE_MOVED', async () => {
-  const { appData, home, oldR, newR, ctx, api, notices, adapter, errors, id, h } = await prepare([textResponse('a1'), textResponse('GHOST-REPLY')])
+// 生产里会话的"见过记录"靠 checkpoint 插件每步前的 sessions.flush（路由 flush 后置位）；不加插件时靠 prepare 末尾那次 flush（第九轮复核 A-P3-1）
+for (const cp of ['after', 'none'] as const) it(`C4（复核员 B 第八轮；checkpoint 插件：${cp}）搬家 → 新位置打开 → 原路径上又建了另一个案件并打开 → 回老会话说一句：会话自己的记录已不在原处，整轮拒绝、记 CASE_MOVED`, async () => {
+  const { appData, home, oldR, newR, ctx, api, notices, adapter, errors, id, h } = await prepare([textResponse('a1'), textResponse('GHOST-REPLY')], cp)
   renameSync(oldR, newR)
   expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
   mkdirSync(oldR, { recursive: true }) // 原路径上另一个案件（新案件编号）
@@ -388,6 +389,52 @@ it('新建的会话第一轮（原版还没落盘、盘上没有它的记录）�
   await ctx.fiber.dispose()
   expect(await readAfterRestart(appData, home, id2)).toContain('NEW-REPLY')
 }, 60000)
+
+// 第十轮 R10-1（复核员 B 第九轮 M1、M1b、M2）：原版还没落过盘的会话（新建、还没说话，如进案件时 DSH 默认建的空白对话）
+for (const cp of ['after', 'before', 'none'] as const) {
+  const blank = async () => {
+    const r = await prepare([textResponse('a1'), textResponse('BLANK-REPLY')], cp)
+    const id2 = SessionMod.SessionId('s2')
+    const h2 = await r.ctx.agents.create({ sessionId: id2, meta: { cwd: r.oldR }, agentOptions: { provider: 'mock', model: 'mock' } })
+    await sleep(300)
+    expect(files(r.oldR).some((f) => f.includes(`${'\\'}s2${'\\'}`))).toBe(false) // 还没落盘
+    return { ...r, id2, h2 }
+  }
+
+  it(`M1（checkpoint 插件：${cp}）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路径不被重建，新位置不写`, async () => {
+    const { oldR, newR, ctx, api, notices, adapter, errors, id2, h2 } = await blank()
+    renameSync(oldR, newR)
+    expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
+    const newHash = hashDir(newR)
+    expect(ctx.sessionPersistence.caseMoved(id2)).toBe(true)
+    expect(await say(ctx, h2.agent, adapter, 'M1-SAY')).toBe(0)
+    expect([notices.get(String(id2)), errors, existsSync(oldR), has(newR, 'M1-SAY'), hashDir(newR) === newHash]).toEqual(['CASE_MOVED', [], false, 0, true])
+    await ctx.fiber.dispose().catch(() => undefined)
+    expect([existsSync(oldR), has(tmp, 'M1-SAY')]).toEqual([false, 0]) // 关软件时也不重建
+  }, 60000)
+
+  it(`M1b（checkpoint 插件：${cp}）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建`, async () => {
+    const { oldR, newR, ctx, notices, adapter, errors, id2, h2 } = await blank()
+    renameSync(oldR, newR)
+    expect(await say(ctx, h2.agent, adapter, 'M1B-SAY')).toBe(0)
+    expect([notices.get(String(id2)), errors, existsSync(oldR), has(tmp, 'M1B-SAY')]).toEqual(['CASE_MOVED', [], false, 0])
+    await ctx.fiber.dispose().catch(() => undefined)
+    expect(existsSync(oldR)).toBe(false)
+  }, 60000)
+
+  it(`M2（checkpoint 插件：${cp}）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别的案件`, async () => {
+    const { oldR, newR, ctx, api, notices, adapter, errors, id2, h2 } = await blank()
+    renameSync(oldR, newR)
+    expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
+    mkdirSync(oldR, { recursive: true }) // 原路径上另一个案件
+    expect((await api.caseOpen({ path: oldR, template: null })).ok).toBe(true)
+    expect(ctx.sessionPersistence.caseMoved(id2)).toBe(true)
+    expect(await say(ctx, h2.agent, adapter, 'M2-SAY')).toBe(0)
+    expect([notices.get(String(id2)), errors, has(oldR, 'M2-SAY'), has(oldR, 'BLANK-REPLY'), has(newR, 'M2-SAY')]).toEqual(['CASE_MOVED', [], 0, 0, 0])
+    await ctx.fiber.dispose().catch(() => undefined)
+    expect(has(tmp, 'M2-SAY')).toBe(0)
+  }, 60000)
+}
 
 it('搬家后服务还没列出新位置（律师没在新位置打开）：根已不在盘上，整轮拒绝，哪里都不写', async () => {
   const { oldR, newR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])

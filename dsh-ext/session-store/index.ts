@@ -175,6 +175,8 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     refreshCaseRoots() { return refreshNow() }
     /** 我方加的：这个会话所在的案件文件夹已不在原位置（N55 ②，见 router.ts），我方 Agent 插件据此拒绝下一轮。 */
     caseMoved(id: string) { return router.caseMoved(id) }
+    /** 我方加的：拒绝一轮之前放下还没落过盘的写入者（第十轮 R10-1，见 router.ts 的 releaseMoved）。 */
+    releaseMoved(id: string) { return router.releaseMoved(id) }
     /** 我方加的：案件根名单上有没有这个根（Host 打开案件后核对刷新是否成功）。 */
     hasCaseRoot(root: string) { return roots.has(root) }
   }

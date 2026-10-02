@@ -1,4 +1,4 @@
-# T17 N55 ② 与第七至九轮返修（活着的会话所在案件挪走了：不搬写入者，整轮拒绝并提示重启）：逐个撤回修法，看对应用例是否变红；每次按原字节写回。
+# T17 N55 ② 与第七至十轮返修（活着的会话所在案件挪走了：不搬写入者，整轮拒绝并提示重启）：逐个撤回修法，看对应用例是否变红；每次按原字节写回。
 # 用法：python mutate.py <输出文件>（在仓库根下跑）
 import io, re, subprocess, sys
 
@@ -19,11 +19,26 @@ MUTS = [
      "      if (this.writers.get(w.id) === w) this.writers.delete(w.id)\n", "",
      ['tests/session-store.spec.ts']),
     ('拒绝：Agent 插件不看位置失效', EXT + 'agent/index.ts',
-     "    if (step === 1 && this.caseMoved(agent.id)) {", "    if (false) {",
-     LIVE + ['tests/agent.spec.ts']),
+     "    if (step === 1 && this.caseMoved(agent.id)) return this.rejectMoved(agent.id)", "    if (false) return this.rejectMoved(agent.id)",
+     ['tests/agent.spec.ts']),
     ('第八轮 B-F1：位置失效的判断不排在最前（只剩先 next() 再判的那个）', EXT + 'agent/index.ts',
-     "    (payload.step === 1 && caseMoved(payload.agent.id)", "    (false && caseMoved(payload.agent.id)",
+     "    if (payload.step !== 1 || !caseMoved(payload.agent.id)) return next()", "    if (true) return next()",
      LIVE),
+    ('第十轮 R10-1：拒绝前不放下没落过盘的写入者', EXT + 'agent/index.ts',
+     "    await store()?.releaseMoved?.(payload.agent.id).catch(() => undefined)\n", "",
+     LIVE),
+    ('第十轮 R10-1：放下没落过盘的写入者前不清缓冲', EXT + 'session-store/router.ts',
+     "      if (Array.isArray(raw.buffered)) raw.buffered.length = 0\n", "      if (Array.isArray(raw.buffered)) void 0\n",
+     LIVE),
+    ('第十轮 R10-1：没落过盘的写入者根不在盘上时不放下', EXT + 'session-store/router.ts',
+     "    return !w.detached && !this.current(w.at) && (!w.seen || existsSync(w.at.caseRoot!))", "    return !w.detached && !this.current(w.at) && existsSync(w.at.caseRoot!)",
+     LIVE),
+    ('第十轮 R10-2：接回时关新句柄不设上限', EXT + 'session-store/router.ts',
+     "        await within(closeHandle(fresh), this.opts.caseRootTimeoutMs ?? 3000).catch(() => undefined)\n", "        await closeHandle(fresh).catch(() => undefined)\n",
+     ['tests/session-store.spec.ts']),
+    ('第九轮 B-F5：接回打开到时后迟到的句柄不关', EXT + 'session-store/router.ts',
+     "        void opening.then((h) => closeHandle(h).catch(() => undefined), () => undefined)\n", "",
+     ['tests/session-store.spec.ts']),
     ('第八轮 B-F2：不判会话自己的记录还在不在', EXT + 'session-store/router.ts',
      "    return !this.current(w.at) || !existsSync(w.at.caseRoot!) || this.recordGone(w)", "    return !this.current(w.at) || !existsSync(w.at.caseRoot!)",
      LIVE),
@@ -31,20 +46,21 @@ MUTS = [
      "    if (!w.seen) {\n      w.seen = this.onDisk(w)\n      return false\n    }\n", "",
      LIVE),
     ('第八轮 B-F5：接回时以写方式打开不设上限', EXT + 'session-store/router.ts',
-     "        fresh = await within(w.at.backend.open(id, 'write'), this.opts.caseRootTimeoutMs ?? 3000)", "        fresh = await w.at.backend.open(id, 'write')",
+     "        fresh = await within(opening, this.opts.caseRootTimeoutMs ?? 3000)", "        fresh = await opening",
      ['tests/session-store.spec.ts']),
     ('不写旧处：根不在名单上时不放下写入者', EXT + 'session-store/router.ts',
      "    if (this.toDetach(w)) {", "    if (false) {",
      LIVE),
     ('第七轮 B-F1：根不在盘上（拔盘）也放下', EXT + 'session-store/router.ts',
-     "    return !w.detached && !this.current(w.at) && existsSync(w.at.caseRoot!)", "    return !w.detached && !this.current(w.at)",
+     "    return !w.detached && !this.current(w.at) && (!w.seen || existsSync(w.at.caseRoot!))", "    return !w.detached && !this.current(w.at)",
      LIVE),
     ('第七轮 A-P2-1：接回核对的内存事件数在打开新句柄之前取', EXT + 'session-store/router.ts',
-     "      let fresh: Handle\n      try {\n        fresh = await within(w.at.backend.open(id, 'write'), this.opts.caseRootTimeoutMs ?? 3000)\n      } catch (e) { fail('session_store.writer_reattach_failed', e); return }\n      let n = -1\n      try {\n        n = (await within((fresh.read as () => Promise<{ events: unknown[] }>).call(fresh), this.opts.caseRootTimeoutMs ?? 3000)).events.length\n      } catch (e) { fail('session_store.writer_reattach_failed', e) }\n      if (n !== this.opts.liveSeq(id) ||",
-     "      const early = this.opts.liveSeq(id)\n      let fresh: Handle\n      try {\n        fresh = await within(w.at.backend.open(id, 'write'), this.opts.caseRootTimeoutMs ?? 3000)\n      } catch (e) { fail('session_store.writer_reattach_failed', e); return }\n      let n = -1\n      try {\n        n = (await within((fresh.read as () => Promise<{ events: unknown[] }>).call(fresh), this.opts.caseRootTimeoutMs ?? 3000)).events.length\n      } catch (e) { fail('session_store.writer_reattach_failed', e) }\n      if (n !== early ||",
+     [("      let fresh: Handle\n      const opening = w.at.backend.open(id, 'write')", "      const early = this.opts.liveSeq(id)\n      let fresh: Handle\n      const opening = w.at.backend.open(id, 'write')"),
+      ("      if (n !== this.opts.liveSeq(id) || this.writers.get(id) !== w) {", "      if (n !== early || this.writers.get(id) !== w) {")],
+     None,
      LIVE),
     ('第七轮 B-F4：放下不设上限（关句柄挂住就一直等）', EXT + 'session-store/router.ts',
-     "      await within(closeHandle(w.cur), this.opts.caseRootTimeoutMs ?? 3000)", "      await closeHandle(w.cur)",
+     "      await within(closeHandle(w.cur), this.opts.caseRootTimeoutMs ?? 3000).catch((e: unknown) => fail(", "      await closeHandle(w.cur).catch((e: unknown) => fail(",
      ['tests/session-store.spec.ts']),
     ('第七轮 A-P3-2：放下失败不记日志', EXT + 'session-store/router.ts',
      ".catch((e: unknown) => fail('session_store.writer_detach_failed', e))", ".catch(() => undefined)",
@@ -70,7 +86,7 @@ MUTS = [
      "      if (n !== this.opts.liveSeq(id) || this.writers.get(id) !== w) {", "      if (this.writers.get(id) !== w) {",
      LIVE),
     ('解除：同一会话的 recheck 不排队', EXT + 'session-store/router.ts',
-     "    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(() => this.recheckOnce(id))", "    const run = this.recheckOnce(id)",
+     "    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(fn)", "    const run = fn()",
      LIVE),
     ('提示：输入区不提示 CASE_MOVED', EXT + 'ui/dock.tsx',
      "        if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)\n", "",
@@ -96,13 +112,17 @@ for name, path, a, b, tests in MUTS:
     raw = io.open(path, encoding='utf-8', newline='').read()
     nl = '\r\n' if '\r\n' in raw else '\n'
     src = raw.replace('\r\n', '\n')
-    assert src.count(a) == 1, (name, src.count(a))
+    pairs = a if isinstance(a, list) else [(a, b)]  # 一个变异可以改几处（同一文件）
+    mutated = src
+    for x, y in pairs:
+        assert mutated.count(x) == 1, (name, mutated.count(x))
+        mutated = mutated.replace(x, y)
     try:
-        io.open(path, 'w', encoding='utf-8', newline='').write(src.replace(a, b).replace('\n', nl))
+        io.open(path, 'w', encoding='utf-8', newline='').write(mutated.replace('\n', nl))
         summary, fails = run(tests)
     finally:
         io.open(path, 'w', encoding='utf-8', newline='').write(raw)
     out.append(f'## {name}\n文件：{path}；跑：{"、".join(tests)}\n结果：{summary}\n' + '\n'.join('- ' + f for f in fails) + '\n')
     print(out[-1], flush=True)
-report = '# T17 N55 ② 与第七至九轮返修变异（撤回单处修法）\n\n' + '\n'.join(out)
+report = '# T17 N55 ② 与第七至十轮返修变异（撤回单处修法）\n\n' + '\n'.join(out)
 io.open(sys.argv[1], 'w', encoding='utf-8').write(report)
