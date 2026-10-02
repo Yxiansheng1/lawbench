@@ -1,0 +1,7 @@
+﻿merge gate line-A @ 54d0671 2026-10-02 21:11
+check_examples: [对] case-archiving/catalogs/民事行政卷.json (rc=0)
+build_skills --check: 结果：✔ 通过 (rc=0)
+service: 1258 passed, 7 skipped, 1 warning in 1324.36s (0:22:04)
+prep395: 92 passed, 1 warning in 86.29s (0:01:26)
+dsh-ext (D:\lawbench-rv\gate-A 副本，node_modules 拷自线 A 并重建 12 个联接): Test Files 32 passed; Tests 529 passed | 5 skipped (534); tsc --noEmit rc=0
+check_ui_words.py: 零命中
