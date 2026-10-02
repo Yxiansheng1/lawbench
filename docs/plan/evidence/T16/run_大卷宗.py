@@ -90,7 +90,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--think", default="关闭", choices=["关闭", "低", "中", "高"])
     ap.add_argument("--max-tokens", type=int, default=8192)
+    ap.add_argument("--prep", action="store_true", help="勾选使用 395 的 9B（真机补测，输出文件名加 -9b）")
     args = ap.parse_args()
+    sfx = "-9b" if args.prep else ""
     key = test_key()
     gate._registry_onedrive_folders = lambda: []
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="lbt16-"))
@@ -103,7 +105,7 @@ def main() -> int:
     case_id = r["value"]["case_id"]
     build_index(root, case_id)
     params = {"thinking": args.think, "window": "64K", "max_tokens": args.max_tokens}
-    r = c.post("/api/pipeline/run", json={"case_id": case_id, "step": "wiki_build", "use_prep": False,
+    r = c.post("/api/pipeline/run", json={"case_id": case_id, "step": "wiki_build", "use_prep": args.prep,
                                           "params": params}).json()
     if not r.get("ok"):
         print("启动失败：", r)
@@ -121,14 +123,15 @@ def main() -> int:
             break
         time.sleep(3)
     task_dir = root / "工作区" / "任务" / tid
-    out = HERE / "大卷宗wiki"
+    out = HERE / f"大卷宗wiki{sfx}"
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(root / "工作区" / "wiki", out)
     rec = json.loads((task_dir / "运行记录.json").read_text(encoding="utf-8"))
     res = json.loads((task_dir / "result.json").read_text(encoding="utf-8"))
-    rec["参数"] = {"thinking": args.think, "max_tokens": args.max_tokens, "并行": 2, "每段字数": 8000}
-    (HERE / "大卷宗运行记录.json").write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+    rec["参数"] = {"thinking": args.think, "max_tokens": args.max_tokens, "并行": 2, "每段字数": 8000,
+                 "use_prep": args.prep}
+    (HERE / f"大卷宗运行记录{sfx}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
     chk = res["citation_check"] or {}
     counts = {k: sum(1 for p in chk.get("problems", []) if p["class"] == k) for k in "ABCDEFG"}
     lines = [f"# 大卷宗 wiki 全文核对（产品 checks 库，excerpt）", f"任务 {tid}  状态 {res['status']}",
@@ -136,7 +139,7 @@ def main() -> int:
     for p in chk.get("problems", []):
         lines.append(f"- {p['class']} [{p['severity']}] {p['message']}")
         lines.append(f"    原句：{p['excerpt'][:100]}")
-    (HERE / "大卷宗核对.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (HERE / f"大卷宗核对{sfx}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\n完成：{res['status']}，调用 {rec['模型调用次数']} 次，{rec['总耗时秒']} 秒；核对 " +
           "；".join(f"{k} {counts[k]}" for k in "ABCDEFG"))
     c.close()
