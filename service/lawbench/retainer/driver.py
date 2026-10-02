@@ -179,7 +179,7 @@ def is_driver(h: dict) -> bool:
 def child_env() -> dict[str, str]:
     env = {k: os.environ[k] for k in PASS_ENV if os.environ.get(k)}
     env["PYTHONUTF8"] = "1"
-    return env
+    return procs.python_env(env)
 
 
 def expected_models(driver_dir: pathlib.Path) -> dict[str, str]:

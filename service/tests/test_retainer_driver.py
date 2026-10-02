@@ -149,7 +149,7 @@ def test_child_env_has_no_proxy(monkeypatch):
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
     monkeypatch.setenv("PYTHONPATH", "C:\\evil")
     env = D.child_env()
-    assert set(env) <= set(D.PASS_ENV) | {"PYTHONUTF8"}
+    assert set(env) <= set(D.PASS_ENV) | {"PYTHONUTF8", "PYTHONNOUSERSITE"} and env["PYTHONNOUSERSITE"] == "1"
 
 
 def test_api_contract(client, monkeypatch):

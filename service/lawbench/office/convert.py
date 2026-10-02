@@ -33,7 +33,7 @@ from ..case import gate
 from ..errors import ApiError
 from ..ingest import ParseError, detect, links
 from ..ingest import libreoffice as lo
-from ..procs import kill_tree
+from ..procs import kill_tree, python_env
 
 TIMEOUT = 120          # 秒；测试里可改小
 QUIT_WAIT = 5.0
@@ -196,6 +196,11 @@ def lo_refusal(path: pathlib.Path) -> tuple[str | None, str]:
         return "unchecked", ext
 
 
+def worker_env() -> dict[str, str]:
+    """com_worker 子进程的环境：能导入 lawbench，不读用户目录的 site-packages。"""
+    return python_env(dict(os.environ, PYTHONPATH=_PKG_PARENT + os.pathsep + os.environ.get("PYTHONPATH", "")))
+
+
 def _kill_pid(pid: int) -> None:
     subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -261,7 +266,7 @@ class OfficeConverter:
 
     def _run_worker(self, name: str, progid: str, local: pathlib.Path, out: pathlib.Path) -> int | None:
         cmd = (WORKER_CMD or [sys.executable, "-m", "lawbench.office.com_worker"]) + [progid, str(local), str(out)]
-        env = dict(os.environ, PYTHONPATH=_PKG_PARENT + os.pathsep + os.environ.get("PYTHONPATH", ""))
+        env = worker_env()
         before = processes()
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,

@@ -176,7 +176,7 @@ def test_custom_template_from_settings(env, tid, tmp_path):
 
 
 def test_pandoc_missing(env, tid, monkeypatch):
-    monkeypatch.setenv("LAWBENCH_PANDOC", str(pathlib.Path(env.appdata) / "没有这个" / "pandoc.exe"))
+    monkeypatch.setattr(P, "find_pandoc", lambda: None)                  # 哪儿都找不到
     rel = draft(env, tid, "缺 pandoc", "正文")
     fail(confirm(env, tid, rel, formats=["docx"]), "INTERNAL")
     ok(confirm(env, tid, rel, formats=["md"]), "api/outputs_confirm.schema.json")    # 只要 md 不需要 pandoc
@@ -364,3 +364,18 @@ def test_strip_html_many_unclosed_lt_a_fast():
     t0 = _t.monotonic()
     assert P.strip_workspace_links(s) == s
     assert _t.monotonic() - t0 < 2
+
+
+
+def test_find_pandoc_env_first(tmp_path, monkeypatch):
+    """跨线小项 1：LAWBENCH_PANDOC 设了且文件在就用它；设了但文件不在，照旧往下找（不当成"没有"）。"""
+    fake_exe = tmp_path / "tools" / "pandoc.exe"
+    fake_exe.parent.mkdir()
+    fake_exe.write_bytes(b"x")
+    monkeypatch.setenv("LAWBENCH_PANDOC", str(fake_exe))
+    assert P.find_pandoc() == str(fake_exe)
+    monkeypatch.setenv("LAWBENCH_PANDOC", str(tmp_path / "没有" / "pandoc.exe"))
+    monkeypatch.delenv("LAWBENCH_PANDOC")
+    expected = P.find_pandoc()
+    monkeypatch.setenv("LAWBENCH_PANDOC", str(tmp_path / "没有" / "pandoc.exe"))
+    assert P.find_pandoc() == expected

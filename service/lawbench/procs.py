@@ -10,6 +10,13 @@ import os
 import subprocess
 
 
+def python_env(env: dict[str, str]) -> dict[str, str]:
+    """服务起的 Python 子进程都不读用户目录的 site-packages / .pth（T20 复核实测：嵌入式 Python 的 ._pth 挡不住
+    %APPDATA%\\Python 下的 .pth，用户装的包会混进来）。就地加上 PYTHONNOUSERSITE=1 并返回。"""
+    env["PYTHONNOUSERSITE"] = "1"
+    return env
+
+
 def kill_tree(proc: subprocess.Popen, drain: bool = False) -> None:
     """drain=True：用 communicate() 收尾，把 stdout / stderr 管道里剩下的读空（调用方开了 PIPE 时要这样，
     否则子进程可能卡在写满的管道上）；否则只 wait()。"""

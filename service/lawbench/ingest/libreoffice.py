@@ -37,7 +37,11 @@ CANDIDATES = [
 
 
 def find_soffice() -> str | None:
-    """查找顺序：PATH → 默认安装位置。"""
+    """查找顺序：环境变量 LAWBENCH_SOFFICE（设了且文件在；打包后 Host 传随包的 <安装目录>\\tools\\…）→ PATH →
+    默认安装位置。"""
+    env = os.environ.get("LAWBENCH_SOFFICE")
+    if env and os.path.isfile(env):
+        return env
     found = shutil.which("soffice")
     if found:
         return found
@@ -163,7 +167,7 @@ class _Session:
                 f"-env:UserInstallation={profile_dir.as_uri()}", "--convert-to", fmt, "--outdir", str(job / "out"),
                 str(local)]
         # LibreOffice 自己的临时文件也落在本次的配置目录旁边，会话结束一起删掉；系统临时目录不留材料副本
-        env = dict(os.environ, TMP=str(tmp), TEMP=str(tmp), TMPDIR=str(tmp))
+        env = procs.python_env(dict(os.environ, TMP=str(tmp), TEMP=str(tmp), TMPDIR=str(tmp)))   # LibreOffice 自带 Python
         with _LOCK:
             try:
                 proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,

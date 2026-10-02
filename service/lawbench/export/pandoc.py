@@ -23,10 +23,11 @@ TEMPLATES = ("文书", "合同")
 
 
 def find_pandoc() -> str | None:
-    """查找顺序：环境变量 LAWBENCH_PANDOC → PATH → 用户级安装（%LOCALAPPDATA%\\Pandoc）→ 全机安装。不写死用户名。"""
+    """查找顺序：环境变量 LAWBENCH_PANDOC（设了且文件在；打包后 Host 传随包的）→ PATH → 用户级安装
+    （%LOCALAPPDATA%\\Pandoc）→ 全机安装。不写死用户名。"""
     env = os.environ.get("LAWBENCH_PANDOC")
-    if env:
-        return env if os.path.isfile(env) else None
+    if env and os.path.isfile(env):
+        return env
     found = shutil.which("pandoc")
     if found:
         return found

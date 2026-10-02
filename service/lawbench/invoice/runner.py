@@ -217,6 +217,7 @@ class InvoiceRunner:
         """子进程只拿名单里的变量（Spec 13.3）；不继承代理等其他变量。"""
         env = {k: os.environ[k] for k in PASS_ENV if os.environ.get(k)}
         env["PYTHONUTF8"] = "1"
+        procs.python_env(env)
         env["INVOICE_RUNTIME_CACHE"] = str(self.appdata / "ivc")    # 短路径，避免超过 259 字符（回写①）
         buyer = self.settings.get()["office"].get("invoice_buyer")
         if buyer:

@@ -146,8 +146,8 @@ def test_env_only_whitelisted(tmp_path, monkeypatch):
     monkeypatch.setenv("LAWFIRM_KEY", "sk-should-not-pass")
     monkeypatch.setenv("PYTHONPATH", "C:\\evil")
     env = make_runner(tmp_path).env()
-    assert set(env) <= set(R.PASS_ENV) | {"PYTHONUTF8", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE"}
-    assert env["PYTHONUTF8"] == "1" and env["INVOICE_BUYER"] == BUYER
+    assert set(env) <= set(R.PASS_ENV) | {"PYTHONUTF8", "PYTHONNOUSERSITE", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE"}
+    assert env["PYTHONUTF8"] == "1" and env["INVOICE_BUYER"] == BUYER and env["PYTHONNOUSERSITE"] == "1"
     assert env["INVOICE_RUNTIME_CACHE"] == str(tmp_path / "ad" / "ivc")
     r2 = R.InvoiceRunner(FakeSettings(str(tmp_path), buyer=None), tmp_path / "ad")
     assert "INVOICE_BUYER" not in r2.env()                        # 未设置时不传，引擎自己判"待核"
@@ -166,7 +166,7 @@ def test_child_process_sees_only_whitelisted_env(tmp_path, monkeypatch):
     seen = set(json.loads(v["output"]))
     assert "LB_CANARY" not in seen and "HTTPS_PROXY" not in seen
     # Windows 会给每个进程自动补几项（如 SystemRoot 的大小写变体），除此之外只有名单里的
-    allowed = {k.upper() for k in (*R.PASS_ENV, "PYTHONUTF8", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE")}
+    allowed = {k.upper() for k in (*R.PASS_ENV, "PYTHONUTF8", "PYTHONNOUSERSITE", "INVOICE_BUYER", "INVOICE_RUNTIME_CACHE")}
     extra = {k for k in seen if k.upper() not in allowed}
     assert extra <= {"__PYVENV_LAUNCHER__"}, extra
 
