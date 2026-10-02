@@ -1,30 +1,50 @@
-# T12 真机补测：识别队列对真实 395 · 2026-10-02 15:26:25
+# T12 真机补测：识别队列对真实 395 · 2026-10-02 15:17:19
 # 395 所内 http://192.168.8.124:9000（契约 1.3，/health 见 evidence\T11\reach-20261002.txt）；Key：.env.local 测试 Key A，由 key_getter 注入（不打印、不写凭据管理器）；并发 2
 # 材料：criminal-01 4 份 + 大卷宗 22 个文件 + 水印对照.pdf（全部虚构）；扫描后需识别的材料 3 份、共 6 页；本次提交 3 份 6 页（上限 20）
 
-提交 水印对照（pdf）第 [1, 2] 页 → J-20261002152625-d530，预计 1 分钟
-提交 讯问笔录（pdf）第 [1, 2, 3] 页 → J-20261002152625-35b2，预计 1 分钟
-提交 转账截图（image）第 [1] 页 → J-20261002152625-11c9，预计 1 分钟
+提交 水印对照（pdf）第 [1, 2] 页 → J-20261002151719-dc69，预计 1 分钟
+提交 讯问笔录（pdf）第 [1, 2, 3] 页 → J-20261002151719-67ec，预计 1 分钟
+提交 转账截图（image）第 [1] 页 → J-20261002151719-6f60，预计 1 分钟
 
 ## 任务状态变化（秒）
-- J-20261002152625-d530（水印对照）：[(0.4, 'running'), (33.2, 'done')]
-- J-20261002152625-35b2（讯问笔录）：[(0.4, 'queued'), (7.5, 'running'), (67.5, 'done')]
-- J-20261002152625-11c9（转账截图）：[(0.4, 'queued'), (6.0, 'running'), (7.5, 'done')]
-## 395 /health 旁路探测（每 2 秒，10 秒超时；服务自己探测用 1.5 秒）：27 次，耗时中位 0.47 秒、最长 0.61 秒；超过 1.5 秒或失败 0 次
+- J-20261002151719-dc69（水印对照）：[(0.6, 'running'), (2.6, 'paused'), (371.2, 'queued'), (401.5, 'running'), (434.3, 'done')]
+- J-20261002151719-67ec（讯问笔录）：[(0.6, 'queued'), (2.6, 'paused'), (371.2, 'running'), (432.3, 'done')]
+- J-20261002151719-6f60（转账截图）：[(0.6, 'queued'), (2.6, 'paused'), (371.2, 'queued'), (400.5, 'running'), (401.5, 'done')]
+## 395 /health 旁路探测（每 2 秒，10 秒超时；服务自己探测用 1.5 秒）：63 次，耗时中位 0.50 秒、最长 0.66 秒；超过 1.5 秒或失败 28 次
+  - 第 1 秒：失败 ConnectTimeout
+  - 第 13 秒：失败 ConnectTimeout
+  - 第 26 秒：失败 ConnectTimeout
+  - 第 38 秒：失败 ConnectTimeout
+  - 第 51 秒：失败 ConnectTimeout
+  - 第 63 秒：失败 ConnectTimeout
+  - 第 76 秒：失败 ConnectTimeout
+  - 第 88 秒：失败 ConnectTimeout
+  - 第 101 秒：失败 ConnectTimeout
+  - 第 113 秒：失败 ConnectTimeout
+  - 第 125 秒：失败 ConnectTimeout
+  - 第 138 秒：失败 ConnectTimeout
+  - 第 150 秒：失败 ConnectTimeout
+  - 第 163 秒：失败 ConnectTimeout
+  - 第 176 秒：失败 ConnectTimeout
+  - 第 188 秒：失败 ConnectTimeout
+  - 第 201 秒：失败 ConnectTimeout
+  - 第 213 秒：失败 ConnectTimeout
+  - 第 226 秒：失败 ConnectTimeout
+  - 第 238 秒：失败 ConnectTimeout
 
-全部结束用时 67.5 秒；同时"发送中"的页最多 2 个（设定并发 2）
+全部结束用时 434.3 秒；同时"发送中"的页最多 2 个（设定并发 2）
 
 ## 水印对照：status=done pause_reason=None done=2 failed=0
-  第1页：done，重试计次 0，原因 None，发送中→完成约 5.6 秒
-  第2页：done，重试计次 0，原因 None，发送中→完成约 32.8 秒
+  第1页：done，重试计次 0，原因 None，发送中→完成约 404.5 秒
+  第2页：done，重试计次 0，原因 None，发送中→完成约 433.7 秒
 ## 讯问笔录：status=done pause_reason=None done=3 failed=0
-  第1页：done，重试计次 0，原因 None，发送中→完成约 31.3 秒
-  第2页：done，重试计次 0，原因 None，发送中→完成约 30.8 秒
-  第3页：done，重试计次 0，原因 None，发送中→完成约 28.8 秒
+  第1页：done，重试计次 0，原因 None，发送中→完成约 28.8 秒
+  第2页：done，重试计次 0，原因 None，发送中→完成约 29.3 秒
+  第3页：done，重试计次 0，原因 None，发送中→完成约 31.3 秒
 ## 转账截图：status=done pause_reason=None done=1 failed=0
-  第1页：done，重试计次 0，原因 None，发送中→完成约 1.5 秒
+  第1页：done，重试计次 0，原因 None，发送中→完成约 1.0 秒
 
-每页耗时（发送中→完成，0.5 秒采样）：6 页，中位 30.8 秒，最短 1.5、最长 32.8 秒；吞吐约 5.3 页/分钟
+每页耗时（发送中→完成，0.5 秒采样）：6 页，中位 31.3 秒，最短 1.0、最长 433.7 秒；吞吐约 0.8 页/分钟
 
 ## 合并后的材料（index 与文本页数）
 - 水印对照：status=parsed is_ocr=full 仍待识别 []；文本 2 页（unit_count 2），识别所得 2 页；■ 0 个、[看不清] 0 处
@@ -284,7 +304,7 @@
 ----------------------------------------
 
 ## 日志
-- 服务日志 24 行；出现过的 op：case_open, index, job_done, materials_scan, ocr_submit, open, scan, select_prep, settings, submit
-- 识别模块失败事件：0 条 []（503 会计为 busy / 重试，见各页重试计次）
+- 服务日志 44 行；出现过的 op：case_open, index, job_done, materials_scan, ocr_submit, open, pause, prep_back, scan, select_prep, settings, submit
+- 识别模块失败事件：6 条 [('pause', 'prep_down')]（503 会计为 busy / 重试，见各页重试计次）
 - 搜 9 个敏感串（Key、案件路径与文件夹名、各材料名、识别文本片段）：命中 0 个 []
 - 原件 sha256：27 个文件，前后全部一致

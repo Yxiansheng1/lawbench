@@ -1,0 +1,12 @@
+# 395 连通核（T12 真机补测，2026-10-02 15:11，开发机在律所局域网内）
+# 命令：python scripts\check_395_reach.py 192.168.8.124
+
+395：192.168.8.124
+
+3389  远程桌面                          通
+22    SSH                           通
+9000  预处理服务（未部署时不通是正常的）             通
+9101  OCR 后端（应当不通，只监听本机）            不通（TimeoutError）
+9102  9B 后端（应当不通，只监听本机）             不通（TimeoutError）
+
+/health： {'status': 'ok', 'ocr': 'ok', 'llm9b': 'ok', 'queue': 0, 'version': '1.0.0', 'contract_version': '1.3'}
