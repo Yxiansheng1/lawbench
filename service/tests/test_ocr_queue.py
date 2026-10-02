@@ -262,6 +262,57 @@ def test_prep_down_then_back(tmp_path):
         e.close()
 
 
+def test_submit_while_prep_down_shows_waiting_then_resumes(tmp_path):
+    """395 已经连不上时再提交的任务，列表上直接是"等待 395 恢复"，不是"排队中"；恢复后两个任务都做完
+    （T12 复核 NOTE 2：原来 _pause_all 只暂停当时在内存里的任务）。"""
+    port = closed_port()
+    f = Fake395()
+    e = Env(tmp_path, f"http://127.0.0.1:{port}", {"卷一/讯问笔录.pdf": PDF})
+    try:
+        m = e.material("讯问笔录")
+        e.st.ocr.start()
+        first = e.submit(m["material_id"], [1])["job_id"]
+        e.wait(first, ("paused",))
+        second = e.submit(m["material_id"], [2])["job_id"]
+        j = next(x for x in e.jobs() if x["job_id"] == second)
+        assert (j["status"], j["pause_reason"]) == ("paused", "prep_down")
+        with ServerThread(f.app, port=port):
+            assert e.wait(second, ("done",))["done"] == 1
+            assert e.wait(first, ("done",))["done"] == 1
+    finally:
+        e.close()
+
+
+def _mark_job(env, job_id: str, job_status: str, page_status: str) -> None:
+    con = sqlite3.connect(str(env.root / "工作区" / "case.db"))
+    with con:
+        con.execute("UPDATE ocr_jobs SET status = ? WHERE job_id = ?", (job_status, job_id))
+        con.execute("UPDATE ocr_pages SET status = ? WHERE job_id = ?", (page_status, job_id))
+    con.close()
+
+
+def test_next_skips_job_being_finalized(env):
+    """某个发送线程正在给任务收尾（finalizing）：_next 不再把它交给别的线程补收尾（T12 第三轮复核 P3，变异 C3）。"""
+    q = env.st.ocr
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    _mark_job(env, v["job_id"], "running", "done")                 # 页都做完了，任务还没标完成
+    with q._cv:
+        q._jobs[v["job_id"]].finalizing = True
+        assert q._next() is None
+        q._jobs[v["job_id"]].finalizing = False
+        assert q._next() == (q._jobs[v["job_id"]], None)             # 没人在收尾时，交出去补收尾
+
+
+def test_next_drops_finished_job_from_memory(env):
+    """库里已结束的任务（收尾时被 case_open 又放回内存的那种）：_next 读到就出内存（T12 第三轮复核 P3，变异 C7）。"""
+    q = env.st.ocr
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    _mark_job(env, v["job_id"], "done", "done")
+    with q._cv:
+        assert q._next() is None
+        assert v["job_id"] not in q._jobs
+
+
 # ---------------------------------------------------------------- 4. 取消
 
 def test_cancel_keeps_done_pages_and_drops_in_flight(env, fake):

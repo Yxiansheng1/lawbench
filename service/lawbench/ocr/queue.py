@@ -186,12 +186,14 @@ class OcrQueue:
             raise ApiError("INVALID_ARGUMENT", "page_out_of_range")
         job_id = new_job_id()
         t = now()
+        # 395 正连不上时提交的任务直接记"等待 395 恢复"，与已有任务一样由探测线程放回（T12 复核 NOTE 2）
+        status, reason = ("paused", "prep_down") if self._prep_down.is_set() else ("queued", None)
         with merge.connect(root) as con:
             # 第一版不去水印：dewatermark 一律记 0（Spec 6.7）
             con.execute("INSERT INTO ocr_jobs (job_id, material_id, material_version, dewatermark, status, "
                         "pause_reason, total, done, failed, created_at, updated_at) "
-                        "VALUES (?, ?, ?, 0, 'queued', NULL, ?, 0, 0, ?, ?)",
-                        (job_id, m["material_id"], m["sha256"], len(pages), t, t))
+                        "VALUES (?, ?, ?, 0, ?, ?, ?, 0, 0, ?, ?)",
+                        (job_id, m["material_id"], m["sha256"], status, reason, len(pages), t, t))
             con.executemany("INSERT INTO ocr_pages (job_id, page_no, status, attempts) VALUES (?, ?, 'pending', 0)",
                             [(job_id, p) for p in pages])
         with self._cv:

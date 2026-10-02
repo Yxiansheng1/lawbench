@@ -1,0 +1,5 @@
+# T12 独立后续红绿（2026-10-02）
+改坏：NOTE 2：395 不通时新任务仍记排队中 → 红｜1 failed, 2 passed, 38 deselected, 1 warning in 6.31s
+改坏：C3：_next 不看 finalizing → 红｜1 failed, 2 passed, 38 deselected, 1 warning in 10.69s
+改坏：C7：已结束的任务不出内存 → 红｜1 failed, 2 passed, 38 deselected, 1 warning in 8.45s
+复原 → 绿｜3 passed, 38 deselected, 1 warning in 7.67s
