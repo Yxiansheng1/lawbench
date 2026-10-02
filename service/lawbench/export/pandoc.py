@@ -53,8 +53,9 @@ _INLINE = re.compile(r"(!?)\[((?:[^\[\]\\]|\\.|!\[(?:[^\[\]\\]|\\.)*\]\([^()\n]*
                      r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)")
 # 原始 HTML：开始标签、结束标签一遍扫出来再配对（T15 第二轮记录项 5：原来的 <a …>(.*?)</a> 遇到大量不闭合的 <a>
 # 耗时按平方增长）。[^>]* 遇到 > 就停，整体线性
-_HTML_TAG = re.compile(r"<(/?)(a|iframe|object|img|source|embed)\b([^>]*)>", re.I)
-_HTML_ATTR = re.compile(r"\b(?:href|src|data)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))", re.I)
+# 标签和属性长度都设上限（T23 第二轮记录项 8：没有 > 的大量 "<a" 曾要 91 秒）
+_HTML_TAG = re.compile(r"<(/?)(a|iframe|object|img|source|embed)\b([^<>]{0,2000})>", re.I)
+_HTML_ATTR = re.compile(r"\b(?:href|src|data)\s*=\s*(?:\"([^\"]{0,2000})\"|'([^']{0,2000})'|([^\s>]{1,2000}))", re.I)
 _PAIRED = ("a", "iframe", "object")
 _AUTO = re.compile(r"<([^<>\s]+)>")
 _REFDEF = re.compile(r"^ {0,3}\[([^\]]+)\]:[ \t]*<?(\S+?)>?(?:[ \t]+.*)?$", re.M)

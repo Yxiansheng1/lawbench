@@ -503,3 +503,59 @@ def test_page_numbers_inside_cropbox():
     ys = []
     page.extract_text(visitor_text=lambda text, cm, tm, fd, fs: ys.append((text, tm[5] * cm[3] + cm[5])) if "页" in text else None)
     assert ys and all(100 <= y <= 800 for _t, y in ys), ys
+
+
+# ---------------------------------------------------------------- 第二轮复核记录项（0930 注记）
+
+def xlsx_with_external(path: pathlib.Path) -> None:
+    import zipfile
+    zin = zipfile.ZipFile(FIXTURES / "civil-01" / "银行流水.xlsx")
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in zin.namelist():
+            zout.writestr(n, zin.read(n))
+        zout.writestr("xl/drawings/_rels/drawing9.xml.rels",
+                      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/'
+                      'package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/'
+                      'officeDocument/2006/relationships/image" Target="http://127.0.0.1:9/x.png" TargetMode="External"/>'
+                      "</Relationships>")
+
+
+@needs_lo
+def test_refused_material_skipped_not_whole_failure(tmp_path):
+    """记录项 2、5：转换时因外链被拒的材料（外链 xlsx）：保存方案先提醒；生成时跳过并写明，不整次失败；文字统一。"""
+    x = tmp_path / "对账表.xlsx"
+    xlsx_with_external(x)
+    files = dict(FILES)
+    files["03一审/我方证据/对账表.xlsx"] = x
+    e = Env(tmp_path / "case", files)
+    try:
+        s = ok(e.client.get("/api/settings"), "api/settings.schema.json")
+        s["converter"] = "libreoffice"
+        ok(e.client.put("/api/settings", json=s), "api/settings.schema.json")
+        tid = e.begin("sess-x")["task_id"]
+        p = plan(items=[it if it["code"] != 7 else {"code": 7, "name": "证据材料", "materials": ["对账表", "送货单"]}
+                        for it in plan()["items"]])
+        saved = e.tool_ok(tid, "case_save_archive_plan", p)
+        assert "「对账表」加密、读不了或有外链，生成时会跳过，请换成可读的版本或从方案中去掉" in saved["warnings"]
+        v = ok(build(e, tid, p), "api/archive_build.schema.json")
+        assert "「对账表」加密、读不了或有外链，没有放进卷宗，请换成可读的版本后重新生成" in v["manual"]
+        rng = {x["code"]: x for x in v["page_ranges"]}
+        assert rng[7]["to"] - rng[7]["from"] + 1 == pdf_pages(CLOSED / "03一审" / "我方证据" / "送货单.pdf")
+    finally:
+        e.close()
+
+
+def test_md_rejection_names_material(tmp_path):
+    """记录项 6：不能转的类型被拒时，提示里写明哪份材料、为什么（错误码不变）。"""
+    md = tmp_path / "备忘.md"
+    md.write_text("# 备忘", encoding="utf-8")
+    files = dict(FILES)
+    files["03一审/我方证据/备忘.md"] = md
+    e = Env(tmp_path / "case", files)
+    try:
+        tid = e.begin("sess-md2")["task_id"]
+        body = fail(e.tool(tid, "case_save_archive_plan", plan(items=[{"code": 7, "name": "证据材料",
+                                                                       "materials": ["备忘"]}])), "INVALID_ARGUMENT")
+        assert "「备忘」" in body["error"]["message"] and "PDF" in body["error"]["message"]
+    finally:
+        e.close()

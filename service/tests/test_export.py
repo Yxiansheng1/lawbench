@@ -354,3 +354,13 @@ def test_strip_html_unclosed_anchors_fast_and_iframe_closed():
     assert s('前<iframe src="工作区/a.html">备用</iframe>后<object data="工作区/b.pdf"><p>x</p></object>尾') == "前后尾"
     assert s('<a href="https://e.com">外<a href="工作区/a">内</a></a>') == '<a href="https://e.com">外内</a>'
     assert s('<iframe src="https://e.com/v"></iframe>') == '<iframe src="https://e.com/v"></iframe>'
+
+
+
+def test_strip_html_many_unclosed_lt_a_fast():
+    """记录项 8：没有 > 的大量 "<a"（20000 个）也在 2 秒内。"""
+    import time as _t
+    s = "<a " * 20000 + "正文"
+    t0 = _t.monotonic()
+    assert P.strip_workspace_links(s) == s
+    assert _t.monotonic() - t0 < 2

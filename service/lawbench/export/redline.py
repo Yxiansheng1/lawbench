@@ -192,12 +192,17 @@ def _max_id(*roots) -> int:
 
 # ---------------------------------------------------------------- 一条修改
 
+def _has_content(run) -> bool:
+    return any(c.tag in (dx._T, dx._TAB, dx._BR, dx._CR, _FLDCHAR) for c in run)
+
+
 def _ends_link(parent, last) -> bool:
     """find 落在超链接文字的末尾（之后同一链接里再没有 run）：w:hyperlink、HYPERLINK 简单域、HYPERLINK 复杂域都算
     （T15 第二轮记录项 1：链接末尾跟着 w:bookmarkEnd / w:proofErr 时也要认出来）。"""
     if parent.tag == _HYPERLINK or (parent.tag == _FLDSIMPLE and "HYPERLINK" in (parent.get(q("instr")) or "").upper()):
-        return not any(s.tag == _R for s in last.itersiblings())
-    nxt = next((s for s in last.itersiblings() if s.tag == _R), None)
+        return not any(s.tag == _R and _has_content(s) for s in last.itersiblings())
+    # 往后找第一个有文字或域符的 run（记录项 9：域结束前跟着空 run 时也要认出来）
+    nxt = next((s for s in last.itersiblings() if s.tag == _R and _has_content(s)), None)
     if nxt is None or nxt.find(f"{_FLDCHAR}[@{q('fldCharType')}='end']") is None:
         return False
     instr = []                                          # 往前找到这个域的开始，收它的指令

@@ -118,7 +118,7 @@ def create_app(config: Config, *, key_getter=None, transport: httpx.BaseTranspor
     async def on_api_error(request: Request, exc: ApiError) -> JSONResponse:
         error = f"{exc.code}:{exc.reason}" if exc.reason else exc.code  # 原因是固定代号，不含内容
         logs.event("api", _op(request), status="denied" if exc.code == "OUT_OF_CASE" else "fail", error=error)
-        return JSONResponse(fail_body(exc.code), status_code=200)
+        return JSONResponse(fail_body(exc.code, exc.message), status_code=200)
 
     async def on_contract_error(request: Request, exc: contracts.ContractError) -> JSONResponse:
         logs.event("api", _op(request), status="fail", error=f"CONTRACT:{exc.schema}{exc.field_path}")

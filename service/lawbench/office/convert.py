@@ -6,8 +6,14 @@
 - Word / WPS：每次在单独的子进程（com_worker）里做，120 秒超时；超时或出错时结束该子进程，并结束本次转换让 COM
   启动的 Word / WPS 进程——只认"本次开始后才出现、由 COM 启动（父进程是 svchost）"的那几个，不动律师自己开着的。
   成功后也等它们自己退出，5 秒没退的同样结束，不留隐藏窗口和残留进程。
-- LibreOffice：复用 ingest/libreoffice 的 Converter（独立配置目录、外链拦截、超时杀树）；.doc / .wps、xlsx
-  交给它之前按 14.3 ②a、②b 查外链，有就不交（这一份用 LibreOffice 转不了）。
+- 交给任何程序之前**按文件头查、不看扩展名**（T23 第一轮复核 P1-1、P1-2）：
+  - 交 Word / WPS 前（word_has_external）：OLE → 加密或 14.3 ②a 外链；压缩包 → 关系文件里的外部目标（超链接除外）、
+    链接类域、altChunk（有 aFChunk 关系就不交，主编排 0930 定）；其他内容（RTF、HTML、文本冒充）一律不交。
+    有外链只走 LibreOffice（Word 关了 UpdateLinksAtOpen 仍按链接取图，实测 8 个请求）。
+  - 交 LibreOffice 前（lo_refusal）：Word 类 OLE 加密或外链、压缩包里 altChunk HTML 有外部地址、其他内容 → 不转；
+    表格类 OLE 加密、压缩包 14.3 ②b 外部关系、其他内容 → 不转；文本类文件头不是文本或开头像 HTML / RTF → 不转。
+  - 查不了按"有"。因为安全原因不转的抛 Refused（码仍是 CONVERTER_UNAVAILABLE），归档生成据此跳过这一份并写明。
+- LibreOffice：复用 ingest/libreoffice 的 Converter（独立配置目录、外链拦截、超时杀树），副本扩展名按文件头定。
 - 不调用任何打印接口，不改系统默认打印机。三种都失败：CONVERTER_UNAVAILABLE。
 """
 from __future__ import annotations
@@ -44,6 +50,18 @@ _COM_LOCK = threading.Lock()
 
 class _Failed(Exception):
     """这一个程序转不了，换下一个。"""
+
+
+class _Refused(_Failed):
+    """出于安全不交给这个程序（加密、有外链、内容不是该格式、查不了）。"""
+
+
+class Refused(ApiError):
+    """所有可用程序都因安全原因不转这一份（不是程序坏了）：调用方可以跳过这份材料。"""
+
+    def __init__(self, why: str):
+        super().__init__("CONVERTER_UNAVAILABLE", f"refused:{why}")
+        self.why = why
 
 
 # ---------------------------------------------------------------- 进程快照（Toolhelp32）
@@ -102,7 +120,7 @@ def word_has_external(path: pathlib.Path) -> bool:
             return detect.ole_encrypted(path) or links.has_external_picture(path)
         if kind != "zip":
             return True
-        if links.xlsx_has_external_rels(path) or _altchunk_external(path):   # 函数名是 xlsx，对任何 OOXML 都成立
+        if links.xlsx_has_external_rels(path) or _has_afchunk(path) or _altchunk_external(path):   # 函数名是 xlsx，对任何 OOXML 都成立
             return True
         with links.open_zip(path) as z:
             for n in z.namelist():
@@ -123,12 +141,59 @@ _HTML_URL = re.compile(rb"""(?:src|href|data|background)\s*=\s*["']?\s*(?:https?
 
 
 def _altchunk_external(path: pathlib.Path) -> bool:
-    """docx 的 altChunk 内嵌 HTML / MHT 部件里有没有指向外部的 src、href 等（复核 NOTE-2，只做这一条低成本的）。"""
+    """docx 的 altChunk 内嵌 HTML / MHT 部件里有没有指向外部的 src、href 等（复核 NOTE-2）。只用在交 LibreOffice 前；
+    交 Word 前有 aFChunk 关系就不交（_has_afchunk）。部件读不了（校验和坏、加密）报"无法检查"。"""
     with links.open_zip(path) as z:
         for n in z.namelist():
-            if n.lower().endswith((".html", ".htm", ".mht", ".mhtml", ".xhtml")) and _HTML_URL.search(z.read(n)):
+            if not n.lower().endswith((".html", ".htm", ".mht", ".mhtml", ".xhtml")):
+                continue
+            try:
+                data = z.read(n)
+            except Exception:  # noqa: BLE001 校验和坏、加密、解压出错（T23 第二轮记录项 1）
+                raise ParseError("unchecked")
+            if _HTML_URL.search(data):
                 return True
     return False
+
+
+def _has_afchunk(path: pathlib.Path) -> bool:
+    """压缩包里有没有 aFChunk（altChunk）关系：有就不交 Word / WPS（主编排 0930 定：内嵌 HTML / MHT / RTF 里取外部资源
+    的写法太多，正则兜不住，用确定性规则）。"""
+    with links.open_zip(path) as z:
+        for n in z.namelist():
+            if n.lower().endswith(".rels"):
+                for rel in links._rels_root(z, n).iter():
+                    if isinstance(rel.tag, str) and (rel.get("Type") or "").endswith("/aFChunk"):
+                        return True
+    return False
+
+
+def lo_refusal(path: pathlib.Path) -> tuple[str | None, str]:
+    """交 LibreOffice 之前的检查（按文件头）：返回 (不转的原因或 None, 副本扩展名)。保存归档方案时也用它先给提醒。"""
+    ext = path.suffix.lower()
+    try:
+        kind = detect.content_kind(path)
+        if ext in WORD_TYPES:
+            if kind == "ole":
+                if detect.ole_encrypted(path) or links.has_external_picture(path):
+                    return "encrypted_or_external_link", ".doc"
+                return None, ".doc"
+            if kind == "zip":
+                return ("external_link" if _altchunk_external(path) else None), ".docx"
+            return "not_office_file", ext
+        if ext in (".xlsx", ".xlsm", ".xls"):
+            if kind == "ole":
+                return ("encrypted" if detect.ole_encrypted(path) else None), ".xls"
+            if kind == "zip":
+                return ("external_link" if links.xlsx_has_external_rels(path) else None), ".xlsx"
+            return "not_office_file", ext
+        head = path.read_bytes()[:4096].lower()
+        if kind != "other" or any(m in head for m in (b"<html", b"<img", b"<iframe", b"<link", b"{\\rtf",
+                                                        b"<?xml", b"<svg")):
+            return "not_plain_text", ext
+        return None, ext
+    except (ParseError, OSError):
+        return "unchecked", ext
 
 
 def _kill_pid(pid: int) -> None:
@@ -154,9 +219,12 @@ class OfficeConverter:
         n = len(list(gate.resolve_internal(root, job_rel, op="convert").glob("c*"))) + 1
         sub = f"{job_rel}/c{n}"
         local = gate.write_bytes(root, f"{sub}/in{ext}", src.read_bytes(), op="convert")
+        refused: list[str] = []
         if any(o != "libreoffice" for o in order) and word_has_external(local):
             logs.event("office", "convert", status="fail", error="external_link_skip_com")
             order = tuple(o for o in order if o == "libreoffice")
+            refused.append("external_link")
+        broken = False
         for name in order:
             t0 = time.monotonic()
             try:
@@ -164,9 +232,15 @@ class OfficeConverter:
             except _Failed as f:
                 logs.event("office", "convert", status="fail", error=f"{name}:{f}",
                            duration_ms=(time.monotonic() - t0) * 1000)
+                if isinstance(f, _Refused):
+                    refused.append(str(f))
+                else:
+                    broken = True
                 continue
             logs.event("office", "convert", error=name, duration_ms=(time.monotonic() - t0) * 1000)
             return out, name
+        if refused and not broken:                     # 不是程序坏了，是这一份不能交出去
+            raise Refused(refused[-1])
         raise ApiError("CONVERTER_UNAVAILABLE", "all_failed")
 
     # ---------- Word / WPS ----------
@@ -233,39 +307,9 @@ class OfficeConverter:
         - 文本类（txt、csv）：文件头是 OLE / 压缩包 / PDF 的不转；开头 4KB 里像 HTML、RTF 的不转（防 LibreOffice 按内容
           认成网页去取图）。
         副本扩展名按文件头定（与 T5 X1 同口径）。"""
-        ext = local.suffix.lower()
-        try:
-            kind = detect.content_kind(local)
-            if ext in WORD_TYPES:
-                if kind == "ole":
-                    if detect.ole_encrypted(local) or links.has_external_picture(local):
-                        raise _Failed("encrypted_or_external_link")
-                    suffix = ".doc"
-                elif kind == "zip":
-                    if _altchunk_external(local):
-                        raise _Failed("external_link")
-                    suffix = ".docx"
-                else:
-                    raise _Failed("not_office_file")
-            elif ext in (".xlsx", ".xlsm", ".xls"):
-                if kind == "ole":
-                    if detect.ole_encrypted(local):
-                        raise _Failed("encrypted")
-                    suffix = ".xls"
-                elif kind == "zip":
-                    if links.xlsx_has_external_rels(local):
-                        raise _Failed("external_link")
-                    suffix = ".xlsx"
-                else:
-                    raise _Failed("not_office_file")
-            else:
-                head = local.read_bytes()[:4096].lower()
-                if kind != "other" or any(m in head for m in (b"<html", b"<img", b"<iframe", b"<link", b"{\\rtf",
-                                                                b"<?xml", b"<svg")):
-                    raise _Failed("not_plain_text")
-                suffix = ext
-        except ParseError:
-            raise _Failed("unchecked")
+        why, suffix = lo_refusal(local)
+        if why:
+            raise _Refused(why)
         conv = lo.Converter(gate.resolve_internal(root, sub, op="convert"), self.lo_base, soffice=self.soffice)
         try:
             with conv.session() as s:

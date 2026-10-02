@@ -25,6 +25,15 @@ _MESSY = re.compile(r"^(微信图片|IMG)_\d+", re.IGNORECASE)
 _UNREADABLE = ("failed", "source_deleted")
 # 能转成 PDF 放进卷宗的材料类型（md 不行：没有可靠的版式转换，按复核 P3-2 在保存方案时就拒）
 CONVERTIBLE = ("pdf", "docx", "doc", "wps", "xlsx", "xls", "csv", "txt", "image")
+_PRECHECK = ("docx", "doc", "wps", "xlsx", "xls", "csv", "txt")
+
+
+def _refused(root: str, m: dict) -> bool:
+    from ..office.convert import lo_refusal
+    try:
+        return lo_refusal(gate.resolve_read(root, m["rel_path"], op="archive_plan"))[0] is not None
+    except ApiError:
+        return True
 
 
 def load_catalog(skills_dirs, name: str) -> dict:
@@ -118,9 +127,10 @@ def match(root: str, index: dict, catalog: dict) -> dict:
             "ignored": ignored}
 
 
-def check_plan(catalog: dict, plan: dict, index: dict) -> tuple[list[dict], list[str]]:
+def check_plan(catalog: dict, plan: dict, index: dict, root: str | None = None) -> tuple[list[dict], list[str]]:
     """归档方案的程序校验（保存方案和生成归档共用）：编号必须是该卷类目录里的、不能是程序生成的项（结案报告）、
     不能重复，否则 INVALID_ARGUMENT；材料名必须在材料清单里，否则 MATERIAL_NOT_FOUND。
+    给了案件根目录时，Word、表格、文本类材料先跑一遍交 LibreOffice 前的同一套检查，查到的先提醒（生成时会跳过）。
     返回 (缺失的必交项 [{code, name}], 提醒)。"""
     by_code = {it["code"]: it for it in catalog["items"]}
     codes = [it["code"] for it in plan["items"]]
@@ -139,10 +149,11 @@ def check_plan(catalog: dict, plan: dict, index: dict) -> tuple[list[dict], list
             m = materials.get(name)
             if m is None:
                 raise ApiError("MATERIAL_NOT_FOUND", "unknown_material")
-            if m["type"] not in CONVERTIBLE:
-                raise ApiError("INVALID_ARGUMENT", "not_convertible")     # 如 .md：生成时转不了 PDF，保存方案时就拒
-            if m["status"] in _UNREADABLE:
-                warnings.append(f"「{name}」导入时没通过（加密、读不了或有外链），生成时会跳过，请换成可读的版本或从方案中去掉")
+            if m["type"] not in CONVERTIBLE:                              # 如 .md：生成时转不了 PDF，保存方案时就拒
+                raise ApiError("INVALID_ARGUMENT", "not_convertible",
+                               detail=f"「{name}」是 {m['type']} 格式，转不成 PDF 放进卷宗；请换成 PDF 或 Word 版本，或从方案中去掉")
+            if m["status"] in _UNREADABLE or (root and m["type"] in _PRECHECK and _refused(root, m)):
+                warnings.append(f"「{name}」加密、读不了或有外链，生成时会跳过，请换成可读的版本或从方案中去掉")
             if name in seen and seen[name] != it["code"]:
                 warnings.append(f"「{name}」同时放在第 {seen[name]} 项和第 {it['code']} 项，卷宗里会出现两次")
             seen.setdefault(name, it["code"])

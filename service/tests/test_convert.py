@@ -474,3 +474,62 @@ def test_com_conversions_one_at_a_time(lo_base, monkeypatch, tmp_path):
         t.join()
     (a0, a1), (b0, b1) = sorted(spans)
     assert b0 >= a1
+
+
+# ---------------------------------------------------------------- 第二轮复核记录项（0930 注记）
+
+def test_altchunk_part_unreadable_is_unchecked(case, lo_base, tmp_path, fake):
+    """记录项 1：altChunk 的 HTML 部件读不了（校验和坏）：按"无法检查"，不交 Word 也不交 LibreOffice，不出 500。"""
+    p = tmp_path / "坏块.docx"
+    altchunk_docx(p, "https://example.com")
+    raw = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(p.read_bytes())) as zin, zipfile.ZipFile(raw, "w") as zout:
+        for n in zin.namelist():
+            zout.writestr(n, zin.read(n), compress_type=zipfile.ZIP_STORED if n.endswith(".html") else zipfile.ZIP_DEFLATED)
+    data = bytearray(raw.getvalue())
+    i = data.index(b"https://example.com")
+    data[i] = ord("H")                                                     # 内容改一个字节，CRC 对不上
+    p.write_bytes(bytes(data))
+    with pytest.raises(C.ParseError):
+        C._altchunk_external(p)
+    assert C.word_has_external(p)
+    assert C.lo_refusal(p)[0] == "unchecked"
+    fake.set(word="ok")
+    with pytest.raises(C.Refused):
+        C.OfficeConverter(lo_base).to_pdf(str(case), p, "工作区/临时/j")
+    assert fake.calls() == []
+
+
+def test_afchunk_relation_never_to_word(tmp_path):
+    """记录项 3（主编排定）：有 aFChunk 关系就不交 Word / WPS，不管内嵌内容写成什么样。"""
+    p = tmp_path / "块.docx"
+    d = pydocx.Document()
+    d.add_paragraph("正文")
+    buf = io.BytesIO()
+    d.save(buf)
+    zin = zipfile.ZipFile(io.BytesIO(buf.getvalue()))
+    with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in zin.namelist():
+            data = zin.read(n)
+            if n == "word/_rels/document.xml.rels":
+                data = data.replace(b"</Relationships>", b'<Relationship Id="rId99" Type="http://schemas.openxmlformats.org/'
+                                    b'officeDocument/2006/relationships/aFChunk" Target="chunk.bin"/></Relationships>')
+            zout.writestr(n, data)
+        zout.writestr("word/chunk.bin", b"MIME-Version: 1.0\r\n\r\n<img src=3D\"//host/x.png\">")
+    assert C._has_afchunk(p) and C.word_has_external(p)
+    assert not C._altchunk_external(p)                                       # 正则兜不住的写法：靠关系判断
+
+
+@pytest.mark.parametrize("name", ["加密.doc", "加密.xls"])
+def test_encrypted_ole_refused_everywhere(case, lo_base, fake, tmp_path, monkeypatch, name):
+    """记录项 4：带 EncryptionInfo 的 OLE（加密的新版 Office 的外形）：不交 Word / WPS，也不交 LibreOffice。"""
+    from fakes import minimal_ole
+    started = []
+    monkeypatch.setattr(C.lo.Converter, "session", lambda self: started.append(1))
+    p = tmp_path / name
+    minimal_ole(p, {"EncryptionInfo": b"x", "EncryptedPackage": b"y"})
+    fake.set(word="ok", kwps="ok", wps="ok")
+    with pytest.raises(C.Refused):
+        C.OfficeConverter(lo_base).to_pdf(str(case), p, "工作区/临时/j")
+    assert fake.calls() == [] and started == []
+    assert C.lo_refusal(p)[0] in ("encrypted", "encrypted_or_external_link")

@@ -526,3 +526,29 @@ def test_text_format_version_guard():
     from lawbench.case import materials as M
     assert M.TEXT_FORMAT_VERSION == 3
     assert {"docx", "doc", "wps"} <= set(M.REFORMAT_TYPES)
+
+
+
+def test_insert_after_link_end_with_empty_runs():
+    """记录项 9：复杂域 HYPERLINK、w:hyperlink 里链接文字后跟空 run：仍认作链接末尾，insert_after 进需人工。"""
+    from lxml import etree as ET
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' \
+         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    for frags in (
+        ['<w:r {ns}><w:fldChar w:fldCharType="begin"/></w:r>',
+         '<w:r {ns}><w:instrText xml:space="preserve"> HYPERLINK "http://127.0.0.1:9/x" </w:instrText></w:r>',
+         '<w:r {ns}><w:fldChar w:fldCharType="separate"/></w:r>', '<w:r {ns}><w:t>附件清单</w:t></w:r>',
+         '<w:r {ns}><w:rPr><w:b/></w:rPr></w:r>', '<w:r {ns}><w:fldChar w:fldCharType="end"/></w:r>'],
+        ['<w:hyperlink {ns} r:id="rId99"><w:r><w:t>附件清单</w:t></w:r><w:r><w:rPr><w:b/></w:rPr></w:r></w:hyperlink>'],
+    ):
+        d = pydocx.Document()
+        p = d.add_paragraph()
+        p.add_run("详见")
+        for f in frags:
+            p._p.append(ET.fromstring(f.format(ns=ns)))
+        p.add_run("。")
+        buf = io.BytesIO()
+        d.save(buf)
+        out, applied, manual = R.generate(buf.getvalue(), [
+            {"id": 1, "para": 1, "action": "insert_after", "find": "附件清单", "text": "（另附）", "comment": "c"}])
+        assert applied == [] and manual == [{"id": 1, "reason": R.R_IN_LINK}]

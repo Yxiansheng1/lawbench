@@ -1,0 +1,9 @@
+1 altChunk 部件读不了不当无法检查: 红（1 failed, 1 warning in 3.42s）
+2 被拒的材料整次失败: 红（1 failed, 1 warning in 16.69s）
+2 保存方案不预检: 红（1 failed, 1 warning in 2.50s）
+3 不看 aFChunk 关系: 红（1 failed, 1 warning in 0.96s）
+4 交 Word 前不查加密: 红（1 failed, 1 passed, 1 warning in 1.61s）
+4 交 LibreOffice 前表格不查加密: 红（1 failed, 1 passed, 1 warning in 1.08s）
+6 不写明材料: 红（1 failed, 1 warning in 2.19s）
+8 标签不限长度: 红（1 failed, 1 warning in 9.40s）
+9 空 run 也算后面还有: 红（1 failed, 1 warning in 0.99s）

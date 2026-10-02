@@ -20,7 +20,7 @@ def save_archive_plan(ctx: ToolContext, a: dict) -> dict:
     """按契约校验（/core/tool 已校验 args）、按目录核编号和材料名后写 工作区/任务/<任务>/归档方案.json；
     算出缺失的必交项。办案结果、金助理编号、承办律师没填的给提醒（办案结果为空时生成会被拒绝）。"""
     catalog = am.load_catalog(ctx.skills_dirs, a["catalog"])
-    missing, warnings = am.check_plan(catalog, a, ctx.index())
+    missing, warnings = am.check_plan(catalog, a, ctx.index(), ctx.root)
     if a["result"] is None:
         warnings.append("办案结果未确认：生成归档文件前须由律师在归档面板确认")
     if a["jzl_no"] is None:

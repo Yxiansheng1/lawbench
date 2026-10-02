@@ -31,7 +31,7 @@ from ..case.task import now_iso
 from ..errors import ApiError
 from ..export import outputs as eo
 from ..ingest.libreoffice import remove_tree
-from ..office.convert import OfficeConverter
+from ..office.convert import OfficeConverter, Refused
 from . import documents as D
 from . import match as am
 
@@ -169,7 +169,11 @@ class ArchiveBuilder:
                 if by_name[name]["status"] in am._UNREADABLE:     # 导入时没通过（加密、有外链……）：不碰原件（复核 P1-1）
                     skipped.append(name)
                     continue
-                pdf, used = self._to_pdf(root, by_name[name], job, choice)
+                try:
+                    pdf, used = self._to_pdf(root, by_name[name], job, choice)
+                except Refused:                                   # 外链 xlsx、altChunk 外链等：跳过并写明（记录项 2）
+                    skipped.append(name)
+                    continue
                 if used:
                     used_any.append(used)
                 if pdf is None or _readable(pdf) is None:
@@ -253,7 +257,7 @@ class ArchiveBuilder:
                 statements.append(("特殊情况说明", "律师费未结清情况说明及承诺.docx", D.make_fee_statement(md, plan)))
                 manual.append("律师费未结清，已生成《律师费未结清情况说明及承诺》：须经办律师手签，附佐证材料，交风控专员报备")
         for name in skipped:
-            manual.append(f"「{name}」读不了（加密或损坏），没有放进卷宗，请换成可读的版本后重新生成")
+            manual.append(f"「{name}」加密、读不了或有外链，没有放进卷宗，请换成可读的版本后重新生成")
         manual.append("上传金助理的三个文件：发票.pdf、立卷申请书（手签扫描版）、卷宗.pdf")
 
         listing = D.catalog_md(plan, catalog, ranges, missing, skipped).encode("utf-8")
