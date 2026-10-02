@@ -121,7 +121,10 @@ class Service:
         else:
             cmd = [sys.executable, str(pathlib.Path(__file__).resolve()), "serve", "--port", str(self.port),
                    "--token", self.token, "--appdata", str(self.appdata)]
-        out = open(self.logdir / f"service-{self.starts}.out", "wb")
+        if not self.port_free(10):
+            raise Stop("服务", f"端口 {self.port} 仍被占用，旧服务进程没有退干净")
+        self._out = open(self.logdir / f"service-{self.starts}.out", "wb")
+        out = self._out
         self.proc = subprocess.Popen(cmd, cwd=str(SERVICE), stdout=out, stderr=subprocess.STDOUT,
                                      env=dict(os.environ, PYTHONIOENCODING="utf-8"))
         t0 = time.monotonic()
@@ -136,10 +139,29 @@ class Service:
             time.sleep(0.3)
         raise Stop("服务", "60 秒内服务没有就绪")
 
-    def kill(self) -> None:
+    def kill(self) -> bool:
+        """强杀（模拟崩溃、断电，比正常退出更苛刻）。venv 的 python.exe 是启动器、真解释器是它的子进程，
+        所以按进程树杀；杀完等端口真正释放，返回端口是否已释放。"""
         if self.proc and self.proc.poll() is None:
-            self.proc.kill()                     # 强杀：模拟崩溃、断电，比正常退出更苛刻
-            self.proc.wait(10)
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(self.proc.pid)], capture_output=True)
+            try:
+                self.proc.wait(10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+        out = getattr(self, "_out", None)
+        if out is not None and not out.closed:
+            out.close()
+        return self.port_free(15)
+
+    def port_free(self, wait: float) -> bool:
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < wait:
+            with socket.socket() as sk:
+                sk.settimeout(0.5)
+                if sk.connect_ex(("127.0.0.1", self.port)) != 0:
+                    return True
+            time.sleep(0.3)
+        return False
 
     def url(self, path: str) -> str:
         return f"http://127.0.0.1:{self.port}{path}"
@@ -276,9 +298,11 @@ class Smoke:
             self.caveat = "识别中途强杀没有赶上（续做未检验，请重跑）"
             self.rows.append("[5] 注：识别太快，没赶上\"有页已完成、有页未完成\"的时刻；这次强杀发生在全部识别完之后，"
                              "续做没有被检验，请重跑")
-        self.svc.kill()
+        freed = self.svc.kill()
+        if not freed:
+            raise Stop("服务", "强杀后端口没有释放（旧服务进程还活着），重启检验无效")
         before = self.db_pages()
-        self.log("5", "强杀服务进程", 0, "-", f"关停时 {killed_at or '（见注）'}；ocr_pages 行数={len(before)} "
+        self.log("5", "强杀服务进程", 0, "-", f"关停时 {killed_at or '（见注）'}；端口已释放=True；ocr_pages 行数={len(before)} "
                  f"状态={sorted({v[0] for v in before.values()})}")
         secs = self.svc.start()
         self.log("5", "重新起服务", secs, "-", "")
@@ -450,7 +474,13 @@ def main() -> int:
     a.out.write_text("\n".join(head + s.rows) + "\n", encoding="utf-8")
     print(head[1])
     if not a.keep:
-        shutil.rmtree(tmp, ignore_errors=True)
+        for _ in range(10):                         # 服务进程刚退时文件句柄可能还没放：重试几次
+            shutil.rmtree(tmp, ignore_errors=True)
+            if not tmp.exists():
+                break
+            time.sleep(1)
+        if tmp.exists():
+            print("临时目录没删干净，请手动删除：", tmp)
     else:
         print("临时目录保留在", tmp)
     return 0 if result == "通过" else 1
