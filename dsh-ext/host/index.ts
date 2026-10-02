@@ -11,11 +11,14 @@ import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
 import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
 import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
+// 构建后核对打包出的 Host 方法形参名与方法表一致（scripts/build.mjs）
+export { REMOTE_METHODS }
 import { attachCaseSessions, type PersistenceLike, type RegistryLike } from './attach-sessions.ts'
 import { API_ROUTES, buildRequest, type ApiRoute } from '../shared/api-routes.ts'
 import { listSkills, type SkillInfo } from './skills.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
 import { requestJson } from './http-json.ts'
+import { readArchivePlan } from './archive-plan.ts'
 import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
@@ -177,6 +180,17 @@ export class LawbenchRemote {
   async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null } }> {
     const sessionId = (request as { session_id?: unknown } | null)?.session_id
     return { ok: true, value: { code: typeof sessionId === 'string' ? this.notices.take(sessionId) : null } }
+  }
+
+  /**
+   * 归档面板（T26 第 3 步）读某任务的归档方案，见 archive-plan.ts。只读这一个文件；日志只记结果和错误码。
+   * @param request - { root, task_id }：当前案件根、任务编号。
+   */
+  async archivePlan(request: unknown): Promise<ApiResult> {
+    const r = request as { root?: unknown; task_id?: unknown } | null
+    const out = readArchivePlan(r?.root, r?.task_id)
+    this.log(out.ok ? 'info' : 'warn', 'archive.plan_read', { ok: out.ok, code: out.ok ? undefined : out.error.code })
+    return out as ApiResult
   }
 
   /**

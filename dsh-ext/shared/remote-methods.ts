@@ -31,6 +31,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'attachCaseSessions', params: ['request'] },
   // T20 准备：启动自检里有问题的项（内置 Python、tokenizer、LibreOffice、pandoc、管理员 Skill 目录、缓存路径长度）
   { method: 'selfCheck', params: [] },
+  // T26 第 3 步：归档面板读 <案件>\工作区\任务\<任务ID>\归档方案.json（服务没有读它的接口；只读）
+  { method: 'archivePlan', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

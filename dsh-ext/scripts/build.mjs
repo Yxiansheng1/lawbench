@@ -64,3 +64,20 @@ for (const name of ['agent', 'host', 'credentials', 'session-store', 'index']) {
   if (r.status !== 0) throw new Error(`lib/${name}.js 在纯 ESM 下导入失败：${(r.stderr || '').split(/\r?\n/).slice(0, 3).join(' ')}`)
 }
 console.log('lib/*.js 纯 ESM 导入检查通过')
+
+// 打包出的 Host 方法形参名必须与方法表一致：DSH 网关按形参名取参数，esbuild 遇到同名顶层绑定会把形参改名
+// （如 request → request2，T26 第 3 步桌面端实测：所有带 request 的方法都报 arguments-invalid）
+{
+  const url = pathToFileURL(join(root, 'lib', 'host.js')).href
+  const { spawnSync } = await import('node:child_process')
+  const code = `const m = await import(${JSON.stringify(url)}); const bad = [];
+    for (const { method, params } of m.REMOTE_METHODS) {
+      const fn = m.LawbenchRemote.prototype[method]; const src = String(fn);
+      const got = src.slice(src.indexOf('(') + 1, src.indexOf(')')).split(',').map((s) => s.trim()).filter(Boolean);
+      if (got.join() !== params.join()) bad.push(method + '(' + got.join() + ')');
+    }
+    if (bad.length) { console.error(bad.join(' ')); process.exit(1) }`
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' })
+  if (r.status !== 0) throw new Error(`lib/host.js 的方法形参名与方法表不一致：${(r.stderr || '').trim().slice(0, 300)}`)
+  console.log('lib/host.js 方法形参名与方法表一致')
+}

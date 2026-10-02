@@ -4,6 +4,8 @@
 //   --invoice-blocked <动作,…> 这些动作回 [BLOCKED] 失败体（failed:true）。
 // /api/retainer/driver：给了 --retainer-python <python.exe> 时真的起 engines\retainer\tools\ocr-driver\driver.py
 //   （只监听 127.0.0.1:17801，同 T25 真服务的命令行），否则只记状态；--retainer-stop-stuck：stop 回 running:true。
+// /api/archive/build（T26 第 3 步）：按契约校验请求；confirmed.result 为 null 回 PLAN_NOT_CONFIRMED（同真服务）；
+//   --archive-fail <错误码> 一律回该失败体；否则按方案编号算出虚构的页码范围、列出四个文件和两条要人手处理的事项。
 import { spawn } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,6 +38,7 @@ export function makeTools({ arg, flag, check, fail, ok, settings }) {
   const blocked = new Set((arg('--invoice-blocked', '') ?? '').split(',').filter(Boolean))
   const python = arg('--retainer-python', null)
   const stuck = flag('--retainer-stop-stuck')
+  const archiveFail = arg('--archive-fail', null)
   let busy = false
   let driver = null
   let driverRunning = false
@@ -89,8 +92,35 @@ export function makeTools({ arg, flag, check, fail, ok, settings }) {
     return [value(false, '证件识别已停止')]
   }
 
+  async function archive(body) {
+    const v = check('api/archive_build', 'request', body)
+    if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
+    if (archiveFail) return [fail(archiveFail, archiveFail === 'CONVERTER_UNAVAILABLE' ? '本机没有可用的 Word、WPS，内置转换程序也无法启动' : '内部错误，请重试；多次出现请联系技术支持')]
+    const plan = body.confirmed
+    if (plan.result === null) return [fail('PLAN_NOT_CONFIRMED', '请先确认办案结果')]
+    await new Promise((r) => setTimeout(r, Math.min(delay, 800)))
+    const folder = `归档/${plan.client}${plan.opponent ? `诉${plan.opponent}` : ''}`
+    let page = 1
+    const page_ranges = [...plan.items].sort((a, b) => a.code - b.code).map((it) => {
+      const from = page; page += 2 * it.materials.length
+      return { code: it.code, from, to: page - 1 }
+    })
+    const last = Math.max(...plan.items.map((it) => it.code)) + 1
+    page_ranges.push({ code: last, from: page, to: page }) // 结案报告（程序生成）
+    return [ok({
+      folder,
+      files: [
+        { kind: '卷宗', path: `${folder}/卷宗.pdf` }, { kind: '立卷申请书', path: `${folder}/立卷申请书.docx` },
+        { kind: '结案报告', path: `${folder}/结案报告.docx` }, { kind: '归档目录', path: `${folder}/归档目录.md` },
+      ],
+      page_ranges, converter: 'libreoffice',
+      manual: ['立卷申请书需打印手签后扫描', '立卷申请书模板为临时模板（律所模板到位后替换）'],
+    })]
+  }
+
   return {
     handle(method, path, body) {
+      if (method === 'POST' && path === '/api/archive/build') return archive(body)
       if (method === 'POST' && path === '/api/invoice/run') return invoice(body)
       if (method === 'POST' && path === '/api/retainer/driver') return retainer(body)
       return null

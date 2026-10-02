@@ -9,6 +9,7 @@ import { Badge, Button, C, Empty, Loading, S, useLoad } from './kit.tsx'
 import { app, call, lb, notice, setIntent, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
+import { ARCHIVE_SKILL, ArchiveDialog } from './archive.tsx'
 
 const NO_INPUTS: string[] = []
 
@@ -34,6 +35,7 @@ function Results({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }
   // 显示的是本会话的选择；还有没取走的待带入意向时以它为准（T13 返修 P2-2）
   const inputs = useStore(app, (s) => s.intents[id]?.inputs ?? s.selections[sessionId]?.inputs) ?? NO_INPUTS
   const [confirming, setConfirming] = useState<{ task: Task; draft: Draft } | null>(null)
+  const [archiving, setArchiving] = useState<string | null>(null)
   useEffect(() => { void lb().listSkills().then((r) => setTitles(Object.fromEntries(r.value.skills.map((s) => [s.name, s.title])))).catch(() => undefined) }, [])
   const skillName = (t: Task) => t.task_id.startsWith('P-') ? '案件 wiki 整理' : t.skill ? titles[t.skill] ?? t.skill : '自由对话'
   const toggleInput = (path: string) => setIntent(id, { inputs: inputs.includes(path) ? inputs.filter((x) => x !== path) : [...inputs, path] })
@@ -59,6 +61,11 @@ function Results({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }
                   </div>
                 </div>
               ))}
+              {t.skill === ARCHIVE_SKILL ? (
+                <div style={S.row}>
+                  <Button size="sm" variant="outline" disabled={t.status === 'running'} onClick={() => setArchiving(t.task_id)}>核对归档方案并生成归档文件…</Button>
+                </div>
+              ) : null}
               <CheckLine title="自检结果" {...citationSummary(t.citation_check)} />
               {(() => { const cov = coverageLines(t.coverage); return <CheckLine title="没读全的材料" tone={cov.ok ? 'ok' : cov.lines.length ? 'err' : 'faint'} summary={cov.summary} lines={cov.lines} /> })()}
             </li>
@@ -75,6 +82,7 @@ function Results({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }
           </li>
         ))}</ul>
       )}</Loading>
+      {archiving ? <ArchiveDialog caseRef={caseRef} taskId={archiving} onClose={() => { setArchiving(null); void reload() }} /> : null}
       {confirming ? <ConfirmDialog caseRef={caseRef} task={confirming.task} draft={confirming.draft} onClose={() => setConfirming(null)} onDone={() => { setConfirming(null); void reload(); void reloadOutputs() }} /> : null}
     </div>
   )

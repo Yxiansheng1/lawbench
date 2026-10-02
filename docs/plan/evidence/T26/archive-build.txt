@@ -1,0 +1,36 @@
+T26 第 3 步 · 归档面板对 main 真工作台服务的实测（2026-10-02 18:13–18:28，线 A 本机）
+
+环境：桌面端开发版（dsh 477b4f4 + 13 个补丁，dsh-ext 本分支构建），测试目录 <测试目录>（LOCALAPPDATA、APPDATA、DSH_HOME 都在这里）；
+工作台服务 = 本仓库 service\（已合入 main 69f0218，含 T23 归档），python -m lawbench（线 C 的 .venv），Host 拉起。
+设置里两组服务器地址都填 127.0.0.1 死端口（llm 127.0.0.1:1/3、prep 127.0.0.1:2/4）；律师姓名"演示律师（虚构）"。
+案件：tests\fixtures\criminal-01 复制到 <测试目录>\cases\刑事-虚构归档演示，按刑事目录打开（/api/case/open template=criminal），/api/materials/scan。
+
+归档方案的来源：没有测试 Key，模型不跑。脚本按 Agent 的路径走真服务：/api/task（entry archiving、skill case-archiving）→ /core/task/begin
+→ /core/tool case_archive_match（刑事卷；虚构材料的文件名对不上目录关键词，四份都在 unmatched）→ /core/tool case_save_archive_plan
+（按内容归项：5 会见笔录←讯问笔录；6 调查材料←现场勘验图文、转账截图；9 起诉意见书←起诉意见书；result=null）→ /core/task/end。
+服务返回：path 工作区/任务/T-20261002181311-77e7/归档方案.json；缺失必交 5 项；提醒"办案结果未确认""金助理案件编号未填"。
+
+界面操作（截图 第3步\01、02，archive-panel.png）：
+1. 成果标签"案卷归档"任务 → "核对归档方案并生成归档文件…" → 面板读到方案（Host archivePlan，日志 archive.plan_read ok:true）。
+2. 办案结果未选：按钮灰、提示"请先点选办案结果"（01）。
+3. 点选"胜诉"：按钮可用（02）；第 6 项把"现场勘验图文"下移（合并顺序改为 转账截图、现场勘验图文）。
+4. 生成归档文件：/api/archive/build 15.1 秒返回（Host 走 node:http，日志 api.call archiveBuild ok:true ms:15120）。本机有 Word，结案报告用 Word 转 PDF。
+5. 面板列出：5 个文件、卷宗页码（5 第 1–3 页、6 第 4–5 页、9 第 6–10 页、13 结案报告 第 11 页）、7 条要人手处理的事项（archive-panel.png）。
+   归档目录.md 第 6 项入卷材料为"转账截图、现场勘验图文"——界面改的顺序已生效。
+
+归档总文件夹（dir /s /a-d）：
+ Volume in drive D is Data
+ Volume Serial Number is CE43-C08E
+
+ Directory of <测试目录>\cases\刑事-虚构归档演示\成果\归档\张某（虚构）案件归档
+
+2026/10/02  18:28           705,867 卷宗.pdf
+2026/10/02  18:28             1,356 归档目录.md
+2026/10/02  18:28            37,604 材料缺失情况说明及承诺.docx
+2026/10/02  18:28            37,339 立卷申请书.docx
+2026/10/02  18:28            37,047 结案报告.docx
+               5 File(s)        819,213 bytes
+
+     Total Files Listed:
+               5 File(s)        819,213 bytes
+               0 Dir(s)  115,525,226,496 bytes free
