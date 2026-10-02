@@ -34,3 +34,6 @@
 
 ## 5. 结论
 **通过。** 进 main；小项（16a 文字、分批再切一层）注记线 C。
+
+## 6. 小项亲核（2026-10-02 21:00 (+08:00)）
+- 线 C 97f3077（README 16a 文字、find_leaks --split 再切一层、demo 加第 7 步）：改动面只 cceptance\ 与证据；用户名 0 命中；ind_leaks.py 语法过；主编排自跑 demo_find_leaks_resume.py，结论与证据一致（故意种的 2 处泄漏被找到、续跑只重扫中断那批）。**通过**，cherry-pick 进 main。按用户 20:55 决定，开发机上不再跑任何 find_leaks 全盘扫描。
