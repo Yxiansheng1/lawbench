@@ -121,9 +121,12 @@ MUTATIONS = [
     ("R6·工作台 500 用中间件返回、不断开连接", "app.py", [
         ("except Exception as exc:  # noqa: BLE001 内部异常", "except ZeroDivisionError as exc:  # noqa: BLE001 内部异常"),
     ], "tests/test_t3_rework.py tests/test_api_case.py -k 'r6_ or internal'"),
+    # 2026-10-02 锚点更新：net.py 现在用 fail_502()，且其后另有兜底 except Exception（也回 502）；所以改坏写法从
+    # "删掉这一支"改成"这一支记 ok、不回 502"——防护（记 fail 并返回 502）被拿掉，用例应变红
     ("R6·转发在回响应头之前的其他 httpx 异常记 fail 并返回 502", "net.py", [
         ('            except httpx.HTTPError as e:\n                finish("fail", type(e).__name__)\n'
-         '                await _send_simple(send, 502, _error_body("SERVER_UNREACHABLE"))\n', ""),
+         '                await fail_502("SERVER_UNREACHABLE")\n',
+         '            except httpx.HTTPError as e:\n                finish("ok", None)\n'),
     ], "tests/test_t3_rework.py -k r6_"),
     ("R6·转发流式中途上游断开记 fail", "net.py", [
         ('finish("fail", type(e).__name__)  # 上游流式中途断开', 'finish("ok", None)  # 上游流式中途断开'),
@@ -145,8 +148,10 @@ MUTATIONS = [
     ("R11·拒绝包含应用数据目录的根目录", "case/gate.py", [
         ("        if _norm(ad) == _norm(real) or is_within(real, ad):", "        if False:"),
     ], "tests/test_t3_rework.py -k r11_"),
+    # 2026-10-02 锚点更新：gate.mkdir_original 把"是链接"和"是同名文件"合成一个条件；只去掉"是链接"那一半
     ("R12·标准目录某一级已是 junction 时跳过", "case/gate.py", [
-        ("        if is_link(cur):\n            return False\n", ""),
+        ("        if is_link(cur) or (os.path.lexists(cur) and not os.path.isdir(cur)):\n",
+         "        if os.path.lexists(cur) and not os.path.isdir(cur):\n"),
     ], "tests/test_t3_rework.py -k r12_"),
 ]
 
