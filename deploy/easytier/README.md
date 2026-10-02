@@ -46,9 +46,9 @@ C:\EasyTier\easytier-core.exe --network-name lawbench --network-secret <密钥> 
 
 在**律所外的网络**（手机热点）上，用一台已加入 `lawbench` 网络的笔记本运行：
 ```
-python deploy\easytier\check_remote.py
+python deploy\easytier\check_remote.py --save docs\plan\evidence\T27\remote-check.txt
 ```
-通过标准：`10.126.126.1:8000` 可连通且 `/v1/models` 返回 200；两台虚拟 IP 上的 22、3389 等其他端口全部不通；局域网地址 `192.168.8.x` 从所外不可达；`10.126.126.3:9000` 在识别服务（T11）部署后可连通。结果存 `docs\plan\evidence\T27\remote-check.txt`。
+通过标准：`10.126.126.1:8000` 可连通且 `/v1/models` 返回 200；`10.126.126.3:9000` 可连通且 `/health` 返回 200（T11 已部署，2026-10-02 起是必过项）；两台虚拟 IP 上的 22、3389 等其他端口全部不通；局域网地址 `192.168.8.x` 从所外不可达。结果用 `--save` 直接存到 `docs\plan\evidence\T27\remote-check.txt`。上线前的完整操作见同目录 `操作单-上线前.md`。
 
 ## 5. 上线前还要做的（换正式密钥时一次做完，只停网一次）
 
