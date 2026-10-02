@@ -39,13 +39,16 @@ class FakeBackend implements Backend {
   flushed = 0
   /** 关句柄永不返回（盘慢、网络盘挂住）。 */
   hangClose = false
+  /** 以写方式打开永不返回。 */
+  hangOpen = false
   /** 句柄的 read 按原版返回 { events }（接回核对用）；不设时返回编号（看代理的 this 绑定）。 */
   eventRead = false
   /** 交出去的第几个句柄。 */
   private opened = 0
   constructor(public root: string) {}
-  async create(h: Header) { this.sessions.set(h.id, h); return this.h(h) }
+  async create(h: Header) { this.sessions.set(h.id, h); return { ...this.h(h), access: 'write' } }
   async open(id: string, access: 'read' | 'write') {
+    if (this.hangOpen && access === 'write') await new Promise(() => {})
     const h = this.sessions.get(id)
     if (!h) throw Object.assign(new Error(`not found ${id}`), { name: 'SessionPersistenceNotFoundError' })
     return { ...this.h(h), access }
@@ -329,6 +332,7 @@ describe('第三轮复核返修：路由', () => {
       const { router, backendOf, caseRoots } = fakeRouter([OLD], { allowOutsideCase: false, refresh: () => { throw new Error('ECONNREFUSED') } })
       await router.create(H('s1', OLD))
       backendOf(join(OLD, '工作区', '会话')).sessions.set('s2', H('s2', OLD))
+      mkdirSync(join(OLD, '工作区', '会话', '项目', 's1'), { recursive: true }) // 假实例不落盘：会话记录目录手建
       const w = await router.open('s1', 'write')
       await router.open('s2', 'read') // 读句柄不记
       expect([router.caseMoved('s1'), router.caseMoved('s2'), router.caseMoved('nope')]).toEqual([false, false, false])
@@ -340,11 +344,13 @@ describe('第三轮复核返修：路由', () => {
       expect(router.caseMoved('s1')).toBe(true)
       caseRoots.replace([{ root: NEW, exists: true }, { root: OLD, exists: true }])
       expect(router.caseMoved('s1')).toBe(false)
-      // 盘暂时不在（根还在名单上）→ 失效；插回 → 解除
+      // 盘暂时不在（根还在名单上）→ 失效；插回 → 解除。新建、原版还没落过盘的会话（盘上本来没有它的记录）同样按"根不在盘上"判
+      await router.create(H('s3', OLD)) // 新建：写句柄，盘上还没有记录目录
+      expect(router.caseMoved('s3')).toBe(false)
       renameSync(OLD, GONE)
-      expect(router.caseMoved('s1')).toBe(true)
+      expect([router.caseMoved('s1'), router.caseMoved('s3')]).toEqual([true, true])
       renameSync(GONE, OLD)
-      expect(router.caseMoved('s1')).toBe(false)
+      expect([router.caseMoved('s1'), router.caseMoved('s3')]).toEqual([false, false])
       // 句柄关掉之后不再记（重启后、resume 从新位置打开的是新句柄）
       caseRoots.replace([{ root: NEW, exists: true }])
       await (w.close as () => Promise<void>)()
@@ -358,6 +364,7 @@ describe('第三轮复核返修：路由', () => {
     try {
       const { router, backendOf, caseRoots, logs } = fakeRouter([OLD], { allowOutsideCase: false, timeoutMs: 100, liveSeq: () => 0 })
       await router.create(H('s1', OLD))
+      mkdirSync(join(OLD, '工作区', '会话', '项目', 's1'), { recursive: true }) // 假实例不落盘：会话记录目录手建
       const store = backendOf(join(OLD, '工作区', '会话'))
       store.eventRead = true
       const w = (await router.open('s1', 'write')) as Handle & { serial: number }
@@ -370,9 +377,17 @@ describe('第三轮复核返修：路由', () => {
       expect(Date.now() - t0).toBeLessThan(2000)
       expect([router.caseMoved('s1'), router.writersToRecheck()]).toEqual([true, []])
       expect(logs.find(([e]) => e === 'session_store.writer_detach_failed')?.[1]).toEqual({ index: 1, error: 'Error' })
-      // 根回到名单：一样长（盘上 0 条、内存 0 条）→ 在原处接回，代理上的方法转给新开的句柄
+      // 根回到名单，但以写方式打开挂住：到时放弃这次接回、记 writer_reattach_failed，仍算失效（第八轮复核 B-F5）
       store.hangClose = false
+      store.hangOpen = true
       caseRoots.replace([{ root: OLD, exists: true }])
+      const t1 = Date.now()
+      await router.recheck('s1')
+      expect(Date.now() - t1).toBeLessThan(2000)
+      expect(router.caseMoved('s1')).toBe(true)
+      expect(logs.find(([e]) => e === 'session_store.writer_reattach_failed')?.[1]).toEqual({ index: 1, error: 'Error' })
+      // 打开恢复：一样长（盘上 0 条、内存 0 条）→ 在原处接回，代理上的方法转给新开的句柄
+      store.hangOpen = false
       await router.recheck('s1')
       expect(router.caseMoved('s1')).toBe(false)
       expect(w.serial).toBeGreaterThan(first)

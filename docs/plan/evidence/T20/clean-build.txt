@@ -1,0 +1,19 @@
+T20 / P-4：干净克隆打补丁后整体构建（T17 第八轮复核 B-F3；2026-10-02，线 A 本机，离线）
+
+问题（复核员 B 在干净克隆上复现）：apps/desktop/scripts 下 development-app.ts、package-macos.ts、package-target.ts、
+smoke-packaged-runtime.ts、tests/package-macos.spec.ts 五处 import './lawbench-product.mjs'，P-4 只带了 .mjs、没有声明文件，
+`pnpm run build` 报 TS7016。同目录别的 .mjs 都配一个 .d.mts（如 desktop-build-commit.d.mts）。线 A 自己的 dsh 工作区能编过，
+是增量编译缓存（tsbuildinfo）没重查。
+
+修法：P-4 补丁加 apps/desktop/scripts/lawbench-product.d.mts（export const LAWBENCH_PRODUCT_NAME: string），重新导出 P-4
+（基线克隆里 P-11 之上的提交 + 新文件；P-4 的图片仍不进补丁，打补丁后由 packaging\brand\desktop\ 拷入）。
+
+验证：
+1. git clone D:\lawbench-A\dsh（固定提交 477b4f4205）到短路径 <仓库>\.tmp-demo\dc（放在暂存目录下 node_modules 路径超过 260 字符，删不掉）。
+2. 按 PATCHES.md 顺序 git apply 13 个补丁：全部无错（P-10、P-12、P-13、P-3、P-5、P-9、P-14、P-15、P-16、P-17、P-18、P-11、P-4），
+   再拷入 packaging\brand\desktop\*。
+3. corepack pnpm@11.7.0 install --offline --frozen-lockfile --store-dir D:\.pnpm-store：Done in 1m 31s，退出码 0。
+   （第一次没指定 --store-dir，用默认 store 缺 @stylistic/eslint-plugin 5.10.0，离线装不上；build.ps1 的 dsh 步沿用这台机器的 store 配置，
+   构建机要先把 store 备齐或指定 --store-dir。）
+4. corepack pnpm@11.7.0 run build：退出码 0，全量日志里 TS7016 0 处。
+清理：.tmp-demo\dc 不入库（.tmp-demo 本来就不提交）。

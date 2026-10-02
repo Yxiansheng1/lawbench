@@ -59,7 +59,8 @@ def replace_once(old, new):
 
 # 在 preset-lawbench 段内把内置目录插到数组最前面（导出会把 !!js 折成多行，按锚点文本替换）
 seg_start = tree_src.index("id: preset-lawbench")
-anchor = "[process.getBuiltinModule('node:path').join(process.env.ProgramData"
+# T20 起 customSkillDirs 换成打包感知的写法（数组在函数体里，元素用 p.join），锚点随之改
+anchor = "[p.join(process.env.ProgramData"
 pos = tree_src.index(anchor, seg_start)
 swapped_tree = tree_src[:pos] + "[process.env.LAWBENCH_SKILLS_DIR, " + tree_src[pos + 1:]
 CASES = [

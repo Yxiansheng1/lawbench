@@ -129,7 +129,7 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
   }
 
   /**
-   * 名单刷新后放下所属根已不在名单上的写入者、或在原处接回（N55 ②，见 router.ts 的 recheck）。会话的 Agent 正在跑一轮的
+   * 名单刷新后放下所属根已不在名单上、且还在盘上（复制）的写入者，或在原处接回（N55 ②，见 router.ts 的 recheck）。会话的 Agent 正在跑一轮的
    * 不打断，这一轮照原处落完，等它结束（agent/status 变 idle）再做。
    */
   const waiting = new Set<string>()

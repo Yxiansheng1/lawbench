@@ -127,6 +127,14 @@ index 2bb56c359f..e2d37def03 100644
        // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
        signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
        notarize: true,
+diff --git a/apps/desktop/scripts/lawbench-product.d.mts b/apps/desktop/scripts/lawbench-product.d.mts
+new file mode 100644
+index 0000000000..5855290d62
+--- /dev/null
++++ b/apps/desktop/scripts/lawbench-product.d.mts
+@@ -0,0 +1,2 @@
++/** lawbench P-4: product name used by the build, packaging and smoke scripts (see lawbench-product.mjs). */
++export const LAWBENCH_PRODUCT_NAME: string
 diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
 new file mode 100644
 index 0000000000..3f7c8385d4

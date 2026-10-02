@@ -15,7 +15,7 @@
 // - 搬家（F-CASE-04，方案甲）：记录头里的 cwd 是建会话时的旧路径；从案件实例读出的会话，交给 DSH 的记录头里
 //   cwd 一律换成该案件现在的根，DSH 和工作区登记据此认得它。原版实例的身份核对按"根 + 旧 cwd 的编码"找文件，
 //   整个案件目录一起搬走时这条相对路径不变，所以不需要改原版包（见交付说明第 5 节）。
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { inside, pathKey, type CaseRoots } from './case-roots.ts'
 
@@ -74,7 +74,26 @@ function within<T>(p: Promise<T>, ms: number): Promise<T> {
 
 interface Store { readonly root: string; readonly caseRoot: string | null; readonly backend: Backend; readonly index: number }
 /** 交出去的一个案件写句柄：属于哪个实例、真正的句柄是哪个、是否已放下（见 recheck）。 */
-interface Writer { readonly id: string; readonly at: Store; cur: Handle; detached: boolean }
+interface Writer {
+  readonly id: string
+  readonly at: Store
+  cur: Handle
+  detached: boolean
+  /** 这个会话的记录已在盘上见过（打开已有会话时即是；新建的要等原版第一次落盘）。见过之后又没了，算位置失效。 */
+  seen: boolean
+}
+/** 原版给会话编号编成目录名的写法（session-persistence-jsonl/src/format.ts 的 encodeSegment）。 */
+const encodeSegment = (raw: string): string => {
+  if (raw === '.') return '~002E'
+  if (raw === '..') return '~002E~002E'
+  let out = ''
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i)
+    const ch = String.fromCharCode(code)
+    out += ch !== '~' && /^[A-Za-z0-9._-]$/.test(ch) ? ch : '~' + code.toString(16).toUpperCase().padStart(4, '0')
+  }
+  return out
+}
 const closeHandle = (h: Handle): Promise<void> => (h.close as () => Promise<void>).call(h)
 
 export class SessionRouter {
@@ -133,7 +152,8 @@ export class SessionRouter {
     return header === snap.header ? snap : { ...snap, header }
   }
 
-  private handle(s: Store, h: Handle): Handle {
+  /** @param existing - 打开的是盘上已有的会话（新建的为 false）。 */
+  private handle(s: Store, h: Handle, existing: boolean): Handle {
     const header = this.header(s, h.header)
     const writer = s.caseRoot && h.access === 'write'
     if (!writer && header === h.header) return h
@@ -148,7 +168,7 @@ export class SessionRouter {
     }
     // 记下这个写句柄属于哪个案件根，关闭时去掉（同一会话只记最新交出去的那个）。接回后真正的句柄换成新开的那个（w.cur），
     // 代理上的方法都转给它（第七轮复核 A-P3-3）
-    const w: Writer = { id: h.id, at: s, cur: h, detached: false }
+    const w: Writer = { id: h.id, at: s, cur: h, detached: false, seen: existing }
     this.writers.set(h.id, w)
     const close = async (): Promise<void> => {
       if (this.writers.get(w.id) === w) this.writers.delete(w.id)
@@ -168,7 +188,29 @@ export class SessionRouter {
   private readonly writers = new Map<string, Writer>()
 
   private invalid(w: Writer): boolean {
-    return !this.current(w.at) || !existsSync(w.at.caseRoot!)
+    return !this.current(w.at) || !existsSync(w.at.caseRoot!) || this.recordGone(w)
+  }
+
+  /** 这个会话的记录目录（<案件>\工作区\会话\<项目>\<编号>）在不在盘上。原版按建会话时的 cwd 编项目目录，这里不重算，逐个项目目录找。 */
+  private onDisk(w: Writer): boolean {
+    const seg = encodeSegment(w.id)
+    try {
+      return readdirSync(w.at.root, { withFileTypes: true }).some((e) => e.isDirectory() && existsSync(join(w.at.root, e.name, seg)))
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * 案件根还在、也在名单上，但这个会话自己的记录已不在（第八轮复核 B-F2：搬家后原路径上又建了另一个案件并打开）。
+   * 只对见过记录的会话判：新建的会话在原版第一次落盘之前盘上本来就没有。
+   */
+  private recordGone(w: Writer): boolean {
+    if (!w.seen) {
+      w.seen = this.onDisk(w)
+      return false
+    }
+    return !this.onDisk(w)
   }
 
   /** 要放下：根已不在名单上、但还在盘上（复制后在新位置打开）。根不在盘上（拔盘、搬家）不放下，见 recheck。 */
@@ -194,7 +236,8 @@ export class SessionRouter {
    * 名单刷新成功后由会话存储插件调（这个会话的 Agent 空闲时）。DSH 被拒的一轮也会把律师那句话和"一轮被拦下"记进会话
    * （live-writer.spec），活着的写入者会把它们写进旧处；所以根已不在名单上、还在盘上（复制后在新位置打开）时先放下写入者：
    * 关掉真正的句柄（原版把缓冲的事件落完、注销写入者），之后这个会话的事件哪里都不写，旧处不再变。关最多等 3 秒（盘慢、
-   * 网络盘挂住），到时没关完就让它在后台接着关，照样记为已放下（第七轮复核 B-F4）。
+   * 网络盘挂住），到时没关完就让它在后台接着关，照样记为已放下（第七轮复核 B-F4）；后台关完之前进来的事件原版
+   * 仍一并落进旧处（第八轮复核 B-F4，已知限制）。接回时的打开、读取同样最多等 3 秒（第八轮复核 B-F5）。
    * 根不在盘上（拔盘、搬家）不放下（第七轮复核 B-F1）：此时关句柄落不了盘，原版照样注销，缓冲里的事件（比如拔盘时正在跑的
    * 那一轮的回答）就永久丢了；留着写入者，原版写不进去会留着缓冲下次再写，插回后接上。
    * 根回到名单（重新打开原位置）且盘上记录与内存里的会话一样长时，在原处重新以写方式打开接着写；内存事件数在读完盘上记录
@@ -227,11 +270,11 @@ export class SessionRouter {
     } else if (w.detached && !this.invalid(w) && this.opts.liveSeq) {
       let fresh: Handle
       try {
-        fresh = await w.at.backend.open(id, 'write')
+        fresh = await within(w.at.backend.open(id, 'write'), this.opts.caseRootTimeoutMs ?? 3000)
       } catch (e) { fail('session_store.writer_reattach_failed', e); return }
       let n = -1
       try {
-        n = (await (fresh.read as () => Promise<{ events: unknown[] }>).call(fresh)).events.length
+        n = (await within((fresh.read as () => Promise<{ events: unknown[] }>).call(fresh), this.opts.caseRootTimeoutMs ?? 3000)).events.length
       } catch (e) { fail('session_store.writer_reattach_failed', e) }
       if (n !== this.opts.liveSeq(id) || this.writers.get(id) !== w) { await closeHandle(fresh).catch(() => undefined); return }
       w.cur = fresh
@@ -260,7 +303,7 @@ export class SessionRouter {
     else throw new Error(OUTSIDE_CASE)
     const h = await s.backend.create(header, options)
     this.owner.set(header.id, s)
-    return this.handle(s, h)
+    return this.handle(s, h, false)
   }
 
   /** 实例还在当前名单上（默认根总在）。名单换掉后，表里指向旧根的条目当作没有。 */
@@ -310,7 +353,7 @@ export class SessionRouter {
     if (!s) return this.defaultStore.backend.open(id, access, options)
     this.checkAccess(s, access)
     try {
-      return this.handle(s, await s.backend.open(id, access, options))
+      return this.handle(s, await s.backend.open(id, access, options), true)
     } catch (error) {
       // 表里记的实例说没有（同一进程里案件搬了家，第三轮复核 B-F6）：去掉这条，换别的实例找
       if (!known || !isNotFound(error)) throw error
@@ -319,7 +362,7 @@ export class SessionRouter {
       if (!s && await this.refreshOnMiss()) s = await this.locate(id, options, was)
       if (!s) throw error
       this.checkAccess(s, access)
-      return this.handle(s, await s.backend.open(id, access, options))
+      return this.handle(s, await s.backend.open(id, access, options), true)
     }
   }
 
@@ -376,6 +419,8 @@ export class SessionRouter {
   async flush(): Promise<void> {
     const stores = [this.defaultStore, ...this.stores.values()]
     const results = await Promise.allSettled(stores.map((s) => s.backend.flush()))
+    // 落过盘了：新建的会话从此算"见过记录"（第八轮复核 B-F2）
+    for (const w of this.writers.values()) if (!w.seen && !w.detached) w.seen = this.onDisk(w)
     const errors = results.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []))
     if (errors.length) throw new AggregateError(errors, 'lawbench session store flush failed')
   }

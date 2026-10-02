@@ -178,10 +178,12 @@ type Ctx = {
 export function apply(ctx: Ctx, config: Config = {}): void {
   const log: Logger = makeLogger('agent', config.appData ?? defaultAppData(), ctx.logger?.('lawbench-agent'))
   const core = new CoreClient(() => ctx.lawbenchCore.endpoint(), log, config.validateContracts ?? true)
+  const caseMoved = (sessionId: string): boolean =>
+    (ctx.get?.('sessionPersistence') as { caseMoved?(id: string): boolean } | undefined)?.caseMoved?.(sessionId) === true
   const agent = new LegalAgent(core, log,
     (sessionId, code) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code),
     (sessionId) => ctx.lawbenchCore.clearTurnBlocked?.(sessionId),
-    (sessionId) => (ctx.get?.('sessionPersistence') as { caseMoved?(id: string): boolean } | undefined)?.caseMoved?.(sessionId) === true)
+    caseMoved)
 
   for (const tool of TOOL_NAMES) {
     ctx.effect(() => ctx.tools.register({
@@ -196,6 +198,14 @@ export function apply(ctx: Ctx, config: Config = {}): void {
 
   ctx.on('agent/pre-step', (async (payload: { agent: AgentLike; step: number }, next: () => Promise<PreStepDecision>) =>
     agent.preStep(payload.agent, payload.step, await next())) as never)
+
+  // 会话所在的案件文件夹已不在原位置（N55 ②）：排在最前，不调 next() 直接整轮拒绝。别的 pre-step 可能先动存储——
+  // DSH 生产插件树里的 session-checkpoint-policy 每步前先 sessions.flush，搬家后旧路径写不进去就抛错、整轮按 agent/error
+  // 结束，走不到上面那个先 next() 再判的处理，律师只看到含完整路径的英文错（T17 第八轮复核 B-F1）
+  ctx.on('agent/pre-step', (async (payload: { agent: AgentLike; step: number }, next: () => Promise<PreStepDecision>) =>
+    (payload.step === 1 && caseMoved(payload.agent.id)
+      ? agent.preStep(payload.agent, 1, { kind: 'enter', messages: [] })
+      : next())) as never, { prepend: true })
 
   ctx.on('agent/request', (async (payload: { agent: AgentLike }, next: () => Promise<LlmCallConfig>) =>
     agent.request(payload.agent.id, await next())) as never)
