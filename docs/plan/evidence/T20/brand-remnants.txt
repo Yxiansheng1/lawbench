@@ -1,0 +1,83 @@
+# T20 收尾第 2 条：构建产物里的"DeepSeek Harness"/"deepseek"（2026-10-02 23:08）
+# 产物：干净克隆打 13 个补丁后构建的 dsh（.tmp-demo\dc，apps\desktop\lib 10-02 19:12）与线 A dsh-ext\lib
+
+## dsh-ext/lib（只有包名与协议键）
+ent_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+nt_ui_primitives2 = require("@deepseek-ai/dsh-client-ui-primitives");
+nt_ui_primitives3 = require("@deepseek-ai/dsh-client-ui-primitives");
+nt_ui_primitives4 = require("@deepseek-ai/dsh-client-ui-primitives");
+nt_ui_primitives5 = require("@deepseek-ai/dsh-client-ui-primitives");
+nt_ui_primitives6 = require("@deepseek-ai/dsh-client-ui-primitives");
+var REMOTE_METHODS_KEY = "@deepseek-ai/dsh-typert-protocol/remote-methods";
+
+## apps/desktop/lib（去掉 @deepseek-ai/ 包名）
+apps/desktop/lib/main.js:	welcomeKeyDescription: "Configure official DeepSeek models to start using Harness",
+apps/desktop/lib/main.js:	welcomeKeyDescription: "配置 DeepSeek 官方模型，即可开始使用",
+apps/desktop/lib/main.js:* Environment variable that overrides the default DeepSeek Harness home. */
+apps/desktop/lib/main.js:* Resolve the default DeepSeek Harness home using Node's platform path rules.
+apps/desktop/lib/main.js:* Resolve the single-root DeepSeek Harness home.
+apps/desktop/lib/main.js:* Shared filesystem path helpers for DeepSeek Harness user data.
+apps/desktop/lib/main.js:/** Directory name for the default DeepSeek Harness home under the OS home. */
+apps/desktop/lib/main.js://#region ../../packages/credentials/deepseek-account/lib/index.js
+apps/desktop/lib/main.js:nt(request, join(resources.dsh, "node_modules", "@deepseek-ai", "dsh-web-frontend", "dist"));
+apps/desktop/lib/main.js:t entry = join(this.runtimeDir, "node_modules", "@deepseek-ai", "dsh-desktop-host", "lib", "index.js");
+apps/desktop/lib/preload-app.cjs:	welcomeKeyDescription: "Configure official DeepSeek models to start using Harness",
+apps/desktop/lib/preload-app.cjs:	welcomeKeyDescription: "配置 DeepSeek 官方模型，即可开始使用",
+apps/desktop/lib/preload-welcome.cjs:	welcomeKeyDescription: "Configure official DeepSeek models to start using Harness",
+apps/desktop/lib/preload-welcome.cjs:	welcomeKeyDescription: "配置 DeepSeek 官方模型，即可开始使用",
+apps/desktop/lib/types/host-process.js:t entry = join(this.runtimeDir, 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'index.js');
+apps/desktop/lib/types/locale.d.ts:    readonly welcomeKeyDescription: "配置 DeepSeek 官方模型，即可开始使用";
+apps/desktop/lib/types/locale.d.ts:adonly welcomeKeyDescription: "Configure official DeepSeek models to start using Harness";
+apps/desktop/lib/types/locale.js:    welcomeKeyDescription: 'Configure official DeepSeek models to start using Harness',
+apps/desktop/lib/types/locale.js:    welcomeKeyDescription: '配置 DeepSeek 官方模型，即可开始使用',
+apps/desktop/lib/types/main.js:bench 与 credentials 远程接口；不再监听 DeepSeek 账号状态
+apps/desktop/lib/types/main.js:nt(request, join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist'));
+apps/desktop/lib/welcome/welcome.css: rgb(65, 118, 230);--dsw-static-deepseek-50: rgb(237, 243, 254);--dsw-static-deepseek-600:
+apps/desktop/lib/welcome/welcome.css: rgb(72, 104, 178);--dsw-static-deepseek-700-delete: rgb(47, 76, 143);--dsw-static-deepsee
+apps/desktop/lib/welcome/welcome.css:--dsw-specific-bubble-highlight: var(--dsw-static-deepseek-200);--dsw-specific-bubble: var(--dsw-static-deep
+apps/desktop/lib/welcome/welcome.css:-sidebar-nav-item-active-accent: var(--dsw-static-deepseek-100);--dsw-specific-sidebar-nav-item-active: var(
+apps/desktop/lib/welcome/welcome.css:0);--dsw-alias-button-info-fill: var(--dsw-static-deepseek-400);--dsw-alias-button-info-hover: var(--dsw-sta
+apps/desktop/lib/welcome/welcome.css:0);--dsw-alias-button-info-fill: var(--dsw-static-deepseek-500);--dsw-alias-button-info-hover: var(--dsw-sta
+apps/desktop/lib/welcome/welcome.css:: rgb(122, 170, 255);--dsw-static-deepseek-450: rgb(86, 134, 254);--dsw-static-deepseek-500:
+apps/desktop/lib/welcome/welcome.css:: rgb(211, 226, 255);--dsw-static-deepseek-300: rgb(183, 200, 254);--dsw-static-deepseek-400
+apps/desktop/lib/welcome/welcome.css:al-bluish-800);--dsw-alias-link: var(--dsw-static-deepseek-500);--dsw-alias-markdown-citation: var(--dsw-sta
+apps/desktop/lib/welcome/welcome.css:dsw-static-blue-950: rgb(23, 37, 84);--dsw-static-deepseek-100: rgb(228, 237, 253);--dsw-static-deepseek-200
+apps/desktop/lib/welcome/welcome.css:k-800: rgb(52, 65, 91);--dsw-static-deepseek-900: rgb(40, 49, 66);--dsw-static-green-100: rgb(
+apps/desktop/lib/welcome/welcome.css:mary-new-colorprimary-new-color: var(--dsw-static-deepseek-450);--dsw-alias-brand-primary: var(--dsw-static-
+apps/desktop/lib/welcome/welcome.css:rimary-dimmed);--dsw-alias-link: var(--dsw-static-deepseek-400);--dsw-alias-markdown-citation: var(--dsw-sta
+apps/desktop/lib/welcome/welcome.css:sw-alias-state-business-primary: var(--dsw-static-deepseek-400);--dsw-alias-state-business-tertiary: var(--d
+apps/desktop/lib/welcome/welcome.css:sw-alias-state-business-primary: var(--dsw-static-deepseek-500);--dsw-alias-state-business-tertiary: var(--d
+apps/desktop/lib/welcome/welcome.css:sw-static-deepseek-100);--dsw-alias-code-diff-added: var(--dsw-stati
+apps/desktop/lib/welcome/welcome.css:sw-static-deepseek-800);--dsw-alias-code-diff-added: var(--dsw-stati
+apps/desktop/lib/welcome/welcome.css:tic-deepseek-400);--dsw-alias-button-primary-dimmed: var(--dsw
+apps/desktop/lib/welcome/welcome.css:tic-deepseek-500);--dsw-alias-button-primary-dimmed: var(--dsw
+
+## apps/desktop/renderer（去掉 @deepseek-ai/ 包名）
+
+## apps/desktop/installer（去掉 @deepseek-ai/ 包名）
+
+## apps/desktop/resources（去掉 @deepseek-ai/ 包名）
+
+## packages/*/*/lib 含 DeepSeek Harness 的包（文件数）
+      2 boot/app-boot
+      2 bundle/sdk-app
+      4 bundle/web-app
+      2 client/ui-plugin-manager
+      3 client/ui-settings-account
+      2 client/ui-settings-models
+      2 client/ui-sidebar-documentpreview
+      2 context/session-reference
+      2 core/system-prompt
+      2 experimental/inspector
+      2 sandbox/sandbox-windows-acl
+      4 sdk/client
+      2 sdk/protocol
+      2 sdk/server
+      2 session/session-telemetry
+      2 session/session-telemetry-otel
+      2 skill/skill-badge
+      2 subagent/subagent-codex
+      2 subagent/subagent-dsh-sdk
+      2 subprocess/subprocess
+      2 util/home-paths
+      1 util/http-proxy

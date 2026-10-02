@@ -30,7 +30,9 @@ PENDING = "候补"
 # rapidocr、omegaconf、antlr4 不在内：证件识别驱动目录自带 vendor\（驱动优先用它，Spec 13.5）
 # 驱动 vendor\rapidocr 顶层还导入 colorlog、requests（连带 urllib3）、tqdm，这几个 vendor 里没带（T20 准备复核 P2-1）
 EXTRA_ROOTS = ["pywin32", "pypdf", "reportlab", "onnxruntime", "opencv-python-headless", "pyclipper", "shapely", "PyYAML", "PyMuPDF",
-               "colorlog", "requests", "tqdm"]
+               "colorlog", "requests", "tqdm", "six"]
+# six：rapidocr 3.9.2 的 METADATA 声明 Requires-Dist six，服务 pyproject 的 retainer 组也列了它（T25 实测环境有）；
+# vendor 里的代码现在没有 import six，照声明装上，免得驱动换版本后缺包（T20 收尾，执行令 2137 第 2.5 条）
 
 # 不在 Python 里的组件：版本未定的写候补（T20 步骤 3 选定后补）
 OTHER = [

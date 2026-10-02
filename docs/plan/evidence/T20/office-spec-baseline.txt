@@ -1,0 +1,14 @@
+# T20 收尾第 4 条：desktop-host office 两个用例，基线（未打补丁的固定提交 477b4f4205）与线 A 打补丁的 dsh 各跑三次（2026-10-02 23:08）
+
+## 基线：干净克隆、不打补丁、离线安装
+baseline dsh 477b4f4205, modified files: 0
+Done in 1m 13.5s using pnpm v11.7.0
+install exit 0
+baseline run 1: Test Files  2 passed (2) | Tests  8 passed (8) | Duration  5.40s (transform 3.45s, setup 2.28s, import 3.83s, tests 584ms, environment 0ms)
+baseline run 2: Test Files  2 passed (2) | Tests  8 passed (8) | Duration  3.42s (transform 1.65s, setup 1.69s, import 2.03s, tests 468ms, environment 0ms)
+baseline run 3: Test Files  2 passed (2) | Tests  8 passed (8) | Duration  3.41s (transform 1.60s, setup 1.70s, import 2.00s, tests 481ms, environment 0ms)
+
+## 线 A dsh（13 个补丁已打）
+ Test Files 2 passed (2)  Tests 8 passed (8) 
+ Test Files 2 passed (2)  Tests 8 passed (8) 
+ Test Files 2 passed (2)  Tests 8 passed (8) 

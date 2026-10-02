@@ -31,7 +31,11 @@ param(
   [string]$PandocExe = '',
   [string]$Tokenizer = '',
   # 'package' step: list what would be packaged instead of running electron-builder.
-  [switch]$DryRun
+  [switch]$DryRun,
+  # 'dsh' step: pnpm content-addressable store for the offline install (the folder that holds v11\). Default: the
+  # storeDir recorded in dsh\node_modules\.modules.yaml by an earlier install. Without it pnpm falls back to the
+  # user's default store, which may lack packages (T17 round 9 finding), so a clean clone must pass this.
+  [string]$PnpmStore = ''
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -50,6 +54,22 @@ function Reset-Dir([string]$dir) {
   New-Item -ItemType Directory -Force $dir | Out-Null
 }
 function Pending([string]$what) { throw "PENDING (T20 step 3/6): $what" }
+# pnpm store for the dsh step: -PnpmStore, else storeDir from dsh\node_modules\.modules.yaml; neither -> stop.
+# .modules.yaml records the versioned folder (D:\\.pnpm-store\\v11, JSON-escaped); --store-dir takes its parent.
+function Resolve-PnpmStore([string]$dshDir) {
+  $store = $PnpmStore
+  $yaml = Join-Path $dshDir 'node_modules\.modules.yaml'
+  if (-not $store -and (Test-Path $yaml)) {
+    $m = Select-String -Path $yaml -Pattern '^\s*"?storeDir"?\s*:\s*"?([^"]+?)"?\s*,?\s*$' | Select-Object -First 1
+    if ($m) { $store = $m.Matches[0].Groups[1].Value.Replace('\\', '\') }
+  }
+  if (-not $store) {
+    throw "pnpm store unknown: no -PnpmStore and no storeDir in $yaml. Pass -PnpmStore <folder that holds v11\> (where the offline packages were fetched)."
+  }
+  $store = $store -replace '[\\/]v\d+[\\/]?$', ''
+  if (-not (Test-Path $store)) { throw "pnpm store folder not found: $store" }
+  return $store
+}
 function Run([string]$exe, [string[]]$argv) {
   # Native tools write warnings to stderr; in Windows PowerShell 5.1 that becomes an error record when output is
   # redirected, which 'Stop' would turn fatal. Judge native commands by their exit code only.
@@ -70,6 +90,9 @@ $Steps = [ordered]@{
     Run $BuildPython @((Join-Path $Root 'packaging\brand\make_brand.py'))
   }
   dsh = {
+    # Store first: stop before touching dsh if the offline install could not run.
+    $store = Resolve-PnpmStore $Dsh
+    Say "pnpm store: $store"
     # Apply the registered patches in order (dsh-patches\PATCHES.md), then copy the P-4 images.
     $patches = Select-String -Path (Join-Path $Root 'dsh-patches\PATCHES.md') -Pattern 'git -C dsh apply \.\.\\dsh-patches\\(\S+\.patch)' |
       ForEach-Object { $_.Matches[0].Groups[1].Value }
@@ -81,9 +104,13 @@ $Steps = [ordered]@{
     try {
       $env:CI = 'true'
       $env:COREPACK_ENABLE_NETWORK = '0'  # corepack must not fetch pnpm either
-      Run 'corepack' @('pnpm@11.7.0', 'install', '--frozen-lockfile', '--offline')
+      Run 'corepack' @('pnpm@11.7.0', 'install', '--frozen-lockfile', '--offline', '--store-dir', $store)
       Run 'corepack' @('pnpm@11.7.0', 'run', 'build')
     } finally { Pop-Location }
+    # dsh-ext has its own dependencies (yaml, ajv, ajv-formats; dsh-ext\pnpm-lock.yaml): a clean clone has no
+    # dsh-ext\node_modules, so install them offline from the same store before bundling.
+    Push-Location (Join-Path $Root 'dsh-ext')
+    try { Run 'corepack' @('pnpm@11.7.0', 'install', '--frozen-lockfile', '--offline', '--store-dir', $store) } finally { Pop-Location }
     Run 'node' @((Join-Path $Root 'dsh-ext\scripts\build.mjs'))
   }
   python = {

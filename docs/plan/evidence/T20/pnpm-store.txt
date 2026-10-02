@@ -1,0 +1,56 @@
+# T20 收尾第 1 条：build.ps1 -PnpmStore，干净克隆实测（2026-10-02，脚本 store-test.ps1：克隆仓库 a464e9f + 工作区 build.ps1，dsh 固定提交 477b4f4205）
+
+## 第一次（23:0x）：第 2、3 种 dsh 安装与构建通过，最后 dsh-ext 打包缺依赖（build.ps1 从来没装 dsh-ext 自己的依赖，本机一直有 dsh-ext\node_modules 没暴露）
+== 2. clean clone, -PnpmStore D:\.pnpm-store
+host/skills.ts:6:35: ERROR: Could not resolve "yaml"
+shared/contracts.ts:3:31: ERROR: Could not resolve "ajv/dist/2020.js"
+shared/contracts.ts:4:34: ERROR: Could not resolve "ajv-formats"
+failed (1): node D:\lawbench-A\.tmp-demo\lc\dsh-ext\scripts\build.mjs
+    + CategoryInfo          : OperationStopped: (failed (1): nod...ripts\build.mjs:String) [], RuntimeException
+    + FullyQualifiedErrorId : failed (1): node D:\lawbench-A\.tmp-demo\lc\dsh-ext\scripts\build.mjs
+exit 1
+
+## 第二次（dsh 步加 dsh-ext 离线安装后，23:2x，重新干净克隆）
+repo a464e9f  dsh 477b4f4205
+== 1. clean clone, no -PnpmStore (expect stop, dsh untouched)
+    + CategoryInfo          : OperationStopped: (pnpm store unkn... were fetched).:String) [], RuntimeException
+    + FullyQualifiedErrorId : pnpm store unknown: no -PnpmStore and no storeDir in D:\lawbench-A\.tmp-demo\lc\dsh\node 
+   _modules\.modules.yaml. Pass -PnpmStore <folder that holds v11\> (where the offline packages were fetched).
+ 
+exit 1
+dsh modified files: 0
+== 2. clean clone, -PnpmStore D:\.pnpm-store
+
+ℹ [@deepseek-ai/dsh-client-hmr] [ESM] lib\invariant.js  2.10 kB │ gzip: 1.04 kB
+ℹ [@deepseek-ai/dsh-client-hmr] [ESM] 2 files, total: 7.23 kB
+ℹ [@deepseek-ai/dsh-client-ui-settings-account] [ESM] lib\index.js  2.92 kB │ gzip: 1.14 kB
+ℹ [@deepseek-ai/dsh-client-ui-settings-account] [ESM] 1 files, total: 2.92 kB
+ℹ [@deepseek-ai/dsh-api-gateway] [ESM] lib\index.js  62.66 kB │ gzip: 16.17 kB
+ℹ [@deepseek-ai/dsh-api-gateway] [ESM] 1 files, total: 62.66 kB
+ℹ [@deepseek-ai/dsh-host-directory-picker-native] [ESM] lib\index.js  10.99 kB │ gzip: 4.05 kB
+ℹ [@deepseek-ai/dsh-host-directory-picker-native] [ESM] 1 files, total: 10.99 kB
+Done in 1.3s using pnpm v11.7.0
+Done in 112ms
+Done in 773ms
+lib/*.js 纯 ESM 导入检查通过
+exit 0
+== 3. same clone again, no -PnpmStore (storeDir now in .modules.yaml)
+"storeDir": "D:\\.pnpm-store\\v11",
+"virtualStoreDir": "D:\\lawbench-A\\.tmp-demo\\lc\\dsh\\node_modules\\.pnpm",
+"virtualStoreDirMaxLength": 60,
+ℹ config file: D:\lawbench-A\.tmp-demo\lc\dsh\packages\web\web-search-perplexity\package.json 
+dist/assets/fonts/Montserrat-OFL.txt                          4.40 kB │ gzip:   1.98 kB
+dist/assets/fonts/montserrat-light-Cvd2VjE_.woff2            61.55 kB
+dist/assets/fonts/montserrat-regular-DYep38cA.woff2          62.01 kB
+dist/assets/fonts/montserrat-medium-B4OyO9CN.woff2           62.15 kB
+Done in 577ms using pnpm v11.7.0
+Done in 26ms
+Done in 80ms
+exit 0
+== 4. -PnpmStore pointing nowhere
+    + CategoryInfo          : OperationStopped: (pnpm store fold...:\no-such-store:String) [], RuntimeException
+    + FullyQualifiedErrorId : pnpm store folder not found: D:\no-such-store
+ 
+exit 1
+
+

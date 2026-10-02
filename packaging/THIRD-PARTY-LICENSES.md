@@ -71,6 +71,7 @@
 | requests | 2.34.2 | Apache-2.0 |
 | rpds-py | 2026.6.3 | MIT |
 | shapely | 2.1.2 | BSD 3-Clause |
+| six | 1.17.0 | MIT |
 | starlette | 1.7.0 | BSD-3-Clause |
 | sympy | 1.14.0 | BSD |
 | tokenizers | 0.23.2 | Apache Software License |
