@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "value": {
+    "outputs": [
+      {
+        "format": "md",
+        "path": "输出/起诉状（周某诉青禾贸易）_v2.md",
+        "version": 2
+      },
+      {
+        "format": "docx",
+        "path": "输出/起诉状（周某诉青禾贸易）_v2.docx",
+        "version": 2
+      }
+    ]
+  }
+}

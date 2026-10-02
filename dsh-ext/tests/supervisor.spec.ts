@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { Supervisor, type ChildHandle } from '../host/supervisor.ts'
+import { CONTRACT_VERSION } from '../shared/contracts.ts'
 
 const FAKE = join(__dirname, '..', 'dev', 'fake-service.mjs')
 
@@ -24,7 +25,7 @@ function realDeps(ports: number[], extra: { version?: string } = {}) {
     },
     pickPort: async () => ports[i++ % ports.length],
     newToken: () => randomBytes(16).toString('hex'),
-    expectedVersion: extra.version ?? '1.1',
+    expectedVersion: extra.version ?? CONTRACT_VERSION, // 跟契约走（1.2 起），不写死
     log: (_l: string, event: string, meta?: Record<string, unknown>) => { events.push({ event, meta }) },
   }
   return { deps, events, children }
@@ -170,6 +171,29 @@ describe('看护：策略（模拟进程）', () => {
     releaseSecond()               // 重启失败
     await new Promise((r) => setTimeout(r, 50))
     expect(s.state).toBe('stopped')
+  })
+
+  it('旧代次的启动失败不覆盖新一代的状态（T7 第三轮 P3-2）', async () => {
+    let calls = 0
+    let failFirst!: () => void
+    const deps = {
+      spawn(): ChildHandle { return { pid: 1, exited: new Promise<number | null>(() => {}), kill: () => {} } },
+      probe: async () => '1.1',
+      // 第一次挑端口挂起，放行后抛错；第二次立即成功
+      pickPort: async () => { calls++; if (calls === 1) { await new Promise<void>((r) => { failFirst = r }); throw new Error('旧的一次挑端口失败') } return 18500 },
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      log: () => {},
+    }
+    const s = new Supervisor(deps)
+    const first = s.start()
+    await new Promise((r) => setTimeout(r, 10))
+    await s.start()               // 第二代启动成功
+    expect(s.state).toBe('running')
+    failFirst()                   // 第一代此时才失败
+    await first
+    expect(s.state).toBe('running')
+    s.stop()
   })
 
   it('挑端口期间 stop()：不再拉起进程（T7 返修 P3-2）', async () => {

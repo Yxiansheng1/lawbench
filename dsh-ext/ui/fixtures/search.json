@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "value": {
+    "hits": [
+      {
+        "name": "借款合同",
+        "material_id": "M0002",
+        "citation": "〔借款合同 第2页〕",
+        "snippet": "…借款金额为人民币叁拾万元整，借款期限自 2025 年 12 月 30 日起至…",
+        "is_ocr": false,
+        "match": "exact"
+      },
+      {
+        "name": "借条",
+        "material_id": "M0008",
+        "citation": "〔借条 第1页〕",
+        "snippet": "…今借到周某人民币叁拾万元整，于 2026 年 6 月 30 日前归还…",
+        "is_ocr": true,
+        "match": "exact"
+      },
+      {
+        "name": "还款流水",
+        "material_id": "M0004",
+        "citation": "〔还款流水 还款明细!B12〕",
+        "snippet": "…2026-03-15 青禾贸易 转入 50000.00 备注 还款…",
+        "is_ocr": false,
+        "match": "expanded"
+      }
+    ],
+    "total": 3,
+    "truncated": false
+  }
+}

@@ -1,0 +1,62 @@
+﻿node : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resol
+ve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+At line:1 char:592
++ ... T17\第二步返修'; node node_modules\vitest\vitest.mjs run packages/client/u ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsco
+nfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/lawbench-A/dsh
+
+ ❯ |thread-safe| packages/api/session-controller/tests/projection-store.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/session-pending-submissions.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/inbox-projection.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/session.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/sessions-service.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/manager.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/client-apply.client.spec.ts (0 test)
+ ❯ |thread-safe| packages/api/session-controller/tests/reference-ownership.client.spec.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| packages/api/session-controller/tests/client-apply.client.spec.ts [ packages/api/session-controlle
+r/tests/client-apply.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/inbox-projection.client.spec.ts [ packages/api/session-contr
+oller/tests/inbox-projection.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/manager.client.spec.ts [ packages/api/session-controller/tes
+ts/manager.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/projection-store.client.spec.ts [ packages/api/session-contr
+oller/tests/projection-store.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/reference-ownership.client.spec.ts [ packages/api/session-co
+ntroller/tests/reference-ownership.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/session-pending-submissions.client.spec.ts [ packages/api/se
+ssion-controller/tests/session-pending-submissions.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/session.client.spec.ts [ packages/api/session-controller/tes
+ts/session.client.spec.ts ]
+ FAIL  |thread-safe| packages/api/session-controller/tests/sessions-service.client.spec.ts [ packages/api/session-contr
+oller/tests/sessions-service.client.spec.ts ]
+Error: client-test-runtime: cannot resolve plugin package @deepseek-ai/dsh-web-app from @deepseek-ai/dsh-base, @deepsee
+k-ai/dsh-web-app
+ ❯ bundleRoster packages/test-support/client-runtime/src/assembly/bundle-roster.ts:69:13
+     67|     const manifestPath = locateManifest(anchors, name)
+     68|     if (manifestPath === undefined) {
+     69|       throw new Error(`client-test-runtime: cannot resolve plugin pack…
+       |             ^
+     70|     }
+     71|     const manifest = readManifest(manifestPath)
+ ❯ packages/test-support/client-runtime/src/assembly/bundle-roster.ts:156:37
+ ❯ packages/test-support/client-runtime/src/assembly/index.ts:12:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+
+ Test Files  8 failed | 176 passed (184)
+      Tests  3059 passed | 1 skipped (3060)
+   Start at  17:07:19
+   Duration  61.84s (transform 221.87s, setup 65.88s, import 968.76s, tests 162.73s, environment 336.95s)
+

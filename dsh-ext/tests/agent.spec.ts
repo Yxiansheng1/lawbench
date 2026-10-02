@@ -6,6 +6,7 @@ import { startFake, type Fake } from './helpers/fake.ts'
 
 let fake: Fake
 let failing: Fake
+let changed: Fake
 const events: string[] = []
 const log = (_l: string, e: string) => { events.push(e) }
 const calls = join(require('node:os').tmpdir(), `lb-agent-calls-${process.pid}.jsonl`)
@@ -13,8 +14,9 @@ const calls = join(require('node:os').tmpdir(), `lb-agent-calls-${process.pid}.j
 beforeAll(async () => {
   fake = await startFake(18807, ['--calls', calls])
   failing = await startFake(18808, ['--fail-begin'])
+  changed = await startFake(18809, ['--fail-context', 'INPUT_CHANGED'])
 })
-afterAll(() => { fake.stop(); failing.stop(); require('node:fs').rmSync(calls, { force: true }) })
+afterAll(() => { fake.stop(); failing.stop(); changed.stop(); require('node:fs').rmSync(calls, { force: true }) })
 
 const mk = (f = () => fake) => new LegalAgent(new CoreClient(() => ({ port: f().port, token: f().token }), log), log)
 const agentObj = (id: string) => ({ id, session: { header: { cwd: 'D:\\案件\\张三诉李四' } } })
@@ -53,6 +55,19 @@ describe('一轮完整对话（对假服务）', () => {
     await a.preStep(agentObj('s-2'), 1, enter())
     await expect(a.executeTool('s-2', 'case_calc_sentence', { penalty: 'x' })).rejects.toThrow()
     await expect(a.executeTool('s-2', 'case_archive_match', {})).rejects.toThrow(/./)
+  })
+})
+
+describe('会话的写入位置已失效（T17 第五轮复核 F1）', () => {
+  it('step 1 整轮拒绝、记 CASE_MOVED 给界面，不取任务；位置正常时照常', async () => {
+    const blocked: Array<[string, string]> = []
+    const lost = new Set(['s-moved'])
+    const a = new LegalAgent(new CoreClient(() => ({ port: fake.port, token: fake.token }), log), log, (id, code) => { blocked.push([id, code]) }, () => {}, (id) => lost.has(id))
+    expect(await a.preStep(agentObj('s-moved'), 1, enter())).toEqual({ kind: 'reject' })
+    expect(blocked).toEqual([['s-moved', 'CASE_MOVED']])
+    expect(a.tasks.has('s-moved')).toBe(false)
+    expect(events).toContain('agent.case_moved')
+    expect((await a.preStep(agentObj('s-ok'), 1, enter())).kind).toBe('enter')
   })
 })
 
@@ -100,6 +115,22 @@ describe('Q11：取任务失败', () => {
     const a = mk(() => failing)
     expect(await a.preStep(agentObj('s-5'), 1, enter())).toEqual({ kind: 'reject' })
     expect(events).toContain('agent.task_begin_failed')
+  })
+  it('拒绝整轮时记下错误码，界面经 Host 的 turnNotice 取走（ORCH 注记 13:18：INPUT_CHANGED）', async () => {
+    const noted: Array<[string, string]> = []
+    const note = (id: string, code: string) => { noted.push([id, code]) }
+    const withNote = (f: () => Fake) => new LegalAgent(new CoreClient(() => ({ port: f().port, token: f().token }), log), log, note)
+    expect(await withNote(() => changed).preStep(agentObj('s-7'), 1, enter())).toEqual({ kind: 'reject' })
+    expect(await withNote(() => failing).preStep(agentObj('s-8'), 1, enter())).toEqual({ kind: 'reject' })
+    expect(noted).toEqual([['s-7', 'INPUT_CHANGED'], ['s-8', 'CASE_NOT_FOUND']])
+    expect(events).toContain('agent.context_failed')
+  })
+  it('取任务、取上下文都成功时清掉该会话没被取走的旧记录（返修 P3-C ①）；被拦下时不清', async () => {
+    const cleared: string[] = []
+    const mkAgent = (f: () => Fake) => new LegalAgent(new CoreClient(() => ({ port: f().port, token: f().token }), log), log, () => {}, (id) => { cleared.push(id) })
+    await mkAgent(() => fake).preStep(agentObj('s-9'), 1, enter())
+    await mkAgent(() => changed).preStep(agentObj('s-10'), 1, enter())
+    expect(cleared).toEqual(['s-9'])
   })
   it('服务没起来时拒绝整轮', async () => {
     const a = new LegalAgent(new CoreClient(() => undefined, log), log)

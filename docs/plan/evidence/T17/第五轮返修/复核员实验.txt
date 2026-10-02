@@ -1,0 +1,79 @@
+# 复核员 B 第五轮实验（D:\lawbench-coord\附件-T17第五轮-复核员B实验\ 的三份 spec 原样放进 dsh-ext\tests 跑完即删）
+
+结果：Tests  21 passed (21)（实验只打印、不断言；与同目录修前基线对照）
+
+## rvb22-out.txt（修后）
+Y1 uiOpenCase {"open":true,"openMs":38,"attach":"{\"attached\":1,\"failed\":0}","attachMs":16} members new ["s1"] old []
+Y1 after append: old changed false new changed true events old 3 new 7
+Y1 open(write) again while live handle held SessionAlreadyOwnedError: session "s1" is already owned by an active write handle
+Y1 open(write) after agent released ok cwd=<tmp>\案件盘\案丙
+Y1m rename with live handle ok
+Y1m uiOpenCase {"open":true,"openMs":28,"attach":"{\"attached\":1,\"failed\":0}","attachMs":15}
+Y1m append via live handle ok old dir recreated false old files 0 events new 7
+Y2 hang uiOpenCase {"open":true,"openMs":3027,"attach":"{\"attached\":0,\"failed\":0,\"listed\":false}","attachMs":3019} roots ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb22-TclFJn\\桌面\\案丙"] members new [] old ["s1"]
+Y2 hang continue write cwd=<tmp>\桌面\案丙 ms 9 old changed true events old 7 new 3 logs []
+Y2 500 uiOpenCase {"open":true,"openMs":14,"attach":"{\"attached\":0,\"failed\":0,\"listed\":false}","attachMs":6} roots ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb22-USEb2n\\桌面\\案丙"] members new [] old ["s1"]
+Y2 500 continue write cwd=<tmp>\桌面\案丙 ms 9 old changed true events old 7 new 3 logs []
+Y2 reset uiOpenCase {"open":true,"openMs":17,"attach":"{\"attached\":0,\"failed\":0,\"listed\":false}","attachMs":6} roots ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb22-7OevR5\\桌面\\案丙"] members new [] old ["s1"]
+Y2 reset continue write cwd=<tmp>\桌面\案丙 ms 8 old changed true events old 7 new 3 logs []
+Y3 open ok true cwd <tmp>\案件盘\案丙 old unchanged true events new 7
+Y4 A {"open":true,"openMs":427,"attach":"{\"attached\":1,\"failed\":0}","attachMs":850} B {"open":true,"openMs":838,"attach":"{\"attached\":1,\"failed\":0}","attachMs":818} roots ["C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb22-JwMl9L\\案乙","C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb22-JwMl9L\\案件盘\\案丙"]
+Y4 s1 cwd <tmp>\案件盘\案丙 b1 cwd <tmp>\案乙 old unchanged true members new ["s1"] B ["b1"]
+Y4 reboot registry ok
+Y5 before opening new: wrote to <tmp>\桌面\案丙 events old 4 new 3
+Y5 open new {"open":true,"openMs":20,"attach":"{\"attached\":1,\"failed\":0}","attachMs":13}
+Y5 after open new: wrote to <tmp>\案件盘\案丙 old unchanged true events old 4 new 7
+Y5 reopen old {"open":true,"openMs":14,"attach":"{\"attached\":1,\"failed\":0}","attachMs":18} members old ["s1"] new []
+Y5 after reopen old: wrote to <tmp>\桌面\案丙 new unchanged true list ["s1@C:\\Users\\<用户>\\AppData\\Local\\Temp\\rvb22-zro4a7\\桌面\\案丙"]
+Y5 reboot registry ok
+Y6 先打开后列表 stat cwd <tmp>\案件盘\案丙 old unchanged true cache files old 1 new true
+Y6 先列表后打开 stat cwd <tmp>\案件盘\案丙 old unchanged true cache files old 1 new true
+Y7 缺 table {"open":true,"openMs":25,"attach":"{\"attached\":0,\"failed\":1}","attachMs":32} logs ["workspace.attach_unsupported"] members new [] old ["s1"] raw new [] raw old ["s1"]
+Y7 缺 table list ["s1@new"] write old unchanged true
+Y7 缺 table reboot members new [] old []
+Y7 缺 table reboot ok
+Y7 缺 indexHeaders {"open":true,"openMs":17,"attach":"{\"attached\":0,\"failed\":1}","attachMs":20} logs ["workspace.attach_unsupported"] members new [] old ["s1"] raw new [] raw old ["s1"]
+Y7 缺 indexHeaders list ["s1@new"] write old unchanged true
+Y7 缺 indexHeaders reboot members new [] old []
+Y7 缺 indexHeaders reboot ok
+Y7 都缺 {"open":true,"openMs":17,"attach":"{\"attached\":0,\"failed\":1}","attachMs":23} logs ["workspace.attach_unsupported"] members new [] old ["s1"] raw new [] raw old ["s1"]
+Y7 都缺 list ["s1@new"] write old unchanged true
+Y7 都缺 reboot members new [] old []
+Y7 都缺 reboot ok
+Y7 detach 抛错 {"open":true,"openMs":24,"attach":"{\"attached\":0,\"failed\":1}","attachMs":29} logs ["workspace.detach_failed","workspace.case_sessions_attached"] members new [] old [] raw new [] raw old ["s1"]
+Y7 detach 抛错 list ["s1@new"] write old unchanged true
+Y7 detach 抛错 reboot members new [] old []
+Y7 detach 抛错 reboot ok
+Y8 down: list ms [3011,0,0] create NOT_READY 1 later concurrent lists [0,0,0]
+Y8 down fresh: 3 concurrent first lists ms [3003,3003,3003]
+Y8 hang: list ms [3008,0,0]
+Y8 B-F6 empty: roots [true] list ["k1"] open write writable cwd=<tmp>\案丁 create new in that case ok
+Y9 attach {"ok":true,"value":{"attached":1,"failed":0}}
+Y9 list ["s1@new"] title {"title":"RVB22-NEW-YN981C57"} members new (after dispose n/a)
+Y9 SIG2 in dsh-home [] appData [] old folder [] old unchanged true ALL ["\\案件盘\\案丙\\工作区\\会话缓存\\s1.json","\\案件盘\\案丙\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb22-bX3T7M-~684C~9762-~6848~4E19--\\s1\\session.v4.jsonl"]
+Y9 SIG2 system TEMP top-level files 0
+Y10 {"open":true,"openMs":2978,"attach":"{\"attached\":1,\"failed\":0}","attachMs":1521} total ms 4499 roots ["new"]
+Y11 5 quick misses -> recent hits 1 after 2.1s one more -> 2
+Y11 hang stat ms [3015,3014,3022]
+
+## rvb22-agent-out.txt（修后）
+AG live=true old files before copy ["\\工作区\\case-id.txt","\\工作区\\会话\\ENC\\s1\\session.v4.jsonl"] FIRST in old 1
+AG live=true agent was live true session cwd <tmp>\桌面\案丙 AFTER-COPY in old 0 in new 0
+AG live=true after shutdown flush: AFTER-COPY in old 0 in new 1
+AG live=true restart list ["s1@new"] new store files ["\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb22a-RiM1Vo-~684C~9762-~6848~4E19--\\s1\\session.v4.jsonl"]
+AG live=true after restart list ["s1@new"] restart sees AFTER-COPY true
+AG live=false old files before copy ["\\工作区\\case-id.txt","\\工作区\\会话\\ENC\\s1\\session.v4.jsonl"] FIRST in old 1
+AG live=false agent was live false session cwd <tmp>\案件盘\案丙 AFTER-COPY in old 0 in new 1
+AG live=false after shutdown flush: AFTER-COPY in old 0 in new 1
+AG live=false restart list ["s1@new"] new store files ["\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb22a-Z9o2t8-~684C~9762-~6848~4E19--\\s1\\session.v4.jsonl"]
+AG live=false after restart list ["s1@new"] restart sees AFTER-COPY true
+
+## rvb22-move-out.txt（修后）
+AG live=true old files before copy ["\\工作区\\case-id.txt","\\工作区\\会话\\ENC\\s1\\session.v4.jsonl"] FIRST in old 1
+MV rename ok
+MV statuses ["running","idle"] old exists false
+AG live=true agent was live true session cwd <tmp>\桌面\案丙 AFTER-COPY in old 0 in new 0
+AG live=true after shutdown flush: AFTER-COPY in old 0 in new 1
+AG live=true restart list ["s1@new"] new store files ["\\工作区\\会话\\--C-Users-<用户>-AppData-Local-Temp-rvb22a-4DlL4n-~684C~9762-~6848~4E19--\\s1\\session.v4.jsonl"]
+AG live=true after restart list ["s1@new"] restart sees AFTER-COPY true
+

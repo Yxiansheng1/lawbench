@@ -1,0 +1,50 @@
+# 返修 P3-5：/api 调用日志摘录（2026-09-30，只留方法名和计数）
+
+## Host 插件日志 %LOCALAPPDATA%\lawbench\logs\plugins-20260930.log 里的 api.call（当天全部桌面端实测，含返修复查）
+共 306 条；其中失败 0 条；带返回校验错误（invalid 字段）0 条。按方法：
+  capsulesReset: 1
+  caseOpen: 2
+  caseRecent: 34
+  getCapsules: 27
+  getWikiSuggestions: 4
+  materialsImport: 1
+  materialsList: 5
+  ocrList: 71
+  ocrSubmit: 1
+  pipelineStatus: 70
+  putCapsules: 1
+  search: 1
+  source: 1
+  taskCreate: 2
+  tasksList: 85
+
+注：T7 沿用的 getSettings、putSettings、testConnection 成功时不写 api.call（沿用 T7 的日志写法；返修 P3-3 之后只在返回不合契约时写一条），所以不在上表，见下面假服务的 /api/settings、/api/connection/test。
+
+## 假工作台服务的调用记录（scratchpad\fake-calls.jsonl，只有方法、路径、状态码、耗时）
+共 876 次；请求不合契约（violations）0 次；假服务自查返回不合契约（response_violations）0 次。按路径：
+  GET /api/capsules: 27
+  GET /api/case/recent: 34
+  GET /api/materials: 5
+  GET /api/ocr/jobs: 71
+  GET /api/pipeline/…: 70
+  GET /api/search: 1
+  GET /api/settings: 81
+  GET /api/source: 1
+  GET /api/tasks: 85
+  GET /api/wiki/suggestions: 4
+  GET /health: 476
+  POST /api/capsules/reset: 1
+  POST /api/case/open: 2
+  POST /api/connection/test: 2
+  POST /api/materials/import: 1
+  POST /api/ocr/jobs: 1
+  POST /api/task: 2
+  POST /core/context: 2
+  POST /core/progress: 2
+  POST /core/task/begin: 2
+  POST /core/task/end: 2
+  POST /core/tool: 1
+  PUT /api/capsules: 1
+  PUT /api/settings: 2
+
+说明：交付说明原先写的"115 次 api.call、0 条校验错误"是首轮实测当时的数；以上为截至本次复查的累计数。

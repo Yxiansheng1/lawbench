@@ -1,0 +1,21 @@
+﻿# P-5 补丁的 DSH 侧测试（2026-09-30 10:50 实跑）
+
+## ui-conversation 全部测试（打补丁后）
+命令：node node_modules/vitest/vitest.mjs run packages/client/ui-conversation（在 dsh\ 下）
+Test Files  40 passed (40)
+Tests  529 passed (529)
+Duration  19.37s (transform 90.37s, setup 42.36s, import 248.49s, tests 11.48s, environment 115.50s)
+
+打补丁前 530 项；删掉只测"+"按钮打开命令菜单的 2 例、新增钩子 1 例，共 529 项。
+
+## 红测
+把 apply.ts 里 `if (taken !== undefined) return taken` 临时改成 `void taken`（钩子结果被忽略）→ 跑 tests/apply-inject.client.spec.tsx：
+  × lawbench P-5: a registered intake hook takes the files before references or uploads
+  Tests  1 failed | 14 passed (15)
+改回后全绿（见上）。
+
+## 类型检查
+node node_modules/typescript/bin/tsc -b packages/client/ui-conversation/tsconfig.client.json：通过（退出码 0）
+
+## 构建
+corepack pnpm run build:lib:client：通过；packages/client/ui-conversation/lib/client.js 含 conversationFileIntake。

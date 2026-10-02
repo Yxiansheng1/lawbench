@@ -1,0 +1,892 @@
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index 4e03717ea9..1470b99356 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -16,7 +16,6 @@ import {
+   net,
+   protocol,
+   session,
+-  shell,
+   type IpcMainInvokeEvent,
+   type MenuItemConstructorOptions,
+ } from 'electron'
+@@ -221,10 +220,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+       devTools: true,
+     },
+   })
+-  window.webContents.setWindowOpenHandler(({ url }) => {
+-    if (['http:', 'https:'].includes(new URL(url).protocol)) void shell.openExternal(url)
+-    return { action: 'deny' }
+-  })
++  // lawbench P-17: nothing leaves for the system browser or mail client; new windows are refused outright.
++  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+   if (process.platform === 'darwin') {
+     // macOS hides the traffic lights in fullscreen; the page drops its
+     // clearance for them off the html[data-fullscreen] flag this feeds.
+@@ -289,8 +286,8 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+     const current = new URL(window.webContents.getURL())
+     if (destination.protocol !== `${SCHEME}:`
+       && !(destination.protocol === 'http:' && destination.origin === current.origin)) {
++      // lawbench P-17: foreign navigations are only stopped, never handed to the system browser.
+       event.preventDefault()
+-      if (['http:', 'https:'].includes(destination.protocol)) void shell.openExternal(url)
+     }
+   })
+   return window
+diff --git a/apps/desktop/src/mandatory-update-window.ts b/apps/desktop/src/mandatory-update-window.ts
+index 724df4ff97..8c5c26a424 100644
+--- a/apps/desktop/src/mandatory-update-window.ts
++++ b/apps/desktop/src/mandatory-update-window.ts
+@@ -1,6 +1,6 @@
+ /** Shell-owned modal policy UI; only explicit actions authorize downloads or browser navigation. */
+ 
+-import { app, BrowserWindow, clipboard, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
++import { app, BrowserWindow, clipboard, ipcMain, type IpcMainInvokeEvent } from 'electron'
+ import type { DesktopLocale } from './locale.ts'
+ import { assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+ import { desktopPolicyPage, type DesktopPolicyState } from './mandatory-update-policy.ts'
+@@ -281,7 +281,9 @@ export class DesktopMandatoryUpdateWindow {
+         await clipboard.writeText(url)
+         if (await clipboard.readText() !== url) throw new Error('desktop policy: clipboard did not retain download address')
+       }
+-      else await shell.openExternal(url)
++      // lawbench P-17: the download page never opens in the system browser; the page action reports
++      // failure and the modal keeps offering to copy the address
++      else throw new Error('lawbench: external pages are not opened')
+       if (epoch !== this.navigationEpoch || this.disposed) return
+       if (action === 'copy') this.navigation = { page: this.navigation?.page ?? 'requested', copy: 'copied' }
+     } catch {
+diff --git a/apps/desktop/src/platform-view.ts b/apps/desktop/src/platform-view.ts
+index ce759c61b1..b254de3fbc 100644
+--- a/apps/desktop/src/platform-view.ts
++++ b/apps/desktop/src/platform-view.ts
+@@ -1,7 +1,7 @@
+ /** Isolated Platform documents owned by the desktop account lifetime. */
+ import type { EventEmitter } from 'node:events'
+ import { createHash, randomUUID } from 'node:crypto'
+-import { WebContentsView, session, shell, type Session, type View, type WebFrameMain } from 'electron'
++import { WebContentsView, session, type Session, type View, type WebFrameMain } from 'electron'
+ import { mergePlatformCookies, platformClientHeaders, type PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
+ import { desktopClientMetadata } from './client-metadata.ts'
+ 
+@@ -141,16 +141,8 @@ export class DesktopPlatformView {
+       nodeIntegration: false, webSecurity: true,
+     } })
+     this.view = view
+-    // External payment and documentation pages open without the embedded session or token.
+-    view.webContents.setWindowOpenHandler(({ url }) => {
+-      const destination = new URL(url)
+-      if (destination.protocol === 'https:' && !destination.username && !destination.password) {
+-        void shell.openExternal(url).catch(() => {
+-          // An OS browser-launch failure leaves the embedded page available for retry.
+-        })
+-      }
+-      return { action: 'deny' }
+-    })
++    // lawbench P-17: nothing leaves for the system browser; new windows are refused outright.
++    view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+     const allowNavigation = (url: string): boolean => {
+       try {
+         const parsed = new URL(url)
+diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
+index b1a8917e48..07f5d6ec74 100644
+--- a/apps/desktop/tests/main-startup.spec.ts
++++ b/apps/desktop/tests/main-startup.spec.ts
+@@ -1035,20 +1035,20 @@ describe('desktop main startup', () => {
+     expect(harness.menu).not.toHaveBeenCalled()
+   })
+ 
+-  it('opens message links externally while retaining same-origin application navigation', async () => {
++  it('lawbench P-17: refuses new windows and foreign navigation without opening anything externally', async () => {
+     await readyForUpdate()
+     const window = harness.windows[0]!
+     const openWindow = window.webContents.setWindowOpenHandler.mock.calls[0]![0] as
+       (details: { url: string }) => { action: string }
+-    const source = 'https://example.com/source?q=reference'
+-    expect(openWindow({ url: source })).toEqual({ action: 'deny' })
+-    expect(harness.openExternal).toHaveBeenCalledWith(source)
+-    harness.openExternal.mockClear()
+-    const external = { preventDefault: vi.fn() }
+-    window.webContents.emit('will-navigate', external, 'https://example.com/document')
+-    expect(external.preventDefault).toHaveBeenCalledOnce()
+-    expect(harness.openExternal).toHaveBeenCalledWith('https://example.com/document')
+-    harness.openExternal.mockClear()
++    for (const url of ['https://example.com/source?q=reference', 'http://192.168.1.10/probe', 'mailto:dev@example.com', 'file:///C:/x.txt']) {
++      expect(openWindow({ url })).toEqual({ action: 'deny' })
++    }
++    for (const url of ['https://example.com/document', 'http://192.168.1.10/probe', 'mailto:dev@example.com']) {
++      const external = { preventDefault: vi.fn() }
++      window.webContents.emit('will-navigate', external, url)
++      expect(external.preventDefault).toHaveBeenCalledOnce()
++    }
++    expect(harness.openExternal).not.toHaveBeenCalled()
+     const internal = { preventDefault: vi.fn() }
+     window.webContents.emit('will-navigate', internal, 'dsh-app://app/session/task-1')
+     expect(internal.preventDefault).not.toHaveBeenCalled()
+diff --git a/apps/desktop/tests/mandatory-update-window.spec.ts b/apps/desktop/tests/mandatory-update-window.spec.ts
+index 484d01065f..0766198978 100644
+--- a/apps/desktop/tests/mandatory-update-window.spec.ts
++++ b/apps/desktop/tests/mandatory-update-window.spec.ts
+@@ -99,18 +99,14 @@ it('defers without dismissing, and cancels pending approval on policy clearance
+   expect(native.handlers.size).toBe(0)
+ })
+ 
+-it('offers copy immediately while browser opening is pending and keeps navigation failures separate', async () => {
++it('lawbench P-17: the page action never opens the system browser and reports failure; copy still works', async () => {
+   const f = setup()
+-  const opened = Promise.withResolvers<undefined>()
+-  native.open.mockReturnValueOnce(opened.promise)
+   native.read.mockResolvedValue('https://downloads.example.com/desktop')
+-  const pending = f.action('page')
+-  expect(f.view().navigation).toEqual({ page: 'requested' })
++  await f.action('page')
++  expect(f.view().navigation).toEqual({ page: 'failed' })
+   await f.action('copy')
+-  expect(f.view().navigation).toEqual({ page: 'requested', copy: 'copied' })
+-  opened.reject(new Error('browser rejected'))
+-  await pending
+   expect(f.view().navigation).toEqual({ page: 'failed', copy: 'copied' })
++  expect(native.open).not.toHaveBeenCalled()
+   expect(f.view().error).toBeUndefined()
+   expect(f.view().policy.blocking).toBe(true)
+ })
+@@ -130,7 +126,7 @@ it('reports clipboard failure and ignores completion after the policy destinatio
+   expect(f.view().navigation).toBeUndefined()
+   f.policy({ blocking: true, checking: false, page: 'https://evil.example/desktop' })
+   await expect(f.action('page')).rejects.toThrow(/no allowed/)
+-  expect(native.open).toHaveBeenCalledTimes(1)
++  expect(native.open).not.toHaveBeenCalled() // lawbench P-17
+ })
+ 
+ it('rejects same-URL child frames and removes quit from renderer privileges', () => {
+diff --git a/apps/desktop/tests/platform-view.spec.ts b/apps/desktop/tests/platform-view.spec.ts
+index f62987d0e5..eb83416fb4 100644
+--- a/apps/desktop/tests/platform-view.spec.ts
++++ b/apps/desktop/tests/platform-view.spec.ts
+@@ -174,14 +174,11 @@ it.each([null, {}, { ...bounds, width: NaN }, { ...bounds, x: -1 }, { ...bounds,
+   expect(() => platformBounds(value)).toThrow()
+ })
+ 
+-it('opens HTTPS payment links in the system browser without an embedded child window', async () => {
++it('lawbench P-17: refuses every new window without handing it to the system browser', async () => {
+   const { manager, owner } = setup()
+   await manager.open(owner, 'top-up', bounds)
+   const handler = view().webContents.setWindowOpenHandler.mock.calls[0]![0] as (details: { url: string }) => { action: string }
+-  expect(handler({ url: 'https://payment.example/order' })).toEqual({ action: 'deny' })
+-  expect(state.openExternal).toHaveBeenCalledWith('https://payment.example/order')
+-  vi.mocked(state.openExternal).mockClear()
+-  for (const url of ['file:///tmp/test', 'javascript:alert(1)', 'https://user:pass@payment.example/order']) {
++  for (const url of ['https://payment.example/order', 'file:///tmp/test', 'javascript:alert(1)', 'https://user:pass@payment.example/order']) {
+     expect(handler({ url })).toEqual({ action: 'deny' })
+   }
+   expect(state.openExternal).not.toHaveBeenCalled()
+diff --git a/packages/client/ui-primitives/src/markdown/render.tsx b/packages/client/ui-primitives/src/markdown/render.tsx
+index adbf0022b4..f685177b50 100644
+--- a/packages/client/ui-primitives/src/markdown/render.tsx
++++ b/packages/client/ui-primitives/src/markdown/render.tsx
+@@ -4,7 +4,8 @@
+  * cache frozen blocks as React elements; the rendered DOM is pinned
+  * byte-for-byte by `tests/fixtures/markdown-dom` and must not drift.
+  *
+- * External link and image destinations pass a protocol allowlist; settled
++ * External link and image destinations pass a protocol allowlist (lawbench
++ * P-17: allowlisted links render as plain, copyable text, never anchors); settled
+  * local file links use an explicit owner callback. Images additionally require
+  * absolute HTTP(S), raw HTML renders as literal text (no HTML enters the
+  * DOM), and KaTeX runs without trusted commands. Fragment-anchor URLs fail
+@@ -16,7 +17,7 @@
+  * may add node types this renderer has no mapping for.
+  */
+ 
+-import { Fragment, createElement, useCallback, useState } from 'react'
++import { Fragment, createElement, isValidElement, useCallback, useState } from 'react'
+ import type { Key, ReactNode } from 'react'
+ import clsx from 'clsx'
+ import type * as Md from 'mdast'
+@@ -574,35 +575,38 @@ function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
+   return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
+ }
+ 
+-/** Anchor over an already-authored href: allowlisted or unwrapped, with optional owner navigation for HTTP(S). */
+-function renderSafeLink(href: string, children: ReactNode[], key: Key, glyph = true): ReactNode {
++/**
++ * lawbench P-17: an allowlisted http(s)/mailto destination never becomes a
++ * clickable anchor. The link unwraps to its text, and when that text is not
++ * the address itself the address follows in parentheses, so the lawyer can
++ * select and copy it; nothing hands it to a browser or mail client.
++ */
++function renderSafeLink(href: string, children: ReactNode[], key: Key, _glyph = true): ReactNode {
+   const safeHref = sanitizeUrl(href)
+-  if (safeHref === '') return <Fragment key={key}>{children}</Fragment>
+-  return <MarkdownAnchor key={key} href={safeHref} glyph={glyph}>{children}</MarkdownAnchor>
++  if (safeHref === '' || showsAddress(plainText(children), safeHref)) return <Fragment key={key}>{children}</Fragment>
++  return <Fragment key={key}>{children}{`（${decodedAddress(safeHref)}）`}</Fragment>
+ }
+ 
+-function MarkdownAnchor({ href, glyph, children }: {
+-  readonly href: string
+-  readonly glyph: boolean
+-  readonly children: ReactNode[]
+-}): ReactNode {
+-  const { openExternalLink } = useMarkdownDelegate()
+-  const external = ['http:', 'https:'].includes(new URL(href).protocol)
+-  const open = external ? openExternalLink : undefined
+-  return (
+-    <a
+-      href={href}
+-      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+-      onClick={open === undefined ? undefined : (event) => {
+-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+-        event.preventDefault()
+-        open(href)
+-      }}
+-    >
+-      {glyph && <LinkIconMedium kind="url" href={href} className={css.linkIcon} />}
+-      {children}
+-    </a>
+-  )
++/** A percent-encoded address as the lawyer reads it (non-ASCII paths); undecodable input stays as is. */
++function decodedAddress(value: string): string {
++  try { return decodeURI(value) } catch { return value }
++}
++
++/**
++ * The text already is the address (GFM literals `www.x`, `a@b` gain a scheme in the href). The href
++ * is percent-encoded (non-ASCII paths), so both sides compare decoded.
++ */
++function showsAddress(text: string, href: string): boolean {
++  const target = decodedAddress(href)
++  return [text, `http://${text}`, `https://${text}`, `mailto:${text}`].some(candidate => decodedAddress(candidate) === target)
++}
++
++/** Visible text of rendered children (strings and element children, depth-first). */
++function plainText(nodes: ReactNode): string {
++  if (typeof nodes === 'string' || typeof nodes === 'number') return String(nodes)
++  if (Array.isArray(nodes)) return nodes.map(plainText).join('')
++  if (isValidElement<{ children?: ReactNode }>(nodes)) return plainText(nodes.props.children)
++  return ''
+ }
+ 
+ /** Local destinations use the scoped file delegate after settlement. */
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.settled.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.settled.txt
+index ee3cf3638e..02b5b5ab4b 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.settled.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.settled.txt
+@@ -9,13 +9,7 @@
+     #text "*提醒！*单星号也保持上游行为。"
+   <p>
+     <code>
+-      <a href="https://example.com/preview?q=one%20two#result" rel="noopener noreferrer" target="_blank">
+-        <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-          <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-          <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-          <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-          <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-        #text "https://example.com/preview?q=one%20two#result"
++      #text "https://example.com/preview?q=one%20two#result"
+     #text " 与 "
+     <code>
+       #text "curl http://127.0.0.1:3199/"
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.streaming.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.streaming.txt
+index ee3cf3638e..02b5b5ab4b 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.streaming.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/cjk-strong-and-inline-code-url.streaming.txt
+@@ -9,13 +9,7 @@
+     #text "*提醒！*单星号也保持上游行为。"
+   <p>
+     <code>
+-      <a href="https://example.com/preview?q=one%20two#result" rel="noopener noreferrer" target="_blank">
+-        <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-          <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-          <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-          <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-          <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-        #text "https://example.com/preview?q=one%20two#result"
++      #text "https://example.com/preview?q=one%20two#result"
+     #text " 与 "
+     <code>
+       #text "curl http://127.0.0.1:3199/"
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.settled.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.settled.txt
+index eafe1678ab..298fdde9d3 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.settled.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.settled.txt
+@@ -16,15 +16,7 @@
+     <ol>
+       <li id="user-content-fn-a">
+         <p>
+-          #text "Footnote a body with "
+-          <a href="https://example.com" rel="noopener noreferrer" target="_blank">
+-            <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-              <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-              <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-              <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-              <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-            #text "link"
+-          #text ". ↩ ↩"
++          #text "Footnote a body with link（https://example.com）. ↩ ↩"
+           <sup>
+             #text "2"
+       <li id="user-content-fn-b">
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.streaming.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.streaming.txt
+index eafe1678ab..298fdde9d3 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.streaming.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/footnotes.streaming.txt
+@@ -16,15 +16,7 @@
+     <ol>
+       <li id="user-content-fn-a">
+         <p>
+-          #text "Footnote a body with "
+-          <a href="https://example.com" rel="noopener noreferrer" target="_blank">
+-            <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-              <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-              <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-              <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-              <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-            #text "link"
+-          #text ". ↩ ↩"
++          #text "Footnote a body with link（https://example.com）. ↩ ↩"
+           <sup>
+             #text "2"
+       <li id="user-content-fn-b">
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.settled.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.settled.txt
+index 577991463c..0d8af52e83 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.settled.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.settled.txt
+@@ -3,20 +3,4 @@
+     #text "Mixed "
+     <del>
+       #text "gone"
+-    #text " text with "
+-    <a href="http://www.example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "www.example.com"
+-    #text " literal and "
+-    <a href="mailto:user@example.com">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "user@example.com"
+-    #text " email."
++    #text " text with www.example.com literal and user@example.com email."
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.streaming.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.streaming.txt
+index 577991463c..0d8af52e83 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.streaming.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/gfm-strikethrough-and-literals.streaming.txt
+@@ -3,20 +3,4 @@
+     #text "Mixed "
+     <del>
+       #text "gone"
+-    #text " text with "
+-    <a href="http://www.example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "www.example.com"
+-    #text " literal and "
+-    <a href="mailto:user@example.com">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "user@example.com"
+-    #text " email."
++    #text " text with www.example.com literal and user@example.com email."
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.settled.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.settled.txt
+index 7efb9bcaaa..5da8fba32f 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.settled.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.settled.txt
+@@ -1,59 +1,12 @@
+ <div class="_markdown_404681">
+   <p>
+-    <a href="https://example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https ok"
+-    #text " and "
+-    <a href="mailto:dev@example.com">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "mailto ok"
+-    #text "."
++    #text "https ok（https://example.com） and mailto ok（mailto:dev@example.com）."
+   <p>
+-    #text "relative dropped and js dropped and "
+-    <a href="HTTPS://example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "upper kept"
+-    #text "."
++    #text "relative dropped and js dropped and upper kept（HTTPS://example.com）."
+   <p>
+-    <a href="https://deepseek.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https://deepseek.com"
+-    #text " and bare autolink "
+-    <a href="https://autolink.example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https://autolink.example.com"
+-    #text " literal."
++    #text "https://deepseek.com and bare autolink https://autolink.example.com literal."
+   <p>
+-    #text "[spaces encoded]("
+-    <a href="https://example.com/a" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https://example.com/a"
+-    #text " b)"
++    #text "[spaces encoded](https://example.com/a b)"
+   <p>
+-    <a href="https://example.com/target" rel="noopener noreferrer" target="_blank">
+-      <img alt="linked badge" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/badge.png">
+-    #text " image-only anchors carry no leading glyph."
++    <img alt="linked badge" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/badge.png">
++    #text "（https://example.com/target） image-only anchors carry no leading glyph."
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.streaming.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.streaming.txt
+index 7efb9bcaaa..5da8fba32f 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.streaming.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/links-and-autolinks.streaming.txt
+@@ -1,59 +1,12 @@
+ <div class="_markdown_404681">
+   <p>
+-    <a href="https://example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https ok"
+-    #text " and "
+-    <a href="mailto:dev@example.com">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "mailto ok"
+-    #text "."
++    #text "https ok（https://example.com） and mailto ok（mailto:dev@example.com）."
+   <p>
+-    #text "relative dropped and js dropped and "
+-    <a href="HTTPS://example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "upper kept"
+-    #text "."
++    #text "relative dropped and js dropped and upper kept（HTTPS://example.com）."
+   <p>
+-    <a href="https://deepseek.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https://deepseek.com"
+-    #text " and bare autolink "
+-    <a href="https://autolink.example.com" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https://autolink.example.com"
+-    #text " literal."
++    #text "https://deepseek.com and bare autolink https://autolink.example.com literal."
+   <p>
+-    #text "[spaces encoded]("
+-    <a href="https://example.com/a" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "https://example.com/a"
+-    #text " b)"
++    #text "[spaces encoded](https://example.com/a b)"
+   <p>
+-    <a href="https://example.com/target" rel="noopener noreferrer" target="_blank">
+-      <img alt="linked badge" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/badge.png">
+-    #text " image-only anchors carry no leading glyph."
++    <img alt="linked badge" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/badge.png">
++    #text "（https://example.com/target） image-only anchors carry no leading glyph."
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.settled.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.settled.txt
+index 741f29e03d..3026d49f9a 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.settled.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.settled.txt
+@@ -1,30 +1,6 @@
+ <div class="_markdown_404681">
+   <p>
+-    #text "A "
+-    <a href="https://example.com/ref" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "full"
+-    #text " reference, a "
+-    <a href="https://example.com/collapsed" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "collapsed"
+-    #text " one, and a "
+-    <a href="https://example.com/shortcut" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "shortcut"
+-    #text " one."
++    #text "A full（https://example.com/ref） reference, a collapsed（https://example.com/collapsed） one, and a shortcut（https://example.com/shortcut） one."
+   <p>
+     #text "[missing full][nope], [missing collapsed][], ![missing image][gone]."
+   <p>
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.streaming.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.streaming.txt
+index 741f29e03d..3026d49f9a 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.streaming.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/reference-links-and-images.streaming.txt
+@@ -1,30 +1,6 @@
+ <div class="_markdown_404681">
+   <p>
+-    #text "A "
+-    <a href="https://example.com/ref" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "full"
+-    #text " reference, a "
+-    <a href="https://example.com/collapsed" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "collapsed"
+-    #text " one, and a "
+-    <a href="https://example.com/shortcut" rel="noopener noreferrer" target="_blank">
+-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-        <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-        <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-        <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-        <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-      #text "shortcut"
+-    #text " one."
++    #text "A full（https://example.com/ref） reference, a collapsed（https://example.com/collapsed） one, and a shortcut（https://example.com/shortcut） one."
+   <p>
+     #text "[missing full][nope], [missing collapsed][], ![missing image][gone]."
+   <p>
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.settled.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.settled.txt
+index 67d874bb19..7a638ae725 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.settled.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.settled.txt
+@@ -24,13 +24,7 @@
+               #text "code"
+         <tr>
+           <td style="text-align: left;">
+-            <a href="https://example.com" rel="noopener noreferrer" target="_blank">
+-              <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-                <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-                <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-                <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-                <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-              #text "link"
++            #text "link（https://example.com）"
+           <td style="text-align: center;">
+             <em>
+               #text "em"
+diff --git a/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.streaming.txt b/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.streaming.txt
+index 67d874bb19..7a638ae725 100644
+--- a/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.streaming.txt
++++ b/packages/client/ui-primitives/tests/fixtures/markdown-dom/table-with-alignment.streaming.txt
+@@ -24,13 +24,7 @@
+               #text "code"
+         <tr>
+           <td style="text-align: left;">
+-            <a href="https://example.com" rel="noopener noreferrer" target="_blank">
+-              <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+-                <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor">
+-                <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor">
+-                <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor">
+-                <path d="M7.99973 14.0889C6.76445 14.0889 5.8252 11.3629 5.8252 8.00006C5.8252 4.63739 6.76445 1.91138 7.99973 1.91138" stroke="currentColor">
+-              #text "link"
++            #text "link（https://example.com）"
+           <td style="text-align: center;">
+             <em>
+               #text "em"
+diff --git a/packages/client/ui-primitives/tests/markdown-compact.client.spec.tsx b/packages/client/ui-primitives/tests/markdown-compact.client.spec.tsx
+index d36214aca0..bf50722d6b 100644
+--- a/packages/client/ui-primitives/tests/markdown-compact.client.spec.tsx
++++ b/packages/client/ui-primitives/tests/markdown-compact.client.spec.tsx
+@@ -34,7 +34,8 @@ describe('compact MarkdownText', () => {
+     expect(compactRoot.querySelector('strong')?.textContent).toBe('strong')
+     expect(compactRoot.querySelector('p > code')?.textContent).toBe('inline')
+     expect(compactRoot.querySelector('blockquote')?.textContent?.trim()).toBe('quoted')
+-    expect(compactRoot.querySelector('a')?.getAttribute('href')).toBe('https://example.com')
++    expect(compactRoot.querySelector('a')).toBeNull() // lawbench P-17: links are plain text
++    expect(compactRoot.textContent).toContain('reference（https://example.com）')
+     expect(compactRoot.querySelector('pre code')?.textContent).toBe('const answer = 42')
+     expect(compactRoot.querySelector('hr')).not.toBeNull()
+     expect(compactRoot.querySelector('table')).not.toBeNull()
+diff --git a/packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx b/packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx
+index a4c0536885..dbb1f5e5f2 100644
+--- a/packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx
++++ b/packages/client/ui-primitives/tests/markdown-file-links.client.spec.tsx
+@@ -97,10 +97,10 @@ describe('Markdown file links', () => {
+     expect(openFile).not.toHaveBeenCalled()
+   })
+ 
+-  it('preserves external links and leaves local links inert without an opener', () => {
++  it('lawbench P-17: external links render as text and local links stay inert without an opener', () => {
+     const view = render(<MarkdownText text={'[web](https://example.com/a#L1) [mail](mailto:a@example.com) [file](src/a.ts)'} />)
+-    expect(view.getByRole('link', { name: 'web' }).getAttribute('target')).toBe('_blank')
+-    expect(view.getByRole('link', { name: 'mail' }).getAttribute('href')).toBe('mailto:a@example.com')
++    expect(view.container.querySelector('a')).toBeNull()
++    expect(view.container.textContent).toBe('web（https://example.com/a#L1） mail（mailto:a@example.com） file')
+     expect(view.queryByRole('button')).toBeNull()
+   })
+ 
+@@ -131,7 +131,7 @@ describe('Markdown file links', () => {
+     expect(first).toHaveBeenCalledOnce()
+   })
+ 
+-  it('routes file and HTTP(S) links through the same provider', () => {
++  it('routes file links through the provider; HTTP(S) links never reach it (lawbench P-17)', () => {
+     const openFile = vi.fn()
+     const openExternalLink = vi.fn()
+     const view = render(
+@@ -142,8 +142,9 @@ describe('Markdown file links', () => {
+     fireEvent.click(view.getByRole('button', { name: 'source' }))
+     expect(openFile).toHaveBeenCalledExactlyOnceWith('src/a.ts', { line: 4 })
+     expect(openExternalLink).not.toHaveBeenCalled()
+-    fireEvent.click(view.getByRole('link', { name: 'web' }))
+-    expect(openExternalLink).toHaveBeenCalledExactlyOnceWith('https://example.com')
++    expect(view.queryByRole('link')).toBeNull()
++    fireEvent.click(view.getByText(/web（https:\/\/example\.com）/))
++    expect(openExternalLink).not.toHaveBeenCalled()
+     expect(openFile).toHaveBeenCalledOnce()
+   })
+ 
+diff --git a/packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx b/packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx
+index d0d7a8a205..37ee0d92d8 100644
+--- a/packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx
++++ b/packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx
+@@ -195,11 +195,12 @@ describe('incremental parsing is actually in effect', () => {
+     expect(live.container.querySelector('a')).toBeNull()
+     expect(live.container.textContent).toContain('[the link][ref]')
+     const fresh = render(<MarkdownText text={doc} streaming />)
+-    expect(fresh.container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/target')
++    // lawbench P-17: a resolved link is plain text with its address, not an anchor
++    expect(fresh.container.textContent).toContain('the link（https://example.com/target）')
+     fresh.unmount()
+     // The settled swap re-parses everything and heals the deviation.
+     live.rerender(<MarkdownText text={doc} />)
+-    expect(live.container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/target')
++    expect(live.container.textContent).toContain('the link（https://example.com/target）')
+     live.unmount()
+   })
+ })
+diff --git a/packages/client/ui-primitives/tests/markdown.client.spec.tsx b/packages/client/ui-primitives/tests/markdown.client.spec.tsx
+index c655a007d2..10a4913cde 100644
+--- a/packages/client/ui-primitives/tests/markdown.client.spec.tsx
++++ b/packages/client/ui-primitives/tests/markdown.client.spec.tsx
+@@ -57,8 +57,10 @@ describe('MarkdownText', () => {
+     expect(screen.getByText('ts')).toBeTruthy()
+     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+     expect(container.querySelector('br')).not.toBeNull()
+-    expect(screen.getByRole('link', { name: 'safe' }).getAttribute('target')).toBe('_blank')
+-    expect(screen.getByRole('link', { name: 'https://deepseek.com' })).toBeTruthy()
++    // lawbench P-17: links render as plain, copyable text
++    expect(container.querySelector('a')).toBeNull()
++    expect(container.textContent).toContain('safe（https://example.com）')
++    expect(container.textContent).toContain('https://deepseek.com')
+   })
+ 
+   it('closes punctuation-terminated strong emphasis before adjacent CJK text', () => {
+@@ -107,7 +109,7 @@ describe('MarkdownText', () => {
+     expect(container.textContent).toContain('**注意：**内容')
+   })
+ 
+-  it('links complete HTTP(S) inline code without promoting commands, unsafe schemes, or fences', () => {
++  it('lawbench P-17: complete HTTP(S) inline code stays plain code text, like every other token', () => {
+     const localUrl = 'http://127.0.0.1:3199/?demo=1'
+     const remoteUrl = 'https://example.com/preview?q=one%20two#result'
+     const source = [
+@@ -123,15 +125,10 @@ describe('MarkdownText', () => {
+     ].join('\n\n')
+     const { container } = render(<MarkdownText text={source} />)
+ 
+-    const links = screen.getAllByRole('link')
+-    expect(links.map(link => link.getAttribute('href'))).toEqual([localUrl, remoteUrl])
+-    for (const link of links) {
+-      expect(link.closest('code')).not.toBeNull()
+-      expect(link.getAttribute('target')).toBe('_blank')
+-      expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+-    }
+-    links[0]?.focus()
+-    expect(document.activeElement).toBe(links[0])
++    expect(screen.queryAllByRole('link')).toEqual([])
++    expect(container.querySelector('a')).toBeNull()
++    expect([...container.querySelectorAll('code')].map(code => code.textContent)).toContain(localUrl)
++    expect([...container.querySelectorAll('code')].map(code => code.textContent)).toContain(remoteUrl)
+     expect(screen.getByText('curl http://127.0.0.1:3199/?demo=1').closest('a')).toBeNull()
+     expect(screen.getByText('javascript:alert(1)').closest('a')).toBeNull()
+     expect(screen.getByText('mailto:dev@example.com').closest('a')).toBeNull()
+@@ -141,55 +138,24 @@ describe('MarkdownText', () => {
+     expect(container.querySelector('pre code a')).toBeNull()
+   })
+ 
+-  it('delegates ordinary HTTP(S) clicks while preserving modified-click behavior', () => {
++  it('lawbench P-17: never hands a link to the delegate; plain and modified clicks, settled and streaming', () => {
+     const openExternalLink = vi.fn<(href: string) => void>()
+-    render(
+-      <MarkdownDelegateProvider openExternalLink={openExternalLink}>
+-        <MarkdownText text={'[secure](https://example.com/a) [plain](http://example.com/b) `https://example.com/code` [mail](mailto:dev@example.com)'} />
+-      </MarkdownDelegateProvider>,
+-    )
+-
+-    const secure = screen.getByRole('link', { name: 'secure' })
+-    const plain = screen.getByRole('link', { name: 'plain' })
+-    const code = screen.getByRole('link', { name: 'https://example.com/code' })
+-    expect(fireEvent.click(secure)).toBe(false)
+-    expect(fireEvent.click(plain)).toBe(false)
+-    expect(fireEvent.click(code)).toBe(false)
+-    expect(openExternalLink.mock.calls).toEqual([
+-      ['https://example.com/a'],
+-      ['http://example.com/b'],
+-      ['https://example.com/code'],
+-    ])
+-
+-    for (const modified of [
+-      { button: 1 },
+-      { metaKey: true },
+-      { ctrlKey: true },
+-      { shiftKey: true },
+-      { altKey: true },
+-    ]) expect(fireEvent.click(secure, modified)).toBe(true)
+-    expect(openExternalLink).toHaveBeenCalledTimes(3)
+-    expect(screen.getByRole('link', { name: 'mail' }).getAttribute('target')).toBeNull()
+-  })
+-
+-  it('updates the delegated link handler while Markdown is streaming', () => {
+-    const first = vi.fn<(href: string) => void>()
+-    const second = vi.fn<(href: string) => void>()
+-    const source = '[web](https://example.com/)'
+-    const view = render(
+-      <MarkdownDelegateProvider openExternalLink={first}>
+-        <MarkdownText text={source} streaming />
+-      </MarkdownDelegateProvider>,
+-    )
+-    fireEvent.click(screen.getByRole('link', { name: 'web' }))
+-    view.rerender(
+-      <MarkdownDelegateProvider openExternalLink={second}>
+-        <MarkdownText text={source} streaming />
+-      </MarkdownDelegateProvider>,
+-    )
+-    fireEvent.click(screen.getByRole('link', { name: 'web' }))
+-    expect(first).toHaveBeenCalledOnce()
+-    expect(second).toHaveBeenCalledOnce()
++    const source = '[secure](https://example.com/a) [plain](http://example.com/b) `https://example.com/code` [mail](mailto:dev@example.com) www.example.com user@example.com'
++    for (const streaming of [false, true]) {
++      const { container, unmount } = render(
++        <MarkdownDelegateProvider openExternalLink={openExternalLink}>
++          <MarkdownText text={source} streaming={streaming} />
++        </MarkdownDelegateProvider>,
++      )
++      expect(container.querySelector('a')).toBeNull()
++      expect(container.textContent).toBe('secure（https://example.com/a） plain（http://example.com/b） https://example.com/code mail（mailto:dev@example.com） www.example.com user@example.com')
++      const paragraph = container.querySelector('p')!
++      for (const modified of [{}, { button: 1 }, { metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }]) {
++        expect(fireEvent.click(paragraph, modified)).toBe(true)
++      }
++      unmount()
++    }
++    expect(openExternalLink).not.toHaveBeenCalled()
+   })
+ 
+   it('links inline code through the file-mention resolver: URL first, settled only, never inside links', () => {
+@@ -224,8 +190,8 @@ describe('MarkdownText', () => {
+     expect(container.querySelectorAll('code button')).toHaveLength(1)
+     expect(container.querySelectorAll('a code button, a button')).toHaveLength(0)
+     expect(screen.getByText('other.css').closest('button')).toBeNull()
+-    // URL promotion wins before the resolver sees a token.
+-    expect(screen.getByText('https://example.com/').closest('a')).not.toBeNull()
++    // URL-shaped tokens reach neither an anchor (lawbench P-17) nor the resolver.
++    expect(screen.getByText('https://example.com/').closest('a, button')).toBeNull()
+ 
+     // Streaming renders keep mentions off — the one gate lives here: cached
+     // frozen elements must not bake in handlers that could go stale.
+@@ -351,9 +317,9 @@ describe('MarkdownText', () => {
+     const neutralized = [...container.querySelectorAll('p')]
+       .find(paragraph => paragraph.textContent === 'script relative')
+     expect(neutralized?.querySelector('a')).toBeNull()
+-    expect(screen.getByRole('link', { name: 'mail' }).getAttribute('target')).toBeNull()
+-    expect(screen.getByRole('link', { name: 'web' }).getAttribute('rel')).toBe('noopener noreferrer')
+-    expect(screen.getByRole('link', { name: 'upper' }).getAttribute('target')).toBe('_blank')
++    // lawbench P-17: allowlisted links are plain text too, address kept for copying
++    expect(container.querySelector('a')).toBeNull()
++    expect(container.textContent).toContain('mail（mailto:dev@example.com） web（http://example.com） upper（HTTPS://example.com）')
+     expect(screen.getByText('relative diagram')).toBeTruthy()
+     expect(screen.getByText('absolute diagram')).toBeTruthy()
+     expect(screen.getByText('file diagram')).toBeTruthy()
+@@ -361,13 +327,18 @@ describe('MarkdownText', () => {
+     expect(screen.getByText('mail diagram')).toBeTruthy()
+   })
+ 
+-  it('leads a known site link with its own mark and an unknown host with the globe', () => {
++  it('lawbench P-17: an address with non-ASCII characters is shown once, not followed by its encoded form', () => {
++    const { container } = render(<MarkdownText text={'见 http://例子.测试/路径 与 [说明](https://例子.测试/资料/一)'} />)
++    expect(container.textContent).toBe('见 http://例子.测试/路径 与 说明（https://例子.测试/资料/一）')
++    expect(container.querySelector('a')).toBeNull()
++  })
++
++  it('lawbench P-17: external links carry no site mark or globe (they are text, not anchors)', () => {
+     const { container } = render(<MarkdownText text={'[repo](https://github.com/org/repo) [docs](https://example.com/a)'} />)
+-    const pathsOf = (svg: SVGSVGElement): (string | null)[] => [...svg.querySelectorAll('path')].map(path => path.getAttribute('d'))
+-    const marks = [...container.querySelectorAll<SVGSVGElement>('p a svg')].map(pathsOf)
+-    const globe = pathsOf(render(<LinkIconMedium kind="url" />).container.querySelector('svg')!)
+-    const github = pathsOf(render(<LinkIconMedium kind="url" href="https://github.com/a" />).container.querySelector('svg')!)
+-    expect(marks).toEqual([github, globe])
++    expect(container.querySelector('p svg')).toBeNull()
++    expect(container.textContent).toBe('repo（https://github.com/org/repo） docs（https://example.com/a）')
++    // The icon component itself is unchanged for other owners.
++    expect(render(<LinkIconMedium kind="url" />).container.querySelector('svg')).not.toBeNull()
+   })
+ 
+   it('keeps incomplete streaming Markdown renderable', () => {

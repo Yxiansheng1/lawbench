@@ -1,0 +1,50 @@
+## N48（P2-A）写入依赖去掉 key
+文件：ui/dock.tsx；跑：tests/dock-z.spec.ts tests/dock-review.spec.ts tests/dock.spec.ts
+结果：3 failed | 105 passed (108)
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y3b 写入在途时切走、失败时不在、回来
+- tests/dock-z.spec.ts > Z：新挂上的输入区、Skill 列表还没读回时写入 > Z1 首页点胶囊进案件（软件刚启动、Skill 列表读得比 task/current 慢）：写给服务的参数
+- tests/dock-z.spec.ts > Z：新挂上的输入区、Skill 列表还没读回时写入 > Z2 S1 改 B 未写成就离开（插槽卸下），回来重挂：写给服务的参数；写失败时状态行
+
+## P3-B 需重写标记不起作用（选回同一份照旧省掉）
+文件：ui/dock.tsx；跑：tests/dock-review.spec.ts tests/dock.spec.ts
+结果：6 failed | 100 passed (106)
+- tests/dock-review.spec.ts > 复核员 X 系列（不重挂） > Y6a INPUT_CHANGED 后 0.5 秒内切走又切回同一胶囊
+- tests/dock-review.spec.ts > 复核员 X 系列（不重挂） > Y6b INPUT_CHANGED 后点"恢复默认"（参数本来就是默认）
+- tests/dock-review.spec.ts > 复核员 X 系列（不重挂） > Y6c INPUT_CHANGED 后在成果区对 X 取消选用再选用（0.5 秒内）
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y6a INPUT_CHANGED 后 0.5 秒内切走又切回同一胶囊
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y6b INPUT_CHANGED 后点"恢复默认"（参数本来就是默认）
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y6c INPUT_CHANGED 后在成果区对 X 取消选用再选用（0.5 秒内）
+
+## P3-C ① Agent 顺利开始时不清旧记录
+文件：agent/index.ts；跑：tests/agent.spec.ts
+结果：1 failed | 10 passed (11)
+- tests/agent.spec.ts > Q11：取任务失败 > 取任务、取上下文都成功时清掉该会话没被取走的旧记录（返修 P3-C ①）；被拦下时不清
+
+## P3-C ② 挂上、换会话时不取 turnNotice
+文件：ui/dock.tsx；跑：tests/dock-review.spec.ts tests/dock.spec.ts
+结果：2 failed | 104 passed (106)
+- tests/dock-review.spec.ts > 复核员 X 系列（不重挂） > Y7 被拦下的一轮发生在别的会话显示时：回来后的提示与之后成功一轮的误报
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y7 被拦下的一轮发生在别的会话显示时：回来后的提示与之后成功一轮的误报
+
+## P3-C ③ 提示只留一个会话（新的顶掉旧的）
+文件：ui/state.ts；跑：tests/dock-review.spec.ts tests/dock.spec.ts
+结果：2 failed | 104 passed (106)
+- tests/dock-review.spec.ts > 复核员 X 系列（不重挂） > Y8 被拦下后切到 S2（S2 也被拦下）再回 S1；或插槽重挂：S1 的提示是否还在
+- tests/dock-review.spec.ts > 复核员 X 系列（重挂） > Y8 被拦下后切到 S2（S2 也被拦下）再回 S1；或插槽重挂：S1 的提示是否还在
+
+## P3-D TurnNotices 取了不删
+文件：shared/turn-notices.ts；跑：tests/turn-notices.spec.ts
+结果：2 failed | 2 passed (4)
+- tests/turn-notices.spec.ts > Host 接线：Agent 经 lawbenchCore 记下 / 清掉，界面经远程方法 turnNotice 取走 > noteTurnBlocked 记下的，turnNotice 取得到且只取一次；clearTurnBlocked 清掉的取不到
+- tests/turn-notices.spec.ts > TurnNotices > 取一次即删；同一会话只留最新；各会话分开
+
+## P3-D TurnNotices.clear 不清
+文件：shared/turn-notices.ts；跑：tests/turn-notices.spec.ts
+结果：2 failed | 2 passed (4)
+- tests/turn-notices.spec.ts > Host 接线：Agent 经 lawbenchCore 记下 / 清掉，界面经远程方法 turnNotice 取走 > noteTurnBlocked 记下的，turnNotice 取得到且只取一次；clearTurnBlocked 清掉的取不到
+- tests/turn-notices.spec.ts > TurnNotices > 一轮顺利开始时清掉没被取走的旧记录（之后不误报）
+
+## P3-D Host 接线：远程方法不用 lawbenchCore 那份记录
+文件：host/index.ts；跑：tests/turn-notices.spec.ts
+结果：1 failed | 3 passed (4)
+- tests/turn-notices.spec.ts > Host 接线：Agent 经 lawbenchCore 记下 / 清掉，界面经远程方法 turnNotice 取走 > noteTurnBlocked 记下的，turnNotice 取得到且只取一次；clearTurnBlocked 清掉的取不到

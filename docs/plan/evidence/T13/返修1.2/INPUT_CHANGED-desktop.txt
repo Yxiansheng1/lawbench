@@ -1,0 +1,45 @@
+﻿[
+ {
+  "step": "挂上",
+  "status": "自由对话"
+ },
+ {
+  "step": "选合同审查",
+  "value": "contract-review"
+ },
+ {
+  "step": "写成后",
+  "status": "下一条消息按「合同审查」运行（直到你改掉）"
+ },
+ {
+  "step": "发送后 300 ms 起",
+  "status": "下一条消息按「合同审查」运行（直到你改掉）"
+ },
+ {
+  "step": "发送后 1000 ms 起",
+  "status": "输入材料已变化，请重新选择"
+ },
+ {
+  "step": "发送后 3000 ms 起",
+  "status": "输入材料已变化，请重新选择"
+ },
+ {
+  "step": "发送后 6000 ms 起",
+  "status": "输入材料已变化，请重新选择"
+ },
+ {
+  "step": "改选合同起草",
+  "value": "contract-draft"
+ },
+ {
+  "step": "写成后",
+  "status": "下一条消息按「合同起草」运行（直到你改掉）"
+ }
+]
+{"ts":"2026-09-30T06:04:30.731Z","method":"POST","path":"/core/task/begin","status":200,"ms":1,"ok":true}
+{"ts":"2026-09-30T06:04:30.738Z","method":"POST","path":"/core/context","status":200,"ms":1,"ok":false,"code":"INPUT_CHANGED"}
+{"ts":"2026-09-30T06:04:30.825Z","method":"GET","path":"/api/task/current","status":200,"ms":1,"ok":true}
+
+补记（2026-09-30 返修时，复核 NOTE）：上面是第一次发送。随后在"合同起草"下又发了一条（假服务仍按 --fail-context 报 INPUT_CHANGED），
+发送后状态行变红字"输入材料已变化，请重新选择"。截图 INPUT_CHANGED-01 取自这第二次（所以下拉框是"合同起草"），截图 02 取自第一次改选后写成时。
+两张截图都是返修前（eb9d817）的界面；返修后的行为由 dock-review.spec.ts 的 Y 系列守着，桌面端复测随 T17 第三步一起做。

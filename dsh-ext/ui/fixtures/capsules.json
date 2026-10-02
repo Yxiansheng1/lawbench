@@ -1,0 +1,258 @@
+{
+  "ok": true,
+  "value": {
+    "v": 1,
+    "hint": "公开法律研究、法条和案例查询建议使用线上大模型；涉及隐私、商业秘密或非公开案卷的材料进入本地工作区。",
+    "shared": [
+      "case-wiki-build",
+      "legal-workflow"
+    ],
+    "groups": [
+      {
+        "id": "civil",
+        "name": "民事与商事",
+        "hidden": false,
+        "items": [
+          {
+            "id": "contract-review",
+            "name": "合同审查",
+            "kind": "skill",
+            "skills": [
+              "contract-review",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "合同审查意见",
+              "带修订痕迹的 Word"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "contract-draft",
+            "name": "合同起草",
+            "kind": "skill",
+            "skills": [
+              "contract-draft",
+              "contract-review",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "合同初稿",
+              "待补事实清单"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "litigation-docs",
+            "name": "诉讼文书起草",
+            "kind": "skill",
+            "skills": [
+              "litigation-docs",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "起诉状",
+              "答辩状",
+              "上诉状",
+              "代理词"
+            ],
+            "hidden": false,
+            "custom": false
+          }
+        ]
+      },
+      {
+        "id": "criminal",
+        "name": "刑事案件",
+        "hidden": false,
+        "items": [
+          {
+            "id": "case-analysis",
+            "name": "案卷分析",
+            "kind": "skill",
+            "skills": [
+              "criminal-reading-notes",
+              "criminal-evidence-review",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "刑事阅卷笔录",
+              "证据审查意见"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "sentence-calc",
+            "name": "刑期计算",
+            "kind": "skill",
+            "skills": [
+              "sentence-calc"
+            ],
+            "outputs": [
+              "刑期计算表",
+              "量刑分析"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "bail-application",
+            "name": "取保候审/不予逮捕申请",
+            "kind": "skill",
+            "skills": [
+              "criminal-applications",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "取保候审申请书",
+              "不予批准逮捕法律意见书"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "defense-opinion",
+            "name": "辩护词起草",
+            "kind": "skill",
+            "skills": [
+              "defense-opinion",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "辩护词"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "cross-exam",
+            "name": "质证意见起草",
+            "kind": "skill",
+            "skills": [
+              "cross-exam-opinion",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "质证意见"
+            ],
+            "hidden": false,
+            "custom": false
+          }
+        ]
+      },
+      {
+        "id": "office",
+        "name": "日常办公",
+        "hidden": false,
+        "items": [
+          {
+            "id": "invoice",
+            "name": "发票整理",
+            "kind": "tool",
+            "tool": "invoice",
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "lawyer-letter",
+            "name": "律师函起草",
+            "kind": "skill",
+            "skills": [
+              "general-drafting",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "律师函"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "bidding",
+            "name": "招投标材料处理",
+            "kind": "skill",
+            "skills": [
+              "tender-review",
+              "bid-drafting",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "招标文件审查意见",
+              "投标文件初稿"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "retainer",
+            "name": "文件生成",
+            "kind": "tool",
+            "tool": "retainer",
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "archiving",
+            "name": "案卷归档",
+            "kind": "skill",
+            "skills": [
+              "case-archiving"
+            ],
+            "outputs": [
+              "结案报告",
+              "归档目录",
+              "卷宗 PDF",
+              "立卷申请书"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "general-docs",
+            "name": "通用文书",
+            "kind": "skill",
+            "skills": [
+              "general-drafting",
+              "case-reading-notes",
+              "pre-issue-check",
+              "doc-revise"
+            ],
+            "outputs": [
+              "法律意见书",
+              "案件分析报告",
+              "民事阅卷笔录"
+            ],
+            "hidden": false,
+            "custom": false
+          },
+          {
+            "id": "case-archiving-v2",
+            "name": "案卷归档（新版）",
+            "kind": "skill",
+            "skills": [
+              "case-archiving"
+            ],
+            "outputs": [
+              "归档方案"
+            ],
+            "hidden": true,
+            "custom": false,
+            "new": true
+          }
+        ]
+      }
+    ]
+  }
+}

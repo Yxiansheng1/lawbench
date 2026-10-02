@@ -1,0 +1,10 @@
+﻿T17 第二步返修 桌面端实测（2026-09-30 17:0x，开发启动，LOCALAPPDATA、APPDATA、DSH_HOME 指到仓库外测试目录 D:\lawbench-devhome-A）
+
+1. 启动：首次配置窗口（file:///…/apps/desktop/renderer/welcome.html）能加载；主界面到首页。
+   第一次试删掉 file: 时启动卡在"Loading plugins…"，日志 ERR_BLOCKED_BY_CLIENT 加载 welcome.html——所以 file: 改为只放行本应用 renderer 目录。
+2. webview / 侧栏浏览器通道（渲染进程里执行）：
+   document.createElement('webview') 没有 webview 方法（getWebContentsId 为 undefined）；
+   window.dshDesktop.browser.acquire(...) 被拒："No handler registered for 'dsh-desktop:browser-acquire'"。
+3. 中文网址（假模型回答 s2r-reply.md）：裸网址 http://例子.测试/路径 只显示一次；命名链接显示为"说明（https://例子.测试/资料/一）"（解码后）；回答里 <a> 0 个。截图 01。
+4. 快捷键列表（设置 → 通用设置 → 编辑快捷键）：有"打开命令菜单"，没有"打开引用菜单"。截图 02（列表顶部）。
+5. 配置写死：取证启动导出的插件清单与 --dump-config 静态树，check_plugin_tree.py 第 3 项 sandbox-policy {"mode":"workspace-write","workspaceRoot":"!!js process.cwd()"}、approval {"policy":"ask"} 一致；变异"approval.policy 改成 never"被报出。

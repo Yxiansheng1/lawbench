@@ -87,6 +87,114 @@
 - id: session-log-deepseek
   disabled: true
 
+# ── 1c. 律师用不上的入口（T17 第一步，执行令 2026-09-30 08:54；调研注记第 4 节）────
+# Host 行和界面行成对关：只关 Host 行，界面照样挂着、调一个没人服务的命名空间。
+
+# 终端
+- id: terminal-controller
+  disabled: true
+- id: ui-sidebar-terminal
+  disabled: true
+
+# @ 文件引用、跨会话引用（session-reference 的 Host 行会把别的会话内容塞进本次请求，不需要界面，必须关）
+# 输入框占位文字"@ 文件或对话"已由源码补丁 P-18 去掉
+- id: file-reference-local
+  disabled: true
+- id: session-reference
+  disabled: true
+- id: ui-reference
+  disabled: true
+
+# 工作区文件浏览（read / stat 接受工作区外的绝对路径）
+- id: workspace-files
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+# 每轮成果卡片：Host 半边硬依赖 workspace-files 提供的 workspaceFiles，随上一行关掉后会"启用但起不来"，显式关掉
+# （执行令 2026-09-30 09:39 裁决；要开回须连 workspace-files 一起开，记入 N41）
+- id: ui-deliverables
+  disabled: true
+
+# 在别的程序里打开；session-controller 自带的 openWorkspacePath 不受这两行约束，要改源码，候 N40
+- id: open-in-app
+  disabled: true
+- id: ui-open-in-app
+  disabled: true
+
+# 在线装插件的运行器（动态 Cordis 包）
+- id: cordis-host-runner
+  disabled: true
+- id: cordis-inspect-providers
+  disabled: true
+- id: cordis-client-runner
+  disabled: true
+- id: ui-cordis
+  disabled: true
+
+# 导出会话（/export、标题栏按钮、GET /api/session.export 整个会话记录加附件的 ZIP）
+- id: session-log-download
+  disabled: true
+
+# 设置里的"内置插件"及附属页
+- id: ui-settings-plugins
+  disabled: true
+- id: ui-settings-plugin-inventory
+  disabled: true
+- id: plugin-inventory
+  disabled: true
+- id: ui-settings-shell
+  disabled: true
+- id: ui-settings-agent-loop
+  disabled: true
+- id: ui-settings-subagent
+  disabled: true
+- id: ui-settings-web-search
+  disabled: true
+
+# ── 1d. 要取舍的入口（N41，用户 2026-09-30 同意主编排推荐；执行令 10:39 第 1 节）──────
+# 同样 Host 行和界面行成对关。
+
+# "权限"菜单（输入区和通用设置里的权限选择）。关掉后沙箱和审批按 base 的默认：
+# sandbox-policy 取 DSH_PERMISSION_MODE ?? 'workspace-write'，approval 为 ask；产品启动环境不设这个变量
+- id: permission
+  disabled: true
+- id: ui-permission
+  disabled: true
+
+# "模型"选择器：只有一条律所路由，新会话默认模型由 agent-default-model 行给出
+- id: ui-model-selection
+  disabled: true
+
+# "Agent 预设"设置页：会显示我方系统提示全文；preset 注册表（agent-preset-registry）保留
+- id: ui-agent-preset
+  disabled: true
+
+# /feedback 命令（会写 /.anonymous-user-id）
+- id: command-feedback
+  disabled: true
+
+# 轨迹视图；每轮记录改动（会在案件文件夹里跑 git、往系统临时目录复制改动的文件）
+- id: ui-trajectory
+  disabled: true
+- id: workspace-changes
+  disabled: true
+
+# "目标""计划"入口（模型侧 tool-goal、command-goal、plan-mode 早已关）
+- id: ui-goal
+  disabled: true
+- id: ui-plan
+  disabled: true
+
+# 权限关掉后沙箱和审批写死，不再读环境变量 DSH_PERMISSION_MODE（桌面端把整个进程环境传给 Host，
+# 机器上有人设了 danger-full-access 也不生效；1516 令第一节小项③）。整行替换，字段写全（workspaceRoot 同 base）
+- id: sandbox-policy
+  config:
+    mode: workspace-write
+    workspaceRoot: !!js process.cwd()
+- id: approval
+  config:
+    policy: ask
+
 # ── 2. 改配置的行 ──────────────────────────────────────────────────────────
 
 # 默认 preset 指向律师工作台；不改的话仍指向已关掉的 standard，新建会话报 agent-preset/not-found
@@ -197,8 +305,9 @@
               includeDefaultRoots: false
               watch: false
               # Spec 10.1：管理员目录 %ProgramData%\lawbench\skills 在前（DSH 同级先到先得，同名时它覆盖内置），
-              # 内置目录 <安装目录>\skills 在后；开发期内置目录由 LAWBENCH_SKILLS_DIR 指定，打包后由 Host 固定为安装目录（T20 待办）
-              customSkillDirs: !!js "[process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+              # 内置目录 <安装目录>\skills 在后；开发期内置目录由 LAWBENCH_SKILLS_DIR 指定。装好的客户端（exe 旁有 resources\app.asar）
+              # 固定为安装目录、不读这个环境变量（T20 步骤 3；与 host\install-layout.ts 同一判断，ProgramData 下目录名同 ADMIN_DIR_NAME）
+              customSkillDirs: !!js "((p, fs) => { const inst = p.dirname(process.execPath); const packaged = fs.existsSync(p.join(inst, 'resources', 'app.asar')); return [p.join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), packaged ? p.join(inst, 'skills') : process.env.LAWBENCH_SKILLS_DIR].filter(Boolean) })(process.getBuiltinModule('node:path'), process.getBuiltinModule('node:fs'))"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user
@@ -235,6 +344,10 @@
     - id: legal-credentials
       name: 'lawbench-dsh/credentials'
 
+    # 界面插件（T13）：行名必须恰好是包名，DSH 的 modules 行才把它当界面插件（exports["./client"]）
+    - id: legal-ui
+      name: 'lawbench-dsh'
+
     # 启动并看护工作台服务（Spec 1.3）；提供 lawbenchCore 服务和远程命名空间 lawbench
     # 开发期由环境变量给出启动命令等；打包后由 T20 固定为内置 Python 与安装目录
     - id: legal-host
@@ -246,3 +359,32 @@
         forwardPort: 18765
         portRange: !!js "process.env.LAWBENCH_SERVICE_PORTS ? process.env.LAWBENCH_SERVICE_PORTS.split('-').map(Number) : undefined"
         env: !!js "JSON.parse(process.env.LAWBENCH_SERVICE_ENV ?? '{}')"
+        # listSkills 读的 Skill 目录（T13 执行令 Q4），与上面 preset 的 skill-filesystem 同一写法、同一顺序（管理员目录在前）
+        skillDirs: !!js "[process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+
+# ── 5. 会话记录进案件文件夹（T17 第三步，执行令 2026-09-30 15:16）─────────────────
+# 原行把所有会话记录存进 $DSH_HOME\sessions；换成我方路由：案件里的会话存 <案件>\工作区\会话，
+# 不在案件里的仍存 $DSH_HOME\sessions。路由内部用的仍是原版 JSONL 包（按 DSH 的模块解析取它的入口文件）。
+- id: session-persistence-jsonl
+  disabled: true
+
+# 会话投影缓存：原行把每个会话的投影（标题等，含律师发的原话）存进 $DSH_HOME\storages\session_projcache，不跟案件走
+# （第三步验收全盘搜特征串时发现），关掉。侧栏里没打开过的会话，标题、最近活动、是否空白只从这份缓存取（不重放记录），
+# 所以不能干脆不要：改由下面的 legal-session-store 用原版缓存类按案件存（<案件>\工作区\会话缓存，第三轮裁决 A-P2-1 ①）
+- id: session-projection-cache
+  disabled: true
+
+- insert:
+    - id: legal-session-store
+      name: 'lawbench-dsh/session-store'
+      config:
+        backendModule: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-persistence-jsonl')"
+        defaultRoot: !!js dshHomePath('sessions')
+        appData: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
+        # 不在案件里的会话不许新建（N46 用户定 ②：没有打开案件就不能发消息）；已有的只读，不能续写
+        allowOutsideCase: false
+        # 会话投影缓存按案件存；写入节奏同 base 原行
+        projectionCache:
+          module: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-projection-cache')"
+          writeEveryEvents: 200
+          writeIntervalMs: 5000

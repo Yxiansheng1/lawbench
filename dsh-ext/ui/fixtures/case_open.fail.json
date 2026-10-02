@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "CASE_ROOT_IS_LINK",
+    "message": "所选文件夹是快捷方式或链接，请选择真实的案件文件夹后再打开"
+  }
+}

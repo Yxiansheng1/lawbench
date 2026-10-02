@@ -1,0 +1,144 @@
+{
+  "ok": true,
+  "value": {
+    "materials": [
+      {
+        "material_id": "M0001",
+        "name": "委托代理合同",
+        "rel_path": "01委托手续/委托代理合同.docx",
+        "type": "docx",
+        "status": "parsed",
+        "unit": "para",
+        "unit_count": 42,
+        "is_ocr": "none",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0002",
+        "name": "借款合同",
+        "rel_path": "02案件材料/借款合同.pdf",
+        "type": "pdf",
+        "status": "parsed",
+        "unit": "page",
+        "unit_count": 6,
+        "is_ocr": "none",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0003",
+        "name": "转账凭证扫描件",
+        "rel_path": "03证据/转账凭证扫描件.pdf",
+        "type": "pdf",
+        "status": "needs_ocr",
+        "unit": "page",
+        "unit_count": 12,
+        "is_ocr": "none",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0004",
+        "name": "还款流水",
+        "rel_path": "03证据/还款流水.xlsx",
+        "type": "xlsx",
+        "status": "parsed",
+        "unit": "cell",
+        "unit_count": 3,
+        "is_ocr": "none",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0005",
+        "name": "转账截图",
+        "rel_path": "03证据/转账截图.png",
+        "type": "image",
+        "status": "parsed",
+        "unit": "page",
+        "unit_count": 1,
+        "is_ocr": "full",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0006",
+        "name": "催款函",
+        "rel_path": "02案件材料/催款函.pdf",
+        "type": "pdf",
+        "status": "failed",
+        "unit": "page",
+        "unit_count": 0,
+        "is_ocr": "none",
+        "stale_ocr": false,
+        "error": "文件已加密，无法读取；请解除密码后重新放入",
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0007",
+        "name": "微信聊天记录",
+        "rel_path": "03证据/微信聊天记录.txt",
+        "type": "txt",
+        "status": "parsed",
+        "unit": "line",
+        "unit_count": 320,
+        "is_ocr": "none",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      },
+      {
+        "material_id": "M0008",
+        "name": "借条",
+        "rel_path": "02案件材料/借条.pdf",
+        "type": "pdf",
+        "status": "ocr_running",
+        "unit": "page",
+        "unit_count": 6,
+        "is_ocr": "partial",
+        "stale_ocr": false,
+        "error": null,
+        "pages_need_ocr": [
+          4,
+          5,
+          6
+        ],
+        "pages_mixed": [
+          2
+        ]
+      },
+      {
+        "material_id": "M0009",
+        "name": "对账单",
+        "rel_path": "03证据/对账单.xls",
+        "type": "xls",
+        "status": "source_deleted",
+        "unit": "cell",
+        "unit_count": 2,
+        "is_ocr": "none",
+        "stale_ocr": true,
+        "error": null,
+        "pages_need_ocr": [],
+        "pages_mixed": []
+      }
+    ]
+  }
+}

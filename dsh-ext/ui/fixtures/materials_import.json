@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "value": {
+    "copied": [
+      {
+        "from": "C:\\Users\\demo\\Desktop\\借条.pdf",
+        "to": "02案件材料/借条.pdf"
+      },
+      {
+        "from": "C:\\Users\\demo\\Desktop\\转账截图.png",
+        "to": "03证据/转账截图.png"
+      }
+    ],
+    "skipped": [
+      {
+        "path": "C:\\Users\\demo\\OneDrive\\补充说明.docx",
+        "reason": "云同步目录"
+      },
+      {
+        "path": "C:\\Users\\demo\\Desktop\\借款合同.pdf",
+        "reason": "同名同内容已存在"
+      }
+    ],
+    "scan": {
+      "added": 2,
+      "changed": 0,
+      "removed": 0,
+      "failed": 0,
+      "review_needed": true
+    }
+  }
+}

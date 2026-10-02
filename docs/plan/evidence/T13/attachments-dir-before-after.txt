@@ -1,0 +1,42 @@
+# $DSH_HOME\attachments 检查（2026-09-30，桌面端开发模式，DSH_HOME=%LOCALAPPDATA%\lawbench-dev\dsh-home）
+
+## 修复前（界面插件的拖入处理没拦住冒泡）
+在浏览器窗格里把两个虚构的 1 字节测试文件（补充借条.pdf、还款承诺书.docx）拖到"材料"面板：
+我方导入确认框弹出，但 DSH 在 document 上的拖入监听（packages/client/ui-attachment/src/client/drop-events.ts:75-78）
+也收下了这次拖入，把文件作为聊天附件存进附件目录（Spec D13 不允许）：
+
+%LOCALAPPDATA%\lawbench-dev\dsh-home\attachments\v1\file-objects\2d\2d711642…4881
+%LOCALAPPDATA%\lawbench-dev\dsh-home\attachments\v1\file-objects\a1\a1fce436…b0fa
+%LOCALAPPDATA%\lawbench-dev\dsh-home\attachments\v1\files\2d\2d711642…4881\补充借条.pdf
+%LOCALAPPDATA%\lawbench-dev\dsh-home\attachments\v1\files\a1\a1fce436…b0fa\还款承诺书.docx
+
+截图：08a-导入确认框（修复前：DSH附件也收下了这次拖入）.jpg（输入框里出现了"补充借条.pdf"附件）。
+
+## 修复
+材料面板、首页案件卡片的 dragenter / dragover / dragleave / drop 处理里 stopPropagation，拖入事件不再冒泡到 document。
+上面 4 个测试文件（本会话自造的虚构 1 字节文件）已删除；删除后附件目录里文件数：0。
+
+## 修复后
+同样的拖入改到首页案件卡片上做一遍：只弹我方导入确认框，输入框没有附件，附件目录文件数仍为 0（见下方复查）。
+
+## 还没覆盖的
+拖到对话框本身、粘贴截图、输入框"+"菜单里的"添加文件"仍走 DSH 附件，要靠 P-5 源码补丁（ui-conversation 的 addFiles 先问我方导入钩子、去掉"+"按钮）。
+P-5 源码补丁本次没能落地：改 dsh\ 子模块源码的操作被本机权限设置拦下，候用户决定（见交付说明）。
+复查（案件卡片拖入之后）：附件目录文件数 0
+
+## 返修 P3-5：材料面板修复后的复查（2026-09-30，桌面端开发模式窗口，经渲染进程调试口操作）
+做法：打开虚构案件，在"材料"面板上派发 dragenter / dragover / drop，拖入两个脚本构造的文件（补充借条.pdf、还款承诺书.docx，没有本机路径）。
+结果：我方处理接住了（弹"没有可导入的文件"），输入框里没有附件（页面文字里没有"补充借条.pdf"），截图 08b。
+
+### 拖入前 dir /s /a-d %LOCALAPPDATA%\lawbench-dev\dsh-home\attachments（原始输出）
+ 驱动器 C 中的卷是 Windows-SSD
+ 卷的序列号是 E46B-7599
+找不到文件
+
+### 拖入后（原始输出）
+ 驱动器 C 中的卷是 Windows-SSD
+ 卷的序列号是 E46B-7599
+找不到文件
+
+## 拖到"文件夹不在原处"的案件卡片（返修一并做，桌面端窗口）
+派发 dragenter / dragover / drop：dragover、drop 都已阻止默认行为（defaultPrevented=true），dropEffect=none，没有弹框，页面地址没变（没有跳到 file://）。

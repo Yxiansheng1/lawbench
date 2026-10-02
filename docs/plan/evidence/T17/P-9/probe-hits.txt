@@ -1,0 +1,21 @@
+﻿# P-9 实测：本机局域网地址上的探针（192.168.8.191:18999，只在这个地址上监听；不是 127.0.0.1）收到的请求
+# 同一台机器、同一套步骤：打开案件新会话 → 发一条消息（假模型网关回答 假模型回答.md，DSH 用真实的 Markdown 渲染）→ 在渲染进程里跑 p9-synthetic.js（合成回答块里的 img、new Image、link 样式、script、@font-face、CSS 背景、fetch、WebSocket、iframe）
+
+## 对照组（桌面端主进程为补丁前的构建 lib\main.js 2026-09-29 23:35）：收到 12 次
+{"time":"2026-09-30T04:23:39.525Z","method":"GET","url":"/md-inline.png?q=%E5%80%9F%E6%AC%BE"}
+{"time":"2026-09-30T04:23:39.536Z","method":"GET","url":"/md-ref.png"}
+{"time":"2026-09-30T04:23:39.538Z","method":"GET","url":"/md-table.png"}
+{"time":"2026-09-30T04:24:02.597Z","method":"GET","url":"/syn-style.css"}
+{"time":"2026-09-30T04:24:02.600Z","method":"GET","url":"/syn-bg.png"}
+{"time":"2026-09-30T04:24:02.602Z","method":"GET","url":"/syn-script.js"}
+{"time":"2026-09-30T04:24:02.603Z","method":"GET","url":"/syn-fetch"}
+{"time":"2026-09-30T04:24:02.605Z","method":"GET","url":"/syn-image.png"}
+{"time":"2026-09-30T04:24:02.607Z","method":"GET","url":"/syn-answer.png"}
+{"time":"2026-09-30T04:24:02.658Z","method":"GET","url":"/syn-font.woff2"}
+{"time":"2026-09-30T04:24:02.727Z","method":"GET","url":"/syn-ws"}
+{"time":"2026-09-30T04:24:02.768Z","method":"GET","url":"/syn-iframe"}
+
+## 补丁后（重新 bundle 的 lib\main.js 含 lawbenchRequestAllowed）：收到 1 次（最后一条是测后从 PowerShell 直接请求、确认探针在听的正向对照）
+{"time":"2026-09-30T04:27:37.611Z","method":"GET","url":"/probe-alive-from-powershell"}
+
+补丁后渲染进程里：fetch 与 WebSocket 报错，new Image 未加载；data: 图片照常加载（dataImage=loaded）；首页、案件、材料列表、发消息与回答都照常（Host 的 http、ws 与 dsh-app:// 放行）。

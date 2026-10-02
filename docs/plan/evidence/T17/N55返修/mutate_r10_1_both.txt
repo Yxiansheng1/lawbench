@@ -1,0 +1,20 @@
+× M1（checkpoint 插件：after）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路径不被重建，新位置不写 3147ms
+× M1b（checkpoint 插件：after）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建 3119ms
+× M2（checkpoint 插件：after）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别的案件 1944ms
+× M1（checkpoint 插件：before）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路径不被重建，新位置不写 3129ms
+× M1b（checkpoint 插件：before）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建 3122ms
+× M2（checkpoint 插件：before）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别的案件 1914ms
+× M1（checkpoint 插件：none）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路径不被重建，新位置不写 3108ms
+× M1b（checkpoint 插件：none）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建 3102ms
+× M2（checkpoint 插件：none）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别的案件 1894ms
+Tests  9 failed | 21 passed (30)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+FAIL  tests/live-writer.spec.ts > M1（checkpoint 插件：after）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路径
+FAIL  tests/live-writer.spec.ts > M1（checkpoint 插件：before）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路
+FAIL  tests/live-writer.spec.ts > M1（checkpoint 插件：none）没落过盘的会话 → 搬家 → 新位置打开 → 在它里面说第一句：整轮拒绝、记 CASE_MOVED，旧路径不
+FAIL  tests/live-writer.spec.ts > M1b（checkpoint 插件：after）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建
+FAIL  tests/live-writer.spec.ts > M1b（checkpoint 插件：before）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建
+FAIL  tests/live-writer.spec.ts > M1b（checkpoint 插件：none）没落过盘的会话 → 搬家（不在新位置打开）→ 在它里面说第一句：整轮拒绝，旧路径不被重建
+FAIL  tests/live-writer.spec.ts > M2（checkpoint 插件：after）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别的
+FAIL  tests/live-writer.spec.ts > M2（checkpoint 插件：before）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别
+FAIL  tests/live-writer.spec.ts > M2（checkpoint 插件：none）没落过盘的会话 → 搬家 → 新位置打开 → 原路径又建了别的案件并打开 → 说一句：整轮拒绝，不写进别的案

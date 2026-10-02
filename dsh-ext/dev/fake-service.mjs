@@ -2,14 +2,23 @@
 // 不属于产品。T3/T8 合并后换真服务复测。
 // 用法：node dev/fake-service.mjs --port 18801  （令牌取环境变量 LB_TOKEN；应用数据目录取 LB_APPDATA）
 // 另支持：--fail-begin（task/begin 返回 CASE_NOT_FOUND）、--calls <jsonl>（记录每次调用的元数据）、
-//   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）
+//   --bad-response（成功返回的内容故意不合契约：/core/* 少字段、工具结果少字段，用来测插件的返回校验）、
+//   --fixtures（T13：其余 /api/* 按 ui/fixtures/<契约>.json 回答，供界面开发和截图；胶囊配置存在 LB_APPDATA 里，重启后保持）、
+//   --fail-api <契约,…>（T13：这些接口改回 ui/fixtures/<契约>.fail.json，截错误提示用）、
+//   --fail-context <错误码>（/core/context 一律返回这个错误，如 INPUT_CHANGED：测输入材料变化后整轮被拦下的提示）、
+//   --case-root <目录>（T13：假数据里第一个案件的文件夹改成这个真实存在的空目录，桌面端才能把它当工作区打开）
+//   T26：发票整理与委托材料两条接口见 dev/fake-tools.mjs（--invoice-delay、--invoice-blocked、--retainer-python、--retainer-stop-stuck）
+//   --llm-reply <文件>（T17：在本机转发端口 LB_FORWARD_PORT 上假扮模型网关，POST /v1/chat/completions 以流式返回这个文件的内容，
+//     让 DSH 用真实的 Markdown 渲染一段回答；只监听 127.0.0.1，不连外网）
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
+import { API_ROUTES } from '../shared/api-routes.ts'
+import { basename, join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { loadContracts, CONTRACTS_DIR } from '../scripts/contracts-source.mjs'
+import { makeTools } from './fake-tools.mjs'
 
 const require = createRequire(import.meta.url)
 const Ajv2020 = require('ajv/dist/2020.js').default
@@ -22,7 +31,24 @@ const TOKEN = process.env.LB_TOKEN ?? ''
 const APPDATA = process.env.LB_APPDATA ?? join(dirname(fileURLToPath(import.meta.url)), '.fake-appdata')
 const CALLS = arg('--calls', null)
 const FAIL_BEGIN = flag('--fail-begin')
+const FAIL_CONTEXT = arg('--fail-context', null)
 const BAD_RESPONSE = flag('--bad-response')
+const FIXTURES = flag('--fixtures')
+// 真服务按案件编号去重：律师在新位置打开（/api/case/open）之后，最近案件只列新位置（T17 第五轮复核的证据缺口）。
+// 这里模拟：给了 --case-root 时，打开的路径若与它同名（复制、搬家后的同一案件），之后第一个案件就报打开的那个路径。
+let CASE_ROOT = arg('--case-root', null)
+// --case-root-file <文件>：每次请求都从这个文件读第一个案件的位置（桌面端复测时手动切换"服务现在只列哪个位置"）
+const CASE_ROOT_FILE = arg('--case-root-file', null)
+// 契约 1.2（N37）：任务单按"管到律师改掉为止"模拟——/api/task 设置该会话当前的选择（新的顶掉旧的）；
+// /api/task/current 读回；/core/task/begin 按当前选择复制一份新建执行中的任务，当前选择不消耗、不删除；
+// /api/tasks 只列已开始执行的。--fail-task-create：写选择一律返回 SERVICE_UNAVAILABLE（测"写入失败保留下拉框"）
+const FAIL_TASK_CREATE = flag('--fail-task-create')
+const selections = new Map() // session_id → { task_id, entry, skill, inputs, params, updated_at }
+const started = [] // 已开始执行的：{ task_id, skill }
+const taskIdNow = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomBytes(2).toString('hex')}` }
+const isoNow = () => { const d = new Date(); const off = -d.getTimezoneOffset(); const p = (n) => String(Math.abs(n)).padStart(2, '0'); return new Date(d.getTime() + off * 60000).toISOString().slice(0, 19) + (off >= 0 ? '+' : '-') + p(Math.trunc(off / 60)) + ':' + p(off % 60) }
+const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'fixtures')
 if (PORT < 18801 || PORT > 18809) throw new Error('假服务端口限 18801–18809')
 if (TOKEN.length < 16) throw new Error('需要环境变量 LB_TOKEN（至少 16 位）')
 
@@ -36,6 +62,9 @@ const check = (id, def, value) => {
   return fn(value) ? [] : fn.errors.map((e) => `${e.instancePath || '/'} ${e.message}`)
 }
 const example = (name) => JSON.parse(readFileSync(join(CONTRACTS_DIR, 'examples', name), 'utf8'))
+const savedSettings = () => { const f = join(APPDATA, 'settings.json'); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : example('file_settings.json') }
+const tools = makeTools({ arg, flag, check, fail: (code, message) => ({ ok: false, error: { code, message } }), ok: (value) => ({ ok: true, value }), settings: savedSettings })
+for (const sig of ['SIGINT', 'SIGTERM', 'exit']) process.on(sig, () => { tools.close(); if (sig !== 'exit') process.exit(0) })
 
 // 工具样例：有官方样例的用样例；T23/T24 的三个工具按工单返回 SERVICE_UNAVAILABLE；其余没有样例的如实返回 INTERNAL
 const TOOL_RESULTS = {
@@ -62,11 +91,15 @@ function handle(method, path, body) {
       if (FAIL_BEGIN) return [fail('CASE_NOT_FOUND', '找不到该案件，请重新打开')]
       const res = example('core_task_begin.res.json'); res.value.task_id = taskId()
       tasks.set(res.value.task_id, { tools: 0 })
+      // 1.2：按该会话当前的选择新建（复制一份），当前选择留着
+      const sel = selections.get(body.session_id)
+      started.push({ task_id: res.value.task_id, skill: sel?.skill ?? null })
       return [res]
     }
     case 'POST /core/context': {
       const v = check('core/context', 'request', body); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
       if (!tasks.has(body.task_id) && !BAD_RESPONSE) return [fail('TASK_NOT_FOUND', '找不到该任务')]
+      if (FAIL_CONTEXT) return [fail(FAIL_CONTEXT, '输入材料已变化，请重新选择')]
       return [example('core_context.res.json')]
     }
     case 'POST /core/tool': {
@@ -112,6 +145,51 @@ function handle(method, path, body) {
   }
 }
 
+// T13 --fixtures：按路由表匹配方法和路径，校验请求后回答 ui/fixtures 里的假数据
+const ROUTE_RE = API_ROUTES.map((r) => ({ r, re: new RegExp('^' + r.path.replace(/\{(\w+)\}/g, '(?<$1>[^/]+)') + '$') }))
+const fixture = (name) => JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8'))
+function fromFixtures(method, path, query, body) {
+  const hit = ROUTE_RE.map(({ r, re }) => ({ r, m: re.exec(path) })).find(({ r, m }) => m && r.http === method)
+  if (!hit) return null
+  const { r, m } = hit
+  const params = Object.fromEntries(Object.entries(m.groups ?? {}).map(([k, v]) => [k, decodeURIComponent(v)]))
+  const request = method === 'GET' ? { ...Object.fromEntries(query), ...params } : { ...(body ?? {}), ...params }
+  if (!r.noRequest) {
+    const v = check(`api/${r.contract}`, 'request', request); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
+  }
+  if (FAIL_API.has(r.contract)) return [fixture(`${r.contract}.fail.json`)]
+  const saved = join(APPDATA, 'capsules.json')
+  if (r.method === 'getCapsules' && existsSync(saved)) return [ok(JSON.parse(readFileSync(saved, 'utf8')))]
+  if (r.method === 'putCapsules') {
+    mkdirSync(APPDATA, { recursive: true })
+    writeFileSync(saved, JSON.stringify(request, null, 2), 'utf8')
+    return [ok(request)]
+  }
+  if (r.method === 'capsulesReset') rmSync(saved, { force: true })
+  if (r.method === 'taskCreate') {
+    if (FAIL_TASK_CREATE) return [fail('SERVICE_UNAVAILABLE', '工作台服务未启动，请稍后重试')]
+    const t = { task_id: taskIdNow(), entry: request.entry, skill: request.skill, inputs: request.inputs, params: request.params, updated_at: isoNow() }
+    selections.set(request.session_id, t) // 新的顶掉旧的
+    return [ok({ task_id: t.task_id })]
+  }
+  if (r.method === 'taskCurrent') {
+    const sel = selections.get(request.session_id)
+    // entry、skill 都为 null 的自由对话选择也原样返回；从没设置过返回 null
+    return [ok({ selection: sel ?? null })]
+  }
+  if (r.method === 'tasksList') {
+    const base = fixture('tasks_list.json')
+    const mine = started.map((c) => ({ task_id: c.task_id, skill: c.skill, status: 'running', drafts: [], citation_passed: null, finished_at: null, coverage: null, citation_check: null }))
+    return [ok({ tasks: [...mine, ...base.value.tasks] })]
+  }
+  if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
+  const out = fixture(`${r.contract}.json`)
+  if (CASE_ROOT_FILE && existsSync(CASE_ROOT_FILE)) CASE_ROOT = readFileSync(CASE_ROOT_FILE, 'utf8').trim() || CASE_ROOT
+  if (CASE_ROOT && r.method === 'caseOpen' && typeof request?.path === 'string' && basename(request.path) === basename(CASE_ROOT)) CASE_ROOT = request.path
+  if (CASE_ROOT && r.method === 'caseRecent' && out.ok && out.value.cases[0]) out.value.cases[0].root = CASE_ROOT
+  return [out]
+}
+
 const RESPONSE_SCHEMA = { '/core/task/begin': 'core/task_begin', '/core/context': 'core/context', '/core/tool': 'core/tool', '/core/progress': 'core/progress', '/core/task/end': 'core/task_end', '/api/connection/test': 'api/connection_test' }
 
 createServer((req, res) => {
@@ -131,22 +209,46 @@ createServer((req, res) => {
   req.on('end', () => {
     let body
     try { body = raw ? JSON.parse(raw) : undefined } catch { return send(200, fail('INVALID_ARGUMENT', '请求参数有误')) }
-    const out = handle(req.method, url.pathname, body)
-    if (!out) return send(404, fail('INVALID_ARGUMENT', '请求参数有误'))
-    let [payload, violations] = out
-    if (BAD_RESPONSE && payload.ok) {
-      // 去掉一个必填字段：/core/tool 去掉工具结果里的第一个字段；其他命令在 value 里塞一个契约没有的字段或删字段
-      const v = structuredClone(payload.value)
-      const firstKey = v && typeof v === 'object' ? Object.keys(v)[0] : undefined
-      if (firstKey) delete v[firstKey]; else payload = { ...payload, unexpected: true }
-      payload = { ...payload, value: v }
-    }
-    const rs = RESPONSE_SCHEMA[url.pathname]
-    const selfCheck = rs ? check(rs, 'response', payload) : []
-    res.meta = {
-      tool: body?.tool, ok: payload.ok, code: payload.ok ? undefined : payload.error.code,
-      ...(violations?.length ? { violations } : {}), ...(selfCheck.length ? { response_violations: selfCheck } : {}),
-    }
-    send(200, payload)
+    void Promise.resolve(tools.handle(req.method, url.pathname, body) ?? handle(req.method, url.pathname, body) ?? (FIXTURES ? fromFixtures(req.method, url.pathname, url.searchParams, body) : null)).then((out) => {
+      if (!out) return send(404, fail('INVALID_ARGUMENT', '请求参数有误'))
+      let [payload, violations] = out
+      if (BAD_RESPONSE && payload.ok) {
+        // 去掉一个必填字段：/core/tool 去掉工具结果里的第一个字段；其他命令在 value 里塞一个契约没有的字段或删字段
+        const v = structuredClone(payload.value)
+        const firstKey = v && typeof v === 'object' ? Object.keys(v)[0] : undefined
+        if (firstKey) delete v[firstKey]; else payload = { ...payload, unexpected: true }
+        payload = { ...payload, value: v }
+      }
+      const route = ROUTE_RE.find(({ r, re }) => r.http === req.method && re.test(url.pathname))?.r
+      const rs = RESPONSE_SCHEMA[url.pathname] ?? (route ? `api/${route.contract}` : undefined)
+      const selfCheck = rs ? check(rs, 'response', payload) : []
+      res.meta = {
+        tool: body?.tool, ok: payload.ok, code: payload.ok ? undefined : payload.error.code,
+        ...(violations?.length ? { violations } : {}), ...(selfCheck.length ? { response_violations: selfCheck } : {}),
+      }
+      send(200, payload)
+    })
   })
 }).listen(PORT, '127.0.0.1', () => process.stdout.write(`fake service on 127.0.0.1:${PORT} contract ${version}\n`))
+
+// T17 --llm-reply：假模型网关（OpenAI 兼容的流式 chat/completions），回答固定为文件内容
+const LLM_REPLY = arg('--llm-reply', null)
+if (LLM_REPLY) {
+  const FORWARD = Number(process.env.LB_FORWARD_PORT ?? '18765')
+  createServer((req, res) => {
+    let body = ''
+    req.on('data', (c) => { body += c })
+    req.on('end', () => {
+      if (req.method !== 'POST' || !req.url.endsWith('/chat/completions')) { res.writeHead(404); res.end(); return }
+      const text = readFileSync(LLM_REPLY, 'utf8')
+      const id = 'chatcmpl-fake'
+      const chunk = (delta, finish = null) => `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+      res.write(chunk({ role: 'assistant', content: '' }))
+      for (let i = 0; i < text.length; i += 40) res.write(chunk({ content: text.slice(i, i + 40) }))
+      res.write(chunk({}, 'stop'))
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [], usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 } })}\n\n`)
+      res.end('data: [DONE]\n\n')
+    })
+  }).listen(FORWARD, '127.0.0.1', () => process.stdout.write(`fake llm on 127.0.0.1:${FORWARD}\n`))
+}

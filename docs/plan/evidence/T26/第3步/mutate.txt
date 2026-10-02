@@ -1,0 +1,79 @@
+# T26 第 3 步归档面板变异（撤回单处修法）
+
+## 办案结果没选也能生成
+文件：dsh-ext/ui/archive-logic.ts
+结果：2 failed | 10 passed (12)
+- tests/archive.spec.ts > 归档面板 > 办案结果未选：按钮不可用，点了也不发请求；点选后可用
+- tests/archive.spec.ts > 归档面板的逻辑 > 样例方案过契约；办案结果为 null 时不能生成，点选后可以；名称为空、日期不对也不能
+- 办案结果未选：按钮不可用，点了也不发请求；点选后可用
+- 样例方案过契约；办案结果为 null 时不能生成，点选后可以；名称为空、日期不对也不能
+
+## 点按钮不再核对能否生成（直接发请求）
+说明：唯一不红的一条。React 不把点击派给 disabled 属性为真的按钮（看的是组件属性，去掉 DOM 上的 disabled 再点也不派），按钮停用已由下一条守着；处理函数里的核对是多一道保险，界面上走不到。
+文件：dsh-ext/ui/archive.tsx
+结果：12 passed (12)
+
+
+## 按钮不随办案结果停用
+文件：dsh-ext/ui/archive.tsx
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > 归档面板 > 办案结果未选：按钮不可用，点了也不发请求；点选后可用
+- 办案结果未选：按钮不可用，点了也不发请求；点选后可用
+
+## 调顺序不生效
+文件：dsh-ext/ui/archive-logic.ts
+结果：2 failed | 10 passed (12)
+- tests/archive.spec.ts > 归档面板 > 成功：改过的名称和顺序随请求交出；列出生成的文件、页码范围、转换提示和要人手处理的事项
+- tests/archive.spec.ts > 归档面板的逻辑 > 改名称、调合并顺序（越界不动）、承办律师与日期；交出去的请求过契约，空着的律师、日期交 null
+- 成功：改过的名称和顺序随请求交出；列出生成的文件、页码范围、转换提示和要人手处理的事项
+- 改名称、调合并顺序（越界不动）、承办律师与日期；交出去的请求过契约，空着的律师、日期交 null
+
+## 名称不去首尾空白
+文件：dsh-ext/ui/archive-logic.ts
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > 归档面板的逻辑 > 改名称、调合并顺序（越界不动）、承办律师与日期；交出去的请求过契约，空着的律师、日期交 null
+- 改名称、调合并顺序（越界不动）、承办律师与日期；交出去的请求过契约，空着的律师、日期交 null
+
+## 空着的承办律师不交 null
+文件：dsh-ext/ui/archive-logic.ts
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > 归档面板的逻辑 > 改名称、调合并顺序（越界不动）、承办律师与日期；交出去的请求过契约，空着的律师、日期交 null
+- 改名称、调合并顺序（越界不动）、承办律师与日期；交出去的请求过契约，空着的律师、日期交 null
+
+## 服务端错误不显示
+文件：dsh-ext/ui/archive.tsx
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > 归档面板 > 服务端错误体：显示中文提示，可再试
+- 服务端错误体：显示中文提示，可再试
+
+## 要人手处理的事项不显示
+文件：dsh-ext/ui/archive.tsx
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > 归档面板 > 成功：改过的名称和顺序随请求交出；列出生成的文件、页码范围、转换提示和要人手处理的事项
+- 成功：改过的名称和顺序随请求交出；列出生成的文件、页码范围、转换提示和要人手处理的事项
+
+## 页码范围不对上名称
+文件：dsh-ext/ui/archive-logic.ts
+结果：2 failed | 10 passed (12)
+- tests/archive.spec.ts > 归档面板 > 成功：改过的名称和顺序随请求交出；列出生成的文件、页码范围、转换提示和要人手处理的事项
+- tests/archive.spec.ts > 归档面板的逻辑 > 页码范围按编号对上名称（程序生成的项写"程序生成"），按起始页排；转换程序的提示
+- 成功：改过的名称和顺序随请求交出；列出生成的文件、页码范围、转换提示和要人手处理的事项
+- 页码范围按编号对上名称（程序生成的项写"程序生成"），按起始页排；转换程序的提示
+
+## Host 读方案不按契约校验
+文件：dsh-ext/host/archive-plan.ts
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > Host 读归档方案（host\archive-plan.ts） > 没有方案、任务编号不合格式、案件根不是绝对路径、内容坏了或不合契约：各自报错
+- 没有方案、任务编号不合格式、案件根不是绝对路径、内容坏了或不合契约：各自报错
+
+## Host 读方案不拦链接
+文件：dsh-ext/host/archive-plan.ts
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > Host 读归档方案（host\archive-plan.ts） > 任务目录是指向案件外的链接：不读
+- 任务目录是指向案件外的链接：不读
+
+## Host 读方案不核任务编号格式
+文件：dsh-ext/host/archive-plan.ts
+结果：1 failed | 11 passed (12)
+- tests/archive.spec.ts > Host 读归档方案（host\archive-plan.ts） > 没有方案、任务编号不合格式、案件根不是绝对路径、内容坏了或不合契约：各自报错
+- 没有方案、任务编号不合格式、案件根不是绝对路径、内容坏了或不合契约：各自报错

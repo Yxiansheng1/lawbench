@@ -20,9 +20,29 @@ const contractsPlugin = {
   },
 }
 
+// 界面插件（T13）：DSH 界面模块格式——CommonJS 包在 window.__ModuleLoader__.load({ id, factory: (require) => … }) 里，
+// react、cordis 等从 DSH 的共享模块表 require（packages/client/web/src/seed.ts），不自带 React。
+const CLIENT_ID = 'lawbench-dsh'
+const SHARED = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/*']
 await esbuild.build({
   absWorkingDir: root,
-  entryPoints: { agent: 'agent/index.ts', host: 'host/index.ts', credentials: 'credentials/index.ts' },
+  entryPoints: { client: 'ui/index.tsx' },
+  outdir: 'lib',
+  bundle: true,
+  format: 'cjs',
+  platform: 'browser',
+  target: 'es2022',
+  jsx: 'automatic',
+  external: SHARED,
+  banner: { js: `window.__ModuleLoader__.load({\n  id: ${JSON.stringify(CLIENT_ID)},\n  factory: (require) => {\n    var module = { exports: {} };\n    var exports = module.exports;` },
+  footer: { js: '    return module.exports;\n  }\n});' },
+  plugins: [contractsPlugin],
+  logLevel: 'info',
+})
+
+await esbuild.build({
+  absWorkingDir: root,
+  entryPoints: { agent: 'agent/index.ts', host: 'host/index.ts', credentials: 'credentials/index.ts', 'session-store': 'session-store/index.ts', index: 'ui/host.ts' },
   outdir: 'lib',
   bundle: true,
   format: 'esm',
@@ -30,6 +50,34 @@ await esbuild.build({
   target: 'node22',
   sourcemap: false,
   legalComments: 'none',
+  // 打进来的 CommonJS 依赖（如 yaml）会 require('process') 等内置模块；纯 ESM 里没有 require，给一个
+  banner: { js: "import { createRequire as __lbCreateRequire } from 'node:module'; const require = __lbCreateRequire(import.meta.url);" },
   plugins: [contractsPlugin],
   logLevel: 'info',
 })
+
+// 构建后在纯 ESM 进程里逐个导入（不能用 node -e：那是 CommonJS，有全局 require，会掩盖上面这类问题）
+for (const name of ['agent', 'host', 'credentials', 'session-store', 'index']) {
+  const url = pathToFileURL(join(root, 'lib', `${name}.js`)).href
+  const { spawnSync } = await import('node:child_process')
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(url)})`], { encoding: 'utf8' })
+  if (r.status !== 0) throw new Error(`lib/${name}.js 在纯 ESM 下导入失败：${(r.stderr || '').split(/\r?\n/).slice(0, 3).join(' ')}`)
+}
+console.log('lib/*.js 纯 ESM 导入检查通过')
+
+// 打包出的 Host 方法形参名必须与方法表一致：DSH 网关按形参名取参数，esbuild 遇到同名顶层绑定会把形参改名
+// （如 request → request2，T26 第 3 步桌面端实测：所有带 request 的方法都报 arguments-invalid）
+{
+  const url = pathToFileURL(join(root, 'lib', 'host.js')).href
+  const { spawnSync } = await import('node:child_process')
+  const code = `const m = await import(${JSON.stringify(url)}); const bad = [];
+    for (const { method, params } of m.REMOTE_METHODS) {
+      const fn = m.LawbenchRemote.prototype[method]; const src = String(fn);
+      const got = src.slice(src.indexOf('(') + 1, src.indexOf(')')).split(',').map((s) => s.trim()).filter(Boolean);
+      if (got.join() !== params.join()) bad.push(method + '(' + got.join() + ')');
+    }
+    if (bad.length) { console.error(bad.join(' ')); process.exit(1) }`
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' })
+  if (r.status !== 0) throw new Error(`lib/host.js 的方法形参名与方法表不一致：${(r.stderr || '').trim().slice(0, 300)}`)
+  console.log('lib/host.js 方法形参名与方法表一致')
+}

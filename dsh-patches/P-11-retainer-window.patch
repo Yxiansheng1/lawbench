@@ -1,0 +1,623 @@
+diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
+index bab440ea61..2bb56c359f 100644
+--- a/apps/desktop/scripts/electron-builder-config.mjs
++++ b/apps/desktop/scripts/electron-builder-config.mjs
+@@ -132,6 +132,7 @@ export function createElectronBuilderConfig(
+       'lib/preload-app.cjs',
+       'lib/preload-mandatory.cjs',
+       'lib/preload-platform-account.cjs',
++      'lib/preload-retainer.cjs',
+       'lib/preload-update-dialog.cjs',
+       'lib/preload-welcome.cjs',
+       'renderer/**/*',
+diff --git a/apps/desktop/src/ipc.ts b/apps/desktop/src/ipc.ts
+index 45175929d2..151095b90e 100644
+--- a/apps/desktop/src/ipc.ts
++++ b/apps/desktop/src/ipc.ts
+@@ -30,6 +30,8 @@ export const DESKTOP_IPC = {
+   windowFullscreen: 'dsh-desktop:window-fullscreen',
+   windowsAppearance: 'dsh-desktop:windows-appearance',
+   windowsMenu: 'dsh-desktop:windows-menu',
++  // lawbench P-11: open the retainer-materials window (settles when it closes)
++  lawbenchRetainerOpen: 'lawbench:open-retainer',
+ } as const
+ 
+ /** Desktop release update state rendered by desktop-owned UI. */
+diff --git a/apps/desktop/src/lawbench-retainer.ts b/apps/desktop/src/lawbench-retainer.ts
+new file mode 100644
+index 0000000000..d791412274
+--- /dev/null
++++ b/apps/desktop/src/lawbench-retainer.ts
+@@ -0,0 +1,231 @@
++/**
++ * lawbench P-11 (Spec 3.2 P-11, 13.5): the retainer-materials window. The main window asks over
++ * `lawbench:open-retainer` to open the firm's offline retainer page (`engines/retainer/启动.html`) in a
++ * window of its own partition (`persist:retainer`, storage kept apart from the main window). That
++ * partition is a separate session, so P-9 does not reach it: it gets the same request whitelist
++ * (only the page's own files and the local ID-card recognition driver on 127.0.0.1:17801), no
++ * spellchecker, no permissions, no navigation and no new windows. The preload removes
++ * `showDirectoryPicker` so the page falls back to downloads, and every download is saved into the
++ * current case's `工作区/临时/委托材料/<时间>/` (without a case: `<应用数据>/临时/委托材料/<时间>/`).
++ * The invoke settles when the window closes, with the files saved; the renderer then stops the driver
++ * and offers the import into `01委托手续` (an import only adds, never overwrites).
++ */
++
++import { app, BrowserWindow, ipcMain, session, type DownloadItem, type IpcMainInvokeEvent, type Session, type WebContents } from 'electron'
++import { existsSync, lstatSync, mkdirSync } from 'node:fs'
++import { dirname, isAbsolute, join, resolve } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { DESKTOP_IPC, assertDesktopSender } from './ipc.ts'
++import { lawbenchRequestAllowed } from './lawbench-request-policy.ts'
++
++export const RETAINER_PARTITION = 'persist:retainer'
++/** The ID-card recognition driver the page talks to (its own CSP allows nothing else). */
++export const RETAINER_DRIVER_URL = 'http://127.0.0.1:17801'
++
++/** What the main window sends: the current case (folder and name), or none. */
++export interface RetainerOpenRequest {
++  readonly caseRoot: string | null
++  readonly caseName: string | null
++}
++
++/** How the invoke settles. */
++export type RetainerResult =
++  | { readonly kind: 'closed'; readonly dir: string; readonly inCase: boolean; readonly files: readonly string[]; readonly failed: number }
++  | { readonly kind: 'already-open' }
++
++/**
++ * The engines directory. Packaged: always `<install>\engines` next to the executable; `LAWBENCH_ENGINES_DIR` is
++ * ignored, since it would point the window (and its file whitelist) at any directory (T20 step 3). Development:
++ * `LAWBENCH_ENGINES_DIR` when given, else the repository's `engines`.
++ */
++export function enginesDirectory(env: NodeJS.ProcessEnv = process.env): string {
++  if (app.isPackaged) return join(dirname(process.execPath), 'engines')
++  const configured = env.LAWBENCH_ENGINES_DIR
++  if (configured !== undefined && configured !== '' && isAbsolute(configured)) return configured
++  return resolve(app.getAppPath(), '..', '..', '..', 'engines')
++}
++
++/** The application data directory the Host gives the service (`%LOCALAPPDATA%\lawbench`). */
++function appDataDirectory(env: NodeJS.ProcessEnv = process.env): string {
++  return join(env.LOCALAPPDATA ?? app.getPath('appData'), 'lawbench')
++}
++
++/** Check the renderer's request; anything else is refused. */
++export function parseOpenRequest(value: unknown): RetainerOpenRequest {
++  if (typeof value !== 'object' || value === null) throw new Error('lawbench retainer: malformed request')
++  const { caseRoot, caseName } = value as Record<string, unknown>
++  const text = (v: unknown, max: number): string | null => {
++    if (v === null || v === undefined) return null
++    if (typeof v !== 'string' || v.length > max || /[\u0000-\u001f]/u.test(v)) throw new Error('lawbench retainer: malformed request')
++    return v
++  }
++  return { caseRoot: text(caseRoot, 1024), caseName: text(caseName, 200) }
++}
++
++/** A case folder counts only when it is an absolute, real (not linked) folder that has `工作区`. */
++export function usableCaseRoot(root: string | null): string | undefined {
++  if (root === null || !isAbsolute(root)) return undefined
++  try {
++    const top = lstatSync(root)
++    const work = lstatSync(join(root, '工作区'))
++    return top.isDirectory() && !top.isSymbolicLink() && work.isDirectory() && !work.isSymbolicLink() ? root : undefined
++  } catch { return undefined }
++}
++
++/** `<时间>` folder name, local time, to the second. */
++export function stamp(now: Date): string {
++  const p = (n: number): string => String(n).padStart(2, '0')
++  return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`
++}
++
++/** Where this window's downloads go. */
++export function downloadDirectory(caseRoot: string | undefined, appData: string, now: Date): string {
++  return caseRoot !== undefined
++    ? join(caseRoot, '工作区', '临时', '委托材料', stamp(now))
++    : join(appData, '临时', '委托材料', stamp(now))
++}
++
++const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/iu
++
++/** A plain file name for a suggested download name: no folders, no characters Windows refuses. */
++export function safeDownloadName(name: string): string {
++  const last = name.split(/[\\/]/u).pop() ?? ''
++  // eslint-disable-next-line no-control-regex
++  const cleaned = last.replace(/[<>:"|?*\u0000-\u001f]/gu, '_').replace(/[. ]+$/u, '').trim()
++  if (cleaned === '' || cleaned === '.' || cleaned === '..') return '下载文件'
++  return RESERVED.test(cleaned) ? `_${cleaned}` : cleaned.slice(0, 180)
++}
++
++/** First free name in the folder: `名.docx`, `名(2).docx`, … (also avoids names already handed out). */
++export function freeName(dir: string, name: string, taken: ReadonlySet<string>): string {
++  const dot = name.lastIndexOf('.')
++  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, '']
++  for (let n = 1; ; n++) {
++    const candidate = n === 1 ? name : `${stem}(${n})${ext}`
++    if (!taken.has(candidate.toLowerCase()) && !existsSync(join(dir, candidate))) return candidate
++  }
++}
++
++/** Window options: own partition, sandboxed, no Node, no webview, no spellchecker. */
++export function retainerWindowOptions(title: string): Electron.BrowserWindowConstructorOptions {
++  return {
++    width: 1280,
++    height: 860,
++    show: false,
++    title,
++    autoHideMenuBar: true,
++    webPreferences: {
++      partition: RETAINER_PARTITION,
++      preload: fileURLToPath(new URL('./preload-retainer.cjs', import.meta.url)),
++      nodeIntegration: false,
++      contextIsolation: true,
++      sandbox: true,
++      webSecurity: true,
++      webviewTag: false,
++      spellcheck: false,
++      navigateOnDragDrop: false,
++    },
++  }
++}
++
++/** Window title: shows the current case name. */
++export function retainerTitle(caseName: string | null, inCase: boolean): string {
++  return inCase && caseName ? `委托材料 — ${caseName}` : '委托材料（没有打开案件）'
++}
++
++interface Downloads {
++  dir: string
++  taken: Set<string>
++  files: string[]
++  failed: number
++  pending: number
++  settled?: () => void
++}
++
++const prepared = new WeakSet<Session>()
++const owners = new Map<number, Downloads>()
++
++/** One-time setup of the retainer partition (whitelist, spellchecker, permissions, downloads). */
++export function prepareRetainerSession(ses: Session, pageDir: string): void {
++  if (prepared.has(ses)) return
++  prepared.add(ses)
++  ses.setSpellCheckerEnabled(false)
++  ses.webRequest.onBeforeRequest((details, callback) => {
++    callback({ cancel: !lawbenchRequestAllowed(details.url, RETAINER_DRIVER_URL, pageDir) })
++  })
++  ses.setPermissionRequestHandler((_contents, _permission, callback) => { callback(false) })
++  ses.setPermissionCheckHandler(() => false)
++  ses.on('will-download', (event, item: DownloadItem, contents: WebContents | undefined) => {
++    const owner = contents === undefined ? undefined : owners.get(contents.id)
++    if (owner === undefined) { event.preventDefault(); return }
++    try { mkdirSync(owner.dir, { recursive: true }) } catch { event.preventDefault(); owner.failed++; return }
++    const name = freeName(owner.dir, safeDownloadName(item.getFilename()), owner.taken)
++    owner.taken.add(name.toLowerCase())
++    item.setSavePath(join(owner.dir, name))
++    owner.pending++
++    item.once('done', (_e, state) => {
++      if (state === 'completed') owner.files.push(join(owner.dir, name))
++      else owner.failed++
++      owner.pending--
++      if (owner.pending === 0) owner.settled?.()
++    })
++  })
++}
++
++/** Keep the window on its page (loaded by the main process; the page itself may not navigate): no navigation, no redirects, no new windows, no webviews, fixed title. */
++export function lockRetainerContents(contents: WebContents): void {
++  contents.setWindowOpenHandler(() => ({ action: 'deny' }))
++  contents.on('will-navigate', (event) => { event.preventDefault() })
++  contents.on('will-redirect', (event) => { event.preventDefault() })
++  contents.on('will-frame-navigate', (event) => { if (!event.isMainFrame) event.preventDefault() })
++  contents.on('will-attach-webview', (event) => { event.preventDefault() })
++}
++
++/**
++ * Install `lawbench:open-retainer` (application lifetime). Only the main window's top frame may call it.
++ * @param getWindow - the current main window.
++ */
++export function installRetainerWindow(getWindow: () => BrowserWindow | undefined): void {
++  let open: BrowserWindow | undefined
++  ipcMain.handle(DESKTOP_IPC.lawbenchRetainerOpen, async (event: IpcMainInvokeEvent, value: unknown): Promise<RetainerResult> => {
++    const main = getWindow()
++    if (main === undefined || main.isDestroyed() || event.sender !== main.webContents || event.senderFrame !== main.webContents.mainFrame) {
++      throw new Error('lawbench retainer: rejected request from an unowned renderer')
++    }
++    assertDesktopSender(event, ['app'])
++    const request = parseOpenRequest(value)
++    if (open !== undefined && !open.isDestroyed()) {
++      if (open.isMinimized()) open.restore()
++      open.focus()
++      return { kind: 'already-open' }
++    }
++    const pageDir = join(enginesDirectory(), 'retainer')
++    const page = join(pageDir, '启动.html')
++    if (!existsSync(page)) throw new Error('委托材料工具没有找到，请重新安装律师工作台。')
++    const caseRoot = usableCaseRoot(request.caseRoot)
++    const downloads: Downloads = { dir: downloadDirectory(caseRoot, appDataDirectory(), new Date()), taken: new Set(), files: [], failed: 0, pending: 0 }
++    const ses = session.fromPartition(RETAINER_PARTITION)
++    prepareRetainerSession(ses, pageDir)
++    const window = new BrowserWindow(retainerWindowOptions(retainerTitle(request.caseName, caseRoot !== undefined)))
++    open = window
++    const contentsId = window.webContents.id
++    owners.set(contentsId, downloads)
++    window.on('page-title-updated', (e) => { e.preventDefault() })
++    lockRetainerContents(window.webContents)
++    const closed = new Promise<void>((done) => { window.once('closed', () => { done() }) })
++    window.once('ready-to-show', () => { window.show() })
++    try {
++      await window.loadFile(page)
++    } catch (error) {
++      owners.delete(contentsId)
++      if (!window.isDestroyed()) window.destroy()
++      open = undefined
++      throw error
++    }
++    await closed
++    open = undefined
++    if (downloads.pending > 0) await new Promise<void>((done) => { downloads.settled = done })
++    owners.delete(contentsId)
++    return { kind: 'closed', dir: downloads.dir, inCase: caseRoot !== undefined, files: downloads.files, failed: downloads.failed }
++  })
++}
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index 1470b99356..bae6af8ad7 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -32,6 +32,7 @@ import { claimDesktopSingleInstance } from './single-instance.ts'
+ import { DesktopUpdateCoordinator } from './update-coordinator.ts'
+ import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
+ import { lawbenchRequestAllowed } from './lawbench-request-policy.ts'
++import { installRetainerWindow } from './lawbench-retainer.ts'
+ import { DesktopFatalRecovery } from './fatal-recovery.ts'
+ import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
+ import { openWelcomeWindow } from './welcome-window.ts'
+@@ -576,6 +577,8 @@ async function main(): Promise<void> {
+   })
+ 
+   installDesktopDirectoryPicker(() => mainWindow)
++  // lawbench P-11: the retainer-materials window (own partition, whitelist, downloads into the case's temporary folder)
++  installRetainerWindow(() => mainWindow)
+   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
+   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
+     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
+diff --git a/apps/desktop/src/preload-app.ts b/apps/desktop/src/preload-app.ts
+index ee262d97d5..3e7dd7e5ee 100644
+--- a/apps/desktop/src/preload-app.ts
++++ b/apps/desktop/src/preload-app.ts
+@@ -78,6 +78,10 @@ if (location.protocol === `${SCHEME}:` && location.hostname === 'app') {
+   // The composer cites dropped, picked, and pasted files and folders that
+   // have a real path as `@path` references instead of uploading them; a
+   // File without one (pasted bytes) answers '' and uploads as before.
++  // lawbench P-11: the retainer-materials window; the promise settles when that window closes
++  contextBridge.exposeInMainWorld('__LAWBENCH_RETAINER__', {
++    open: (request: { caseRoot: string | null; caseName: string | null }) => ipcRenderer.invoke(DESKTOP_IPC.lawbenchRetainerOpen, request) as Promise<unknown>,
++  })
+   contextBridge.exposeInMainWorld('__DSH_HOST_PATHS__', {
+     pathFor: (file: File) => webUtils.getPathForFile(file),
+   })
+diff --git a/apps/desktop/src/preload-retainer.ts b/apps/desktop/src/preload-retainer.ts
+new file mode 100644
+index 0000000000..8b895efe08
+--- /dev/null
++++ b/apps/desktop/src/preload-retainer.ts
+@@ -0,0 +1,20 @@
++/**
++ * lawbench P-11 (Spec 13.5): the retainer page may not write folders directly. Before any page script
++ * runs, remove the File System Access pickers that write (`showDirectoryPicker`, `showSaveFilePicker`)
++ * from the page's world; the page then falls back to downloads, which the main process saves into the
++ * case's temporary folder. Nothing is exposed to the page.
++ */
++
++import { contextBridge } from 'electron'
++
++contextBridge.executeInMainWorld({
++  func: () => {
++    for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) {
++      for (const owner of [window, Object.getPrototypeOf(window), Window.prototype]) {
++        try { Reflect.deleteProperty(owner, name) } catch { /* not configurable */ }
++      }
++      // Still reachable (not deletable): pin it to undefined so `if (!window.showDirectoryPicker)` takes the download path.
++      if (name in window) Object.defineProperty(window, name, { value: undefined, writable: false, configurable: false })
++    }
++  },
++})
+diff --git a/apps/desktop/tests/lawbench-retainer-preload.spec.ts b/apps/desktop/tests/lawbench-retainer-preload.spec.ts
+new file mode 100644
+index 0000000000..9ceebcf112
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-retainer-preload.spec.ts
+@@ -0,0 +1,45 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++
++// lawbench P-11（T26 复核 P3-2）：委托材料窗口的预加载在网页脚本之前删掉 showDirectoryPicker、showSaveFilePicker。
++// 取出交给 contextBridge.executeInMainWorld 的函数，在带这两个属性的假 window 上执行，断言都不在了。
++
++const bridge = vi.hoisted(() => ({ scripts: [] as Array<{ func: () => void }> }))
++vi.mock('electron', () => ({ contextBridge: { executeInMainWorld: (script: { func: () => void }) => { bridge.scripts.push(script) } } }))
++
++const saved = { window: (globalThis as Record<string, unknown>).window, Window: (globalThis as Record<string, unknown>).Window }
++afterEach(() => { Object.assign(globalThis, saved) })
++
++function fakeWindow(where: 'own' | 'prototype' | 'locked') {
++  class FakeWindow {}
++  const picker = () => Promise.resolve('picked')
++  const win = new FakeWindow() as Record<string, unknown>
++  for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) {
++    if (where === 'prototype') Object.defineProperty(FakeWindow.prototype, name, { value: picker, configurable: true, writable: true })
++    else Object.defineProperty(win, name, { value: picker, configurable: where === 'own', writable: true })
++  }
++  Object.assign(globalThis, { window: win, Window: FakeWindow })
++  return win
++}
++
++describe('委托材料窗口的预加载（lawbench P-11）', () => {
++  it('只交一段在网页里执行的函数，不向网页暴露任何东西', async () => {
++    await import('../src/preload-retainer.ts')
++    expect(bridge.scripts).toHaveLength(1)
++    expect(typeof bridge.scripts[0]!.func).toBe('function')
++  })
++
++  it.each(['own', 'prototype'] as const)('两个选择器（定义在 %s）执行后都不在了', (where) => {
++    const win = fakeWindow(where)
++    bridge.scripts[0]!.func()
++    for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) {
++      expect(name in win, name).toBe(false)
++      expect(win[name], name).toBeUndefined()
++    }
++  })
++
++  it('删不掉的（不可配置）也钉成 undefined，网页的 if (!window.showDirectoryPicker) 走下载', () => {
++    const win = fakeWindow('locked')
++    try { bridge.scripts[0]!.func() } catch { /* 钉不住时会抛，下面的断言会失败 */ }
++    for (const name of ['showDirectoryPicker', 'showSaveFilePicker']) expect(win[name], name).toBeUndefined()
++  })
++})
+diff --git a/apps/desktop/tests/lawbench-retainer.spec.ts b/apps/desktop/tests/lawbench-retainer.spec.ts
+new file mode 100644
+index 0000000000..ea9c6b029b
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-retainer.spec.ts
+@@ -0,0 +1,229 @@
++import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { dirname, join } from 'node:path'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++import { DESKTOP_IPC } from '../src/ipc.ts'
++
++// lawbench P-11（Spec 3.2 P-11、13.5）：委托材料窗口。主进程这一半：独立分区、白名单、关拼写检查、拒权限、
++// 禁跳转和新窗口、下载落案件临时目录（同名改名）、只有主窗口顶层能开、关窗后把下载结果交回。
++
++type Handler = (event: unknown, value?: unknown) => Promise<unknown>
++const electron = vi.hoisted(() => ({
++  handlers: new Map<string, Handler>(),
++  windows: [] as Array<ReturnType<typeof fakeWindow>>,
++  sessions: new Map<string, ReturnType<typeof fakeSession>>(),
++  appPath: '',
++  packaged: false,
++}))
++
++function emitter() {
++  const on = new Map<string, Array<(...a: unknown[]) => void>>()
++  return {
++    on: vi.fn((name: string, fn: (...a: unknown[]) => void) => { on.set(name, [...on.get(name) ?? [], fn]) }),
++    once: vi.fn((name: string, fn: (...a: unknown[]) => void) => { on.set(name, [...on.get(name) ?? [], fn]) }),
++    emit: (name: string, ...a: unknown[]) => { for (const fn of on.get(name) ?? []) fn(...a) },
++    has: (name: string) => (on.get(name)?.length ?? 0) > 0,
++  }
++}
++function fakeSession() {
++  const ev = emitter()
++  return {
++    ...ev,
++    setSpellCheckerEnabled: vi.fn(),
++    setPermissionRequestHandler: vi.fn(),
++    setPermissionCheckHandler: vi.fn(),
++    webRequest: { onBeforeRequest: vi.fn() },
++  }
++}
++let nextId = 100
++function fakeWindow(options: unknown) {
++  const ev = emitter()
++  const contents = { ...emitter(), id: ++nextId, mainFrame: {}, setWindowOpenHandler: vi.fn() }
++  return {
++    ...ev,
++    options,
++    webContents: contents,
++    loadFile: vi.fn(async (_p: string) => {}),
++    isDestroyed: vi.fn(() => false),
++    isMinimized: vi.fn(() => false),
++    restore: vi.fn(), focus: vi.fn(), show: vi.fn(), destroy: vi.fn(),
++  }
++}
++vi.mock('electron', () => ({
++  app: { get isPackaged() { return electron.packaged }, getAppPath: () => electron.appPath, getPath: () => electron.appPath },
++  BrowserWindow: vi.fn(function (options: unknown) { const w = fakeWindow(options); electron.windows.push(w); return w }),
++  ipcMain: {
++    handle: (name: string, handler: Handler) => {
++      if (electron.handlers.has(name)) throw new Error(`duplicate IPC handler: ${name}`)
++      electron.handlers.set(name, handler)
++    },
++  },
++  session: { fromPartition: (p: string) => { if (!electron.sessions.has(p)) electron.sessions.set(p, fakeSession()); return electron.sessions.get(p)! } },
++}))
++
++const mod = await import('../src/lawbench-retainer.ts')
++
++let dir: string
++let engines: string
++let caseRoot: string
++let mainWindow: { webContents: { mainFrame: object }; isDestroyed(): boolean }
++const env = { ...process.env }
++
++beforeEach(() => {
++  dir = mkdtempSync(join(tmpdir(), 'lb-retainer-'))
++  engines = join(dir, 'engines')
++  mkdirSync(join(engines, 'retainer'), { recursive: true })
++  writeFileSync(join(engines, 'retainer', '启动.html'), '<!doctype html>')
++  caseRoot = join(dir, '民事-虚构甲')
++  mkdirSync(join(caseRoot, '工作区'), { recursive: true })
++  process.env.LAWBENCH_ENGINES_DIR = engines
++  process.env.LOCALAPPDATA = join(dir, 'Local')
++  electron.windows.length = 0
++  mainWindow = { webContents: { mainFrame: {} }, isDestroyed: () => false }
++})
++afterEach(() => { rmSync(dir, { recursive: true, force: true }); process.env = { ...env } })
++
++if (!electron.handlers.has(DESKTOP_IPC.lawbenchRetainerOpen)) mod.installRetainerWindow(() => mainWindow as never)
++const handler = () => electron.handlers.get(DESKTOP_IPC.lawbenchRetainerOpen)!
++// 主窗口顶层发来的请求（assertDesktopSender 还核 senderFrame.url 是 dsh-app://app）
++const appEvent = () => {
++  (mainWindow.webContents.mainFrame as Record<string, unknown>).url = 'dsh-app://app/index.html'
++  return { sender: mainWindow.webContents, senderFrame: mainWindow.webContents.mainFrame }
++}
++const flush = () => new Promise((r) => setTimeout(r, 0))
++const download = (name: string) => {
++  const item = { ...emitter(), getFilename: () => name, setSavePath: vi.fn() }
++  return item
++}
++
++describe('委托材料窗口（lawbench P-11）', () => {
++  it('窗口：独立分区、沙箱、无 Node、无 webview、关拼写检查；标题显示案件名', () => {
++    const o = mod.retainerWindowOptions(mod.retainerTitle('民事-虚构甲', true))
++    expect(o.title).toBe('委托材料 — 民事-虚构甲')
++    expect(o.webPreferences).toMatchObject({ partition: 'persist:retainer', nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false, spellcheck: false })
++    expect(o.webPreferences?.preload).toMatch(/preload-retainer\.cjs$/u)
++    expect(mod.retainerTitle(null, false)).toBe('委托材料（没有打开案件）')
++  })
++
++  it('分区只放行本页文件和 127.0.0.1:17801；拼写检查关、权限一律拒', () => {
++    const ses = fakeSession()
++    const pageDir = join(engines, 'retainer')
++    mod.prepareRetainerSession(ses as never, pageDir)
++    expect(ses.setSpellCheckerEnabled).toHaveBeenCalledWith(false)
++    const filter = ses.webRequest.onBeforeRequest.mock.calls[0]![0] as (d: { url: string }, cb: (r: { cancel: boolean }) => void) => void
++    const cancel = (url: string) => { let c: boolean | undefined; filter({ url }, (r) => { c = r.cancel }); return c }
++    expect(cancel('http://127.0.0.1:17801/ocr')).toBe(false)
++    expect(cancel(new URL(`file:///${join(pageDir, 'app', 'ui.js').replace(/\\/gu, '/')}`).href)).toBe(false)
++    expect(cancel('blob:file:///x')).toBe(false)
++    for (const url of ['http://127.0.0.1:17802/', 'http://localhost:17801/', 'https://example.com/', 'http://192.168.8.77:8000/v1/models', 'ws://127.0.0.1:18765/',
++      new URL(`file:///${join(dir, 'other.txt').replace(/\\/gu, '/')}`).href, 'file://server/share/a.docx']) expect(cancel(url), url).toBe(true)
++    const perm = ses.setPermissionRequestHandler.mock.calls[0]![0] as (w: unknown, p: string, cb: (ok: boolean) => void) => void
++    let granted: boolean | undefined
++    perm({}, 'media', (ok) => { granted = ok })
++    expect(granted).toBe(false)
++    expect((ses.setPermissionCheckHandler.mock.calls[0]![0] as () => boolean)()).toBe(false)
++  })
++
++  it('禁跳转、禁重定向、禁新窗口、禁子框架跳转、禁 webview', () => {
++    const c = { ...emitter(), setWindowOpenHandler: vi.fn() }
++    mod.lockRetainerContents(c as never)
++    expect((c.setWindowOpenHandler.mock.calls[0]![0] as () => unknown)()).toEqual({ action: 'deny' })
++    for (const name of ['will-navigate', 'will-redirect', 'will-attach-webview']) {
++      const e = { preventDefault: vi.fn() }
++      c.emit(name, e, 'https://example.com/')
++      expect(e.preventDefault, name).toHaveBeenCalled()
++    }
++    const sub = { preventDefault: vi.fn(), isMainFrame: false }
++    c.emit('will-frame-navigate', sub)
++    expect(sub.preventDefault).toHaveBeenCalled()
++  })
++
++  it('文件名：去掉目录、Windows 不许的字符、保留名；同名改名不覆盖', () => {
++    expect(mod.safeDownloadName('..\\..\\a.docx')).toBe('a.docx')
++    expect(mod.safeDownloadName('委托合同:张三?.docx')).toBe('委托合同_张三_.docx')
++    expect(mod.safeDownloadName('CON.docx')).toBe('_CON.docx')
++    expect(mod.safeDownloadName('..')).toBe('下载文件')
++    mkdirSync(join(dir, 'd'))
++    writeFileSync(join(dir, 'd', '授权委托书.docx'), 'x')
++    expect(mod.freeName(join(dir, 'd'), '授权委托书.docx', new Set())).toBe('授权委托书(2).docx')
++    expect(mod.freeName(join(dir, 'd'), '授权委托书.docx', new Set(['授权委托书(2).docx']))).toBe('授权委托书(3).docx')
++  })
++
++  it('案件根：要绝对路径、真实文件夹、有工作区；否则落应用数据', () => {
++    expect(mod.usableCaseRoot(caseRoot)).toBe(caseRoot)
++    expect(mod.usableCaseRoot('民事-虚构甲')).toBeUndefined()
++    expect(mod.usableCaseRoot(dir)).toBeUndefined()
++    expect(mod.usableCaseRoot(null)).toBeUndefined()
++    // 工作区是文件、是指向别处的目录联接：都不算（下载不能经联接写到案件外）
++    const fileWork = join(dir, '文件冒充'); mkdirSync(fileWork); writeFileSync(join(fileWork, '工作区'), 'x')
++    expect(mod.usableCaseRoot(fileWork)).toBeUndefined()
++    const linked = join(dir, '联接冒充'); mkdirSync(linked); mkdirSync(join(dir, '别处'))
++    symlinkSync(join(dir, '别处'), join(linked, '工作区'), 'junction')
++    expect(mod.usableCaseRoot(linked)).toBeUndefined()
++    const now = new Date(2026, 9, 1, 21, 5, 9)
++    expect(mod.downloadDirectory(caseRoot, 'X', now)).toBe(join(caseRoot, '工作区', '临时', '委托材料', '20261001-210509'))
++    expect(mod.downloadDirectory(undefined, join(dir, 'Local', 'lawbench'), now)).toBe(join(dir, 'Local', 'lawbench', '临时', '委托材料', '20261001-210509'))
++  })
++
++  it('只有主窗口顶层能开；请求形状不对拒绝', async () => {
++    await expect(handler()({ sender: {}, senderFrame: {} }, { caseRoot: null, caseName: null })).rejects.toThrow(/unowned/u)
++    await expect(handler()({ sender: mainWindow.webContents, senderFrame: {} }, { caseRoot: null, caseName: null })).rejects.toThrow(/unowned/u)
++    await expect(handler()(appEvent(), { caseRoot: 3, caseName: null })).rejects.toThrow(/malformed/u)
++    await expect(handler()(appEvent(), { caseRoot: 'C:\\a\nb', caseName: null })).rejects.toThrow(/malformed/u)
++    expect(electron.windows).toHaveLength(0)
++  })
++
++  it('打开、下载落案件临时目录（同名改名）、关窗后交回文件；开着时再开只聚焦', async () => {
++    const pending = handler()(appEvent(), { caseRoot, caseName: '民事-虚构甲' }) as Promise<{ kind: string; dir: string; inCase: boolean; files: string[]; failed: number }>
++    await flush()
++    const w = electron.windows[0]!
++    expect(w.loadFile).toHaveBeenCalledWith(join(engines, 'retainer', '启动.html'))
++    expect((w.options as { title: string }).title).toBe('委托材料 — 民事-虚构甲')
++    expect(w.webContents.setWindowOpenHandler).toHaveBeenCalled()
++    expect(await handler()(appEvent(), { caseRoot, caseName: '民事-虚构甲' })).toEqual({ kind: 'already-open' })
++    expect(electron.windows).toHaveLength(1)
++    expect(w.focus).toHaveBeenCalled()
++
++    const ses = electron.sessions.get('persist:retainer')!
++    const a = download('授权委托书.docx'); const b = download('授权委托书.docx'); const c = download('案件.zip')
++    for (const it of [a, b, c]) ses.emit('will-download', { preventDefault: vi.fn() }, it, w.webContents)
++    const stranger = download('x.docx'); const blocked = { preventDefault: vi.fn() }
++    ses.emit('will-download', blocked, stranger, { id: 9999 })
++    expect(blocked.preventDefault).toHaveBeenCalled()
++    const out = (it: ReturnType<typeof download>) => it.setSavePath.mock.calls[0]![0] as string
++    expect(out(a)).toMatch(/工作区[\\/]临时[\\/]委托材料[\\/]\d{8}-\d{6}[\\/]授权委托书\.docx$/u)
++    expect(out(b)).toMatch(/授权委托书\(2\)\.docx$/u)
++    a.emit('done', {}, 'completed'); b.emit('done', {}, 'completed')
++    w.emit('closed')
++    await flush()
++    c.emit('done', {}, 'interrupted')
++    const r = await pending
++    expect(r).toMatchObject({ kind: 'closed', inCase: true, failed: 1 })
++    expect(r.files).toEqual([out(a), out(b)])
++  })
++
++  it('没有案件（或不是案件文件夹）时落应用数据，标题说明没有打开案件', async () => {
++    const pending = handler()(appEvent(), { caseRoot: dir, caseName: '不是案件' }) as Promise<{ dir: string; inCase: boolean }>
++    await flush()
++    const w = electron.windows[0]!
++    expect((w.options as { title: string }).title).toBe('委托材料（没有打开案件）')
++    w.emit('closed')
++    const r = await pending
++    expect(r.inCase).toBe(false)
++    expect(r.dir.startsWith(join(dir, 'Local', 'lawbench', '临时', '委托材料'))).toBe(true)
++  })
++
++  it('引擎目录：开发期可用 LAWBENCH_ENGINES_DIR；装好的客户端一律在 exe 旁的 engines、忽略它（T20 步骤 3）', () => {
++    expect(mod.enginesDirectory({ LAWBENCH_ENGINES_DIR: engines })).toBe(engines)
++    electron.packaged = true
++    try {
++      expect(mod.enginesDirectory({ LAWBENCH_ENGINES_DIR: engines })).toBe(join(dirname(process.execPath), 'engines'))
++    } finally { electron.packaged = false }
++  })
++
++  it('网页文件不在时报中文错误、不建窗口', async () => {
++    rmSync(join(engines, 'retainer', '启动.html'))
++    await expect(handler()(appEvent(), { caseRoot, caseName: 'x' })).rejects.toThrow('委托材料工具没有找到，请重新安装律师工作台。')
++    expect(electron.windows).toHaveLength(0)
++  })
++})
+diff --git a/apps/desktop/tsdown.config.ts b/apps/desktop/tsdown.config.ts
+index 6856126691..723279eec1 100644
+--- a/apps/desktop/tsdown.config.ts
++++ b/apps/desktop/tsdown.config.ts
+@@ -77,7 +77,7 @@ export default defineConfig([
+     clean: false,
+     deps: { neverBundle: ['electron'] },
+   },
+-  ...(['preload-app', 'preload-welcome', 'preload-platform-account', 'preload-mandatory', 'preload-update-dialog'] as const).map(name => ({
++  ...(['preload-app', 'preload-welcome', 'preload-platform-account', 'preload-mandatory', 'preload-update-dialog', 'preload-retainer'] as const).map(name => ({
+     // Sandboxed Electron preloads run as CommonJS even though the application package is ESM.
+     entry: { [name]: `lib/types/${name}.js` },
+     plugins: [packagedImportsPlugin(preloadImports)],

@@ -1,0 +1,215 @@
+# T26 第 1、2 步变异（撤回单处做法）
+
+## 发票：ENGINE_BUSY 不停用按钮
+文件：dsh-ext/ui/invoice.tsx；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- ENGINE_BUSY：全部动作按钮停用并提示"发票整理正在进行中"，过一会儿恢复
+- tests/invoice.spec.ts > 发票整理页 > ENGINE_BUSY：全部动作按钮停用并提示"发票整理正在进行中"，过一会儿恢复
+
+## 发票：动作进行中不停用按钮
+文件：dsh-ext/ui/invoice.tsx；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 动作进行中全部动作按钮停用，回来后恢复
+- 动作进行中全部动作按钮停用，回来后恢复
+
+## 发票：确认已报销不先预览
+文件：dsh-ext/ui/invoice-logic.ts；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 确认已报销：先预览（apply:false），确认后才 apply:true；取消确认就不执行
+- 确认已报销：先预览（apply:false），确认后才 apply:true；取消确认就不执行
+
+## 发票：取消批次用 apply:false 预览（服务对 cancel 一律带 --apply，会直接取消）
+文件：dsh-ext/ui/invoice-logic.ts；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 取消批次：引擎不支持预览，先发报表给律师核对，确认后发 cancel apply:true（从不发 apply:false 的 cancel）
+- 取消批次：引擎不支持预览，先发报表给律师核对，确认后发 cancel apply:true（从不发 apply:false 的 cancel）
+
+## 发票：人工排除不先确认
+文件：dsh-ext/ui/invoice.tsx；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 人工排除：确认框说明"排除后本期不再计入该票"，确认后发 confirm:true；不确认不发
+- 人工排除：确认框说明"排除后本期不再计入该票"，确认后发 confirm:true；不确认不发
+
+## 发票：failed 不标红
+文件：dsh-ext/ui/invoice-logic.ts；跑：tests/invoice.spec.ts
+结果：2 failed | 17 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 引擎自报失败：标红，显示 output 里的原因
+- tests/invoice.spec.ts > 表单 → 请求（契约 1.3） > 结果标色：failed 红、退出码 2 黄、其余绿；契约样例
+- 引擎自报失败：标红，显示 output 里的原因
+- 结果标色：failed 红、退出码 2 黄、其余绿；契约样例
+
+## 发票：没设日常办公文件夹也放行
+文件：dsh-ext/ui/invoice.tsx；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 没设日常办公文件夹或购买方：引导去设置，除环境检查外按钮不可用
+- 没设日常办公文件夹或购买方：引导去设置，除环境检查外按钮不可用
+
+## 发票：短超时（10 分钟）
+文件：dsh-ext/shared/api-routes.ts；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 表单 → 请求（契约 1.3） > 发票动作不设短超时（单个动作最长 30 分钟）；ENGINE_BUSY、OFFICE_DIR_NOT_SET 有说明
+- 发票动作不设短超时（单个动作最长 30 分钟）；ENGINE_BUSY、OFFICE_DIR_NOT_SET 有说明
+
+## 委托材料：关窗后不停驱动
+文件：dsh-ext/ui/retainer.ts；跑：tests/retainer.spec.ts
+结果：3 failed | 7 passed (10)
+- stop 回 running:true：如实显示服务的话（关闭未完成，请稍后再试）
+- tests/retainer.spec.ts > 委托材料窗口（界面） > stop 回 running:true：如实显示服务的话（关闭未完成，请稍后再试）
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 没有新文件：只停驱动，不提示
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 顺序：start → 开窗（带当前案件）→ 关窗后 stop → 确认后导入 01委托手续；请求都合契约
+- 没有新文件：只停驱动，不提示
+- 顺序：start → 开窗（带当前案件）→ 关窗后 stop → 确认后导入 01委托手续；请求都合契约
+
+## 委托材料：stop 回 running:true 时不提示
+文件：dsh-ext/ui/retainer.ts；跑：tests/retainer.spec.ts
+结果：1 failed | 9 passed (10)
+- stop 回 running:true：如实显示服务的话（关闭未完成，请稍后再试）
+- tests/retainer.spec.ts > 委托材料窗口（界面） > stop 回 running:true：如实显示服务的话（关闭未完成，请稍后再试）
+
+## 委托材料：ZIP 不解压
+文件：dsh-ext/ui/retainer.ts；跑：tests/retainer.spec.ts
+结果：1 failed | 9 passed (10)
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 有 ZIP（"保存案件目录"回退为下载整个案件 ZIP）时 unzip:true；律师不确认就不导入
+- 有 ZIP（"保存案件目录"回退为下载整个案件 ZIP）时 unzip:true；律师不确认就不导入
+
+## 委托材料：主进程没认案件也导入
+文件：dsh-ext/ui/retainer.ts；跑：tests/retainer.spec.ts
+结果：1 failed | 9 passed (10)
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 主进程没认这个案件文件夹（inCase:false）时同样不导入
+- 主进程没认这个案件文件夹（inCase:false）时同样不导入
+
+## 委托材料：不问律师直接导入
+文件：dsh-ext/ui/retainer.ts；跑：tests/retainer.spec.ts
+结果：2 failed | 8 passed (10)
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 有 ZIP（"保存案件目录"回退为下载整个案件 ZIP）时 unzip:true；律师不确认就不导入
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 顺序：start → 开窗（带当前案件）→ 关窗后 stop → 确认后导入 01委托手续；请求都合契约
+- 有 ZIP（"保存案件目录"回退为下载整个案件 ZIP）时 unzip:true；律师不确认就不导入
+- 顺序：start → 开窗（带当前案件）→ 关窗后 stop → 确认后导入 01委托手续；请求都合契约
+
+## P-11：分区不设白名单
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 分区只放行本页文件和 127.0.0.1:17801；拼写检查关、权限一律拒
+- 分区只放行本页文件和 127.0.0.1:17801；拼写检查关、权限一律拒
+
+## P-11：分区开拼写检查
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 分区只放行本页文件和 127.0.0.1:17801；拼写检查关、权限一律拒
+- 分区只放行本页文件和 127.0.0.1:17801；拼写检查关、权限一律拒
+
+## P-11：不禁跳转
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 禁跳转、禁重定向、禁新窗口、禁子框架跳转、禁 webview
+- 禁跳转、禁重定向、禁新窗口、禁子框架跳转、禁 webview
+
+## P-11：允许新窗口
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 禁跳转、禁重定向、禁新窗口、禁子框架跳转、禁 webview
+- 禁跳转、禁重定向、禁新窗口、禁子框架跳转、禁 webview
+
+## P-11：同名下载不改名（覆盖）
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：3 failed | 6 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 打开、下载落案件临时目录（同名改名）、关窗后交回文件；开着时再开只聚焦
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 没有案件（或不是案件文件夹）时落应用数据，标题说明没有打开案件
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 网页文件不在时报中文错误、不建窗口
+- 打开、下载落案件临时目录（同名改名）、关窗后交回文件；开着时再开只聚焦
+- 没有案件（或不是案件文件夹）时落应用数据，标题说明没有打开案件
+- 网页文件不在时报中文错误、不建窗口
+
+## P-11：下载名不去目录
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 文件名：去掉目录、Windows 不许的字符、保留名；同名改名不覆盖
+- 文件名：去掉目录、Windows 不许的字符、保留名；同名改名不覆盖
+
+## P-11：不核对是不是主窗口顶层发来的
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 只有主窗口顶层能开；请求形状不对拒绝
+- 只有主窗口顶层能开；请求形状不对拒绝
+
+## P-11：不核对是不是案件文件夹（任何目录都当案件）
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 案件根：要绝对路径、真实文件夹、有工作区；否则落应用数据
+- 案件根：要绝对路径、真实文件夹、有工作区；否则落应用数据
+
+## P-11：窗口不用独立分区
+文件：dsh/apps/desktop/src/lawbench-retainer.ts；跑：apps/desktop/tests/lawbench-retainer.spec.ts
+结果：1 failed | 8 passed (9)
+- |thread-safe| apps/desktop/tests/lawbench-retainer.spec.ts > 委托材料窗口（lawbench P-11） > 窗口：独立分区、沙箱、无 Node、无 webview、关拼写检查；标题显示案件名
+- 窗口：独立分区、沙箱、无 Node、无 webview、关拼写检查；标题显示案件名
+
+## 返修 P1-1：人工核验改回先发 confirm:false 预览
+文件：dsh-ext/ui/invoice-logic.ts；跑：tests/invoice.spec.ts
+结果：2 failed | 17 passed (19)
+- reimburse 默认只预览；cancel 一律 apply:true（只在两步路径里构造）；review、exclude 一律 confirm:true（引擎没有 review 预览）
+- tests/invoice.spec.ts > 发票整理页 > 人工核验：先弹确认框（逐张核对原票、带核验人），确认后只发一次 confirm:true；不确认 0 次（复核 P1-1）
+- tests/invoice.spec.ts > 表单 → 请求（契约 1.3） > reimburse 默认只预览；cancel 一律 apply:true（只在两步路径里构造）；review、exclude 一律 confirm:true（引擎没有 review 预览）
+- 人工核验：先弹确认框（逐张核对原票、带核验人），确认后只发一次 confirm:true；不确认 0 次（复核 P1-1）
+
+## 返修 P1-1：人工核验不先弹确认框
+文件：dsh-ext/ui/invoice.tsx；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 人工核验：先弹确认框（逐张核对原票、带核验人），确认后只发一次 confirm:true；不确认 0 次（复核 P1-1）
+- 人工核验：先弹确认框（逐张核对原票、带核验人），确认后只发一次 confirm:true；不确认 0 次（复核 P1-1）
+
+## 返修 P2-1：/api 路由改回全局 fetch（等响应头最多 300 秒）
+文件：dsh-ext/host/index.ts；跑：tests/host-api.spec.ts
+结果：6 failed | 20 passed (26)
+- /api 路由不走全局 fetch（它等响应头最多 300 秒），换成没有头部时限、只有路由总时限的请求
+- 20 MB 以内的照常导入；临时文件名带随机标识，同一秒两次粘贴不撞名
+- GET 的请求字段放进查询串，带令牌
+- tests/host-api.spec.ts > Host /api 调用层 > GET 的请求字段放进查询串，带令牌
+- tests/host-api.spec.ts > Host /api 调用层 > wiki 建议的 POST 必须带 id 和 accept（GET、POST 共用一份 request 契约）
+- tests/host-api.spec.ts > Host /api 调用层 > 路径参数从 request 里取出，不再放进请求体
+- tests/host-api.spec.ts > 粘贴截图导入（Q3②） > 存到 <应用数据>\临时\粘贴\ 再用绝对路径导入到 02案件材料/粘贴图片，导入后删掉临时文件
+- tests/host-api.spec.ts > 粘贴截图的上限与文件名（返修 P3-4） > 20 MB 以内的照常导入；临时文件名带随机标识，同一秒两次粘贴不撞名
+- tests/host-api.spec.ts > 长路由不被头部时限掐断（T26 复核 P2-1） > /api 路由不走全局 fetch（它等响应头最多 300 秒），换成没有头部时限、只有路由总时限的请求
+- wiki 建议的 POST 必须带 id 和 accept（GET、POST 共用一份 request 契约）
+- 存到 <应用数据>\临时\粘贴\ 再用绝对路径导入到 02案件材料/粘贴图片，导入后删掉临时文件
+- 路径参数从 request 里取出，不再放进请求体
+
+## 返修 P2-1：请求不设总时限
+文件：dsh-ext/host/http-json.ts；跑：tests/host-api.spec.ts
+结果：1 failed | 25 passed (26)
+- tests/host-api.spec.ts > 长路由不被头部时限掐断（T26 复核 P2-1） > 超过路由总时限报 TIMEOUT
+- 超过路由总时限报 TIMEOUT
+
+## 返修 P3-1：取消批次确认框改回"上面是台账报表，请核对批次"
+文件：dsh-ext/ui/invoice-logic.ts；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- tests/invoice.spec.ts > 发票整理页 > 取消批次的确认框说清是整个台账的报表、要先确认批次尚未报销（复核 P3-1）
+- 取消批次的确认框说清是整个台账的报表、要先确认批次尚未报销（复核 P3-1）
+
+## 返修 P3-5：cancel 又按 opts 构造（可能发出 apply:false）
+文件：dsh-ext/ui/invoice-logic.ts；跑：tests/invoice.spec.ts
+结果：1 failed | 18 passed (19)
+- reimburse 默认只预览；cancel 一律 apply:true（只在两步路径里构造）；review、exclude 一律 confirm:true（引擎没有 review 预览）
+- tests/invoice.spec.ts > 表单 → 请求（契约 1.3） > reimburse 默认只预览；cancel 一律 apply:true（只在两步路径里构造）；review、exclude 一律 confirm:true（引擎没有 review 预览）
+
+## 返修 P3-3：ENGINE_FAILED 用服务的通用说明
+文件：dsh-ext/ui/retainer.ts；跑：tests/retainer.spec.ts
+结果：1 failed | 9 passed (10)
+- tests/retainer.spec.ts > 委托材料窗口（界面） > 驱动没起来：提示可手工填写，窗口照开
+- 驱动没起来：提示可手工填写，窗口照开
+
+## 返修 P3-2：预加载不删 showSaveFilePicker
+文件：dsh/apps/desktop/src/preload-retainer.ts；跑：apps/desktop/tests/lawbench-retainer-preload.spec.ts
+结果：3 failed | 1 passed (4)
+- |thread-safe| apps/desktop/tests/lawbench-retainer-preload.spec.ts > 委托材料窗口的预加载（lawbench P-11） > 两个选择器（定义在 own）执行后都不在了
+- |thread-safe| apps/desktop/tests/lawbench-retainer-preload.spec.ts > 委托材料窗口的预加载（lawbench P-11） > 两个选择器（定义在 prototype）执行后都不在了
+- |thread-safe| apps/desktop/tests/lawbench-retainer-preload.spec.ts > 委托材料窗口的预加载（lawbench P-11） > 删不掉的（不可配置）也钉成 undefined，网页的 if (!window.showDirectoryPicker) 走下载
+- 两个选择器（定义在 own）执行后都不在了
+- 两个选择器（定义在 prototype）执行后都不在了
+- 删不掉的（不可配置）也钉成 undefined，网页的 if (!window.showDirectoryPicker) 走下载
+
+## 返修 P3-2：删不掉时不钉成 undefined
+文件：dsh/apps/desktop/src/preload-retainer.ts；跑：apps/desktop/tests/lawbench-retainer-preload.spec.ts
+结果：1 failed | 3 passed (4)
+- |thread-safe| apps/desktop/tests/lawbench-retainer-preload.spec.ts > 委托材料窗口的预加载（lawbench P-11） > 删不掉的（不可配置）也钉成 undefined，网页的 if (!window.showDirectoryPicker) 走下载
+- 删不掉的（不可配置）也钉成 undefined，网页的 if (!window.showDirectoryPicker) 走下载

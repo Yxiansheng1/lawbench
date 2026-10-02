@@ -1,0 +1,3 @@
+# 界面假数据固定用 LF：本机 git 默认 core.autocrlf=true，新检出会转成 CRLF，
+# tests\fixtures.spec.ts 断言假数据里没有回车符（T13 返修 P2-2）
+ui/fixtures/*.json text eol=lf

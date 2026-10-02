@@ -1,0 +1,17 @@
+T26 委托人信息落点检查（acceptance\sec\find_leaks.py 原样运行）。特征字符串取网页自带示例 Excel 里的虚构委托人、对方名称。
+允许的位置：案件文件夹、$DSH_HOME 之外另排除 persist:retainer 分区（开发期在 electron-user-data\Partitions\retainer）。
+另排除 %TEMP%\claude：这是 Claude Code 会话自己的工作目录（脚本、日志、DSH 补丁基线克隆），不是产品数据；第一次连它一起扫时卡在补丁基线克隆上 20 分钟，故排除。
+
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-10-01T22:32:20+08:00
+特征字符串：示例张三, 示例科技有限公司, 示例商贸有限公司
+搜索范围：D:\lawbench-devhome-A；D:\lawbench-A\dsh\apps\desktop\.desktop-build\development\electron-user-data；C:\Users\<用户>\AppData\Local\Temp
+排除（案件目录与指定目录）：D:\lawbench-A\.tmp-demo\t26\民事-虚构己；D:\lawbench-A\dsh\apps\desktop\.desktop-build\development\electron-user-data\Partitions\retainer；C:\Users\<用户>\AppData\Local\Temp\claude
+本次运行开始：2026-10-01 22:32:20
+续跑：沿用上次中断前已扫完的 2 批
+共 2662 批；每批结果单独写进 C:\Users\<用户>\AppData\Local\Temp\claude\D--lawbench-A\83a515fe-3091-4d1d-bb29-68b2364c0be5\scratchpad\t26-leaks2\find_leaks-e0e6e2dd651448f6
+  沿用：D:\lawbench-devhome-A\dsh-home（2026-10-01 22:32:00 扫描，中断前的结果）
+  沿用：D:\lawbench-devhome-A（顶层文件）（2026-10-01 22:31:59 扫描，中断前的结果）
+已搜索 100209 个文件：本次实际扫描 100199 个（用时 1115 秒），沿用中断前的结果 10 个；无权限或读取失败 25 个；超过 256MB 跳过 0 个
+
+结论：通过（案件目录外没有命中）

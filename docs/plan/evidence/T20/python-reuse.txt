@@ -1,0 +1,50 @@
+T20 步骤 2：内置 Python 的可行性验证（2026-10-02 00:00–00:30，本机，离线，不下载任何东西）
+
+DSH 桌面端内置的 Python：python-build-standalone 3.12.14（20260901，x86_64-pc-windows-msvc，install_only_stripped），
+  DSH 构建时按 dsh\scripts\primary-runtime\lock.json 下载并核哈希，sha256 7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14；
+  压缩包留在 dsh\apps\desktop\.desktop-build\downloads\<sha256>；解压后的载荷带 numpy 2.3.5、pandas 3.0.1、Pillow 12.3.0、lxml 6.1.3 等（runtime.json）。
+  运行时 DSH 把整个载荷连同 payloadDigest 复制到 Harness 目录并核对——往里装我方的包要改 DSH 的打包脚本，所以两种做法都不装进去。
+  这个解释器不带 -I 时 sys.path 里有 %APPDATA%\Python\Python312\site-packages（本机实测）。
+
+依赖目录：线 C 开发 .venv 的 site-packages 拷到临时目录（同为 cp312 win_amd64；去掉 prep395 的开发链接）。缺 tokenizers、keyring，相关用例跳过。
+
+做法甲（先试的）：共用 DSH 载荷里的 python.exe，我方依赖放单独目录，启动壳 -I -S 再 addsitedir。
+  服务 --help 正常；服务全部测试 941 通过、6 跳过、4 失败。4 个失败都是测试自己用 sys.executable 另起子进程，
+  子进程没有启动壳加的路径（No module named 'jsonschema'）；给子进程设 PYTHONPATH 后全过。
+  但这暴露了正式运行的问题：服务另起的证件识别驱动就是用 sys.executable、只带运行必需环境变量（线 C retainer\driver.py:48、179），
+  它同样拿不到单独目录里的 onnxruntime 等依赖。所以不采用。
+
+做法乙（采用）：取同一个压缩包（同一文件、同一哈希），解压一份到我方目录 <安装目录>\python\，依赖装进它自己的 Lib\site-packages；
+  另放 sitecustomize.py（去掉用户目录的 site-packages，管住不带 -I 的子进程）和 lawbench-service.pth（加上 <安装目录>\service）。
+  服务由 Host 以 <安装目录>\python\python.exe -I -m lawbench 启动。
+  - 新解压的 site-packages 里只有 pip（干净，不带 DSH 那几个包）。
+  - sys.path 里没有用户目录的 site-packages，有 service 目录；-I -m lawbench --help 正常；
+    不带 -I 的"子进程式"导入 onnxruntime、cv2、lawbench 正常。
+  - 服务全部测试（不加任何路径技巧，直接用这个 python.exe 跑 pytest）：945 通过、6 跳过、0 失败。
+  - packaging\build.ps1 的 python 步骤按此实现：从 DSH 下载缓存取压缩包、核 sha256、用 Windows 自带 tar 解压，
+    从离线 wheelhouse 装 [client.pip]，放 sitecustomize.py 和 .pth，拷 service\lawbench，跑一次 -I -m lawbench --help。
+    本机实测到"解压、核哈希、生成 requirements.txt（37 个包）"，因为没有离线 wheelhouse，在装依赖处按预期停下。
+
+结论：复用 DSH 内置的同一份 3.12.14 发行包，单独解压一份，不改 DSH 的运行时载荷，也不另带 python-build-standalone。
+代价：安装包里多一份约 50MB 的解释器（DSH 载荷里那份照旧给 DSH 自己的 Office 工作区工具用；P-12 已关掉那组工具，T20 步骤 3 可再看能否不打 DSH 那份）。
+
+补记（步骤 3 第 2 条，2026-10-02 08:0x–08:2x）：packaging\build.ps1 -Step python 在本机全程跑通——
+  从 DSH 下载缓存取压缩包、核 sha256、解压到 packaging\stage\python，从离线 wheelhouse（repack_wheels.py 从线 C、线 B 已装环境回装的 50 个轮子）
+  pip install --no-index 装进它自己的 site-packages，放 sitecustomize.py 与 lawbench-service.pth，拷 service\lawbench，-I -m lawbench --help 正常。
+  用这个暂存解释器（只另给 pytest 本身的几个包走 PYTHONPATH，产品里不带 pytest）跑服务全部测试：945 通过、6 跳过、0 失败（tokenizers、keyring 这次都装上了）。
+
+补记二（T20 准备复核 P3-1，2026-10-02 09:0x）：不带 -I 的子进程里用户目录的 .pth 仍会执行、PYTHONPATH 仍生效（复核员实测）。
+  改为在 <安装目录>\python\ 放 python312._pth：DLLs、Lib、Lib\site-packages、..\service、import site。lawbench-service.pth 删掉（由 ._pth 的 ..\service 代替）。
+  暂存解释器实测（PYTHONPATH=C:\evil、不带 -I）：sys.path 只有这几项加 pywin32 自己的三项，没有 C:\evil、没有用户目录；site.ENABLE_USER_SITE=False；
+  lawbench、win32api、onnxruntime 都能导入；-I -m lawbench --help 正常。
+
+补记三（第二轮复核 P3-1 改准，2026-10-02 11:0x）：补记二说"没有用户目录、ENABLE_USER_SITE=False"是 sitecustomize 事后改的结果，不是 ._pth 拦下的。
+  ._pth 里有 import site 时，site 模块照常处理用户目录（no_user_site=0）：用户目录 site-packages 里的 .pth 会先被执行，随后 sitecustomize
+  才把那条路径从 sys.path 删掉。所以 ._pth 管住的是 PYTHONPATH（不再生效）和 sys.path 的组成，管不住用户目录 .pth 的执行；
+  服务另起子进程（证件识别驱动）时传 PYTHONNOUSERSITE=1 仍然必须做（归线 C，主编排另排）。
+
+补记四（第二轮复核 P2-A，2026-10-02 11:1x）：暂存目录原来缺 contracts\，装好后服务按 <安装目录>\contracts 找不到契约，/health 报 500、
+  test_main 两例红。python 步改为一并拷 contracts\ 到 stage\contracts。重建后：暂存服务 python.exe -I -m lawbench 起来，/health 返回
+  200 {"status":"ok","contract_version":"1.3"}；用带 python312._pth 的暂存解释器跑服务全部测试（pytest 经 sys.path 加入，._pth 下 PYTHONPATH 不生效）：
+  945 通过、6 跳过、0 失败（test_main 两例通过）。
+

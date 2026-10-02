@@ -1,0 +1,4 @@
+﻿# P-14 的 DSH 侧测试（在 dsh\ 下跑）
+node node_modules/vitest/vitest.mjs run apps/desktop-host/tests：5 个文件 24 项通过（新增 lawbench-bundle-guard.spec.ts 3 项）
+红测：去掉'跳过的组件'判断 → 1 项失败；去掉'有没有 lawbench-dsh 层'判断 → 1 项失败；还原后全绿。
+tsc -b apps/desktop-host：通过。build:lib:host：通过（apps/desktop-host/lib/index.js 含这句提示）。

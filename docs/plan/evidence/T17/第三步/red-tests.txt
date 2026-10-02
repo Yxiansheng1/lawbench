@@ -1,0 +1,58 @@
+## 新建不看案件（一律进默认根）
+文件：session-store/router.ts
+结果：8 failed | 22 passed (30)
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 列表合并各实例；某个案件根读不出来只跳过它、记一条不带路径的日志；默认根读不出来照原样失败
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 刚登记的案件还不在名单里：新建时先问一次服务再判
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 开关两态：允许时不在案件里的会话进默认根；不允许时拒绝新建并给中文说明（案件里的照常）
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 打开、stat 按编号找实例：新进程（表是空的）逐个实例找到后记下；哪里都没有时按原样报不存在
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 新建按 cwd 选实例：在案件根里（含子目录、大小写、斜杠不同）进该案件，不在的进默认根
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > 搬家：案件目录整个改名、名单按服务更新后重启，旧会话能列出（cwd 为新路径）、能打开、能续写，不需要改原版包
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > 某个案件根读不出来（路径被占成文件）：列表只跳过它，其余照常
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > 案件里的会话只写进 <案件>\工作区\会话，默认根没有；不在案件里的写默认根
+
+## 打开、stat 不按编号表逐个找（只找默认根）
+文件：session-store/router.ts
+结果：1 failed | 29 passed (30)
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 打开、stat 按编号找实例：新进程（表是空的）逐个实例找到后记下；哪里都没有时按原样报不存在
+
+## 列表里案件根读不出来也整体失败
+文件：session-store/router.ts
+结果：1 failed | 29 passed (30)
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 列表合并各实例；某个案件根读不出来只跳过它、记一条不带路径的日志；默认根读不出来照原样失败
+
+## 记录头 cwd 不换成案件现根
+文件：session-store/router.ts
+结果：2 failed | 28 passed (30)
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 记录头 cwd 换成案件现根：记录里的旧 cwd 不在名单上时，list、stat、open 交出去的都是现根；句柄方法照常可用
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > 搬家：案件目录整个改名、名单按服务更新后重启，旧会话能列出（cwd 为新路径）、能打开、能续写，不需要改原版包
+
+## 开关不起作用（不在案件里的一律放行）
+文件：session-store/router.ts
+结果：1 failed | 29 passed (30)
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 开关两态：允许时不在案件里的会话进默认根；不允许时拒绝新建并给中文说明（案件里的照常）
+
+## 新建时名单里没有不问服务
+文件：session-store/router.ts
+结果：1 failed | 29 passed (30)
+- tests/session-store.spec.ts > 会话存储路由：选实例、编号表、列表合并 > 刚登记的案件还不在名单里：新建时先问一次服务再判
+
+## 名单合并不去掉"不在了"的
+文件：session-store/case-roots.ts
+结果：1 failed | 29 passed (30)
+- tests/session-store.spec.ts > 案件根名单缓存 > 读写缓存；服务说"不在了"的去掉、在的加入、没列出的保留；坏缓存当空
+
+## 案件根判断按前缀而不按整段（"张三诉李四2"算进"张三诉李四"）
+文件：session-store/case-roots.ts
+结果：1 failed | 29 passed (30)
+- tests/session-store.spec.ts > 案件根名单缓存 > 读写缓存；服务说"不在了"的去掉、在的加入、没列出的保留；坏缓存当空
+
+# N46 ②（第三步补）
+## N46 默认改回允许案件外会话
+文件：session-store/index.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 30 passed (31)
+- tests/session-store.spec.ts > 接原版 JSONL 包：记录进案件文件夹；案件搬家后能列、能开、能续写 > N46 ②（默认）：不在案件里的会话拒绝新建、给中文说明，$DSH_HOME\sessions 下不新增目录；案件里的照常
+
+## N46 输入区不给提示
+文件：ui/dock.tsx；跑：tests/dock.spec.ts
+结果：1 failed | 40 passed (41)
+- tests/dock.spec.ts > 输入区任务单：契约 1.2（管到律师改掉为止） > N46 ②：会话不在已登记案件里时，输入区上方提示先打开或新建案件，有"回首页"

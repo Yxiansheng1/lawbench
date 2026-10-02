@@ -1,0 +1,22 @@
+﻿# P-16 出处正式按钮：测试与实测
+
+## DSH 侧
+新增 packages/client/ui-primitives/tests/markdown-inline-marks.client.spec.tsx（3 例）、packages/client/ui-chat/tests/inline-marks.client.spec.ts（3 例）。
+ui-primitives 与 ui-chat 两个包全部测试（含 DOM 固定样例 markdown-dom-parity）：
+Test Files  104 passed (104)
+Tests  1918 passed (1918)
+Duration  36.67s (transform 146.26s, setup 40.43s, import 527.24s, tests 107.41s, environment 241.14s)
+DOM 固定样例没有改动也全部通过：inlineMarks 缺省为 undefined，不登记时渲染与原来逐字一致。
+红测：链接里也画按钮 → 变红；按钮不接打开函数 → 变红。'流式时也画按钮'（去掉 render.tsx 里的 streaming 判断）不变红——流式渲染器本来就不把 inlineMarks 传进去（MarkdownText 只在定稿时传），render.tsx 里那一句是第二道闸，属等价变异，如实记下。
+tsc -b ui-primitives、ui-chat 通过；build:lib:client、build:web 通过。
+**注意**：ui-primitives 被打进了 Web 前端包（apps/web/dist），改了它要重新 build:web，桌面端才生效（只 build:lib:client 不够，第一次实测就因此没出按钮）。
+
+## 我方
+dsh-ext\ui\citation.ts 改为给 DSH 登记标记（citationMark：正则 + 每处范围 + 标签 + 打开函数），index.tsx 经 ctx.inject(['chatInlineMarks'], …) 登记；撤掉 ui\citation-click.ts 和 tests\citation-click.spec.ts；citation.spec.ts 去掉点击层的用例，加拆分、标记、DSH 服务守护三组。
+
+## 桌面端（假模型网关回答 假模型回答.md，DSH 真实的 Markdown 渲染）
+最后一个助手回答里的按钮：借款合同 第2页、借款合同 第3页、委托代理合同 第42段、借款合同 第2页（加粗里）——一个括号两处各自一个按钮，加粗里的也成按钮。
+链接里的出处：0 个按钮。〔推断〕〔未找到依据〕：0 个按钮。
+键盘：聚焦第一个出处按钮后按 Enter，右侧打开'原文查看'（截图 01，焦点框可见；按钮的读屏名是'打开原文：借款合同 第2页'）。
+鼠标：点'委托代理合同 第42段'，读材料列表后请求原文（假服务的原文假数据固定是借款合同第 2 页，所以画面里的原文不变；打开的是哪一份由单测守着）（截图 02）。
+流式输出中不成按钮、定稿后才可点：由 DSH 侧用例和 MarkdownText 的定稿闸保证，桌面端假网关一次就流完，肉眼看不到中间态，没有实测。

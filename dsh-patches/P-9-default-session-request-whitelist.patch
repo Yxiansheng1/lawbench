@@ -1,0 +1,223 @@
+diff --git a/apps/desktop/src/lawbench-request-policy.ts b/apps/desktop/src/lawbench-request-policy.ts
+new file mode 100644
+index 0000000000..d711363098
+--- /dev/null
++++ b/apps/desktop/src/lawbench-request-policy.ts
+@@ -0,0 +1,49 @@
++/**
++ * lawbench P-9 (Spec 3.2, owner decision N38): the desktop default session may only reach the
++ * application's own resources and the local Host. Every other http, https, ws and wss request
++ * from any window on the default session is cancelled, so model answers cannot make the
++ * renderer fetch remote images, fonts, styles or scripts.
++ */
++
++import { fileURLToPath } from 'node:url'
++import { resolve, sep } from 'node:path'
++
++/**
++ * Non-network schemes the application itself uses, none of which leaves the machine:
++ * `dsh-app:` the bundled UI; `data:` / `blob:` inline and in-memory resources the renderer builds;
++ * `devtools:` the developer tools window; `about:` the `about:blank` a frame or window starts on.
++ * `chrome:` / `chrome-extension:` are not listed (no internal pages or extensions are used).
++ * `file:` is handled separately: only the application's own renderer files (the first-run window
++ * is loaded from there with `loadFile`), never other local files or `file://host/share` (SMB).
++ */
++const LOCAL_SCHEMES = new Set(['dsh-app:', 'data:', 'blob:', 'devtools:', 'about:'])
++
++/** Whether a `file:` URL names a local file inside the application's renderer directory. */
++function appFile(target: URL, appFiles: string | undefined): boolean {
++  if (appFiles === undefined || target.host !== '') return false
++  let path: string
++  try { path = resolve(fileURLToPath(target)) } catch { return false }
++  const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
++  const root = fold(resolve(appFiles))
++  return fold(path).startsWith(root + sep)
++}
++const NETWORK_SCHEMES = new Set(['http:', 'https:', 'ws:', 'wss:'])
++
++/**
++ * Whether a default-session request may proceed.
++ * @param url - the request URL as Electron reports it.
++ * @param hostUrl - the local Host URL once known (only its exact host:port is allowed, over http or ws).
++ * @param appFiles - the application's renderer directory; `file:` URLs are allowed only inside it.
++ * @returns true when the request stays inside the application or reaches the Host itself.
++ */
++export function lawbenchRequestAllowed(url: string, hostUrl: string | undefined, appFiles?: string): boolean {
++  let target: URL
++  try { target = new URL(url) } catch { return false }
++  if (LOCAL_SCHEMES.has(target.protocol)) return true
++  if (target.protocol === 'file:') return appFile(target, appFiles)
++  if (!NETWORK_SCHEMES.has(target.protocol)) return false
++  if (hostUrl === undefined) return false
++  let host: URL
++  try { host = new URL(hostUrl) } catch { return false }
++  return (target.protocol === 'http:' || target.protocol === 'ws:') && target.host === host.host && target.username === '' && target.password === ''
++}
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index fb7cbfdf41..4e03717ea9 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -32,6 +32,7 @@ import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLoc
+ import { claimDesktopSingleInstance } from './single-instance.ts'
+ import { DesktopUpdateCoordinator } from './update-coordinator.ts'
+ import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
++import { lawbenchRequestAllowed } from './lawbench-request-policy.ts'
+ import { DesktopFatalRecovery } from './fatal-recovery.ts'
+ import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
+ import { openWelcomeWindow } from './welcome-window.ts'
+@@ -213,7 +214,10 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+       contextIsolation: true,
+       sandbox: true,
+       webSecurity: true,
+-      webviewTag: primary,
++      // lawbench P-9: no <webview> in any window (the sidebar browser's guest would sit outside the
++      // default-session request filter), and no spellchecker (it fetches dictionaries from the network).
++      webviewTag: false,
++      spellcheck: false,
+       devTools: true,
+     },
+   })
+@@ -596,13 +600,17 @@ async function main(): Promise<void> {
+     reportFatal(new Error(message), 'web-boot')
+   })
+ 
+-  ipcMain.handle(DESKTOP_IPC.browserAcquire, (event, workspace: unknown) => {
+-    assertProductSender(event)
+-    return browserGuests.acquire(event.sender, workspace)
+-  })
+-  ipcMain.handle(DESKTOP_IPC.browserRelease, (event, lease: unknown) => {
+-    assertProductSender(event)
+-    return browserGuests.release(event.sender, lease)
++  // lawbench P-9: the sidebar browser channel (browserAcquire / browserRelease) is not registered: a
++  // renderer script could otherwise open a separate-partition webview outside the request filter.
++  void browserGuests
++
++  // lawbench P-9: no spellchecker in any default-session window (main, first-run setup, mandatory update);
++  // it would fetch dictionaries from the network.
++  session.defaultSession.setSpellCheckerEnabled(false)
++
++  // lawbench P-9 (N38): the default session only reaches app resources and the local Host; other network requests are cancelled.
++  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
++    callback({ cancel: !lawbenchRequestAllowed(details.url, hostUrl, join(app.getAppPath(), 'renderer')) })
+   })
+ 
+   session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['ws://127.0.0.1/*'] }, (details, callback) => {
+diff --git a/apps/desktop/tests/lawbench-request-policy.spec.ts b/apps/desktop/tests/lawbench-request-policy.spec.ts
+new file mode 100644
+index 0000000000..e5ed4de276
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-request-policy.spec.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from 'vitest'
++import { join } from 'node:path'
++import { pathToFileURL } from 'node:url'
++import { lawbenchRequestAllowed } from '../src/lawbench-request-policy.ts'
++
++const HOST = 'http://127.0.0.1:3080/?token=x'
++
++describe('lawbench P-9 request policy', () => {
++  it('allows application resources and local schemes', () => {
++    for (const url of ['dsh-app://app/index.html', 'dsh-app://shell/welcome.html', 'data:image/png;base64,AA==', 'blob:dsh-app://app/1', 'devtools://devtools/x', 'about:blank']) {
++      expect(lawbenchRequestAllowed(url, HOST), url).toBe(true)
++    }
++  })
++  it('file: only for the application renderer files (first-run window); other local files and shares refused', () => {
++    const app = join(process.cwd(), 'apps-desktop-fixture', 'renderer')
++    expect(lawbenchRequestAllowed(pathToFileURL(join(app, 'welcome.html')).href, HOST, app)).toBe(true)
++    expect(lawbenchRequestAllowed(pathToFileURL(join(app, 'assets', 'welcome.js')).href, HOST, app)).toBe(true)
++    for (const url of [
++      pathToFileURL(join(app, '..', 'secret.html')).href,
++      pathToFileURL(`${app}-other${join('/', 'x.html')}`).href,
++      'file:///C:/x.html',
++      'file://192.168.1.20/share/a.png',
++    ]) {
++      expect(lawbenchRequestAllowed(url, HOST, app), url).toBe(false)
++    }
++    expect(lawbenchRequestAllowed(pathToFileURL(join(app, 'welcome.html')).href, HOST)).toBe(false) // root unknown
++  })
++  it('refuses chrome: and chrome-extension: (no internal pages or extensions are used)', () => {
++    for (const url of ['chrome://gpu', 'chrome-extension://abc/x.js']) {
++      expect(lawbenchRequestAllowed(url, HOST), url).toBe(false)
++    }
++  })
++  it('allows only the Host itself over http and ws', () => {
++    expect(lawbenchRequestAllowed('http://127.0.0.1:3080/api/x', HOST)).toBe(true)
++    expect(lawbenchRequestAllowed('ws://127.0.0.1:3080/api/remote.mux', HOST)).toBe(true)
++    expect(lawbenchRequestAllowed('https://127.0.0.1:3080/api/x', HOST)).toBe(false)
++    expect(lawbenchRequestAllowed('http://127.0.0.1:3081/api/x', HOST)).toBe(false)
++    expect(lawbenchRequestAllowed('http://localhost:3080/api/x', HOST)).toBe(false)
++    expect(lawbenchRequestAllowed('http://user:pw@127.0.0.1:3080/api/x', HOST)).toBe(false)
++  })
++  it('cancels every other network request, including before the Host is known', () => {
++    for (const url of ['https://evil.test/a.png?q=secret', 'http://192.168.1.20:8000/img', 'wss://evil.test/s', 'ws://10.0.0.1/s', 'ftp://evil.test/x', 'not a url']) {
++      expect(lawbenchRequestAllowed(url, HOST), url).toBe(false)
++    }
++    expect(lawbenchRequestAllowed('http://127.0.0.1:3080/api/x', undefined)).toBe(false)
++  })
++})
+diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
+index 3e1e988a1d..b1a8917e48 100644
+--- a/apps/desktop/tests/main-startup.spec.ts
++++ b/apps/desktop/tests/main-startup.spec.ts
+@@ -185,7 +185,7 @@ const harness = await vi.hoisted(async () => {
+   return {
+     failWindow(error: Error) { windowFailure = error },
+     windows, hosts, handlers, app, FakeWindow, FakeHost, powerMonitor, nativeTheme, trays, FakeTray, backgroundNotice, shellDialog,
+-    menu, popup, socketHeaders: vi.fn(), updateCheck, updateDownload, updateInstall,
++    menu, popup, socketHeaders: vi.fn(), requestFilter: vi.fn(), spellChecker: vi.fn(), updateCheck, updateDownload, updateInstall,
+     platformDispose,
+     platformCloseAndWait,
+ 
+@@ -276,7 +276,7 @@ vi.mock('electron', () => ({
+   },
+   Menu: { setApplicationMenu: harness.menu.setApplicationMenu, buildFromTemplate: harness.menu },
+   session: { defaultSession: {
+-    setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: harness.socketHeaders },
++    setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), setSpellCheckerEnabled: harness.spellChecker, webRequest: { onBeforeSendHeaders: harness.socketHeaders, onBeforeRequest: harness.requestFilter },
+   } },
+   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: harness.protocolHandle },
+   powerMonitor: harness.powerMonitor,
+@@ -907,6 +907,43 @@ describe('desktop main startup', () => {
+     expect(callback).toHaveBeenLastCalledWith({})
+   })
+ 
++  it('lawbench P-9: no window may host a webview or spellcheck, and the sidebar browser IPC is not registered', async () => {
++    await readyForUpdate()
++    // the default session (main, first-run setup and mandatory-update windows) has its spellchecker off
++    expect(harness.spellChecker).toHaveBeenCalledWith(false)
++    expect(harness.windows.length).toBeGreaterThan(0)
++    for (const window of harness.windows) {
++      const prefs = (window.options as { webPreferences?: { webviewTag?: boolean; spellcheck?: boolean } }).webPreferences
++      if (prefs === undefined) continue
++      expect(prefs.webviewTag).toBe(false)
++      expect(prefs.spellcheck).toBe(false)
++    }
++    expect(harness.handlers.has(DESKTOP_IPC.browserAcquire)).toBe(false)
++    expect(harness.handlers.has(DESKTOP_IPC.browserRelease)).toBe(false)
++  })
++
++  it('lawbench P-9: cancels default-session requests except app resources and the Host itself', async () => {
++    await import('../src/main.ts')
++    const filter = harness.requestFilter.mock.calls[0]![0] as (details: { url: string }, callback: (result: unknown) => void) => void
++    const callback = vi.fn()
++    // Before the Host is known, every network request is cancelled
++    filter({ url: 'http://127.0.0.1:3080/api/x' }, callback)
++    expect(callback).toHaveBeenLastCalledWith({ cancel: true })
++    await harness.preparing.promise
++    harness.prepared.resolve()
++    await harness.hostStarted.promise
++    harness.hosts[0]!.ready.resolve()
++    await Promise.resolve(invoke(DESKTOP_IPC.boot))
++    for (const url of ['http://127.0.0.1:3080/api/x', 'ws://127.0.0.1:3080/api/remote.mux', 'dsh-app://app/index.html', 'data:image/png;base64,AA==', 'blob:dsh-app://app/1']) {
++      filter({ url }, callback)
++      expect(callback, url).toHaveBeenLastCalledWith({ cancel: false })
++    }
++    for (const url of ['https://evil.test/a.png?q=1', 'http://192.168.1.20:8000/x', 'wss://evil.test/s', 'http://127.0.0.1:9999/x', 'https://127.0.0.1:3080/x', 'http://localhost:3080/x']) {
++      filter({ url }, callback)
++      expect(callback, url).toHaveBeenLastCalledWith({ cancel: true })
++    }
++  })
++
+   it('shares login key discovery with onboarding and rejects foreign renderers', async () => {
+     await readyForUpdate()
+     const window = harness.windows[0]!

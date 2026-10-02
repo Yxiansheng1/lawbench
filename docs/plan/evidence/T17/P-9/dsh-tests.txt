@@ -1,0 +1,9 @@
+﻿# P-9 的 DSH 侧测试（在 dsh\ 下跑）
+node node_modules/vitest/vitest.mjs run apps/desktop/tests/lawbench-request-policy.spec.ts apps/desktop/tests/main-startup.spec.ts
+Test Files  2 passed (2)
+Tests  109 passed (109)
+Duration  6.38s (transform 2.02s, setup 1.67s, import 757ms, tests 4.67s, environment 0ms)
+
+红测：把 main.ts 里的 callback({ cancel: !lawbenchRequestAllowed(details.url, hostUrl) }) 临时改成 callback({ cancel: false })，
+main-startup.spec.ts 的 'lawbench P-9: cancels default-session requests except app resources and the Host itself' 变红（1 failed | 105 passed），改回后全绿。
+tsc -b apps/desktop：通过。桌面端 bundle（pnpm --filter @deepseek-ai/dsh-desktop run bundle）：通过。

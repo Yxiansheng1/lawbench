@@ -1,0 +1,50 @@
+# check_ui_words.py 自检（2026-09-30，按执行令 0357 Q12 裁决后的词表重做）
+
+脚本：scripts\check_ui_words.py。词表只在脚本顶部一处（BANNED_EN、BANNED_ZH）。
+词表：英文 token, tokens, context, prompt, LLM, API, agent, preset, session, JSON, embedding, schema, payload, endpoint, runtime, workspace
+（按整词、不分大小写）；中文 上下文、提示词（"上下文"已包含初稿的"模型上下文""上下文窗口"）。"Skill""Key"按裁决不禁用。
+扫描对象：dsh-ext\ui\ 下 .ts/.tsx/.js/.jsx/.mjs/.json 中律师能看到的文字——字符串字面量、JSX 文本、词条表的值；
+跳过注释、import/export 行、纯 ASCII 且无空格的短标识（CSS 类名、事件名、模块路径），跳过 node_modules、lib、fixtures、tests 目录。
+
+## 样例一（应命中）
+样例文件含：行注释里的 token、块注释里的 context、import 路径里的 session、标识符 sessionId、CSS 类名 lb-panel，
+以及字符串"剩余 token 数"、模板字符串"Prompt 太长"、JSX 文本"超出上下文，请缩小范围"、
+Q12 新增词各一条（Endpoint、Embedding、workspace、Runtime、schema、payload，大小写混用）、词条"本次用了 1200 个 tokens"。
+输出：
+Panel.tsx:5  「token」  …剩余 token 数…
+Panel.tsx:6  「Prompt」  …Prompt 太长…
+Panel.tsx:8  「Endpoint」  …检索服务 Endpoint 不可用…
+Panel.tsx:9  「Embedding」  …Embedding 模型未就绪…
+Panel.tsx:10  「workspace」  …请检查 workspace 设置…
+Panel.tsx:11  「Runtime」  …Runtime 出错…
+Panel.tsx:12  「schema」  …字段不符合 schema…
+Panel.tsx:13  「payload」  …payload 太大…
+Panel.tsx:7  「上下文」  …超出上下文，请缩小范围…
+zh.json:1  「tokens」  …本次用了 1200 个 tokens…
+命中 10 处，退出码 1。注释、import 路径、sessionId、CSS 类名均未误报。
+
+## 样例二（应零命中）
+字符串"材料已导入""选择 Skill""律所 Key 已保存"、JSX 文本"成果"、import './session-helpers'。输出：零命中，退出码 0。
+
+## 补充（界面施工中发现的误报，已修）
+模板字符串里的 ${…} 是代码（如 `${SERVER_WORD.llm}`），原先会误报 llm。改为先去掉 ${…} 再查。
+回测：样例一加一行 `${count} token 已用完，${SERVER.llm} 不可用` → 命中 11 处（多出的一处是字面的 token），${SERVER.llm} 不再误报；样例二仍零命中。
+另：cordis effect 的调试标签（只在开发日志里出现）改成中文，不再含 session、workspace 等词。
+
+## 当前 dsh-ext\ui\
+正式结果见 ui-words.txt（零命中）。
+
+## 返修 P3-1（复核员列的六种漏报，2026-09-30）
+改法：JSX 文本改为取 > 与 < 之间、去掉 {…} 表达式后剩下的文字（剩下的像代码的——含 { } ; => && || === !== ——跳过）；
+纯 ASCII 短字符串恰好等于禁用词（含复数）时照查；英文词表自动含复数；代码里恰好等于禁用词的标识符字符串，
+在该行写注释"ui-words: 标识符（……）"豁免并写明是什么（界面代码里 6 行：Skill 头部 mode 取值 2 行、DSH 服务名 3 行、网关参数来源取值 1 行）。
+样例三（每行一种写法）：
+  1  <div>Token 用量：{n}</div>              JSX 文本紧挨表达式      → 报「Token」
+  2  <div>{n} tokens</div>                   表达式在前、复数         → 报「tokens」
+  3  <Button>{'Prompt'}</Button>             纯英文短字符串=禁用词    → 报「Prompt」
+  4  title: () => 'Session'                  箭头函数返回的字符串     → 报「Session」
+  5  <button aria-label="agent">             读屏可见的属性           → 报「agent」
+  6  '共 3 个 sessions，2 个 agents'          复数形式                → 报「sessions」「agents」
+  7  ctx.inject(['sessions'], f) // ui-words: 标识符（DSH 服务名）    → 不报（豁免）
+  8  a > b && b < a                          比较运算，不是 JSX 文本  → 不报
+输出：命中 7 处，退出码 1。样例一仍命中 11 处，样例二仍零命中。当前 dsh-ext\ui\ 零命中。

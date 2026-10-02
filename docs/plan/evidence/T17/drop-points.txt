@@ -1,0 +1,13 @@
+﻿# 拖入实测的落点记录（复核 A-P3-5）
+
+坐标是渲染进程的 CSS 像素，窗口 1280x822（截图是 1.5 倍像素，1920x1233）。拖入用 CDP `Input.dispatchDragEvent`（dragEnter → dragOver → drop，带一个临时虚构文本的本机路径），就是真实拖入事件。
+落点元素由 `document.elementFromPoint` 在同一窗口、同一布局下取得，在 2026-09-30 上午第一步返修时、打开案件后的新会话里补测。首次实测（第一步补）的窗口尺寸与布局相同。
+
+| 目标 | 坐标 | 落点元素 | 首次实测结果（第一步补，守卫生效、P-5 未接） | 证据 |
+|---|---|---|---|---|
+| 对话输入框 | (489,480) | `div[data-composer-input]`，在 `[data-slot=conversation.composer.bar]` 里 | 弹"没有加进对话"，输入框里没有标签 | 09 |
+| 对话消息区空白处 | (489,200) | `div`，在 `[data-slot=main.conversation]` 里 | 弹提示，没有标签 | 10 |
+| 左侧栏会话列表下方 | (130,700) | `div`，在 `[data-slot=sidebar.workspaces]` 里 | 弹提示（页面文字里有"没有加进对话"），没有标签 | 本表 |
+| 右侧材料面板 | (990,400) | `div`，在 `[data-lawbench-drop]`、`[data-slot=sidebar.right.pane.tab]` 里 | 不拦，照常弹"导入材料"确认框 | 11 |
+
+截图 09、10 里提示框挡住了落点，画面相近，落点以本表为准。

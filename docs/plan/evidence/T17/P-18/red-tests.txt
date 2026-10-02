@@ -1,0 +1,3 @@
+﻿变异：placeholder.default 改回带 @ 的原文 → input-bar.client.spec.tsx       Tests  3 failed | 93 passed (96)
+
+另：ui-settings-general 的 apply、shell 两个测试文件载入即失败（cannot resolve plugin package @deepseek-ai/dsh-web-app），换回补丁前的文件同样失败，测试环境问题。

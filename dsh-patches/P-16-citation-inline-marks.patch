@@ -1,0 +1,440 @@
+diff --git a/packages/client/ui-chat/src/client/apply.ts b/packages/client/ui-chat/src/client/apply.ts
+index 8c86d6e918..18e4df481a 100644
+--- a/packages/client/ui-chat/src/client/apply.ts
++++ b/packages/client/ui-chat/src/client/apply.ts
+@@ -32,6 +32,7 @@ import { StatsPills } from './chat/StatsPills.tsx'
+ import { registerConversationNodes } from './conversation-nodes/register.ts'
+ import { QuotaNoticeHost } from './chat/QuotaNoticeHost.tsx'
+ import { en, NS, zh } from './locale.ts'
++import { chatInlineMarks } from './inline-marks.ts'
+ import { TranscriptViewRow, type TranscriptViewRowInjected } from './settings/TranscriptViewRow.tsx'
+ import { createChatStore } from './stores.ts'
+ import { TranscriptViewPolicy } from './transcript-view.ts'
+@@ -63,6 +64,8 @@ export const inject = [
+  * @param ctx - Client root context.
+  */
+ export function apply(ctx: Context): void {
++  // lawbench P-16: plugins register inline marks (source citations) for settled assistant prose
++  ctx.provide('chatInlineMarks', chatInlineMarks)
+   const quotaNotice = createSnapshotStore<QuotaNoticeState | null>(null)
+   let quotaNoticeSeq = 0
+   // Each hold is its own token, so a release can only drop the hold it was
+diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
+index 5d97a698f7..36b0526b2b 100644
+--- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
++++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
+@@ -5,6 +5,7 @@ import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+ import type { MarkdownFileMentions, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
+ import type { ChatNodeOwnerProps, ChatViewSlotProps, UseDisclosure, UsePresentation } from '../contract/slots.ts'
+ import type { AssistantBlock } from '../contract/snapshot.ts'
++import { useChatInlineMarks } from '../inline-marks.ts'
+ import { markdownLabels } from '../markdown-labels.ts'
+ import { ReasoningRow } from './ReasoningRow.tsx'
+ import { useSearchableHidden } from './searchable-hidden.ts'
+@@ -62,6 +63,8 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+   const pathImages = useMemo<MarkdownPathImages>(() => {
+     return { resolve: value => localPathMediaUrl(document.baseURI, value) }
+   }, [])
++  // lawbench P-16: plugin-registered inline marks (source citations); stable until a registration changes
++  const inlineMarks = useChatInlineMarks()
+   const last = blocks.length - 1
+   // Tool-call heads render as tool rows in the chat view's grouping pass, so
+   // a node that is only those heads (or empty) would paint an empty root
+@@ -86,6 +89,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+             labels={labels}
+             fileMentions={mentions}
+             pathImages={pathImages}
++            inlineMarks={inlineMarks}
+           />,
+         )
+         break
+diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/client/ui-chat/src/client/contract/slots.ts
+index 5c7a8e37cd..62b6af30bc 100644
+--- a/packages/client/ui-chat/src/client/contract/slots.ts
++++ b/packages/client/ui-chat/src/client/contract/slots.ts
+@@ -122,6 +122,8 @@ declare module '@deepseek-ai/cordis' {
+   interface Context {
+     /** Optional prose file-mention provider. */
+     chatFileMentions: ChatFileMentions
++    /** lawbench P-16: plugins register inline marks (e.g. source citations) for settled assistant prose. */
++    chatInlineMarks: import('../inline-marks.ts').ChatInlineMarks
+   }
+ }
+ 
+diff --git a/packages/client/ui-chat/src/client/inline-marks.ts b/packages/client/ui-chat/src/client/inline-marks.ts
+new file mode 100644
+index 0000000000..12429339a4
+--- /dev/null
++++ b/packages/client/ui-chat/src/client/inline-marks.ts
+@@ -0,0 +1,99 @@
++/**
++ * lawbench P-16: inline marks in settled assistant prose (for example source
++ * citations). A plugin registers only a pattern, the clickable ranges inside a
++ * match, a label and an open function — never HTML; the Markdown renderer draws
++ * the buttons, so they are real, focusable controls.
++ * @module @deepseek-ai/dsh-client-ui-chat/inline-marks
++ */
++
++import { useSyncExternalStore } from 'react'
++import type { MarkdownInlineMarks } from '@deepseek-ai/dsh-client-ui-primitives'
++
++/** One registered kind of inline mark. */
++export interface ChatInlineMark {
++  /** Finds marks in one prose text run; the `g` flag is added when missing. */
++  readonly pattern: RegExp
++  /**
++   * Clickable ranges inside one match, as [start, end) offsets relative to the match.
++   * Omitted: the whole match is one button. Empty: the match stays plain text.
++   */
++  readonly ranges?: (match: string) => ReadonlyArray<readonly [number, number]>
++  /** Accessible label and tooltip for one clickable text. */
++  readonly label: (text: string) => string
++  /** Open whatever the clickable text names. */
++  readonly open: (text: string) => void
++}
++
++/** The `chatInlineMarks` service. */
++export interface ChatInlineMarks {
++  /**
++   * Register one kind of mark for assistant prose.
++   * @param mark - Pattern, ranges, label and opener.
++   * @returns Disposer removing the registration.
++   */
++  register(mark: ChatInlineMark): () => void
++}
++
++const marks = new Set<ChatInlineMark>()
++const listeners = new Set<() => void>()
++let snapshot: MarkdownInlineMarks | undefined
++
++function publish(): void {
++  snapshot = marks.size === 0 ? undefined : buildInlineMarks([...marks])
++  for (const listener of listeners) listener()
++}
++
++/** The process-wide registry behind the `chatInlineMarks` service. */
++export const chatInlineMarks: ChatInlineMarks = {
++  register(mark) {
++    marks.add(mark)
++    publish()
++    return () => { if (marks.delete(mark)) publish() }
++  },
++}
++
++/**
++ * Turn registered marks into the renderer's split function.
++ * @param registered - Marks in registration order; earlier marks win on overlap.
++ * @returns The renderer vocabulary.
++ */
++export function buildInlineMarks(registered: readonly ChatInlineMark[]): MarkdownInlineMarks {
++  return {
++    split(value) {
++      const spans: Array<{ start: number; end: number; mark: ChatInlineMark }> = []
++      for (const mark of registered) {
++        const pattern = new RegExp(mark.pattern.source, mark.pattern.flags.includes('g') ? mark.pattern.flags : `${mark.pattern.flags}g`)
++        for (const match of value.matchAll(pattern)) {
++          const at = match.index
++          const ranges = mark.ranges?.(match[0]) ?? [[0, match[0].length] as const]
++          for (const [from, to] of ranges) {
++            const start = at + from
++            const end = at + to
++            if (to <= from || spans.some(s => start < s.end && end > s.start)) continue
++            spans.push({ start, end, mark })
++          }
++        }
++      }
++      if (spans.length === 0) return undefined
++      spans.sort((a, b) => a.start - b.start)
++      const out: Array<string | { text: string; label: string; open: () => void }> = []
++      let cursor = 0
++      for (const { start, end, mark } of spans) {
++        if (start > cursor) out.push(value.slice(cursor, start))
++        const text = value.slice(start, end)
++        out.push({ text, label: mark.label(text), open: () => { mark.open(text) } })
++        cursor = end
++      }
++      if (cursor < value.length) out.push(value.slice(cursor))
++      return out
++    },
++  }
++}
++
++/** Current renderer vocabulary; undefined while no plugin registered a mark. */
++export function useChatInlineMarks(): MarkdownInlineMarks | undefined {
++  return useSyncExternalStore(
++    (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
++    () => snapshot,
++  )
++}
+diff --git a/packages/client/ui-chat/tests/inline-marks.client.spec.ts b/packages/client/ui-chat/tests/inline-marks.client.spec.ts
+new file mode 100644
+index 0000000000..4bb7259c80
+--- /dev/null
++++ b/packages/client/ui-chat/tests/inline-marks.client.spec.ts
+@@ -0,0 +1,48 @@
++// @vitest-environment jsdom
++import { act, renderHook } from '@testing-library/react'
++import { describe, expect, it, vi } from 'vitest'
++import { buildInlineMarks, chatInlineMarks, useChatInlineMarks, type ChatInlineMark } from '../src/client/inline-marks.ts'
++
++const citation = (open = vi.fn()): ChatInlineMark => ({
++  pattern: /〔([^〔〕]+)〕/u,
++  ranges: (match) => {
++    const inner = match.slice(1, -1)
++    if (inner === '推断') return []
++    const out: Array<[number, number]> = []
++    let at = 1
++    for (const item of inner.split('、')) { out.push([at, at + item.length]); at += item.length + 1 }
++    return out
++  },
++  label: text => `打开原文：${text}`,
++  open,
++})
++
++describe('lawbench P-16 chat inline marks', () => {
++  it('splits a run into text and clickable items, adding the g flag and skipping empty ranges', () => {
++    const open = vi.fn()
++    const parts = buildInlineMarks([citation(open)]).split('见〔甲 第1页、乙 第2页〕与〔推断〕')!
++    expect(parts.map(p => typeof p === 'string' ? p : `[${p.text}]`)).toEqual(['见〔', '[甲 第1页]', '、', '[乙 第2页]', '〕与〔推断〕'])
++    const second = parts[3] as { open: () => void; label: string }
++    expect(second.label).toBe('打开原文：乙 第2页')
++    second.open()
++    expect(open).toHaveBeenCalledWith('乙 第2页')
++    expect(buildInlineMarks([citation()]).split('没有出处')).toBeUndefined()
++  })
++
++  it('lets the earlier registration win where two marks overlap', () => {
++    const whole: ChatInlineMark = { pattern: /〔[^〕]+〕/u, label: t => t, open: vi.fn() }
++    const parts = buildInlineMarks([whole, citation()]).split('〔甲 第1页〕')!
++    expect(parts).toHaveLength(1)
++    expect((parts[0] as { text: string }).text).toBe('〔甲 第1页〕')
++  })
++
++  it('publishes registrations to renderers and withdraws them on dispose', () => {
++    const { result } = renderHook(() => useChatInlineMarks())
++    expect(result.current).toBeUndefined()
++    let dispose = (): void => {}
++    act(() => { dispose = chatInlineMarks.register(citation()) })
++    expect(result.current?.split('〔甲 第1页〕')).toHaveLength(3)
++    act(() => { dispose() })
++    expect(result.current).toBeUndefined()
++  })
++})
+diff --git a/packages/client/ui-primitives/src/index.ts b/packages/client/ui-primitives/src/index.ts
+index 0e4cc0a527..3827f4d0f7 100644
+--- a/packages/client/ui-primitives/src/index.ts
++++ b/packages/client/ui-primitives/src/index.ts
+@@ -100,7 +100,7 @@ export { JsonBlock } from './markdown/JsonBlock.tsx'
+ export { MarkdownDelegateProvider } from './markdown/MarkdownDelegate.tsx'
+ export type { MarkdownDelegate, MarkdownDelegateProviderProps, MarkdownExternalLinkHandler } from './markdown/MarkdownDelegate.tsx'
+ export { MarkdownText } from './markdown/MarkdownText.tsx'
+-export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownLabels, MarkdownPathImages } from './markdown/MarkdownText.tsx'
++export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownInlineMarks, MarkdownLabels, MarkdownPathImages } from './markdown/MarkdownText.tsx'
+ export { extractMarkdownPlainText } from './markdown/plain-text.ts'
+ export type { MarkdownPlainTextMode, MarkdownPlainTextOptions } from './markdown/plain-text.ts'
+ export * from './icons/index.tsx'
+diff --git a/packages/client/ui-primitives/src/markdown/MarkdownText.tsx b/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
+index ab2c0b380a..0d4325b323 100644
+--- a/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
++++ b/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
+@@ -20,11 +20,11 @@ import {
+   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
+   wrapBlockChildren,
+ } from './render.tsx'
+-import type { MarkdownFileMentions, MarkdownLabels, MarkdownPathImages, MarkdownRenderContext, ReferenceTargets } from './render.tsx'
++import type { MarkdownFileMentions, MarkdownInlineMarks, MarkdownLabels, MarkdownPathImages, MarkdownRenderContext, ReferenceTargets } from './render.tsx'
+ import 'katex/dist/katex.min.css'
+ import css from './MarkdownText.module.css'
+ 
+-export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownLabels, MarkdownPathImages } from './render.tsx'
++export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownInlineMarks, MarkdownLabels, MarkdownPathImages } from './render.tsx'
+ 
+ /** One settled full render: parse with math, resolve references, append the footnote section. */
+ function renderSettled(
+@@ -32,6 +32,7 @@ function renderSettled(
+   labels: MarkdownLabels,
+   fileMentions: MarkdownFileMentions | undefined,
+   pathImages: MarkdownPathImages | undefined,
++  inlineMarks?: MarkdownInlineMarks | undefined,
+ ): ReactNode[] {
+   const root = parseGfmWithMath(text)
+   const targets = createReferenceTargets()
+@@ -41,6 +42,7 @@ function renderSettled(
+     labels,
+     fileMentions,
+     pathImages,
++    inlineMarks,
+     targets,
+     footnoteOrder: [],
+     footnoteCounts: new Map(),
+@@ -172,13 +174,15 @@ class StreamingRenderer {
+  * absolute HTTP(S) images render directly.
+  */
+ export const MarkdownText = memo(function MarkdownText({
+-  text, streaming = false, labels, fileMentions, pathImages, variant = 'body',
++  text, streaming = false, labels, fileMentions, pathImages, inlineMarks, variant = 'body',
+ }: {
+   text: string
+   streaming?: boolean
+   labels: MarkdownLabels
+   fileMentions?: MarkdownFileMentions | undefined
+   pathImages?: MarkdownPathImages | undefined
++  /** lawbench P-16: owner inline marks, settled renders only (same streaming gate as `fileMentions`). */
++  inlineMarks?: MarkdownInlineMarks | undefined
+   variant?: 'body' | 'compact'
+ }) {
+   const streamRef = useRef<StreamingRenderer | null>(null)
+@@ -186,14 +190,14 @@ export const MarkdownText = memo(function MarkdownText({
+   const children = useMemo(() => {
+     if (!streaming) {
+       streamRef.current = null
+-      return renderSettled(text, labels, fileMentions, pathImages)
++      return renderSettled(text, labels, fileMentions, pathImages, inlineMarks)
+     }
+     if (streamRef.current === null || streamLabelsRef.current !== labels) {
+       streamRef.current = new StreamingRenderer(labels)
+       streamLabelsRef.current = labels
+     }
+     return streamRef.current.render(text)
+-  }, [text, streaming, labels, fileMentions, pathImages])
++  }, [text, streaming, labels, fileMentions, pathImages, inlineMarks])
+   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
+     data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
+ })
+diff --git a/packages/client/ui-primitives/src/markdown/render.tsx b/packages/client/ui-primitives/src/markdown/render.tsx
+index cdb9afcbda..adbf0022b4 100644
+--- a/packages/client/ui-primitives/src/markdown/render.tsx
++++ b/packages/client/ui-primitives/src/markdown/render.tsx
+@@ -178,6 +178,20 @@ export interface MarkdownFileMentions {
+   resolve(value: string): { open: () => void; label: string; title: string } | undefined
+ }
+ 
++/**
++ * lawbench P-16: owner-recognized inline marks in settled prose text (for
++ * example source citations). The owner splits one text run into literal text
++ * and clickable spans; the renderer only draws buttons and never guesses.
++ */
++export interface MarkdownInlineMarks {
++  /**
++   * Split one settled text run.
++   * @param value - The text node's value.
++   * @returns Literal strings and clickable spans in order, or undefined to keep the run as plain text.
++   */
++  split(value: string): ReadonlyArray<string | { text: string; label: string; open: () => void }> | undefined
++}
++
+ /**
+  * One render pass's state: immutable options and targets plus the footnote
+  * numbering accumulated in document order while references render.
+@@ -193,6 +207,8 @@ export interface MarkdownRenderContext {
+   readonly fileMentions: MarkdownFileMentions | undefined
+   /** Local-path image vocabulary; absent wherever no rewriting owner exists. */
+   readonly pathImages: MarkdownPathImages | undefined
++  /** lawbench P-16: settled-text inline marks; absent wherever no owner registered any. */
++  readonly inlineMarks?: MarkdownInlineMarks | undefined
+   /** Inside an anchor's children: interactive mentions must not nest there. */
+   readonly inLink?: boolean
+   /** Reference targets visible to this pass. */
+@@ -263,6 +279,24 @@ function renderBlockEntries(
+   return entries
+ }
+ 
++/** lawbench P-16: one text run with the owner's clickable marks drawn as mention-styled buttons. */
++function renderInlineMarks(value: string, key: Key, marks: MarkdownInlineMarks): ReactNode {
++  const parts = marks.split(value)
++  if (parts === undefined) return value
++  return (
++    <Fragment key={key}>
++      {parts.map((part, index) => typeof part === 'string'
++        ? part
++        : (
++          <button key={index} type="button" className={css.fileMention} title={part.label} aria-label={part.label}
++            data-inline-mark="" onClick={part.open}>
++            {part.text}
++          </button>
++        ))}
++    </Fragment>
++  )
++}
++
+ function renderChildren(
+   nodes: readonly Md.RootContent[],
+   context: MarkdownRenderContext,
+@@ -273,7 +307,9 @@ function renderChildren(
+ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderContext): ReactNode {
+   switch (node.type) {
+     case 'text':
+-      return node.value
++      // lawbench P-16: settled prose only; streaming frames and link text stay plain
++      if (context.inlineMarks === undefined || context.streaming || context.inLink === true) return node.value
++      return renderInlineMarks(node.value, key, context.inlineMarks)
+     case 'paragraph':
+       return <p key={key}>{renderChildren(node.children, context)}</p>
+     case 'heading':
+diff --git a/packages/client/ui-primitives/tests/markdown-inline-marks.client.spec.tsx b/packages/client/ui-primitives/tests/markdown-inline-marks.client.spec.tsx
+new file mode 100644
+index 0000000000..585c40a182
+--- /dev/null
++++ b/packages/client/ui-primitives/tests/markdown-inline-marks.client.spec.tsx
+@@ -0,0 +1,61 @@
++// @vitest-environment jsdom
++import { cleanup, fireEvent, render, screen } from '@testing-library/react'
++import { afterEach, expect, it, vi } from 'vitest'
++import type { MarkdownInlineMarks } from '../src/index.ts'
++import { MarkdownText } from './markdown-test-components.tsx'
++
++afterEach(() => { cleanup() })
++
++/** lawbench P-16: a toy owner that makes every 〔…〕 item clickable, one button per item. */
++function marks(open: (text: string) => void): MarkdownInlineMarks {
++  return {
++    split(value) {
++      const out: Array<string | { text: string; label: string; open: () => void }> = []
++      let cursor = 0
++      for (const m of value.matchAll(/〔([^〔〕]+)〕/gu)) {
++        out.push(value.slice(cursor, m.index + 1))
++        let at = m.index + 1
++        for (const [i, item] of m[1]!.split('、').entries()) {
++          if (i > 0) { out.push('、'); at += 1 }
++          out.push({ text: item, label: `打开原文：${item}`, open: () => { open(item) } })
++          at += item.length
++        }
++        out.push('〕')
++        cursor = at + 1
++      }
++      if (cursor === 0) return undefined
++      out.push(value.slice(cursor))
++      return out
++    },
++  }
++}
++
++it('draws owner marks in settled prose as focusable buttons that open their item', () => {
++  const open = vi.fn()
++  const inlineMarks = marks(open)
++  render(<MarkdownText text={'金额 30 万〔借款合同 第2页、流水!B12〕。'} inlineMarks={inlineMarks} />)
++  const first = screen.getByRole('button', { name: '打开原文：借款合同 第2页' })
++  expect(first.textContent).toBe('借款合同 第2页')
++  expect(first.tagName).toBe('BUTTON')
++  fireEvent.click(first)
++  fireEvent.click(screen.getByRole('button', { name: '打开原文：流水!B12' }))
++  expect(open.mock.calls).toEqual([['借款合同 第2页'], ['流水!B12']])
++  expect(document.body.textContent).toContain('金额 30 万〔借款合同 第2页、流水!B12〕。')
++})
++
++it('keeps streaming frames, link text and runs without marks as plain text', () => {
++  const inlineMarks = marks(vi.fn())
++  const view = render(<MarkdownText text={'见〔借款合同 第2页〕'} streaming inlineMarks={inlineMarks} />)
++  expect(screen.queryByRole('button', { name: /打开原文/ })).toBeNull()
++  view.rerender(<MarkdownText text={'[见〔借款合同 第2页〕](https://example.com)'} inlineMarks={inlineMarks} />)
++  expect(screen.queryByRole('button', { name: /打开原文/ })).toBeNull()
++  view.rerender(<MarkdownText text={'没有出处的一段话'} inlineMarks={inlineMarks} />)
++  expect(screen.queryByRole('button')).toBeNull()
++  view.rerender(<MarkdownText text={'见〔借款合同 第2页〕'} />)
++  expect(screen.queryByRole('button', { name: /打开原文/ })).toBeNull()
++})
++
++it('marks inside strong text still render, one text run at a time', () => {
++  render(<MarkdownText text={'**重点〔借款合同 第2页〕**'} inlineMarks={marks(vi.fn())} />)
++  expect(screen.getByRole('button', { name: '打开原文：借款合同 第2页' }).closest('strong')).not.toBeNull()
++})

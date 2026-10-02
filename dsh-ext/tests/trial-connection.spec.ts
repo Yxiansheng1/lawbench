@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LawbenchRemote, RESTORE_FAILED, type CredentialsLike } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
+import { LawbenchCredentials } from '../credentials/index.ts'
 import { startFake, type Fake } from './helpers/fake.ts'
 
 let fake: Fake
@@ -132,6 +133,46 @@ describe('trialConnection', () => {
     expect(r.restored).toBe(true)
     expect(writes).toBe(0)
     expect(get()).toBe('sk-old-12345678')
+  })
+
+  // ── T7 第三轮 P3-1：用真的 LawbenchCredentials 加可控存储 ─────────────────
+  function controllableStore(initial?: string) {
+    const st = { value: initial, failWriteAfter: undefined as string | undefined, failWriteBefore: undefined as string | undefined, failRead: false, readFailsAfterWriteFailure: false }
+    const store = {
+      read: async () => { if (st.failRead) throw new Error('凭据管理器操作失败（退出码 1）'); return st.value },
+      // failWriteAfter：写成了再报超时；failWriteBefore：没写就报超时（readFailsAfterWriteFailure 时从此读取也失败）
+      write: async (v: string) => {
+        if (st.failWriteBefore === v) { if (st.readFailsAfterWriteFailure) st.failRead = true; throw new Error('凭据管理器操作超时（15 秒）') }
+        st.value = v
+        if (st.failWriteAfter === v) throw new Error('凭据管理器操作超时（15 秒）')
+      },
+      remove: async () => { st.value = undefined },
+    }
+    return { st, cred: new LawbenchCredentials(store) as unknown as CredentialsLike }
+  }
+
+  it('P3-1 写新 Key 超时但其实写成了：按失败恢复，Key 回到旧值', async () => {
+    const { st, cred } = controllableStore('sk-old-12345678')
+    st.failWriteAfter = 'sk-new-12345678'
+    await expect(new LawbenchRemote(supervisorFor(fake), fake.appdata, () => cred).trialConnection(good, 'sk-new-12345678')).rejects.toThrow('已恢复为测试前的配置')
+    expect(st.value).toBe('sk-old-12345678')
+  })
+
+  it('P3-1 写新 Key 超时但其实写成了，其后恢复又失败（没写回）：提示未能恢复', async () => {
+    const { st, cred } = controllableStore('sk-old-12345678')
+    st.failWriteAfter = 'sk-new-12345678'
+    st.failWriteBefore = 'sk-old-12345678'
+    await expect(new LawbenchRemote(supervisorFor(fake), fake.appdata, () => cred).trialConnection(good, 'sk-new-12345678')).rejects.toThrow(RESTORE_FAILED)
+    expect(st.value).toBe('sk-new-12345678')
+  })
+
+  it('P3-1 恢复 Key 失败后读回本身也失败：提示未能恢复', async () => {
+    const { st, cred } = controllableStore('sk-old-12345678')
+    // 新 Key 正常写入；测试因地址不通而失败；恢复写旧 Key 时报错，且从这时起读回也报错
+    st.failWriteBefore = 'sk-old-12345678'
+    st.readFailsAfterWriteFailure = true
+    await expect(new LawbenchRemote(supervisorFor(fake), fake.appdata, () => cred).trialConnection(bad, 'sk-new-12345678')).rejects.toThrow(RESTORE_FAILED)
+    expect(st.failRead).toBe(true)
   })
 
   it('Key 格式不对直接拒绝，不动任何东西', async () => {
