@@ -32,3 +32,9 @@ DSH 桌面端内置的 Python：python-build-standalone 3.12.14（20260901，x86
   从 DSH 下载缓存取压缩包、核 sha256、解压到 packaging\stage\python，从离线 wheelhouse（repack_wheels.py 从线 C、线 B 已装环境回装的 50 个轮子）
   pip install --no-index 装进它自己的 site-packages，放 sitecustomize.py 与 lawbench-service.pth，拷 service\lawbench，-I -m lawbench --help 正常。
   用这个暂存解释器（只另给 pytest 本身的几个包走 PYTHONPATH，产品里不带 pytest）跑服务全部测试：945 通过、6 跳过、0 失败（tokenizers、keyring 这次都装上了）。
+
+补记二（T20 准备复核 P3-1，2026-10-02 09:0x）：不带 -I 的子进程里用户目录的 .pth 仍会执行、PYTHONPATH 仍生效（复核员实测）。
+  改为在 <安装目录>\python\ 放 python312._pth：DLLs、Lib、Lib\site-packages、..\service、import site。lawbench-service.pth 删掉（由 ._pth 的 ..\service 代替）。
+  暂存解释器实测（PYTHONPATH=C:\evil、不带 -I）：sys.path 只有这几项加 pywin32 自己的三项，没有 C:\evil、没有用户目录；site.ENABLE_USER_SITE=False；
+  lawbench、win32api、onnxruntime 都能导入；-I -m lawbench --help 正常。
+

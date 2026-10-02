@@ -36,3 +36,13 @@ export function packagedConfig(config: Config, installDir: string, programData: 
     pandocCandidates: [join(installDir, 'tools', 'pandoc', 'pandoc.exe')],
   }
 }
+
+/**
+ * Host 实际用的配置和要不要查内置 Python：装好的客户端按安装目录写死；开发期照配置（环境变量给的）。
+ * 启动命令不是 Python（开发期用 node 起假服务）时自检不查内置 Python。apply 里用，单独拿出来便于测。
+ */
+export function effectiveConfig(given: Config, execPath: string, exists: (p: string) => boolean, programData: string): { config: Config; packaged: boolean; checkPython: boolean } {
+  const installDir = packagedInstallDir(execPath, exists)
+  const config = installDir ? packagedConfig(given, installDir, programData) : given
+  return { config, packaged: installDir !== undefined, checkPython: /python(w)?(\.exe)?$/i.test(config.command[0] ?? '') }
+}

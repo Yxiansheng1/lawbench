@@ -41,11 +41,14 @@ $AppId = 'cn.lianyue.lawbench'
 # taken from DSH's verified download cache), unpacked into our own directory: our packages go into its own
 # site-packages, so child processes started with sys.executable (the ID-card driver) see them. The DSH payload is
 # not modified. See dsh-patches\PATCHES.md "conclusions" and docs\plan\evidence\T20\python-reuse.txt.
-$PyLock = Get-Content -Raw (Join-Path $Dsh 'scripts\primary-runtime\lock.json') | ConvertFrom-Json
-$PySha = $PyLock.targets.'win-x64'.pythonSha256
-$PyArchive = Join-Path $Dsh ('apps\desktop\.desktop-build\downloads\' + $PySha)
+# (DSH's lock.json is read inside the python step, so -List, preflight and brand work without the submodule.)
 
 function Say([string]$m) { Write-Host "[build] $m" }
+# Copy-Item -Recurse into an existing folder nests it (lawbench\lawbench): always start from an empty target.
+function Reset-Dir([string]$dir) {
+  if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+  New-Item -ItemType Directory -Force $dir | Out-Null
+}
 function Pending([string]$what) { throw "PENDING (T20 step 3/6): $what" }
 function Run([string]$exe, [string[]]$argv) {
   # Native tools write warnings to stderr; in Windows PowerShell 5.1 that becomes an error record when output is
@@ -77,12 +80,15 @@ $Steps = [ordered]@{
     Push-Location $Dsh
     try {
       $env:CI = 'true'
-      Run 'corepack' @('pnpm@11.7.0', 'install', '--frozen-lockfile')
+      Run 'corepack' @('pnpm@11.7.0', 'install', '--frozen-lockfile', '--offline')
       Run 'corepack' @('pnpm@11.7.0', 'run', 'build')
     } finally { Pop-Location }
     Run 'node' @((Join-Path $Root 'dsh-ext\scripts\build.mjs'))
   }
   python = {
+    $pyLock = Get-Content -Raw (Join-Path $Dsh 'scripts\primary-runtime\lock.json') | ConvertFrom-Json
+    $PySha = $pyLock.targets.'win-x64'.pythonSha256
+    $PyArchive = Join-Path $Dsh ('apps\desktop\.desktop-build\downloads\' + $PySha)
     if (-not (Test-Path $PyArchive)) { throw "DSH Python archive not in the download cache: $PyArchive (run the dsh step first)" }
     $hash = (Get-FileHash -Algorithm SHA256 $PyArchive).Hash.ToLower()
     if ($hash -ne $PySha) { throw "DSH Python archive hash mismatch: $hash" }
@@ -103,9 +109,12 @@ $Steps = [ordered]@{
     $pins | Set-Content -Encoding ascii $req
     if (-not (Test-Path $Wheelhouse)) { Pending "offline wheelhouse $Wheelhouse (pip download -r $req on a build machine)" }
     Run $py @('-I', '-m', 'pip', 'install', '--no-index', '--no-warn-script-location', '--find-links', $Wheelhouse, '-r', $req)
-    # sitecustomize drops the per-user site-packages for child processes; the .pth puts <install>\service on the path
+    # python312._pth fixes sys.path for every process using this interpreter, with or without -I (child processes
+    # such as the ID-card driver included): no PYTHONPATH, no per-user site-packages; 'import site' keeps .pth
+    # processing (pywin32). sitecustomize stays as a second guard.
+    Copy-Item -Force (Join-Path $Root 'packaging\python\python312._pth') (Join-Path $Stage 'python\')
     Copy-Item -Force (Join-Path $Root 'packaging\python\sitecustomize.py') $site
-    Copy-Item -Force (Join-Path $Root 'packaging\python\lawbench-service.pth') $site
+    Reset-Dir (Join-Path $Stage 'service')
     Copy-Item -Recurse -Force (Join-Path $Root 'service\lawbench') (Join-Path $Stage 'service\lawbench')
     # The Host starts the service as: <install>\python\python.exe -I -m lawbench
     Run $py @('-I', '-m', 'lawbench', '--help')
@@ -113,7 +122,8 @@ $Steps = [ordered]@{
   tools = {
     $missing = @()
     if ($LibreOfficeDir -and (Test-Path (Join-Path $LibreOfficeDir 'program\soffice.exe'))) {
-      Copy-Item -Recurse -Force $LibreOfficeDir (Join-Path $Stage 'tools\libreoffice')
+      Reset-Dir (Join-Path $Stage 'tools\libreoffice')
+      Copy-Item -Recurse -Force (Join-Path $LibreOfficeDir '*') (Join-Path $Stage 'tools\libreoffice')
     } else { $missing += 'LibreOffice (-LibreOfficeDir <folder with program\soffice.exe>)' }
     if ($PandocExe -and (Test-Path $PandocExe)) {
       New-Item -ItemType Directory -Force (Join-Path $Stage 'tools\pandoc') | Out-Null
@@ -126,13 +136,15 @@ $Steps = [ordered]@{
     if ($missing) { Pending ('payload sources not given: ' + ($missing -join '; ')) }
   }
   skills = {
+    Reset-Dir (Join-Path $Stage 'skills')
     Run $BuildPython @((Join-Path $Root 'skills\_scripts\install.py'), '--out', (Join-Path $Stage 'skills'))
     # the one-time elevated step for the admin Skill folder ships with the install
     New-Item -ItemType Directory -Force (Join-Path $Stage 'installer') | Out-Null
     Copy-Item -Force (Join-Path $Root 'packaging\installer\set-skills-acl.ps1') (Join-Path $Stage 'installer\')
   }
   engines = {
-    Copy-Item -Recurse -Force (Join-Path $Root 'engines') (Join-Path $Stage 'engines')
+    Reset-Dir (Join-Path $Stage 'engines')
+    Copy-Item -Recurse -Force (Join-Path $Root 'engines\*') (Join-Path $Stage 'engines')
   }
   lock = {
     Run $BuildPython @((Join-Path $Root 'packaging\gen_lock.py'), '--site', (Join-Path $Stage 'python\Lib\site-packages'), '--stage', $Stage)
@@ -159,6 +171,8 @@ $Steps = [ordered]@{
 }
 
 if ($List) { $Steps.Keys | ForEach-Object { $_ }; exit 0 }
+# 'powershell -File build.ps1 -Step a,b' delivers one string "a,b"; split it
+$Step = @($Step | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $todo = if ($Step.Count) { $Step } else { @($Steps.Keys) }
 foreach ($s in $todo) {
   if (-not $Steps.Contains($s)) { throw "unknown step: $s (use -List)" }

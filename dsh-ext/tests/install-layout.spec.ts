@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
-import { ADMIN_DIR_NAME, packagedConfig, packagedInstallDir } from '../host/install-layout.ts'
+import { ADMIN_DIR_NAME, effectiveConfig, packagedConfig, packagedInstallDir } from '../host/install-layout.ts'
 import type { Config } from '../host/index.ts'
 
 let dir: string
@@ -65,5 +65,18 @@ describe('打包后的固定布局', () => {
     expect(run(development())).toEqual([join('C:\\ProgramData', 'lawbench', 'skills'), 'C:\\evil\\skills'])
     const { inst, exe } = installed()
     expect(run(exe)).toEqual([join('C:\\ProgramData', 'lawbench', 'skills'), join(inst, 'skills')])
+  })
+
+  it('apply 用的分支（复核 NOTE）：装好的客户端按安装目录、查内置 Python；开发期照配置，命令是 node 时不查、是 python 时查', () => {
+    const { inst, exe } = installed()
+    const p = effectiveConfig(DEV, exe, exists, 'C:\ProgramData')
+    expect(p.packaged).toBe(true)
+    expect(p.config.command[0]).toBe(join(inst, 'python', 'python.exe'))
+    expect(p.checkPython).toBe(true)
+    const node = effectiveConfig({ ...DEV, command: ['D:\node\node.exe', 'fake-service.mjs'] }, development(), exists, 'C:\ProgramData')
+    expect(node).toMatchObject({ packaged: false, checkPython: false })
+    expect(node.config.command[0]).toBe('D:\node\node.exe')
+    const py = effectiveConfig({ ...DEV, command: ['C:\Py\python.exe', '-m', 'lawbench'] }, development(), exists, 'C:\ProgramData')
+    expect(py).toMatchObject({ packaged: false, checkPython: true })
   })
 })

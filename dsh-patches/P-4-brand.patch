@@ -1,3 +1,29 @@
+diff --git a/apps/desktop/electron-builder.config.d.mts b/apps/desktop/electron-builder.config.d.mts
+index 3ccec5b190..ec3ebabc50 100644
+--- a/apps/desktop/electron-builder.config.d.mts
++++ b/apps/desktop/electron-builder.config.d.mts
+@@ -4,7 +4,7 @@ import type { AfterPackContext, BeforePackContext } from 'app-builder-lib'
+ export interface DesktopElectronBuilderConfig {
+   readonly appId: string
+   readonly artifactName: string
+-  readonly protocols: readonly [{ readonly name: 'DeepSeek Harness'; readonly schemes: readonly ['dsh'] }]
++  readonly protocols: readonly [{ readonly name: string; readonly schemes: readonly ['dsh'] }] // lawbench P-4：名称见 scripts/lawbench-product.mjs
+   readonly directories: {
+     readonly output: string
+   }
+diff --git a/apps/desktop/installer/extract-report.h b/apps/desktop/installer/extract-report.h
+index c885816c75..db024718b2 100644
+--- a/apps/desktop/installer/extract-report.h
++++ b/apps/desktop/installer/extract-report.h
+@@ -114,7 +114,7 @@ inline std::wstring Headline(int code, const std::wstring& output, const std::ws
+ 
+ inline std::wstring Compose(int code, const std::wstring& archive, const std::wstring& destination, const std::wstring& output,
+                             const std::wstring& timestamp, const std::wstring& windowsVersion) {
+-    std::wstring report = L"DeepSeek Harness installer: extraction failed\r\n";
++    std::wstring report = L"Lawbench installer: extraction failed\r\n";
+     report += L"Time: " + timestamp + L"\r\n";
+     report += L"Result: " + DescribeResult(code) + L"\r\n";
+     report += L"Archive: " + archive + L"\r\n";
 diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
 index 174ebfa28b..265940ac6a 100644
 --- a/apps/desktop/installer/strings.nsh
@@ -29,16 +55,45 @@ index 174ebfa28b..265940ac6a 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
+diff --git a/apps/desktop/scripts/development-app.ts b/apps/desktop/scripts/development-app.ts
+index ff09b8b783..bbeb22f823 100644
+--- a/apps/desktop/scripts/development-app.ts
++++ b/apps/desktop/scripts/development-app.ts
+@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
+ import { createHash } from 'node:crypto'
+ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+ import { dirname, join } from 'node:path'
++import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
+ 
+ /** Workspace and runtime settings captured for Launch Services cold starts. */
+ export interface DevelopmentAppOptions {
+@@ -40,7 +41,7 @@ export function prepareDevelopmentApp(options: DevelopmentAppOptions): string {
+       CFBundleName: 'Harness Dev',
+       CFBundleDisplayName: 'Harness Dev',
+       CFBundleExecutable: 'HarnessDev',
+-      CFBundleURLTypes: [{ CFBundleURLName: 'DeepSeek Harness', CFBundleURLSchemes: ['dsh'], CFBundleTypeRole: 'Viewer' }],
++      CFBundleURLTypes: [{ CFBundleURLName: LAWBENCH_PRODUCT_NAME, CFBundleURLSchemes: ['dsh'], CFBundleTypeRole: 'Viewer' }],
+     }
+     for (const [key, value] of Object.entries(values)) {
+       execFileSync('/usr/bin/plutil', ['-replace', key, '-json', JSON.stringify(value), plist])
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
-index 2bb56c359f..09be1f0c9e 100644
+index 2bb56c359f..d9398e42f6 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
 +++ b/apps/desktop/scripts/electron-builder-config.mjs
-@@ -99,16 +99,16 @@ export function createElectronBuilderConfig(
+@@ -12,6 +12,7 @@ import {
+   resolveMacOSSigningEnvironment,
+ } from './desktop-release-environment.mjs'
+ import { notarizeMacOSDiskImageArtifact } from './notarize-macos-disk-images.mjs'
++import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
+ import { verifyMacOSSignatureAfterSign } from './verify-macos-signature.mjs'
+ import {
+   createWindowsTokenSigner,
+@@ -99,16 +100,16 @@ export function createElectronBuilderConfig(
    const packaged = resolveDesktopBuildCommit(env)
    return {
      appId,
 -    protocols: [{ name: 'DeepSeek Harness', schemes: ['dsh'] }],
-+    protocols: [{ name: '连越律师工作台', schemes: ['dsh'] }], // lawbench P-4：名称换掉，scheme 不动（DSH 单实例与唤起依赖它）
++    protocols: [{ name: LAWBENCH_PRODUCT_NAME, schemes: ['dsh'] }], // lawbench P-4：名称换掉，scheme 不动（DSH 单实例与唤起依赖它）
      extraMetadata: {
        dshDesktopAppId: appId,
        dshMandatoryUpdatePolicy: policy,
@@ -46,14 +101,14 @@ index 2bb56c359f..09be1f0c9e 100644
        ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
      },
 -    productName: 'DeepSeek Harness',
-+    productName: '连越律师工作台', // lawbench P-4：软件名称未定，暂用占位名（packaging\brand\names.txt）
++    productName: LAWBENCH_PRODUCT_NAME, // lawbench P-4：软件名称未定，暂用占位名（scripts/lawbench-product.mjs）
      // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
 -    artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
 +    artifactName: `lawbench-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
      directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
      asar: true,
      electronDist: buildPaths.electron,
-@@ -148,6 +148,9 @@ export function createElectronBuilderConfig(
+@@ -148,6 +149,9 @@ export function createElectronBuilderConfig(
        // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
        ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
      ],
@@ -63,7 +118,7 @@ index 2bb56c359f..09be1f0c9e 100644
      mac: {
        icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
        category: 'public.app-category.developer-tools',
-@@ -156,7 +159,7 @@ export function createElectronBuilderConfig(
+@@ -156,7 +160,7 @@ export function createElectronBuilderConfig(
        identity: macOSSigning?.signingIdentity,
        forceCodeSigning: true,
        hardenedRuntime: true,
@@ -72,11 +127,101 @@ index 2bb56c359f..09be1f0c9e 100644
        // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
        signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
        notarize: true,
+diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
+new file mode 100644
+index 0000000000..3f7c8385d4
+--- /dev/null
++++ b/apps/desktop/scripts/lawbench-product.mjs
+@@ -0,0 +1,7 @@
++/**
++ * lawbench P-4: the product name in one place for the build scripts (electron-builder productName and protocol
++ * name, packaged executable and app bundle paths in the packaging and smoke scripts).
++ * The software name is not decided yet (owner N58); this is the placeholder from packaging\brand\names.txt.
++ * Runtime strings (menus, dialogs, About) take it from src/locale.ts LAWBENCH_PRODUCT; change both together.
++ */
++export const LAWBENCH_PRODUCT_NAME = '连越律师工作台'
+diff --git a/apps/desktop/scripts/package-macos.ts b/apps/desktop/scripts/package-macos.ts
+index c1a2cb5c71..a72ac62c2b 100644
+--- a/apps/desktop/scripts/package-macos.ts
++++ b/apps/desktop/scripts/package-macos.ts
+@@ -16,6 +16,7 @@ import {
+ } from './desktop-auto-update-environment.mjs'
+ import { verifyMacOSAppUpdateConfig } from './macos-app-update-config.mjs'
+ import { verifyMacOSNotarizedApplication, verifyMacOSSignature } from './verify-macos-signature.mjs'
++import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
+ 
+ const execute = promisify(execFile)
+ 
+@@ -78,7 +79,7 @@ export async function packageMacOSArtifacts(
+   const expected = resolveMacOSSigningEnvironment(environment)
+   const credentials = resolveMacOSNotarizationEnvironment(environment)
+   const update = resolveDesktopAutoUpdateConfig(environment, 'darwin', arch)
+-  const appPath = join(artifactsRoot, arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
++  const appPath = join(artifactsRoot, arch === 'arm64' ? 'mac-arm64' : 'mac', `${LAWBENCH_PRODUCT_NAME}.app`)
+   const root = await mkdtemp(join(dirname(artifactsRoot), 'notarization-'))
+   const zipApp = join(root, 'zip', basename(appPath))
+   const dmgApp = join(root, 'dmg', basename(appPath))
+diff --git a/apps/desktop/scripts/package-target.ts b/apps/desktop/scripts/package-target.ts
+index 62f4fcbbb2..9a729e01ed 100644
+--- a/apps/desktop/scripts/package-target.ts
++++ b/apps/desktop/scripts/package-target.ts
+@@ -24,6 +24,7 @@ import { suggestDesktopBuildVersion } from './desktop-build-version-discovery.ts
+ import { desktopBuildCommitEnvironment, readDesktopBuildCommit, resolveDesktopBuildCommit } from './desktop-build-commit.mjs'
+ import { requireDesktopToolchain } from './desktop-toolchain-preflight.ts'
+ import { withMacOSNotarizationProxy } from './macos-notarization-proxy.ts'
++import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
+ 
+ const APP_ROOT = resolve(import.meta.dirname, '..')
+ const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
+@@ -489,7 +490,7 @@ export async function packageTarget(
+   } else if (target.platform === 'darwin') {
+     await execute([...desktopElectronBuilderArguments(target, true), '--config.mac.notarize=false'], electronBuilderEnv)
+     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
+-    const appPath = join(buildPaths.artifacts, target.arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
++    const appPath = join(buildPaths.artifacts, target.arch === 'arm64' ? 'mac-arm64' : 'mac', `${LAWBENCH_PRODUCT_NAME}.app`)
+     await withMacOSNotarizationProxy(mac?.notarizationProxy,
+       () => notarizeMacOS({ appPath, ...resolveMacOSNotarizationEnvironment(environment) }), undefined, undefined, proxyEvent)
+   } else {
+diff --git a/apps/desktop/scripts/smoke-packaged-runtime.ts b/apps/desktop/scripts/smoke-packaged-runtime.ts
+index 106830b5ad..30d680f57d 100644
+--- a/apps/desktop/scripts/smoke-packaged-runtime.ts
++++ b/apps/desktop/scripts/smoke-packaged-runtime.ts
+@@ -1,5 +1,6 @@
+ /** Validate the assembled application, including native Office conversion outside ASAR. */
+ import { join } from 'node:path'
++import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
+ import { parseArgs } from 'node:util'
+ import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
+ import { readDesktopRuntime, verifyDesktopRuntime } from '../src/runtime-tree.ts'
+@@ -14,9 +15,9 @@ const windows = target === 'win-x64'
+ if (values.unsigned && !windows) throw new Error('desktop smoke: unsigned artifacts require Windows')
+ const artifacts = values.unsigned ? paths.unsignedArtifacts : paths.artifacts
+ const application = windows ? join(artifacts, 'win-unpacked')
+-  : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app', 'Contents')
++  : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', `${LAWBENCH_PRODUCT_NAME}.app`, 'Contents')
+ const resources = join(application, windows ? 'resources' : 'Resources')
+-const executable = windows ? join(application, 'DeepSeek Harness.exe') : join(application, 'MacOS', 'DeepSeek Harness')
++const executable = windows ? join(application, `${LAWBENCH_PRODUCT_NAME}.exe`) : join(application, 'MacOS', LAWBENCH_PRODUCT_NAME)
+ const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version,
+   resolveDesktopPackageTarget(target))
+ if (windows && !values.unsigned) await verifyWindowsCode(application)
 diff --git a/apps/desktop/src/locale.ts b/apps/desktop/src/locale.ts
-index b3f9e535c9..52e7c968ad 100644
+index b3f9e535c9..4cac1a4859 100644
 --- a/apps/desktop/src/locale.ts
 +++ b/apps/desktop/src/locale.ts
-@@ -4,21 +4,21 @@ export const en = {
+@@ -1,24 +1,33 @@
+ /** Typed English and Chinese copy owned by the Electron shell. */
+ 
++/**
++ * lawbench P-4: names shown by the desktop shell, in one place. The software name is a placeholder until the owner
++ * decides (N58; build scripts use scripts/lawbench-product.mjs, keep both equal). The vendor line ("技术支持") was
++ * read from the logo and awaits the owner's confirmation (N58).
++ */
++export const LAWBENCH_PRODUCT = '连越律师工作台'
++export const LAWBENCH_FIRM = { zh: '广东连越（深圳）律师事务所', en: 'Guangdong Lianyue (Shenzhen) Law Firm' } as const
++export const LAWBENCH_VENDOR = { zh: '上海莫莱特智能科技有限公司', en: 'Shanghai Morelite Intelligent Technology Co., Ltd.' } as const
++
+ export const en = {
    application: 'Application',
    fileMenu: 'File',
    closePage: 'Close Page or Window',
@@ -84,20 +229,20 @@ index b3f9e535c9..52e7c968ad 100644
 -  aboutProduct: 'DeepSeek Harness',
 -  aboutVersion: 'Version V{version}',
 -  hideApplication: 'Hide DeepSeek Harness',
-+  aboutMenu: 'About 连越律师工作台',
-+  aboutProduct: '连越律师工作台',
-+  aboutVersion: 'Version V{version}\nGuangdong Lianyue (Shenzhen) Law Firm\nTechnical support: Shanghai Morelite Intelligent Technology Co., Ltd.',
-+  hideApplication: 'Hide 连越律师工作台',
++  aboutMenu: `About ${LAWBENCH_PRODUCT}`,
++  aboutProduct: `${LAWBENCH_PRODUCT}`,
++  aboutVersion: `Version V{version}\n${LAWBENCH_FIRM.en}\nTechnical support: ${LAWBENCH_VENDOR.en}`,
++  hideApplication: `Hide ${LAWBENCH_PRODUCT}`,
    hideOtherApplications: 'Hide Others',
    showAllApplications: 'Show All',
 -  quitApplication: 'Quit DeepSeek Harness',
 -  openApplication: 'Open DeepSeek Harness',
-+  quitApplication: 'Quit 连越律师工作台',
-+  openApplication: 'Open 连越律师工作台',
++  quitApplication: `Quit ${LAWBENCH_PRODUCT}`,
++  openApplication: `Open ${LAWBENCH_PRODUCT}`,
    quit: 'Quit',
    cancel: 'Cancel',
 -  quitTitle: 'Quit DeepSeek Harness?',
-+  quitTitle: 'Quit 连越律师工作台?',
++  quitTitle: `Quit ${LAWBENCH_PRODUCT}?`,
    quitActiveTasks: 'Running tasks will be interrupted.',
    quitScheduledTasks: 'Scheduled tasks will not run while the app is closed.',
    quitActiveAndScheduledTasks: 'Running tasks will be interrupted, and scheduled tasks will not run while the app is closed.',
@@ -106,51 +251,51 @@ index b3f9e535c9..52e7c968ad 100644
    backgroundNoticeConfirm: 'Confirm',
    edit: 'Edit',
    menuBar: 'Application menu',
-@@ -29,7 +29,7 @@ export const en = {
+@@ -29,7 +38,7 @@ export const en = {
    copy: 'Copy',
    paste: 'Paste',
    selectAll: 'Select All',
 -  startupFailed: 'DeepSeek Harness is unavailable',
-+  startupFailed: '连越律师工作台 is unavailable',
++  startupFailed: `${LAWBENCH_PRODUCT} is unavailable`,
    fatalSummary: 'The application could not start or stopped unexpectedly.',
    startupAddressInUse: 'Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.',
    diagnosticTruncated: '… Error details shortened.',
-@@ -39,10 +39,10 @@ export const en = {
+@@ -39,10 +48,10 @@ export const en = {
    restartApplication: 'Restart',
    recoveryOperationFailed: 'The recovery operation failed',
    disableThirdPartyPlugins: 'Disable third-party plugins, back up profile patch, and restart',
 -  welcomeTitle: 'DeepSeek Harness',
 -  welcomeBrand: 'DeepSeek Harness',
-+  welcomeTitle: '连越律师工作台',
-+  welcomeBrand: '连越律师工作台',
++  welcomeTitle: `${LAWBENCH_PRODUCT}`,
++  welcomeBrand: `${LAWBENCH_PRODUCT}`,
    welcomeTaglineBefore: 'Welcome to ',
 -  welcomeTaglineBrand: 'DeepSeek Harness',
-+  welcomeTaglineBrand: '连越律师工作台',
++  welcomeTaglineBrand: `${LAWBENCH_PRODUCT}`,
    welcomeTaglineAfter: '',
    welcomeDescription: 'Build potential. Explore intelligence.',
    welcomeAuthStarting: 'Opening sign in…',
-@@ -85,7 +85,7 @@ export const en = {
+@@ -85,7 +94,7 @@ export const en = {
    updateCurrent: 'No updates available. Current version: V{version}',
    updateChecking: 'Checking for updates…',
    updateDownload: 'Download update',
 -  updateDownloadedTitle: 'DeepSeek Harness v{version} downloaded',
-+  updateDownloadedTitle: '连越律师工作台 v{version} downloaded',
++  updateDownloadedTitle: `${LAWBENCH_PRODUCT} v{version} downloaded`,
    updateDownloadedDetail: 'The update package has downloaded. Select “Install and Restart” to restart the app and begin installation.',
    updateDownloadedTitleWindows: 'New version v{version} is ready',
    updateDownloadedDetailWindows: 'The app will close temporarily during the update and reopen automatically when it is complete.\n\nThe update may take some time. Please wait and do not launch the app again during installation.',
-@@ -103,9 +103,9 @@ export const en = {
+@@ -103,9 +112,9 @@ export const en = {
    updateTasksUnavailable: 'Task status is unavailable. Try updating again when the workspace is ready.',
    updateStopFailed: 'Tasks could not be stopped safely. The update was not installed. Please try again later.',
    updateTechnicalDetails: 'View technical details',
 -  updateTitle: 'DeepSeek Harness Update',
-+  updateTitle: '连越律师工作台 Update',
++  updateTitle: `${LAWBENCH_PRODUCT} Update`,
    updateAvailable: 'An update is available',
 -  updateDetail: 'DeepSeek Harness {version}\n\nDeepSeek Harness will restart to complete the update.',
-+  updateDetail: '连越律师工作台 {version}\n\n连越律师工作台 will restart to complete the update.',
++  updateDetail: `${LAWBENCH_PRODUCT} {version}\n\n${LAWBENCH_PRODUCT} will restart to complete the update.`,
    installAndRestart: 'Install and Restart',
    later: 'Later',
    updateFailedTitle: 'Update Failed',
-@@ -148,21 +148,23 @@ export const zh = {
+@@ -148,21 +157,23 @@ export const zh = {
    application: '应用',
    fileMenu: '文件',
    closePage: '关闭页面或窗口',
@@ -158,21 +303,21 @@ index b3f9e535c9..52e7c968ad 100644
 -  aboutProduct: 'DeepSeek Harness',
 -  aboutVersion: '版本 V{version}',
 -  hideApplication: '隐藏 DeepSeek Harness',
-+  aboutMenu: '关于 连越律师工作台',
-+  aboutProduct: '连越律师工作台',
++  aboutMenu: `关于 ${LAWBENCH_PRODUCT}`,
++  aboutProduct: `${LAWBENCH_PRODUCT}`,
 +  // lawbench P-4：关于面板写律所和"技术支持"
-+  aboutVersion: '版本 V{version}\n广东连越（深圳）律师事务所\n技术支持：上海莫莱特智能科技有限公司',
-+  hideApplication: '隐藏 连越律师工作台',
++  aboutVersion: `版本 V{version}\n${LAWBENCH_FIRM.zh}\n技术支持：${LAWBENCH_VENDOR.zh}`,
++  hideApplication: `隐藏 ${LAWBENCH_PRODUCT}`,
    hideOtherApplications: '隐藏其他',
    showAllApplications: '显示全部',
 -  quitApplication: '退出 DeepSeek Harness',
 -  openApplication: '打开 DeepSeek Harness',
-+  quitApplication: '退出 连越律师工作台',
-+  openApplication: '打开 连越律师工作台',
++  quitApplication: `退出 ${LAWBENCH_PRODUCT}`,
++  openApplication: `打开 ${LAWBENCH_PRODUCT}`,
    quit: '退出',
    cancel: '取消',
 -  quitTitle: '退出 DeepSeek Harness？',
-+  quitTitle: '退出 连越律师工作台？',
++  quitTitle: `退出 ${LAWBENCH_PRODUCT}？`,
    quitActiveTasks: '当前正在运行的任务将会中断',
    quitScheduledTasks: '应用关闭期间，定时任务不会运行',
    quitActiveAndScheduledTasks: '当前正在运行的任务将会中断，且应用关闭期间，定时任务不会运行',
@@ -182,60 +327,69 @@ index b3f9e535c9..52e7c968ad 100644
    backgroundNoticeConfirm: '确认',
    edit: '编辑',
    menuBar: '应用菜单',
-@@ -173,7 +175,7 @@ export const zh = {
+@@ -173,7 +184,7 @@ export const zh = {
    copy: '复制',
    paste: '粘贴',
    selectAll: '全选',
 -  startupFailed: 'DeepSeek Harness 无法使用',
-+  startupFailed: '连越律师工作台 无法使用',
++  startupFailed: `${LAWBENCH_PRODUCT} 无法使用`,
    fatalSummary: '应用无法启动或已意外停止。',
    startupAddressInUse: '有其他正在运行的 DSH（如其他 dsh web、桌面端），无法同时启动，请退出其他正在运行的 DSH 后重启。',
    diagnosticTruncated: '… 错误详情已截短。',
-@@ -183,10 +185,10 @@ export const zh = {
+@@ -183,10 +194,10 @@ export const zh = {
    restartApplication: '重启',
    recoveryOperationFailed: '恢复操作失败',
    disableThirdPartyPlugins: '禁用第三方插件、备份 profile patch 并重启',
 -  welcomeTitle: 'DeepSeek Harness',
 -  welcomeBrand: 'DeepSeek Harness',
-+  welcomeTitle: '连越律师工作台',
-+  welcomeBrand: '连越律师工作台',
++  welcomeTitle: `${LAWBENCH_PRODUCT}`,
++  welcomeBrand: `${LAWBENCH_PRODUCT}`,
    welcomeTaglineBefore: '欢迎使用 ',
 -  welcomeTaglineBrand: 'DeepSeek Harness',
-+  welcomeTaglineBrand: '连越律师工作台',
++  welcomeTaglineBrand: `${LAWBENCH_PRODUCT}`,
    welcomeTaglineAfter: '',
    welcomeDescription: '组装无限可能，共探智能上限',
    welcomeAuthStarting: '正在打开登录…',
-@@ -229,7 +231,7 @@ export const zh = {
+@@ -229,7 +240,7 @@ export const zh = {
    updateCurrent: '当前暂无可用更新。当前版本：V{version}',
    updateChecking: '正在检查更新…',
    updateDownload: '下载更新',
 -  updateDownloadedTitle: 'DeepSeek Harness v{version} 下载完成',
-+  updateDownloadedTitle: '连越律师工作台 v{version} 下载完成',
++  updateDownloadedTitle: `${LAWBENCH_PRODUCT} v{version} 下载完成`,
    updateDownloadedDetail: '安装包已下载完毕，点击“安装并重启”，即刻重启客户端，开始部署。',
    updateDownloadedTitleWindows: '新版本 v{version} 已准备就绪',
    updateDownloadedDetailWindows: '更新期间应用将暂时关闭，完成后会自动打开。\n\n更新可能需要一些时间，请耐心等待，期间请勿重复启动应用。',
-@@ -247,9 +249,9 @@ export const zh = {
+@@ -247,9 +258,9 @@ export const zh = {
    updateTasksUnavailable: '无法确认任务状态，请在工作区就绪后重试更新。',
    updateStopFailed: '未能安全停止任务，更新未安装。请稍后重试。',
    updateTechnicalDetails: '查看技术详情',
 -  updateTitle: 'DeepSeek Harness 更新',
-+  updateTitle: '连越律师工作台 更新',
++  updateTitle: `${LAWBENCH_PRODUCT} 更新`,
    updateAvailable: '发现可用更新',
 -  updateDetail: 'DeepSeek Harness {version}\n\nDeepSeek Harness 将重启以完成更新。',
-+  updateDetail: '连越律师工作台 {version}\n\n连越律师工作台 将重启以完成更新。',
++  updateDetail: `${LAWBENCH_PRODUCT} {version}\n\n${LAWBENCH_PRODUCT} 将重启以完成更新。`,
    installAndRestart: '安装并重启',
    later: '稍后',
    updateFailedTitle: '更新失败',
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index bae6af8ad7..40621e1d2b 100644
+index bae6af8ad7..8632bce346 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
+@@ -27,7 +27,7 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'
+ import { installMicrophonePermissions } from './microphone-permissions.ts'
+ import { DesktopBackendController } from './backend-controller.ts'
+ import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+-import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
++import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale, LAWBENCH_PRODUCT } from './locale.ts'
+ import { claimDesktopSingleInstance } from './single-instance.ts'
+ import { DesktopUpdateCoordinator } from './update-coordinator.ts'
+ import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
 @@ -825,7 +825,7 @@ async function main(): Promise<void> {
    const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
      : join(process.resourcesPath, 'icon.png')
    app.setAboutPanelOptions({
 -    applicationName: 'DeepSeek Harness',
-+    applicationName: '连越律师工作台', // lawbench P-4
++    applicationName: LAWBENCH_PRODUCT, // lawbench P-4
      applicationVersion: app.getVersion(),
      // The release has no separate build number; omit Electron's bundle version.
      version: '',
@@ -545,6 +699,28 @@ index 07f5d6ec74..ddb355d81d 100644
      ])
      expect(harness.popup.mock.lastCall![0]).toMatchObject({ window, x: 48, y: 34 })
      expect(harness.popup.mock.lastCall![0].callback).toBeTypeOf('function')
+diff --git a/apps/desktop/tests/package-macos.spec.ts b/apps/desktop/tests/package-macos.spec.ts
+index e8fb5dcf34..d5532b85ba 100644
+--- a/apps/desktop/tests/package-macos.spec.ts
++++ b/apps/desktop/tests/package-macos.spec.ts
+@@ -12,6 +12,8 @@ import {
+ } from '../scripts/package-macos.ts'
+ import { desktopElectronBuilderArguments, resolveDesktopPackageTarget } from '../scripts/package-target.ts'
+ import { writeMacOSAppUpdateConfig } from '../scripts/macos-app-update-config.mjs'
++import { LAWBENCH_PRODUCT_NAME } from '../scripts/lawbench-product.mjs'
++
+ 
+ const environment = {
+   DSH_DESKTOP_MACOS_SIGNING_IDENTITY: 'Example Company (TEAMID1234)',
+@@ -29,7 +31,7 @@ function barrier() {
+ async function fixture(arch: 'arm64' | 'x64' = 'arm64') {
+   const root = await mkdtemp(join(tmpdir(), 'desktop-parallel-notarization-'))
+   const artifactsRoot = join(root, 'artifacts')
+-  const appPath = join(artifactsRoot, arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
++  const appPath = join(artifactsRoot, arch === 'arm64' ? 'mac-arm64' : 'mac', `${LAWBENCH_PRODUCT_NAME}.app`) // lawbench P-4
+   await mkdir(join(appPath, 'Contents', 'Resources'), { recursive: true })
+   await writeFile(join(appPath, 'payload'), 'signed content')
+   await writeMacOSAppUpdateConfig(join(appPath, 'Contents', 'Resources'), {
 diff --git a/apps/desktop/tests/quit-confirmation.spec.ts b/apps/desktop/tests/quit-confirmation.spec.ts
 index e7843f6b71..69593c4c34 100644
 --- a/apps/desktop/tests/quit-confirmation.spec.ts

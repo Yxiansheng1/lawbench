@@ -28,7 +28,9 @@ PENDING = "候补"
 # 客户端 Python 要装的顶层包：service\pyproject.toml 的依赖 + Spec 14.1 / 13.5 点名的
 # （pywin32：Word/WPS 自动化；pypdf、reportlab：归档与 Word 转 PDF；证件识别驱动：rapidocr 及其依赖 onnxruntime、opencv）
 # rapidocr、omegaconf、antlr4 不在内：证件识别驱动目录自带 vendor\（驱动优先用它，Spec 13.5）
-EXTRA_ROOTS = ["pywin32", "pypdf", "reportlab", "onnxruntime", "opencv-python-headless", "pyclipper", "shapely", "PyYAML", "PyMuPDF"]
+# 驱动 vendor\rapidocr 顶层还导入 colorlog、requests（连带 urllib3）、tqdm，这几个 vendor 里没带（T20 准备复核 P2-1）
+EXTRA_ROOTS = ["pywin32", "pypdf", "reportlab", "onnxruntime", "opencv-python-headless", "pyclipper", "shapely", "PyYAML", "PyMuPDF",
+               "colorlog", "requests", "tqdm"]
 
 # 不在 Python 里的组件：版本未定的写候补（T20 步骤 3 选定后补）
 OTHER = [
@@ -122,11 +124,14 @@ def license_of(d: Distribution) -> str:
     expr = m.get("License-Expression")
     if expr:
         return expr
-    lic = (m.get("License") or "").strip()
-    if lic and len(lic) < 60 and "\n" not in lic:
-        return lic
     classes = [c.split("::")[-1].strip() for c in m.get_all("Classifier") or [] if c.startswith("License ::")]
-    return "; ".join(classes) or PENDING
+    lic = (m.get("License") or "").strip()
+    # License 字段有的是一句话（如 PyMuPDF 的"Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License"），
+    # 有的是整段许可证全文：一句话的照抄，全文只取第一行，都不丢（复核 P2-2：原来长于 60 字的整句被丢掉，AGPL 漏报）
+    first = lic.splitlines()[0].strip() if lic else ""
+    if first and (len(lic) <= 200 or not classes):
+        return first[:200]
+    return "; ".join(classes) or first[:200] or PENDING
 
 
 def client_sections(sites: list[pathlib.Path], stage: pathlib.Path | None = None) -> tuple[str, list[tuple[str, str, str]], list[str]]:
@@ -151,7 +156,7 @@ def client_sections(sites: list[pathlib.Path], stage: pathlib.Path | None = None
     for name, v, f, sha, src, lic in tools_rows(stage):
         lines.append(f"{name:<13} {v}  {f}  {sha}  {src}  {lic}")
     dists, missing = closure(distributions(sites), service_roots() + EXTRA_ROOTS)
-    lines += ["", "[client.pip]  # 客户端 Python 依赖闭包（-I -S 隔离运行，不用 DSH 内置运行时自带的 numpy、pandas 等）"]
+    lines += ["", "[client.pip]  # 客户端 Python 依赖闭包（单独解压的 3.12.14，-I 运行，不用 DSH 内置运行时自带的 numpy、pandas 等）"]
     rows = []
     for d in dists:
         lines.append(f"{d.metadata['Name']}=={d.version}")
@@ -190,6 +195,10 @@ def write_licenses(rows: list[tuple[str, str, str]], missing: list[str]) -> None
         "",
         "## 客户端 Python 依赖",
         "",
+        "**PyMuPDF 是 AGPL-3.0（或 Artifex 商业许可）**：由证件识别驱动 `engines\\retainer\\tools\\ocr-driver\\docloader.py` 引入（把证件 PDF 转成图片），"
+        "随包分发时要按 AGPL 附许可证全文并提供源码获取方式；能否换成已在用的 pypdfium2 / pypdf 要改律所的驱动代码（原样使用，不改），候 owner N58。",
+        "各包的许可证全文随它的 `*.dist-info`（`LICENSE*`、`licenses\\`）一起装进 `<安装目录>\\python\\Lib\\site-packages\\`。",
+        "",
         "| 包 | 版本 | 许可证（取自包自己的元数据） |",
         "|---|---|---|",
     ]
@@ -204,11 +213,17 @@ def main() -> None:
     ap.add_argument("--site", required=True, type=pathlib.Path, action="append", help="可给多次；同名包以先给的为准")
     ap.add_argument("--stage", type=pathlib.Path, help="build.ps1 的暂存目录：有 tools\\ 和 tokenizer.json 时记实际版本与哈希")
     a = ap.parse_args()
+    # 依赖目录不存在或是空的，直接报错退出，不要把已提交的锁文件清成 0 个包（复核 P2-3）
+    for site in a.site:
+        if not site.is_dir() or not any(site.glob("*.dist-info")):
+            sys.exit(f"gen_lock: 依赖目录不存在或没有已装的包：{site}")
     # 判断条件依赖用依赖目录里的 packaging（构建机的 Python 不一定装了）
     sys.path.insert(0, str(a.site[0]))
     global Requirement
     from packaging.requirements import Requirement
     client, rows, missing = client_sections(a.site, a.stage)
+    if not rows:
+        sys.exit("gen_lock: 依赖闭包是空的，没有写锁文件")
     write_lock(client)
     write_licenses(rows, missing)
     print(f"[client.pip] {len(rows)} 个包；候补 {len(missing)} 个：{', '.join(missing) or '无'}")

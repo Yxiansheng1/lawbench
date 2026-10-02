@@ -18,7 +18,7 @@ import { TurnNotices } from '../shared/turn-notices.ts'
 import { requestJson } from './http-json.ts'
 import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
-import { packagedConfig, packagedInstallDir } from './install-layout.ts'
+import { effectiveConfig } from './install-layout.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -419,11 +419,10 @@ Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS_KEY, {
 
 export function apply(ctx: Ctx, given: Config): void {
   // 装好的客户端：命令、目录按安装目录写死，不用开发期环境变量给的（T20 步骤 3，install-layout.ts）
-  const installDir = packagedInstallDir(process.execPath, existsSync)
-  const config = installDir ? packagedConfig(given, installDir, process.env.ProgramData ?? 'C:\\ProgramData') : given
+  const { config, packaged, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData')
   // 只记元数据（Spec 4.5）：事件名、状态、端口、退出码、次数
   const log = makeLogger('host', config.appData, ctx.logger?.('lawbench-host'))
-  if (installDir) log('info', 'config.packaged_layout')
+  if (packaged) log('info', 'config.packaged_layout')
   if (!Array.isArray(config.command) || config.command.length === 0) {
     log('error', 'config.missing_command')
     return
@@ -464,7 +463,6 @@ export function apply(ctx: Ctx, given: Config): void {
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))
   // 启动自检：内置 Python 只在启动命令是 Python 时查（开发期用 node 起假服务时不查）
-  const python = /python(w)?(\.exe)?$/i.test(config.command[0] ?? '')
   const checker = () => selfCheck(nodeSelfCheckDeps({
     command: python ? config.command : [], serviceDir: config.cwd, appData: config.appData,
     adminSkillsDir: config.skillDirs?.[0], sofficeCandidates: config.sofficeCandidates, pandocCandidates: config.pandocCandidates,

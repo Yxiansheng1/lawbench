@@ -125,7 +125,7 @@ def main() -> None:
     side.save(OUT / "installer-sidebar.bmp")
 
     desktop_assets(firm, mark)
-    (OUT / "names.txt").write_text(f"{FIRM_FULL_NAME}\n{PRODUCT_NAME_PLACEHOLDER}\n", encoding="utf-8")
+    (OUT / "names.txt").write_text(f"{FIRM_FULL_NAME}\n{PRODUCT_NAME_PLACEHOLDER}\n", encoding="utf-8", newline="\n")
     for p in sorted(OUT.rglob("*")):
         if p.suffix in (".png", ".ico", ".bmp"):
             with Image.open(p) as im:

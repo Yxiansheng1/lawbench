@@ -45,13 +45,14 @@ tokenizer     Qwen3  tokenizer.json  87a7830d63fcf43bf241c3c5242e96e62dd3fdc2922
 libreoffice   26.8.0.3  tools\libreoffice\program\soffice.exe  a2823391857db1dd8ebbd8234267f9ec58ec7e5b5fc434665c0ecec4671cb988  documentfoundation.org（本机现有安装拷入；正式构建以选定的发布包为准）  MPL-2.0
 pandoc        3.11  tools\pandoc\pandoc.exe  8063cc4bc334a73d1400e7434a34b13ff75b3709cec5a511595630eb9a3ea098  github.com/jgm/pandoc releases（本机现有安装拷入；正式构建以选定的发布包为准）  GPL-2.0-or-later
 
-[client.pip]  # 客户端 Python 依赖闭包（-I -S 隔离运行，不用 DSH 内置运行时自带的 numpy、pandas 等）
+[client.pip]  # 客户端 Python 依赖闭包（单独解压的 3.12.14，-I 运行，不用 DSH 内置运行时自带的 numpy、pandas 等）
 anyio==4.15.1
 attrs==26.1.0
 certifi==2026.7.22
 charset-normalizer==3.5.1
 click==8.5.0
 colorama==0.4.6
+colorlog==6.12.0
 et_xmlfile==2.0.0
 filelock==4.0.7
 flatbuffers==25.12.19
@@ -88,6 +89,7 @@ pywin32-ctypes==0.2.3
 PyYAML==6.0.3
 referencing==0.37.0
 reportlab==5.0.1
+requests==2.34.2
 rpds-py==2026.6.3
 shapely==2.1.2
 starlette==1.7.0
@@ -95,4 +97,5 @@ sympy==1.14.0
 tokenizers==0.23.2
 tqdm==4.70.1
 typing_extensions==4.16.0
+urllib3==2.8.0
 uvicorn==0.54.0

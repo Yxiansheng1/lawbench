@@ -19,6 +19,9 @@
 
 ## 客户端 Python 依赖
 
+**PyMuPDF 是 AGPL-3.0（或 Artifex 商业许可）**：由证件识别驱动 `engines\retainer\tools\ocr-driver\docloader.py` 引入（把证件 PDF 转成图片），随包分发时要按 AGPL 附许可证全文并提供源码获取方式；能否换成已在用的 pypdfium2 / pypdf 要改律所的驱动代码（原样使用，不改），候 owner N58。
+各包的许可证全文随它的 `*.dist-info`（`LICENSE*`、`licenses\`）一起装进 `<安装目录>\python\Lib\site-packages\`。
+
 | 包 | 版本 | 许可证（取自包自己的元数据） |
 |---|---|---|
 | anyio | 4.15.1 | MIT |
@@ -27,6 +30,7 @@
 | charset-normalizer | 3.5.1 | MIT |
 | click | 8.5.0 | BSD-3-Clause |
 | colorama | 0.4.6 | BSD License |
+| colorlog | 6.12.0 | MIT License |
 | et_xmlfile | 2.0.0 | MIT |
 | filelock | 4.0.7 | MIT |
 | flatbuffers | 25.12.19 | Apache 2.0 |
@@ -55,14 +59,15 @@
 | pillow | 12.3.0 | MIT-CMU |
 | protobuf | 7.36.2 | 3-Clause BSD License |
 | pyclipper | 1.4.0 | MIT |
-| pymupdf | 1.28.2 | 候补 |
+| pymupdf | 1.28.2 | Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License |
 | pypdf | 6.19.0 | BSD-3-Clause |
 | pypdfium2 | 5.13.0 | BSD-3-Clause, Apache-2.0, dependency licenses |
 | pywin32 | 312 | PSF |
 | pywin32-ctypes | 0.2.3 | BSD-3-Clause |
 | PyYAML | 6.0.3 | MIT |
 | referencing | 0.37.0 | MIT |
-| reportlab | 5.0.1 | BSD License |
+| reportlab | 5.0.1 | BSD license (see license.txt for details), Copyright (c) 2000-2025, ReportLab Inc. |
+| requests | 2.34.2 | Apache-2.0 |
 | rpds-py | 2026.6.3 | MIT |
 | shapely | 2.1.2 | BSD 3-Clause |
 | starlette | 1.7.0 | BSD-3-Clause |
@@ -70,4 +75,5 @@
 | tokenizers | 0.23.2 | Apache Software License |
 | tqdm | 4.70.1 | MPL-2.0 AND MIT |
 | typing_extensions | 4.16.0 | PSF-2.0 |
+| urllib3 | 2.8.0 | MIT |
 | uvicorn | 0.54.0 | BSD-3-Clause |
