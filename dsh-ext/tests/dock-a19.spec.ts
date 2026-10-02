@@ -3,7 +3,7 @@
 // 收为回归用例（T13 第四轮返修）：打印改为断言，复核员原有断言保留；夹具见 helpers/dock-lab.ts。
 // 第四轮复核实验 rv4.spec.ts 的 K9（两种挂载模式）、N1、N2 随 N51 补充令（2026-10-01 11:19）收进来。
 import { act } from 'react'
-import { CASE_MOVED_TEXT, CASE_MOVED_TITLE, INPUT_CHANGED_TEXT } from '../ui/dock.tsx'
+import { CASE_MOVED_TEXT, CASE_MOVED_TITLE, CASE_NOT_FOUND_TEXT, INPUT_CHANGED_TEXT } from '../ui/dock.tsx'
 import { app, setApi, setIntent } from '../ui/state.ts'
 import { A, api, B, begin, button, CASE, click, flush, h, mount, paramsPanel, pick, send, setup, status, teardown, turnEnded, unmount, verdict, X } from './helpers/dock-lab.ts'
 
@@ -149,14 +149,17 @@ for (const remount of [false, true]) {
   })
 }
 
-// T17 第五轮复核 F1：上一轮因案件文件夹已不在原处被 Agent 插件拒绝（CASE_MOVED）：弹中文说明，状态行照常读
-it('turnNotice 返回 CASE_MOVED：弹"这条消息没有发出"的中文说明', async () => {
-  setApi({ ...api(), turnNotice: async () => ({ ok: true, value: { code: 'CASE_MOVED' } }) } as never)
-  await mount('S1'); await flush(800)
-  const d = app.get().dialogs.find((x: any) => x.title === CASE_MOVED_TITLE) as { text?: string } | undefined
-  expect(d?.text).toBe(CASE_MOVED_TEXT)
-  expect(status()).not.toBe('正在读取当前选择…')
-})
+// N55 ②：上一轮因案件文件夹已不在原处被 Agent 插件拒绝（CASE_MOVED）、或取任务时服务报 CASE_NOT_FOUND（第六轮复核
+// A-P2-3 / B-F2）：弹中文说明，状态行照常读
+for (const [code, text] of [['CASE_MOVED', CASE_MOVED_TEXT], ['CASE_NOT_FOUND', CASE_NOT_FOUND_TEXT]] as const) {
+  it(`turnNotice 返回 ${code}：弹"这条消息没有发出"的中文说明`, async () => {
+    setApi({ ...api(), turnNotice: async () => ({ ok: true, value: { code } }) } as never)
+    await mount('S1'); await flush(800)
+    const d = app.get().dialogs.findLast((x: any) => x.title === CASE_MOVED_TITLE) as { text?: string } | undefined // 上一例的对话框可能还在
+    expect(d?.text).toBe(text)
+    expect(status()).not.toBe('正在读取当前选择…')
+  })
+}
 
 // 第四轮复核 N1、N2：取提示出错不挡读取（挂上时先取提示再读，取提示抛错或返回不合形状时也要读）
 describe('turnNotice 出错时照常读取（第四轮复核 N1、N2）', () => {

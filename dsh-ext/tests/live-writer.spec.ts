@@ -1,7 +1,7 @@
-// 活着的会话跟着案件走（T17 第五轮复核 F1；改编自复核员 B 的 zz-rvb22-agent / zz-rvb22-move，打印改为断言）：
-// DSH 真 AgentLoop（假模型）+ 我方会话存储 + 我方 Host 的 caseOpen；假工作台服务按真服务语义（按案件编号去重，
-// /api/case/open 之后只列新位置）。会话的事件不经句柄的 append（原版实例监听 session/event 投给自己登记的写入者），
-// 所以名单变了以后由会话存储把写入者搬到新位置（Agent 空闲时；正在跑的等这一轮结束），搬不了就记为已失效。
+// 活着的会话所在的案件挪走了（N55 用户定 ②：不搬写入者，整轮拒绝并提示重启；改编自复核员 B 第六轮的 zz-rvb22-agent /
+// zz-rvb22-move，打印改为断言）：DSH 真 AgentLoop（假模型）+ 我方会话存储 + 我方 Agent 插件 + 我方 Host 的 caseOpen；
+// 假工作台服务按真服务语义（按案件编号去重，/api/case/open 之后只列新位置；/core/task/begin 按 cwd 找已登记的案件，
+// 找不到报 CASE_NOT_FOUND）。
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CaseRoots } from '../session-store/case-roots.ts'
 import { apply as applyStore, name as storeName } from '../session-store/index.ts'
+import { apply as applyAgent, name as agentName } from '../agent/index.ts'
 import { LawbenchRemote } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
 
@@ -28,16 +29,24 @@ const AgentLoop = (await imp('@deepseek-ai/dsh-agent-loop')).default
 const Projection = (await imp('@deepseek-ai/dsh-session-projection')).default
 const { MockAdapter, textResponse } = await import(/* @vite-ignore */ join(AL, 'tests', 'mock-adapter.ts'))
 const CASE_OPEN_OK = JSON.parse(readFileSync(join(__dirname, '..', 'ui', 'fixtures', 'case_open.json'), 'utf8'))
+const example = (n: string) => JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'examples', n), 'utf8'))
+const TASK_BEGIN_OK = example('core_task_begin.res.json')
+const TASK_BEGIN_FAIL = example('core_task_begin.fail.json') // CASE_NOT_FOUND
+const CONTEXT_OK = example('core_context.res.json')
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /** 假模型：script 里的元素可写成 { delayMs, chunks }，那一次回答先等这么久（让 caseOpen 落在一轮当中）。 */
 class DelayAdapter extends MockAdapter {
   private readonly delays: number[]
   constructor(script: unknown[]) {
-    super(script.map((e: any) => (e && typeof e === 'object' && 'chunks' in e ? e.chunks : e)))
+    // 我方 Agent 插件按任务单设思考档（契约示例为"低"），假模型要声明支持
+    super(script.map((e: any) => (e && typeof e === 'object' && 'chunks' in e ? e.chunks : e)), { efforts: [{ id: 'low', name: 'Low' }], defaultEffort: 'low' })
     this.delays = script.map((e: any) => (e && typeof e === 'object' && 'delayMs' in e ? e.delayMs : 0))
   }
+  /** 模型被调了几次。 */
+  calls = 0
   async * stream(options: any): AsyncIterable<any> {
+    this.calls++
     const ms = this.delays.shift() ?? 0
     if (ms) await sleep(ms)
     yield* super.stream(options)
@@ -46,6 +55,8 @@ class DelayAdapter extends MockAdapter {
 
 // 假工作台服务：案件编号取自 <案件>\工作区\case-id.txt（复制后两处同号，按号去重，打开哪个就只列哪个）
 let reg: Array<{ case_id: string; root: string; t: number }> = []
+/** 服务的最近案件接口不可用（名单刷新失败）。 */
+let svcDown = false
 let clock = 0
 const cidOf = (root: string): string => {
   const f = join(root, '工作区', 'case-id.txt')
@@ -58,8 +69,21 @@ let port = 0
 beforeAll(async () => {
   server = createServer((q, r) => {
     r.setHeader('content-type', 'application/json')
+    if (q.url === '/api/case/recent' && svcDown) { r.statusCode = 503; r.end('{}'); return }
     if (q.url === '/api/case/recent') { r.end(JSON.stringify({ ok: true, value: { cases: [...reg].sort((a, b) => b.t - a.t).map((c) => ({ case_id: c.case_id, name: 'x', root: c.root, last_opened: '2026-10-01T12:00:00+08:00', exists: existsSync(c.root) })) } })); return }
     if (q.url === '/api/case/open') { let b = ''; q.on('data', (d) => { b += d }); q.on('end', () => { svcOpen(JSON.parse(b).path); r.end(JSON.stringify(CASE_OPEN_OK)) }); return }
+    if (q.url?.startsWith('/core/')) {
+      let b = ''; q.on('data', (d) => { b += d }); q.on('end', () => {
+        const body = JSON.parse(b || '{}')
+        if (q.url === '/core/task/begin') {
+          // 真服务语义：cwd 必须是已登记、还在盘上的案件根
+          const ok = reg.some((c) => c.root.toLowerCase() === String(body.cwd).toLowerCase() && existsSync(c.root))
+          r.end(JSON.stringify(ok ? TASK_BEGIN_OK : TASK_BEGIN_FAIL)); return
+        }
+        if (q.url === '/core/context') { r.end(JSON.stringify(CONTEXT_OK)); return }
+        r.end(JSON.stringify({ ok: true, value: {} }))
+      }); return
+    }
     r.statusCode = 404; r.end('{}')
   })
   await new Promise<void>((res) => server.listen(0, '127.0.0.1', () => res()))
@@ -68,7 +92,7 @@ beforeAll(async () => {
 afterAll(async () => { server.closeAllConnections?.(); await new Promise((r) => server.close(r)) })
 
 let tmp: string
-beforeEach(() => { tmp = realpathSync(mkdtempSync(join(tmpdir(), 'lb-live-'))); reg = [] })
+beforeEach(() => { tmp = realpathSync(mkdtempSync(join(tmpdir(), 'lb-live-'))); reg = []; svcDown = false })
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }) })
 
 function files(dir: string): string[] {
@@ -80,17 +104,24 @@ const hashDir = (d: string) => files(d).sort().map((f) => f.slice(d.length) + ':
 const user = (text: string) => Llm.createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
 const idle = (ctx: any, agent: any) => new Promise<void>((resolve) => { const off = ctx.on('agent/status', ({ agent: a, status }: any) => { if (a === agent && status === 'idle') { off(); resolve() } }) })
 
-/** 起 DSH 真 AgentLoop + 我方会话存储；Host 的 caseOpen 走假服务。replies 是假模型依次给的回答（可带延迟）。 */
+/** 起 DSH 真 AgentLoop + 我方会话存储 + 我方 Agent 插件；Host 的 caseOpen 走假服务。replies 是假模型依次给的回答（可带延迟）。
+ * notices：Agent 插件拒绝整轮时记下的错误码（Host 的 turnNotice 取的就是它）。 */
 async function boot(appData: string, home: string, replies: unknown[]) {
   const ctx = new Context()
   await ctx.plugin(Llm.default); await ctx.plugin(SessionMod.default); await ctx.plugin(Projection); await ctx.plugin(SystemPrompt); await ctx.plugin(ToolRuntime); await ctx.plugin(AgentRegistry)
-  ctx.provide('lawbenchCore', { endpoint: () => ({ port, token: 't' }), onState: (fn: (s: string) => void) => { fn('running'); return () => {} } })
+  const notices = new Map<string, string>()
+  ctx.provide('lawbenchCore', {
+    endpoint: () => ({ port, token: 't' }), onState: (fn: (s: string) => void) => { fn('running'); return () => {} },
+    noteTurnBlocked: (sid: string, code: string) => { notices.set(sid, code) }, clearTurnBlocked: (sid: string) => { notices.delete(sid) },
+  })
   await ctx.plugin({ name: storeName, apply: applyStore }, { backend: Jsonl, defaultRoot: home, appData, compression: 'none' })
+  await ctx.plugin({ name: agentName, inject: ['tools', 'lawbenchCore'], apply: applyAgent }, { appData, validateContracts: false })
   await ctx.plugin(AgentLoop, { agents: [] })
-  ctx.llm.registerAdapter(['mock'], new DelayAdapter(replies))
+  const adapter = new DelayAdapter(replies)
+  ctx.llm.registerAdapter(['mock'], adapter)
   const api = new LawbenchRemote({ endpoint: () => ({ port, token: 't' }), state: 'running' } as unknown as Supervisor, appData, () => undefined, [], () => {}, undefined,
     (n) => (n === 'sessionPersistence' ? ctx.sessionPersistence : undefined)) as LawbenchRemote & { caseOpen(r: unknown): Promise<{ ok: boolean }> }
-  return { ctx, api }
+  return { ctx, api, notices, adapter }
 }
 /** 重启后读这个会话的全部事件（新进程，只有会话存储）。 */
 async function readAfterRestart(appData: string, home: string, id: unknown): Promise<string> {
@@ -111,7 +142,7 @@ async function prepare(replies: unknown[]) {
   const appData = join(tmp, 'Local', 'lawbench'); const home = join(tmp, 'dsh-home', 'sessions')
   const oldR = join(tmp, '桌面', '案丙'); const newR = join(tmp, '案件盘', '案丙')
   mkdirSync(oldR, { recursive: true }); mkdirSync(join(tmp, '案件盘'))
-  const { ctx, api } = await boot(appData, home, replies)
+  const { ctx, api, notices, adapter } = await boot(appData, home, replies)
   expect((await api.caseOpen({ path: oldR, template: null })).ok).toBe(true)
   for (let i = 0; i < 100 && !new CaseRoots(appData).load().list().includes(oldR); i++) await sleep(20)
   const id = SessionMod.SessionId('s1')
@@ -119,139 +150,163 @@ async function prepare(replies: unknown[]) {
   const p = idle(ctx, h.agent); h.agent.followup(user('FIRST-LIVE')); await p
   await sleep(1500); await ctx.sessionPersistence.flush()
   expect(has(oldR, 'FIRST-LIVE')).toBe(1)
-  return { appData, home, oldR, newR, ctx, api, id, h }
+  expect(notices.size).toBe(0)
+  return { appData, home, oldR, newR, ctx, api, notices, adapter, id, h }
+}
+
+/** 在活着的 Agent 上说一句并等这一轮结束、落盘；返回这一轮假模型被调了几次。 */
+async function say(ctx: any, agent: any, adapter: any, text: string): Promise<number> {
+  const before = adapter.calls
+  const p = idle(ctx, agent); agent.followup(user(text)); await p
+  await sleep(1200); await ctx.sessionPersistence.flush().catch(() => undefined) // 盘不在时原版写不进去、留着缓冲
+  return adapter.calls - before
+}
+
+/** 重启（新进程，带 Agent 插件），从会话现在的位置 resume 后说一句。 */
+async function restartAndSay(appData: string, home: string, id: unknown, text: string) {
+  const { ctx, notices, adapter } = await boot(appData, home, [textResponse('after-restart')])
+  await sleep(300)
+  await ctx.sessionPersistence.list()
+  const agent = (await ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })).agent
+  const cwd = agent.session.header.cwd
+  const calls = await say(ctx, agent, adapter, text)
+  await ctx.fiber.dispose()
+  return { cwd, calls, notice: notices.get(String(id)) }
 }
 
 for (const how of ['copy', 'move'] as const) {
-  it(`${how === 'copy' ? '复制' : '搬家'}：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里续写：落新文件夹，旧处不变，重启后看得到`, async () => {
-    const { appData, home, oldR, newR, ctx, api, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  it(`${how === 'copy' ? '复制' : '搬家'}：会话活着（Agent 还在）→ 新位置 caseOpen → 在这个会话里再说一句：整轮拒绝、记 CASE_MOVED，旧处新处都不变；重启后在新位置续写照常`, async () => {
+    const { appData, home, oldR, newR, ctx, api, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
     if (how === 'copy') cpSync(oldR, newR, { recursive: true }); else renameSync(oldR, newR)
-    const oldHash = hashDir(oldR)
     expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
+    const oldHash = hashDir(oldR); const newHash = hashDir(newR)
     expect(ctx.agents.get(id)).toBe(h.agent) // 还是那个活着的 Agent
-    const p = idle(ctx, h.agent); h.agent.followup(user('AFTER-LIVE')); await p
-    await ctx.sessionPersistence.flush()
-    expect(has(newR, 'AFTER-LIVE')).toBe(1)
-    expect(hashDir(oldR)).toBe(oldHash) // 复制：旧处一个字节不变；搬家：旧处本来就没有
-    expect(ctx.sessionPersistence.writerLost(id)).toBe(false)
+    expect(ctx.sessionPersistence.caseMoved(id)).toBe(true)
+    expect(await say(ctx, h.agent, adapter, 'AFTER-LIVE')).toBe(0) // 没调模型
+    expect(notices.get(String(id))).toBe('CASE_MOVED')
+    expect([hashDir(oldR) === oldHash, hashDir(newR) === newHash, has(oldR, 'AFTER-LIVE'), has(newR, 'AFTER-LIVE')]).toEqual([true, true, 0, 0])
     await ctx.fiber.dispose()
-    expect(await readAfterRestart(appData, home, id)).toContain('AFTER-LIVE')
-  }, 40000)
+    expect([hashDir(oldR) === oldHash, hashDir(newR) === newHash]).toEqual([true, true]) // 关软件时也不往两处补
+    // 重启后（resume 路径）在新位置续写照常（第五轮修好的部分不退化）
+    const r = await restartAndSay(appData, home, id, 'AFTER-RESTART')
+    expect([r.cwd, r.calls, r.notice, has(newR, 'AFTER-RESTART'), has(oldR, 'AFTER-RESTART')]).toEqual([newR, 1, undefined, 1, 0])
+    if (how === 'copy') expect(hashDir(oldR)).toBe(oldHash)
+  }, 60000)
 }
 
-it('复制：会话已放下（下次续写走 resume）→ 新位置 caseOpen → 续写落新文件夹', async () => {
-  const { appData, home, oldR, newR, ctx, api, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+it('复制：会话已放下（下次续写走 resume）→ 新位置 caseOpen → 续写落新文件夹，不拒', async () => {
+  const { appData, home, oldR, newR, ctx, api, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
   await h.dispose()
   cpSync(oldR, newR, { recursive: true })
   const oldHash = hashDir(oldR)
   expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
   await ctx.sessionPersistence.list()
   const agent = (await ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })).agent
-  const p = idle(ctx, agent); agent.followup(user('AFTER-RESUME')); await p
-  await ctx.sessionPersistence.flush()
-  expect([has(newR, 'AFTER-RESUME'), hashDir(oldR) === oldHash]).toEqual([1, true])
+  expect(agent.session.header.cwd).toBe(newR)
+  expect(await say(ctx, agent, adapter, 'AFTER-RESUME')).toBe(1)
+  expect([notices.size, has(newR, 'AFTER-RESUME'), hashDir(oldR) === oldHash]).toEqual([0, 1, true])
   await ctx.fiber.dispose()
   expect(await readAfterRestart(appData, home, id)).toContain('AFTER-RESUME')
-}, 40000)
+}, 60000)
 
-it('关软件 → 复制 → 再开（名单还是旧位置）→ 先点开这个会话（Agent 从旧位置 resume）→ 新位置 caseOpen → 续写：落新文件夹', async () => {
-  const { appData, home, oldR, newR, ctx, h, id } = await prepare([textResponse('a1')])
-  await h.dispose(); await ctx.fiber.dispose()
+it('名单刷新失败（服务的最近案件接口不可用）不误判：复制后根还在名单上、还在盘上，照常在旧处续写', async () => {
+  const { oldR, newR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
   cpSync(oldR, newR, { recursive: true })
-  const { ctx: ctx2, api } = await boot(appData, home, [textResponse('a2')])
-  await sleep(300)
-  await ctx2.sessionPersistence.list()
-  const agent = (await ctx2.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })).agent
-  expect(agent.session.header.cwd).toBe(oldR) // 名单还是旧位置时 resume 的
-  // resume 时（名单还是旧位置）会话已在旧处补写过事件，新位置的副本少这几条：搬的时候从旧处补齐
-  expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
-  expect(ctx2.sessionPersistence.writerLost(id)).toBe(false)
-  const oldHash = hashDir(oldR)
-  const p = idle(ctx2, agent); agent.followup(user('AFTER-REOPEN')); await p
-  await ctx2.sessionPersistence.flush()
-  expect([has(newR, 'AFTER-REOPEN'), has(oldR, 'AFTER-REOPEN'), hashDir(oldR) === oldHash]).toEqual([1, 0, true])
-  await ctx2.fiber.dispose()
-}, 40000)
+  svcDown = true
+  await (ctx.sessionPersistence as { refreshCaseRoots(): Promise<void> }).refreshCaseRoots()
+  expect(ctx.sessionPersistence.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'STILL-OLD')).toBe(1)
+  expect([notices.size, has(oldR, 'STILL-OLD'), has(newR, 'STILL-OLD')]).toEqual([0, 1, 0])
+  await ctx.fiber.dispose()
+}, 60000)
 
-it('复制时会话正在跑一轮：不打断，等这一轮结束再搬；这一轮落在旧处，搬的时候补到新位置；之后只写新位置', async () => {
+it('盘暂时不在、名单没变：这一轮拒绝（原版写不进去留着缓冲）；插回后解除，能续写，被拒那一轮作为"被拦下"落回原处', async () => {
+  const { oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  const away = oldR + '-拔出'
+  renameSync(oldR, away)
+  expect(await say(ctx, h.agent, adapter, 'WHILE-AWAY')).toBe(0)
+  expect(notices.get(String(id))).toBe('CASE_MOVED')
+  expect(has(away, 'WHILE-AWAY')).toBe(0)
+  renameSync(away, oldR)
+  expect(ctx.sessionPersistence.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'BACK-AGAIN')).toBe(1)
+  expect([notices.has(String(id)), has(oldR, 'BACK-AGAIN'), has(oldR, 'WHILE-AWAY')]).toEqual([false, 1, 1])
+  await ctx.fiber.dispose()
+  expect(await readAfterRestart(join(tmp, 'Local', 'lawbench'), join(tmp, 'dsh-home', 'sessions'), id)).toContain('BACK-AGAIN')
+}, 60000)
+
+it('盘拔出期间名单刷新过（服务报 exists:false，写入者放下）→ 插回、名单刷新（根回到名单）→ 在原处接回，能续写', async () => {
+  const { appData, home, oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  const away = oldR + '-拔出'
+  renameSync(oldR, away)
+  const store = ctx.sessionPersistence as { refreshCaseRoots(): Promise<void>; caseMoved(id: unknown): boolean }
+  await store.refreshCaseRoots()
+  expect(store.caseMoved(id)).toBe(true)
+  renameSync(away, oldR)
+  expect(store.caseMoved(id)).toBe(true) // 名单还没刷新：仍算失效
+  await store.refreshCaseRoots()
+  expect(store.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'REATTACHED')).toBe(1)
+  expect([notices.size, has(oldR, 'REATTACHED')]).toEqual([0, 1])
+  await ctx.fiber.dispose()
+  expect(await readAfterRestart(appData, home, id)).toContain('REATTACHED')
+}, 60000)
+
+it('写入者放下后又被拒过一轮（这几条只在内存里）→ 根回到名单：不接回，仍提示重启；重启后照常', async () => {
+  const { appData, home, oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  const away = oldR + '-拔出'
+  renameSync(oldR, away)
+  const store = ctx.sessionPersistence as { refreshCaseRoots(): Promise<void>; caseMoved(id: unknown): boolean }
+  await store.refreshCaseRoots()
+  expect(await say(ctx, h.agent, adapter, 'DROPPED')).toBe(0)
+  renameSync(away, oldR)
+  const oldHash = hashDir(oldR)
+  await store.refreshCaseRoots()
+  expect(store.caseMoved(id)).toBe(true)
+  notices.clear()
+  expect(await say(ctx, h.agent, adapter, 'STILL-BLOCKED')).toBe(0)
+  expect([notices.get(String(id)), hashDir(oldR) === oldHash]).toEqual(['CASE_MOVED', true])
+  await ctx.fiber.dispose()
+  const r = await restartAndSay(appData, home, id, 'AFTER-RESTART')
+  expect([r.cwd, r.calls, r.notice, has(oldR, 'AFTER-RESTART')]).toEqual([oldR, 1, undefined, 1])
+}, 60000)
+
+it('搬家后服务还没列出新位置（律师没在新位置打开）：根已不在盘上，整轮拒绝，哪里都不写', async () => {
+  const { oldR, newR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  renameSync(oldR, newR)
+  await (ctx.sessionPersistence as { refreshCaseRoots(): Promise<void> }).refreshCaseRoots() // 服务报旧位置 exists:false
+  const newHash = hashDir(newR)
+  expect(await say(ctx, h.agent, adapter, 'NOWHERE')).toBe(0)
+  expect([notices.get(String(id)), hashDir(newR) === newHash, existsSync(oldR)]).toEqual(['CASE_MOVED', true, false])
+  await ctx.fiber.dispose()
+}, 60000)
+
+it('复制时会话正在跑一轮：不打断，这一轮照原处落完；下一轮拒绝', async () => {
   // 第二句的回答慢 1.5 秒：caseOpen 发生在这一轮当中
-  const slow = { chunks: textResponse('a2'), delayMs: 1500 }
-  const { ctx, api, oldR, newR, id, h } = await prepare([textResponse('a1'), slow, textResponse('a3')])
+  const slow = { chunks: textResponse('REPLY-DURING-RUN'), delayMs: 1500 }
+  const { ctx, api, notices, adapter, oldR, newR, id, h } = await prepare([textResponse('a1'), slow, textResponse('a3')])
   cpSync(oldR, newR, { recursive: true })
   const p = idle(ctx, h.agent); h.agent.followup(user('DURING-RUN'))
   await sleep(200)
   expect(h.agent.status).toBe('running')
   expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
-  expect(has(newR, 'DURING-RUN')).toBe(0) // 正在跑：还没搬
   await p
-  for (let i = 0; i < 100 && has(newR, 'DURING-RUN') === 0; i++) await sleep(20)
-  expect([has(oldR, 'DURING-RUN'), has(newR, 'DURING-RUN')]).toEqual([1, 1]) // 这一轮落在旧处，搬的时候补到新位置
-  expect(ctx.sessionPersistence.writerLost(id)).toBe(false)
-  const oldHash = hashDir(oldR)
-  const p2 = idle(ctx, h.agent); h.agent.followup(user('AFTER-RUN')); await p2
-  await ctx.sessionPersistence.flush()
-  expect([has(newR, 'AFTER-RUN'), hashDir(oldR) === oldHash]).toEqual([1, true])
+  await sleep(1200); await ctx.sessionPersistence.flush()
+  // 这一轮照原处落完：律师那句话（打开新位置之前已写）和打开之后才回来的回答都在旧处
+  expect([has(oldR, 'DURING-RUN'), has(oldR, 'REPLY-DURING-RUN'), has(newR, 'DURING-RUN'), notices.size]).toEqual([1, 1, 0, 0])
+  const oldHash = hashDir(oldR); const newHash = hashDir(newR)
+  expect(await say(ctx, h.agent, adapter, 'AFTER-RUN')).toBe(0)
+  expect([notices.get(String(id)), hashDir(oldR) === oldHash, hashDir(newR) === newHash]).toEqual(['CASE_MOVED', true, true])
   await ctx.fiber.dispose()
-}, 40000)
+}, 60000)
 
-for (const sameLength of [false, true]) {
-  it(`复制后新位置被另一个进程续写过（${sameLength ? '旧处也接着说过一句' : '旧处没再写'}）：两处分叉，搬不了，记为已失效，两处都不再变`, async () => {
-    const { appData, home, ctx, api, oldR, newR, id, h } = await prepare([textResponse('a1'), textResponse('old-side')])
-    cpSync(oldR, newR, { recursive: true })
-    if (sameLength) { // 活着的会话在旧处说一句（名单还是旧位置）
-      const p0 = idle(ctx, h.agent); h.agent.followup(user('OLD-SIDE')); await p0
-      await ctx.sessionPersistence.flush()
-    }
-    // 另一个进程（名单只有新位置、不连服务）在新位置 resume 这个会话说一句：新位置与旧处分叉
-    const appData2 = join(tmp, 'Local2', 'lawbench')
-    new CaseRoots(appData2).replace([{ root: newR, exists: true }])
-    const other = new Context()
-    await other.plugin(Llm.default); await other.plugin(SessionMod.default); await other.plugin(Projection); await other.plugin(SystemPrompt); await other.plugin(ToolRuntime); await other.plugin(AgentRegistry)
-    await other.plugin({ name: storeName, apply: applyStore }, { backend: Jsonl, defaultRoot: join(tmp, 'home2'), appData: appData2, compression: 'none' })
-    await other.plugin(AgentLoop, { agents: [] })
-    other.llm.registerAdapter(['mock'], new DelayAdapter([textResponse('new-side')]))
-    await other.sessionPersistence.list()
-    const a2 = (await other.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })).agent
-    const p1 = idle(other, a2); a2.followup(user('NEW-SIDE')); await p1
-    await other.sessionPersistence.flush(); await other.fiber.dispose()
-    expect([has(newR, 'NEW-SIDE'), has(oldR, 'NEW-SIDE')]).toEqual([1, 0])
-    expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
-    expect(ctx.sessionPersistence.writerLost(id)).toBe(true)
-    const oldHash = hashDir(oldR); const newHash = hashDir(newR)
-    // 没有 Agent 插件拦着时再说一句：哪里都不写（Agent 插件会整轮拒绝并提示，见 agent.spec）
-    const p = idle(ctx, h.agent); h.agent.followup(user('AFTER-LOST')); await p
-    await sleep(1200)
-    expect([hashDir(oldR) === oldHash, hashDir(newR) === newHash]).toEqual([true, true])
-    await ctx.fiber.dispose()
-    void appData; void home
-  }, 40000)
-}
-
-it('搬家后、在新位置打开之前又说了一句（旧目录已不在，这句只在内存里）：新位置比内存短，搬不了，记为已失效', async () => {
-  const { ctx, api, oldR, newR, id, h } = await prepare([textResponse('a1'), textResponse('a2'), textResponse('a3')])
-  renameSync(oldR, newR)
-  const p0 = idle(ctx, h.agent); h.agent.followup(user('IN-BETWEEN')); await p0
-  await sleep(1200)
-  expect(has(newR, 'IN-BETWEEN')).toBe(0)
-  expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
-  expect(ctx.sessionPersistence.writerLost(id)).toBe(true)
-  const newHash = hashDir(newR)
-  const p = idle(ctx, h.agent); h.agent.followup(user('AFTER-LOST')); await p
-  await sleep(1200)
-  expect(hashDir(newR)).toBe(newHash)
+it('CASE_NOT_FOUND（真服务语义：task/begin 的 cwd 已不是登记的案件，名单又没刷新到）：整轮拒绝，记 CASE_NOT_FOUND 给界面', async () => {
+  const { oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  svcDown = true // 名单刷新不到
+  reg = [] // 服务那边这个案件已不在登记里
+  expect(ctx.sessionPersistence.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'NOT-FOUND')).toBe(0) // 没调模型
+  // 会话的位置本身没变：被拒的这一轮由 DSH 记作"被拦下"落在原处（与 INPUT_CHANGED 等被拒时一样）
+  expect([notices.get(String(id)), has(oldR, 'NOT-FOUND')]).toEqual(['CASE_NOT_FOUND', 1])
   await ctx.fiber.dispose()
-}, 40000)
-
-it('搬家后服务还没列出新位置（律师没在新位置打开）：写入者搬不过去，记为已失效，两处都不写', async () => {
-  const { ctx, api, oldR, newR, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
-  renameSync(oldR, newR)
-  await (ctx.sessionPersistence as { refreshCaseRoots(): Promise<void> }).refreshCaseRoots() // 服务报旧位置 exists:false
-  expect(ctx.sessionPersistence.writerLost(id)).toBe(true)
-  const newHash = hashDir(newR)
-  const p = idle(ctx, h.agent); h.agent.followup(user('NOWHERE')); await p
-  await sleep(1200)
-  expect(hashDir(newR)).toBe(newHash)
-  expect(existsSync(oldR)).toBe(false)
-  void api
-  await ctx.fiber.dispose()
-}, 40000)
+}, 60000)

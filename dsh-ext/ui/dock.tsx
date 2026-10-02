@@ -17,9 +17,11 @@ const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 const WRITE_DELAY_MS = 500
 /** 上一轮因输入材料变化被拦下（/core/context 报 INPUT_CHANGED）时状态行的话（ORCH 注记 2026-09-30 13:18）。 */
 export const INPUT_CHANGED_TEXT = '输入材料已变化，请重新选择'
-/** 上一轮因会话所在的案件文件夹已不在原处、接不到新位置被拒（T17 第五轮复核 F1，Agent 插件记 CASE_MOVED）。 */
+/** 上一轮因会话所在的案件文件夹已不在原处被拒（N55 ②，Agent 插件记 CASE_MOVED）。 */
 export const CASE_MOVED_TITLE = '这条消息没有发出'
-export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在原来的位置，没能接着写入。请从首页重新打开案件，再在这个对话里继续。'
+export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在原来的位置。请重启软件后在这个对话里继续，或新开一个对话。'
+/** 上一轮取任务时服务说这个对话不属于任何已打开的案件（/core/task/begin 报 CASE_NOT_FOUND，第六轮复核 A-P2-3 / B-F2）。 */
+export const CASE_NOT_FOUND_TEXT = '没有找到这个对话所在的案件。请回到首页重新打开案件；如果案件文件夹刚挪过位置，请重启软件后在这个对话里继续，或新开一个对话。'
 /** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */
 export const TURN_ENDED = 'lawbench:turn-ended'
 
@@ -126,6 +128,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
         const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
         if (r.ok && r.value?.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
         if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)
+        if (r.ok && r.value?.code === 'CASE_NOT_FOUND') showNotice(CASE_MOVED_TITLE, CASE_NOT_FOUND_TEXT)
       } catch { /* 当没有提示 */ }
     }
     setError(null)

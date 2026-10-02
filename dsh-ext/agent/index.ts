@@ -49,17 +49,17 @@ export class LegalAgent {
   /**
    * @param noteBlocked - 拒绝整轮时记下错误码，界面经 Host 的 turnNotice 取走（DSH 的 reject 带不了消息）。
    * @param clearBlocked - 这一轮顺利开始时清掉该会话没被取走的旧记录（复核 P3-C ①）。
-   * @param writerLost - 这个会话的写入位置是否已失效（案件文件夹搬走、写入者搬不过去，T17 第五轮复核 F1；见会话存储 router.ts）。
+   * @param caseMoved - 这个会话所在的案件文件夹是否已不在原位置（N55 ②；见会话存储 router.ts）。
    */
-  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly writerLost: (sessionId: string) => boolean = () => false) {}
+  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly caseMoved: (sessionId: string) => boolean = () => false) {}
 
   /** agent/pre-step。step 1 取任务和上下文；每步检查模型调用预算。 */
   async preStep(agent: AgentLike, step: number, decision: PreStepDecision): Promise<PreStepDecision> {
     if (decision.kind === 'reject') return decision
     let state = this.tasks.get(agent.id)
     const added: UserMessage[] = []
-    if (step === 1 && this.writerLost(agent.id)) {
-      // 案件文件夹已不在原处、又接不到新位置：整轮拒绝（这一轮的记录落不进任何案件文件夹），界面给中文说明
+    if (step === 1 && this.caseMoved(agent.id)) {
+      // 案件文件夹已不在原处（N55 ②）：整轮拒绝，不写旧处；界面提示重启软件后在这个对话里继续，或新开一个对话
       this.log('warn', 'agent.case_moved', {})
       this.noteBlocked(agent.id, 'CASE_MOVED')
       this.tasks.delete(agent.id)
@@ -181,7 +181,7 @@ export function apply(ctx: Ctx, config: Config = {}): void {
   const agent = new LegalAgent(core, log,
     (sessionId, code) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code),
     (sessionId) => ctx.lawbenchCore.clearTurnBlocked?.(sessionId),
-    (sessionId) => (ctx.get?.('sessionPersistence') as { writerLost?(id: string): boolean } | undefined)?.writerLost?.(sessionId) === true)
+    (sessionId) => (ctx.get?.('sessionPersistence') as { caseMoved?(id: string): boolean } | undefined)?.caseMoved?.(sessionId) === true)
 
   for (const tool of TOOL_NAMES) {
     ctx.effect(() => ctx.tools.register({

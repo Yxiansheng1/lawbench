@@ -1,0 +1,78 @@
+# T17 N55 ②（活着的会话所在案件挪走了：不搬写入者，整轮拒绝并提示重启）：逐个撤回修法，看对应用例是否变红；每次按原字节写回。
+# 用法：python mutate.py <输出文件>（在仓库根下跑）
+import io, re, subprocess, sys
+
+EXT = 'dsh-ext/'
+LIVE = ['tests/live-writer.spec.ts']
+ONLY = sys.argv[2:]  # 给了名字片段就只跑名字含这些片段的
+MUTS = [
+    ('判定：不看名单（根不在名单上也不算失效）', EXT + 'session-store/router.ts',
+     "    return !this.current(w.at) || !existsSync(w.at.caseRoot!)\n", "    return !existsSync(w.at.caseRoot!)\n",
+     LIVE + ['tests/session-store.spec.ts']),
+    ('判定：不看盘（根不在盘上也不算失效）', EXT + 'session-store/router.ts',
+     "    return !this.current(w.at) || !existsSync(w.at.caseRoot!)\n", "    return !this.current(w.at)\n",
+     LIVE + ['tests/session-store.spec.ts']),
+    ('判定：放下过的不算失效（放下后又被拒过一轮、根回到名单就放行）', EXT + 'session-store/router.ts',
+     "    return !!w && (w.detached || this.invalid(w))", "    return !!w && this.invalid(w)",
+     LIVE),
+    ('判定：关掉的写句柄不从表里去掉', EXT + 'session-store/router.ts',
+     "      if (this.writers.get(w!.id) === w) this.writers.delete(w!.id)\n", "",
+     ['tests/session-store.spec.ts']),
+    ('拒绝：Agent 插件不看位置失效', EXT + 'agent/index.ts',
+     "    if (step === 1 && this.caseMoved(agent.id)) {", "    if (false) {",
+     LIVE + ['tests/agent.spec.ts']),
+    ('不写旧处：根不在名单上时不放下写入者', EXT + 'session-store/router.ts',
+     "    if (!w.detached && !this.current(w.at)) {", "    if (false) {",
+     LIVE),
+    ('不写旧处：打开案件后的刷新不等放下写入者就返回', EXT + 'session-store/index.ts',
+     "    await refresh(true)\n    await recheckWriters()\n", "    await refresh(true)\n",
+     LIVE),
+    ('不写旧处：先记"已放下"再关（并发的另一次 recheck 不等关完）', EXT + 'session-store/router.ts',
+     "      await closeHandle(w.cur).catch(() => undefined)\n      w.detached = true\n", "      w.detached = true\n      await closeHandle(w.cur).catch(() => undefined)\n",
+     LIVE),
+    ('正在跑的一轮：不等结束就放下（不看 Agent 状态）', EXT + 'session-store/index.ts',
+     "      if (agents?.get(id)?.status !== 'running') { await recheckOne(id); continue }", "      { await recheckOne(id); continue }",
+     LIVE),
+    ('解除：根回到名单不在原处接回', EXT + 'session-store/router.ts',
+     "    } else if (w.detached && !this.invalid(w) && eventCount !== undefined) {", "    } else if (false) {",
+     LIVE),
+    ('解除：接回时不核对盘上与内存一样长', EXT + 'session-store/router.ts',
+     "      if (n !== eventCount || this.writers.get(id) !== w) {", "      if (this.writers.get(id) !== w) {",
+     LIVE),
+    ('解除：同一会话的 recheck 不排队', EXT + 'session-store/router.ts',
+     "    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(() => this.recheckOnce(id, eventCount))", "    const run = this.recheckOnce(id, eventCount)",
+     LIVE),
+    ('提示：输入区不提示 CASE_MOVED', EXT + 'ui/dock.tsx',
+     "        if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)\n", "",
+     ['tests/dock-a19.spec.ts']),
+    ('提示：输入区不提示 CASE_NOT_FOUND', EXT + 'ui/dock.tsx',
+     "        if (r.ok && r.value?.code === 'CASE_NOT_FOUND') showNotice(CASE_MOVED_TITLE, CASE_NOT_FOUND_TEXT)\n", "",
+     ['tests/dock-a19.spec.ts']),
+]
+
+
+def run(tests):
+    r = subprocess.run(['node', 'scripts/test.mjs', '--maxWorkers=1', *tests], cwd=EXT, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    text = r.stdout + r.stderr
+    fails = sorted(set(l.strip() for l in re.findall(r'(?m)^\s*(?:FAIL|×)\s+(.+?)(?:\s+\d+ms)?$', text)))
+    summary = re.findall(r'(?m)^\s+Tests\s+(\d.+)$', text)
+    return (summary[-1].strip() if summary else '?'), fails
+
+
+out = []
+for name, path, a, b, tests in MUTS:
+    if ONLY and not any(k in name for k in ONLY):
+        continue
+    raw = io.open(path, encoding='utf-8', newline='').read()
+    nl = '\r\n' if '\r\n' in raw else '\n'
+    src = raw.replace('\r\n', '\n')
+    assert src.count(a) == 1, (name, src.count(a))
+    try:
+        io.open(path, 'w', encoding='utf-8', newline='').write(src.replace(a, b).replace('\n', nl))
+        summary, fails = run(tests)
+    finally:
+        io.open(path, 'w', encoding='utf-8', newline='').write(raw)
+    out.append(f'## {name}\n文件：{path}；跑：{"、".join(tests)}\n结果：{summary}\n' + '\n'.join('- ' + f for f in fails) + '\n')
+    print(out[-1], flush=True)
+report = '# T17 N55 ② 返修变异（撤回单处修法）\n\n' + '\n'.join(out)
+io.open(sys.argv[1], 'w', encoding='utf-8').write(report)
