@@ -23,7 +23,7 @@ KEY_TIMEOUT = 10.0
 
 
 def _endpoint(app_state, name: str, fn: Callable[[dict], dict], *, query: bool = False,
-              no_input: bool = False, family: str = "api", path_params: bool = False):
+              no_input: bool = False, family: str = "api"):
     """family：契约目录（api 或 core）；日志的模块名也用它。"""
     schema = f"{family}/{name}.schema.json"
 
@@ -179,7 +179,7 @@ def routes(st) -> list[Route]:
         Route("/api/retainer/driver", E("retainer_driver", retainer_driver), methods=["POST"]),
         Route("/api/ocr/jobs", E("ocr_submit", ocr_submit), methods=["POST"]),
         Route("/api/ocr/jobs", E("ocr_list", ocr_list, query=True), methods=["GET"]),
-        Route("/api/ocr/jobs/{job_id}/cancel", E("ocr_cancel", ocr_cancel, path_params=True), methods=["POST"]),
+        Route("/api/ocr/jobs/{job_id}/cancel", E("ocr_cancel", ocr_cancel), methods=["POST"]),
     ]
 
 
