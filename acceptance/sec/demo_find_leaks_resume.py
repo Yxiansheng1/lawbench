@@ -4,7 +4,9 @@
 1. 两处副本 → 不通过；2. 同参数再跑 → 上次已跑完，从头来，仍不通过；3. 删掉副本 → 通过；
 4. 在 d1 放一份新副本、不带 --fresh 再跑 → 不通过（修复前这里会沿用旧结果报"通过"）；
 5. 模拟中断：进度标为没跑完并删掉一批 → 只重扫这一批，沿用的批次列出扫描时刻；
-6. 模拟中断且沿用的批次已超过 24 小时 → 不沿用、重扫。
+6. 模拟中断且沿用的批次已超过 24 小时 → 不沿用、重扫；
+7. 再切一层（--split，模拟 %LOCALAPPDATA%）：big 的顶层文件、s1、s2 各算一批；s2 放副本 → 不通过；
+   模拟中断、删掉 s2 这一批 → 只重扫 s2，其余沿用，仍不通过（命中只在 s2）。
 """
 from __future__ import annotations
 
@@ -20,20 +22,20 @@ HERE = Path(__file__).resolve().parent
 FEAT = "LBFX-CLSD01-P6V3"
 
 
-def run(root: Path, out: Path, title: str) -> None:
+def run(root: Path, out: Path, title: str, extra: tuple = ()) -> None:
     print(f"\n## {title}")
     r = subprocess.run([sys.executable, str(HERE / "find_leaks.py"), "--root", str(root), "--feature", FEAT,
-                        "--out", str(out)], capture_output=True, text=True, encoding="utf-8",
+                        "--out", str(out), *extra], capture_output=True, text=True, encoding="utf-8",
                        env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     for line in r.stdout.splitlines():
-        if line.startswith(("# 运行时间", "证据文件", "特征字符串", "搜索范围", "排除", "共 ")):
+        if line.startswith(("# 运行时间", "证据文件", "特征字符串", "搜索范围", "排除")):
             continue
-        print(line.replace(str(root), "<root>"))
+        print(line.replace(str(root), "<root>").replace(str(out), "<out>"))
     print(f"exit={r.returncode}")
 
 
 def state_file(out: Path) -> Path:
-    return next(out.glob("find_leaks-*/进度.json"))
+    return max(out.glob("find_leaks-*/进度.json"), key=lambda p: p.stat().st_mtime)
 
 
 def main() -> None:
@@ -66,6 +68,23 @@ def main() -> None:
         v["at"] = time.time() - 25 * 3600
     sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
     run(root, out, "6. 模拟中断、沿用的批次都已超过 24 小时 → 全部重扫")
+
+    big = root / "big"
+    for n in ("s1", "s2"):
+        (big / n).mkdir(parents=True)
+    (big / "顶层.txt").write_text("与案件无关", encoding="utf-8")
+    (big / "s1" / "正常.txt").write_text("与案件无关", encoding="utf-8")
+    (big / "s2" / "副本.md").write_text(f"案卷副本 {FEAT}", encoding="utf-8")
+    split = ("--split", str(big), "--fresh")
+    run(root, out, "7a. 再切一层：--split big → big 的顶层文件、big\\s1、big\\s2 各算一批；s2 有副本 → 应不通过", split)
+    sf = state_file(out)
+    st = json.loads(sf.read_text(encoding="utf-8"))
+    st["completed"] = False
+    drop = next(k for k in st["done"] if k.endswith("s2"))
+    del st["done"][drop]
+    sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+    run(root, out, "7b. 模拟中断、删掉 big\\s2 这一批，同参数（去掉 --fresh）续跑 → 只重扫 s2，其余沿用，仍不通过",
+        split[:2])
 
 
 if __name__ == "__main__":

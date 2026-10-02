@@ -7,8 +7,10 @@ python acceptance\\sec\\find_leaks.py --feature LBFX-CRIM01-7Q3Z --case-dir D:\\
   --exclude   额外排除的目录（如测试样本所在的仓库、本工具的证据目录）
   --max-mb    跳过超过此大小的文件（缺省 256），跳过的文件逐个列出
   --fresh     不续跑，从头搜
+  --split     这些目录的顶层子目录各算一批（可多次）；缺省为 %LOCALAPPDATA%、%APPDATA%——它们通常占了用户目录的
+              绝大部分，整个当一批时一次中断要重扫几个小时（T21 重试跑实测）。只切这一层，不往下递归切
 
-按顶层目录分批：每扫完一批打印一行（文件数、命中数、耗时），结果单独写进证据目录下
+按顶层目录分批（%LOCALAPPDATA%、%APPDATA% 再往下切一层，见 --split）：每扫完一批打印一行（文件数、命中数、耗时），结果单独写进证据目录下
 find_leaks-<参数摘要>\批NNNN.txt，进度记在同目录的 进度.json。中断后用同样的参数再运行，
 自动从没扫完的那一批继续；沿用的批次在证据里列出扫描时刻，超过 24 小时的不沿用、重扫。
 一次运行全部扫完后标记为已完成，下一次运行自动从头开始（续跑只对没跑完的那一次有效）。
@@ -74,18 +76,35 @@ def scan_one(p: Path, patterns, max_bytes, acc) -> None:
         acc["denied"] += 1
 
 
-def batches(roots, excluded) -> list[tuple[str, Path, bool]]:
-    """按顶层目录分批：每个根目录下的顶层文件算一批，每个顶层子目录各算一批。返回 (批名, 路径, 是否递归)。"""
+def default_splits() -> list[Path]:
+    return [Path(v) for v in (os.environ.get("LOCALAPPDATA"), os.environ.get("APPDATA")) if v and Path(v).is_dir()]
+
+
+def batches(roots, excluded, splits=()) -> list[tuple[str, Path, bool]]:
+    """按顶层目录分批：每个根目录下的顶层文件算一批，每个顶层子目录各算一批。返回 (批名, 路径, 是否递归)。
+    splits 里的目录（及通往它们的上级目录）再拆开：顶层文件一批、每个子目录一批；splits 自己的子目录不再往下拆。"""
+    splits = [x.resolve() for x in splits]
+
+    def subdirs(d: Path) -> list[Path]:
+        try:
+            return sorted(e for e in d.iterdir() if e.is_dir() and not is_link(e) and not excluded(e))
+        except OSError:
+            return []
+
+    def expand(d: Path, top: bool) -> list[tuple[str, Path, bool]]:
+        is_split = any(d.resolve() == x for x in splits)
+        holds_split = any(d.resolve() in x.parents for x in splits)
+        if not (top or is_split or holds_split):
+            return [(str(d), d, True)]
+        out = [(f"{d}（顶层文件）", d, False)]
+        for sub in subdirs(d):
+            out += [(str(sub), sub, True)] if is_split else expand(sub, False)
+        return out
+
     out = []
     for root in roots:
-        if excluded(root):
-            continue
-        out.append((f"{root}（顶层文件）", root, False))
-        try:
-            subs = sorted(e for e in root.iterdir() if e.is_dir() and not is_link(e) and not excluded(e))
-        except OSError:
-            subs = []
-        out += [(str(d), d, True) for d in subs]
+        if not excluded(root):
+            out += expand(root, True)
     return out
 
 
@@ -109,8 +128,9 @@ def scan_batch(path: Path, recursive: bool, excluded, patterns, max_bytes) -> di
     return acc
 
 
-def run_key(feats, roots, excludes, max_mb) -> str:
-    raw = json.dumps([feats, [str(p) for p in roots], sorted(str(p) for p in excludes), max_mb], ensure_ascii=False)
+def run_key(feats, roots, excludes, max_mb, splits=()) -> str:
+    raw = json.dumps([feats, [str(p) for p in roots], sorted(str(p) for p in excludes), max_mb,
+                      sorted(str(p) for p in splits)], ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -122,6 +142,8 @@ def main() -> None:
     ap.add_argument("--exclude", action="append", default=[], type=Path)
     ap.add_argument("--max-mb", type=int, default=256)
     ap.add_argument("--fresh", action="store_true", help="不续跑，丢掉上次的进度从头搜")
+    ap.add_argument("--split", action="append", type=Path,
+                    help="这些目录的顶层子目录各算一批；缺省 %%LOCALAPPDATA%%、%%APPDATA%%")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     r = Report("find_leaks", "SEC-01、SEC-11；上线必过第 5、21 项", a.out)
@@ -142,7 +164,8 @@ def main() -> None:
     r.log("搜索范围：" + "；".join(str(p) for p in roots))
     r.log("排除（案件目录与指定目录）：" + ("；".join(str(p) for p in excludes) or "无"))
 
-    key = run_key(feats, roots, excludes, a.max_mb)
+    splits = [x.resolve() for x in (a.split if a.split is not None else default_splits())]
+    key = run_key(feats, roots, excludes, a.max_mb, splits)
     batch_dir = r.out_dir / f"find_leaks-{key}"
     state_file = batch_dir / "进度.json"
     batch_dir.mkdir(parents=True, exist_ok=True)
@@ -163,7 +186,7 @@ def main() -> None:
     elif a.fresh:
         r.log("--fresh：从头开始")
     reused = set(state["done"])
-    plan = batches(roots, excluded)
+    plan = batches(roots, excluded, splits)
     r.log(f"共 {len(plan)} 批；每批结果单独写进 {batch_dir}")
     t_all = time.time()
     for i, (name, path, recursive) in enumerate(plan, 1):
