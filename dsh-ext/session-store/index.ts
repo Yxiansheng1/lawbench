@@ -119,7 +119,7 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
     return inFlight
   }
   /**
-   * 立刻按服务刷新一次名单并等它回来（上限 3 秒，见 refreshFromService）。律师打开案件（caseOpen）之后服务才只列新位置，
+   * 立刻按服务刷新一次名单并等它回来（每次问服务最多 3 秒（途中那次另等），之后放下要放下的写入者，每个最多 3 秒，见 refreshFromService 与 router.ts 的 recheck；第七轮复核 B-F4）。律师打开案件（caseOpen）之后服务才只列新位置，
    * Host 在 caseOpen 成功后、挂回游离会话之前调它（第四轮复核 B-F1）。正在途中的那次可能是打开之前发出的，等它完再问一次。
    */
   const refreshNow = async (): Promise<void> => {
@@ -134,9 +134,7 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
    */
   const waiting = new Set<string>()
   const recheckOne = async (id: string): Promise<void> => {
-    const sessions = ctx.get('sessions') as { get(id: string): { seq?: number } | undefined } | undefined
-    const seq = sessions?.get(id)?.seq
-    await router.recheck(id, typeof seq === 'number' ? seq : undefined).catch((e: unknown) => {
+    await router.recheck(id).catch((e: unknown) => {
       log('warn', 'session_store.writer_recheck_failed', { error: (e as Error)?.name ?? 'Error' })
     })
   }
@@ -157,7 +155,13 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
   const router = new SessionRouter(
     (root) => new Jsonl(ctx.isolate('sessionPersistence'), { root, ...(config.compression ? { compression: config.compression } : {}) }),
     roots,
-    { defaultRoot: config.defaultRoot, allowOutsideCase: config.allowOutsideCase ?? false, refresh, firstRefresh: gate, log },
+    {
+      defaultRoot: config.defaultRoot, allowOutsideCase: config.allowOutsideCase ?? false, refresh, firstRefresh: gate, log,
+      liveSeq: (id) => {
+        const seq = (ctx.get('sessions') as { get(id: string): { seq?: number } | undefined } | undefined)?.get(id)?.seq
+        return typeof seq === 'number' ? seq : undefined
+      },
+    },
   )
 
   class LawbenchSessionPersistence extends Base {

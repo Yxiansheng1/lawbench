@@ -10,7 +10,7 @@
 // - 活着的会话所在的案件挪走了（N55 用户定 ②，不搬写入者）：DSH 的会话一旦起过 Agent，Agent 一直攥着打开时拿到的写句柄，
 //   会话的事件经原版实例投给它登记的写入者，路由换不了它的去处。所以这里记下路由交出去的每个案件写句柄属于哪个案件根；
 //   那个根已不在当前名单上、或已不在盘上，这个会话就算"位置失效"（只在内存里判，不落盘、不改登记），由我方 Agent 插件
-//   在下一轮开始时整轮拒绝并提示重启软件。名单刷新后根已不在名单上的，Agent 空闲时放下写入者，旧处不再变（recheck）。
+//   在下一轮开始时整轮拒绝并提示重启软件。名单刷新后根已不在名单上、还在盘上的（复制），Agent 空闲时放下写入者，旧处不再变（recheck）。
 //   重启后会话从新位置打开（见下一条），照常续写。
 // - 搬家（F-CASE-04，方案甲）：记录头里的 cwd 是建会话时的旧路径；从案件实例读出的会话，交给 DSH 的记录头里
 //   cwd 一律换成该案件现在的根，DSH 和工作区登记据此认得它。原版实例的身份核对按"根 + 旧 cwd 的编码"找文件，
@@ -51,6 +51,8 @@ export interface RouterOptions {
   /** 单个案件根 list、stat 的上限（毫秒），超时就跳过（第三轮复核 B-F5）。默认 3000。 */
   caseRootTimeoutMs?: number
   log?: LogFn
+  /** 内存里这个会话此刻的事件数（DSH 会话的 seq）；接回时核对用，不给时不接回。 */
+  liveSeq?: (id: string) => number | undefined
 }
 
 /** 案件里存会话记录的子目录（相对案件根）。 */
@@ -135,22 +137,29 @@ export class SessionRouter {
     const header = this.header(s, h.header)
     const writer = s.caseRoot && h.access === 'write'
     if (!writer && header === h.header) return h
-    let w: Writer | undefined
-    if (writer) {
-      // 记下这个写句柄属于哪个案件根，关闭时去掉（同一会话只记最新交出去的那个）
-      w = { id: h.id, at: s, cur: h, detached: false }
-      this.writers.set(h.id, w)
+    if (!writer) {
+      return new Proxy(h, {
+        get: (target, prop) => {
+          if (prop === 'header') return header
+          const v = Reflect.get(target, prop, target)
+          return typeof v === 'function' ? v.bind(target) : v
+        },
+      })
     }
+    // 记下这个写句柄属于哪个案件根，关闭时去掉（同一会话只记最新交出去的那个）。接回后真正的句柄换成新开的那个（w.cur），
+    // 代理上的方法都转给它（第七轮复核 A-P3-3）
+    const w: Writer = { id: h.id, at: s, cur: h, detached: false }
+    this.writers.set(h.id, w)
     const close = async (): Promise<void> => {
-      if (this.writers.get(w!.id) === w) this.writers.delete(w!.id)
-      await closeHandle(w!.cur)
+      if (this.writers.get(w.id) === w) this.writers.delete(w.id)
+      await closeHandle(w.cur)
     }
     return new Proxy(h, {
-      get: (target, prop) => {
+      get: (_target, prop) => {
         if (prop === 'header') return header
-        if (w && (prop === 'close' || prop === Symbol.asyncDispose)) return close
-        const v = Reflect.get(target, prop, target)
-        return typeof v === 'function' ? v.bind(target) : v
+        if (prop === 'close' || prop === Symbol.asyncDispose) return close
+        const v = Reflect.get(w.cur, prop, w.cur)
+        return typeof v === 'function' ? v.bind(w.cur) : v
       },
     })
   }
@@ -162,6 +171,11 @@ export class SessionRouter {
     return !this.current(w.at) || !existsSync(w.at.caseRoot!)
   }
 
+  /** 要放下：根已不在名单上、但还在盘上（复制后在新位置打开）。根不在盘上（拔盘、搬家）不放下，见 recheck。 */
+  private toDetach(w: Writer): boolean {
+    return !w.detached && !this.current(w.at) && existsSync(w.at.caseRoot!)
+  }
+
   /**
    * 这个会话的写句柄所属案件根已不在当前名单上、或已不在盘上，或写入者已放下（N55 ②"位置失效"）：我方 Agent 插件据此拒绝下一轮。
    * 名单只在刷新成功时换，所以刷新失败不会误判；根回到名单、盘插回后解除（放下过的见 recheck）。
@@ -171,22 +185,25 @@ export class SessionRouter {
     return !!w && (w.detached || this.invalid(w))
   }
 
-  /** 名单刷新后要 recheck 的会话：根已不在名单上、还没放下的；放下了、根又回到名单且在盘上的。 */
+  /** 名单刷新后要 recheck 的会话：要放下的；放下了、根又回到名单且在盘上的。 */
   writersToRecheck(): string[] {
-    return [...this.writers.values()].filter((w) => (w.detached ? !this.invalid(w) : !this.current(w.at))).map((w) => w.id)
+    return [...this.writers.values()].filter((w) => (w.detached ? !this.invalid(w) : this.toDetach(w))).map((w) => w.id)
   }
 
   /**
    * 名单刷新成功后由会话存储插件调（这个会话的 Agent 空闲时）。DSH 被拒的一轮也会把律师那句话和"一轮被拦下"记进会话
-   * （桌面端实测与 live-writer.spec），活着的写入者会把它们写进旧处；所以根已不在名单上时先放下写入者：关掉真正的句柄
-   * （原版把缓冲的事件落完、注销写入者），之后这个会话的事件哪里都不写，旧处不再变。根回到名单（重新打开原位置、盘插回）
-   * 且盘上记录与内存里的会话一样长时，在原处重新以写方式打开接着写；不一样长（放下期间又被拒过一轮，这几条只在内存里）
-   * 就一直算位置失效，重启后从盘上读。只是盘暂时不在、名单没变时不放下：原版写不进去会留着缓冲下次再写，插回后接上。
-   * @param eventCount - 内存里这个会话的事件数（DSH 会话的 seq）；不知道时不重新打开。
+   * （live-writer.spec），活着的写入者会把它们写进旧处；所以根已不在名单上、还在盘上（复制后在新位置打开）时先放下写入者：
+   * 关掉真正的句柄（原版把缓冲的事件落完、注销写入者），之后这个会话的事件哪里都不写，旧处不再变。关最多等 3 秒（盘慢、
+   * 网络盘挂住），到时没关完就让它在后台接着关，照样记为已放下（第七轮复核 B-F4）。
+   * 根不在盘上（拔盘、搬家）不放下（第七轮复核 B-F1）：此时关句柄落不了盘，原版照样注销，缓冲里的事件（比如拔盘时正在跑的
+   * 那一轮的回答）就永久丢了；留着写入者，原版写不进去会留着缓冲下次再写，插回后接上。
+   * 根回到名单（重新打开原位置）且盘上记录与内存里的会话一样长时，在原处重新以写方式打开接着写；内存事件数在读完盘上记录
+   * 之后再取（第七轮复核 A-P2-1：取早了，取数之后、登记新写入者之前律师发的那句被原版丢掉，比对却判一样长，接回后序号
+   * 接不上，整段对话静默不落盘）。不一样长（放下期间又被拒过一轮，这几条只在内存里）就一直算位置失效，重启后从盘上读。
    */
-  recheck(id: string, eventCount: number | undefined): Promise<void> {
+  recheck(id: string): Promise<void> {
     // 同一会话同时只做一次（打开案件后的刷新与后台刷新可能同时触发），后来的排在后面
-    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(() => this.recheckOnce(id, eventCount))
+    const run = (this.rechecking.get(id) ?? Promise.resolve()).then(() => this.recheckOnce(id))
     const tail = run.catch(() => undefined)
     this.rechecking.set(id, tail)
     void tail.then(() => { if (this.rechecking.get(id) === tail) this.rechecking.delete(id) })
@@ -195,19 +212,28 @@ export class SessionRouter {
 
   private readonly rechecking = new Map<string, Promise<void>>()
 
-  private async recheckOnce(id: string, eventCount: number | undefined): Promise<void> {
+  private async recheckOnce(id: string): Promise<void> {
     const w = this.writers.get(id)
     if (!w) return
-    if (!w.detached && !this.current(w.at)) {
-      // 关完再记"已放下"：同时来的另一次 recheck 排在这次后面，看到的是关完之后的状态（打开案件后要等它关完再返回）
-      await closeHandle(w.cur).catch(() => undefined)
+    const fail = (event: string, error: unknown): void => {
+      // 只记元数据：第几个案件根、错误名
+      this.opts.log?.('warn', event, { index: w.at.index, error: (error as Error)?.name ?? 'Error' })
+    }
+    if (this.toDetach(w)) {
+      // 关完（或到时）再记"已放下"：同时来的另一次 recheck 排在这次后面，看到的是关完之后的状态（打开案件后要等它再返回）
+      await within(closeHandle(w.cur), this.opts.caseRootTimeoutMs ?? 3000).catch((e: unknown) => fail('session_store.writer_detach_failed', e))
       w.detached = true
       this.opts.log?.('info', 'session_store.writer_detached', { index: w.at.index })
-    } else if (w.detached && !this.invalid(w) && eventCount !== undefined) {
-      const fresh = await w.at.backend.open(id, 'write').catch(() => undefined)
-      if (!fresh) return
-      const n = await (fresh.read as () => Promise<{ events: unknown[] }>).call(fresh).then((r) => r.events.length, () => -1)
-      if (n !== eventCount || this.writers.get(id) !== w) { await closeHandle(fresh).catch(() => undefined); return }
+    } else if (w.detached && !this.invalid(w) && this.opts.liveSeq) {
+      let fresh: Handle
+      try {
+        fresh = await w.at.backend.open(id, 'write')
+      } catch (e) { fail('session_store.writer_reattach_failed', e); return }
+      let n = -1
+      try {
+        n = (await (fresh.read as () => Promise<{ events: unknown[] }>).call(fresh)).events.length
+      } catch (e) { fail('session_store.writer_reattach_failed', e) }
+      if (n !== this.opts.liveSeq(id) || this.writers.get(id) !== w) { await closeHandle(fresh).catch(() => undefined); return }
       w.cur = fresh
       w.detached = false
       this.opts.log?.('info', 'session_store.writer_reattached', { index: w.at.index })

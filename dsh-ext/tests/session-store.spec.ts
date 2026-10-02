@@ -37,6 +37,12 @@ class FakeBackend implements Backend {
   /** 读取永不返回（网络盘挂住）。 */
   hang = false
   flushed = 0
+  /** 关句柄永不返回（盘慢、网络盘挂住）。 */
+  hangClose = false
+  /** 句柄的 read 按原版返回 { events }（接回核对用）；不设时返回编号（看代理的 this 绑定）。 */
+  eventRead = false
+  /** 交出去的第几个句柄。 */
+  private opened = 0
   constructor(public root: string) {}
   async create(h: Header) { this.sessions.set(h.id, h); return this.h(h) }
   async open(id: string, access: 'read' | 'write') {
@@ -54,11 +60,18 @@ class FakeBackend implements Backend {
     if (this.failList) throw Object.assign(new Error('EIO'), { code: 'EIO' })
     return [...this.sessions.values()].map((header) => ({ header, revision: 'r' }))
   }
-  private h(header: Header): Handle { return { id: header.id, header, read: function (this: Handle) { return this.id }, close: async () => {} } }
+  private h(header: Header): Handle {
+    const b = this
+    return {
+      id: header.id, header, serial: ++this.opened,
+      read: function (this: Handle) { return b.eventRead ? Promise.resolve({ events: [] }) : this.id },
+      close: () => (b.hangClose ? new Promise<void>(() => {}) : Promise.resolve()),
+    }
+  }
 }
 
 type Gate = { done(): boolean; wait(): Promise<boolean> }
-function fakeRouter(roots: string[], opts: { allowOutsideCase?: boolean; refresh?: (r: CaseRoots) => void | Promise<void>; firstRefresh?: Gate; timeoutMs?: number } = {}) {
+function fakeRouter(roots: string[], opts: { allowOutsideCase?: boolean; refresh?: (r: CaseRoots) => void | Promise<void>; firstRefresh?: Gate; timeoutMs?: number; liveSeq?: (id: string) => number | undefined } = {}) {
   const made: FakeBackend[] = []
   const caseRoots = new CaseRoots()
   caseRoots.replace(roots.map((root) => ({ root, exists: true })))
@@ -69,6 +82,7 @@ function fakeRouter(roots: string[], opts: { allowOutsideCase?: boolean; refresh
     refresh: opts.refresh ? async () => opts.refresh!(caseRoots) : undefined,
     firstRefresh: opts.firstRefresh,
     caseRootTimeoutMs: opts.timeoutMs,
+    liveSeq: opts.liveSeq,
     log: (_l, e, m) => { logs.push([e, m]) },
   })
   const backendOf = (root: string) => made.find((b) => b.root === root)!
@@ -336,6 +350,33 @@ describe('第三轮复核返修：路由', () => {
       await (w.close as () => Promise<void>)()
       expect(router.caseMoved('s1')).toBe(false)
     } finally { for (const d of [OLD, NEW, GONE]) rmSync(d, { recursive: true, force: true }) }
+  })
+
+  it('第七轮 B-F4、A-P3-2、A-P3-3：放下时关句柄挂住 → 到时照样记已放下、记一条 writer_detach_failed；接回后代理方法转给新句柄', async () => {
+    const OLD = realpathSync(mkdtempSync(join(tmpdir(), 'lb-detach-'))); const NEW = OLD + '-新'
+    mkdirSync(NEW)
+    try {
+      const { router, backendOf, caseRoots, logs } = fakeRouter([OLD], { allowOutsideCase: false, timeoutMs: 100, liveSeq: () => 0 })
+      await router.create(H('s1', OLD))
+      const store = backendOf(join(OLD, '工作区', '会话'))
+      store.eventRead = true
+      const w = (await router.open('s1', 'write')) as Handle & { serial: number }
+      const first = w.serial
+      store.hangClose = true
+      caseRoots.replace([{ root: NEW, exists: true }]) // 复制后在新位置打开：根不在名单上、还在盘上
+      expect(router.writersToRecheck()).toEqual(['s1'])
+      const t0 = Date.now()
+      await router.recheck('s1')
+      expect(Date.now() - t0).toBeLessThan(2000)
+      expect([router.caseMoved('s1'), router.writersToRecheck()]).toEqual([true, []])
+      expect(logs.find(([e]) => e === 'session_store.writer_detach_failed')?.[1]).toEqual({ index: 1, error: 'Error' })
+      // 根回到名单：一样长（盘上 0 条、内存 0 条）→ 在原处接回，代理上的方法转给新开的句柄
+      store.hangClose = false
+      caseRoots.replace([{ root: OLD, exists: true }])
+      await router.recheck('s1')
+      expect(router.caseMoved('s1')).toBe(false)
+      expect(w.serial).toBeGreaterThan(first)
+    } finally { for (const d of [OLD, NEW]) rmSync(d, { recursive: true, force: true }) }
   })
 
   it('A-P3-3：默认根里已有的旧会话只读，续写拒绝并给同一句中文说明（开关打开时照常）', async () => {

@@ -181,7 +181,7 @@ export class LawbenchRemote {
 
   /**
    * 打开案件后把游离会话挂回该案件的工作区（T17 第三轮复核 B-F2），见 attach-sessions.ts。界面等它做完再打开工作区
-   * （先刷新名单，上限 3 秒；再列一次会话，挂住的案件根每个最多 3 秒），不看结果、不提示；出错只记日志。
+   * （先刷新名单：每次问服务最多 3 秒（途中那次另等），之后放下要放下的写入者，每个最多 3 秒；再列一次会话，挂住的案件根每个最多 3 秒），不看结果、不提示；出错只记日志。
    * @param request - { root }：刚作为工作区打开的案件根。
    */
   async attachCaseSessions(request: unknown): Promise<ApiResult> {
@@ -398,7 +398,7 @@ for (const route of API_ROUTES) {
   Object.defineProperty(LawbenchRemote.prototype, route.method, {
     configurable: true, writable: true,
     value: route.method === 'caseOpen'
-      // 打开（或新建）案件成功后服务才把它列为现在的位置：请会话存储立刻按服务刷新案件根名单并等它回来（上限 3 秒），
+      // 打开（或新建）案件成功后服务才把它列为现在的位置：请会话存储立刻按服务刷新案件根名单并等它回来（每次问服务最多 3 秒（途中那次另等），之后放下要放下的写入者，每个最多 3 秒），
       // 接下来界面打开工作区、挂回会话、律师续写都按新名单走（T17 第四轮复核 B-F1）
       ? async function (this: LawbenchRemote, request: unknown) {
         const r = await this.callApi(route, request)

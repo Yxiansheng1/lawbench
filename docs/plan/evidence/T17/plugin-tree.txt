@@ -1422,9 +1422,13 @@
           includeDefaultRoots: false
           watch: false
           customSkillDirs: !!js >-
-            [process.getBuiltinModule('node:path').join(process.env.ProgramData
-            ?? 'C:\\ProgramData', 'lawbench', 'skills'),
+            ((p, fs) => { const inst = p.dirname(process.execPath); const
+            packaged = fs.existsSync(p.join(inst, 'resources', 'app.asar'));
+            return [p.join(process.env.ProgramData ?? 'C:\\ProgramData',
+            'lawbench', 'skills'), packaged ? p.join(inst, 'skills') :
             process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)
+            })(process.getBuiltinModule('node:path'),
+            process.getBuiltinModule('node:fs'))
       - id: tool-skill
         name: '@deepseek-ai/dsh-tool-skill'
       - id: tool-ask-user

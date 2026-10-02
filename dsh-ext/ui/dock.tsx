@@ -19,7 +19,7 @@ const WRITE_DELAY_MS = 500
 export const INPUT_CHANGED_TEXT = '输入材料已变化，请重新选择'
 /** 上一轮因会话所在的案件文件夹已不在原处被拒（N55 ②，Agent 插件记 CASE_MOVED）。 */
 export const CASE_MOVED_TITLE = '这条消息没有发出'
-export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在原来的位置。请重启软件后在这个对话里继续，或新开一个对话。'
+export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在原来的位置。刚才这句没有发出，重启软件后请在这个对话里重新发送这句话，或新开一个对话。'
 /** 上一轮取任务时服务说这个对话不属于任何已打开的案件（/core/task/begin 报 CASE_NOT_FOUND，第六轮复核 A-P2-3 / B-F2）。 */
 export const CASE_NOT_FOUND_TEXT = '没有找到这个对话所在的案件。请回到首页重新打开案件；如果案件文件夹刚挪过位置，请重启软件后在这个对话里继续，或新开一个对话。'
 /** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */

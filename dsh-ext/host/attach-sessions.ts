@@ -44,7 +44,7 @@ export interface RegistryLike {
 }
 export interface PersistenceLike {
   list(): Promise<ReadonlyArray<{ header: HeaderLike }>>
-  /** 我方会话存储加的：按服务刷新案件根名单并等它回来（上限 3 秒）。 */
+  /** 我方会话存储加的：按服务刷新案件根名单并等它回来（每次问服务最多 3 秒（途中那次另等），之后放下要放下的写入者，每个最多 3 秒）。 */
   refreshCaseRoots?(): Promise<void>
 }
 type LogFn = (level: 'info' | 'warn' | 'error', event: string, meta?: Record<string, unknown>) => void

@@ -235,7 +235,7 @@ it('盘暂时不在、名单没变：这一轮拒绝（原版写不进去留着�
   expect(await readAfterRestart(join(tmp, 'Local', 'lawbench'), join(tmp, 'dsh-home', 'sessions'), id)).toContain('BACK-AGAIN')
 }, 60000)
 
-it('盘拔出期间名单刷新过（服务报 exists:false，写入者放下）→ 插回、名单刷新（根回到名单）→ 在原处接回，能续写', async () => {
+it('盘拔出期间名单刷新过（服务报 exists:false；根不在盘上不放下）→ 插回、名单刷新 → 解除，能续写', async () => {
   const { appData, home, oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
   const away = oldR + '-拔出'
   renameSync(oldR, away)
@@ -246,29 +246,112 @@ it('盘拔出期间名单刷新过（服务报 exists:false，写入者放下）
   expect(store.caseMoved(id)).toBe(true) // 名单还没刷新：仍算失效
   await store.refreshCaseRoots()
   expect(store.caseMoved(id)).toBe(false)
-  expect(await say(ctx, h.agent, adapter, 'REATTACHED')).toBe(1)
-  expect([notices.size, has(oldR, 'REATTACHED')]).toEqual([0, 1])
+  expect(await say(ctx, h.agent, adapter, 'BACK-AGAIN')).toBe(1)
+  expect([notices.size, has(oldR, 'BACK-AGAIN')]).toEqual([0, 1])
   await ctx.fiber.dispose()
-  expect(await readAfterRestart(appData, home, id)).toContain('REATTACHED')
+  expect(await readAfterRestart(appData, home, id)).toContain('BACK-AGAIN')
 }, 60000)
 
-it('写入者放下后又被拒过一轮（这几条只在内存里）→ 根回到名单：不接回，仍提示重启；重启后照常', async () => {
+it('盘拔出期间名单刷新过、又被拒过一轮 → 插回、名单刷新：解除，被拒那一轮作为"被拦下"落回原处，能续写（第七轮复核 B-F1）', async () => {
   const { appData, home, oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
   const away = oldR + '-拔出'
   renameSync(oldR, away)
   const store = ctx.sessionPersistence as { refreshCaseRoots(): Promise<void>; caseMoved(id: unknown): boolean }
   await store.refreshCaseRoots()
-  expect(await say(ctx, h.agent, adapter, 'DROPPED')).toBe(0)
+  expect(await say(ctx, h.agent, adapter, 'WHILE-AWAY')).toBe(0)
+  expect(notices.get(String(id))).toBe('CASE_MOVED')
   renameSync(away, oldR)
-  const oldHash = hashDir(oldR)
   await store.refreshCaseRoots()
+  expect(store.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'AFTER-BACK')).toBe(1)
+  expect([has(oldR, 'WHILE-AWAY'), has(oldR, 'AFTER-BACK')]).toEqual([1, 1])
+  await ctx.fiber.dispose()
+  const evs = await readAfterRestart(appData, home, id)
+  expect([evs.includes('WHILE-AWAY'), evs.includes('AFTER-BACK')]).toEqual([true, true])
+}, 60000)
+
+it('E2（复核员 B 第七轮）盘在一轮当中拔出、一轮结束后名单刷新 → 插回：这一轮的回答保住，解除，能续写，重启后看得到', async () => {
+  const slow = { chunks: textResponse('REPLY-E2-UNPLUG'), delayMs: 1500 }
+  const { appData, home, oldR, ctx, notices, adapter, id, h } = await prepare([textResponse('a1'), slow, textResponse('a3')])
+  const away = oldR + '-拔出'
+  const p = idle(ctx, h.agent); h.agent.followup(user('RUN-E2'))
+  await sleep(300)
+  renameSync(oldR, away) // 拔盘（这一轮还在跑）
+  await p
+  await sleep(1200)
+  const store = ctx.sessionPersistence as { refreshCaseRoots(): Promise<void>; caseMoved(id: unknown): boolean }
+  await store.refreshCaseRoots() // 服务报 exists:false，名单去掉；Agent 已空闲
   expect(store.caseMoved(id)).toBe(true)
+  renameSync(away, oldR) // 插回
+  await store.refreshCaseRoots()
+  expect(store.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'AFTER-E2')).toBe(1)
+  expect([notices.has(String(id)), has(oldR, 'REPLY-E2-UNPLUG'), has(oldR, 'AFTER-E2')]).toEqual([false, 1, 1])
+  await ctx.fiber.dispose()
+  const evs = await readAfterRestart(appData, home, id)
+  expect([evs.includes('RUN-E2'), evs.includes('REPLY-E2-UNPLUG'), evs.includes('AFTER-E2')]).toEqual([true, true, true])
+}, 60000)
+
+it('复制 → 新位置打开（写入者放下）→ 重新打开原位置（根回到名单、一样长）→ 在原处接回，能续写，新位置不变', async () => {
+  const { appData, home, oldR, newR, ctx, api, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  cpSync(oldR, newR, { recursive: true })
+  expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
+  expect(ctx.sessionPersistence.caseMoved(id)).toBe(true)
+  const newHash = hashDir(newR)
+  expect((await api.caseOpen({ path: oldR, template: null })).ok).toBe(true)
+  expect(ctx.sessionPersistence.caseMoved(id)).toBe(false)
+  expect(await say(ctx, h.agent, adapter, 'REATTACHED')).toBe(1)
+  expect([notices.size, has(oldR, 'REATTACHED'), hashDir(newR) === newHash]).toEqual([0, 1, true])
+  await ctx.fiber.dispose()
+  expect(await readAfterRestart(appData, home, id)).toContain('REATTACHED')
+}, 60000)
+
+it('复制 → 新位置打开（放下）→ 又被拒过一轮（这几条只在内存里）→ 重新打开原位置：不接回，仍提示重启，两处不变；重启后照常', async () => {
+  const { appData, home, oldR, newR, ctx, api, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('a2')])
+  cpSync(oldR, newR, { recursive: true })
+  expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
+  expect(await say(ctx, h.agent, adapter, 'DROPPED')).toBe(0)
+  expect((await api.caseOpen({ path: oldR, template: null })).ok).toBe(true)
+  expect(ctx.sessionPersistence.caseMoved(id)).toBe(true)
+  const oldHash = hashDir(oldR); const newHash = hashDir(newR)
   notices.clear()
   expect(await say(ctx, h.agent, adapter, 'STILL-BLOCKED')).toBe(0)
-  expect([notices.get(String(id)), hashDir(oldR) === oldHash]).toEqual(['CASE_MOVED', true])
+  expect([notices.get(String(id)), hashDir(oldR) === oldHash, hashDir(newR) === newHash]).toEqual(['CASE_MOVED', true, true])
   await ctx.fiber.dispose()
   const r = await restartAndSay(appData, home, id, 'AFTER-RESTART')
-  expect([r.cwd, r.calls, r.notice, has(oldR, 'AFTER-RESTART')]).toEqual([oldR, 1, undefined, 1])
+  expect([r.cwd, r.calls, r.notice, has(oldR, 'AFTER-RESTART'), has(oldR, 'DROPPED')]).toEqual([oldR, 1, undefined, 1, 0])
+}, 60000)
+
+it('X2（复核员 A 第七轮）接回核对内存事件数之后律师立刻发一句：不误接回、序号接得上，这句和回答都落盘', async () => {
+  const { appData, home, oldR, newR, ctx, api, notices, adapter, id, h } = await prepare([textResponse('a1'), textResponse('X2-REPLY')])
+  cpSync(oldR, newR, { recursive: true })
+  expect((await api.caseOpen({ path: newR, template: null })).ok).toBe(true)
+  // 会话存储取内存事件数时（取完之后的下一个微任务里）律师发一句
+  const sessions = (ctx as any).sessions
+  const get = sessions.get.bind(sessions)
+  let armed = true
+  const p = idle(ctx, h.agent)
+  sessions.get = (sid: unknown) => {
+    const r = get(sid)
+    if (armed && sid === id) { armed = false; queueMicrotask(() => h.agent.followup(user('X2-RACE'))) }
+    return r
+  }
+  expect((await api.caseOpen({ path: oldR, template: null })).ok).toBe(true)
+  sessions.get = get
+  expect(armed).toBe(false)
+  await p
+  await sleep(1200)
+  await ctx.sessionPersistence.flush() // 序号接不上时这里报"flush failed"
+  if (ctx.sessionPersistence.caseMoved(id)) {
+    expect(notices.get(String(id))).toBe('CASE_MOVED') // 没接回：被拒且有提示，不是静默
+  } else {
+    expect([has(oldR, 'X2-RACE'), has(oldR, 'X2-REPLY')]).toEqual([1, 1])
+    await ctx.fiber.dispose()
+    const evs = await readAfterRestart(appData, home, id)
+    expect([evs.includes('X2-RACE'), evs.includes('X2-REPLY')]).toEqual([true, true])
+    return
+  }
+  await ctx.fiber.dispose()
 }, 60000)
 
 it('搬家后服务还没列出新位置（律师没在新位置打开）：根已不在盘上，整轮拒绝，哪里都不写', async () => {
