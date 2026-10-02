@@ -580,6 +580,59 @@ def test_text_layer_line_starting_with_mark_not_split():
     assert merge.merge_text(new, {2: "识别出的第二页"})[0] == new          # 再合并一次不变
 
 
+# ---------------------------------------------------------------- N60 ②：水印重复行折叠
+
+WM = "仅供办案使用"
+WM_BODY = ("讯问笔录（第1次）\n\n时间：2026年1月15日14时20分至16时05分\n\n问：你是否认识吴某？\n\n"
+           "答：认识，是在网上认识的，她说想贷款。\n\n编号：LBFX-CRIM01-7Q3Z")
+# 真机补测（evidence\T12\real-395.txt）的样子：正文后水印重复 790 行、行间空一行，末尾截断成半行
+WM_SAMPLE = WM_BODY + "\n\n" + "\n\n".join([WM] * 790) + "\n\n仅供"
+
+
+def test_fold_watermark_run_into_one_line_and_note():
+    from lawbench.ocr import merge
+    out = merge.fold_repeats(WM_SAMPLE)
+    assert out == WM_BODY + "\n\n" + WM + "\n（识别结果中该行重复 790 次，已折叠）\n\n仅供"
+    assert merge.fold_repeats(out) == out                               # 已折过的再折不变
+
+
+@pytest.mark.parametrize("n, folded", [(5, False), (6, True)])
+def test_fold_threshold_is_more_than_five(n, folded):
+    from lawbench.ocr import merge
+    md = "正文\n" + "\n".join([WM] * n) + "\n结尾"
+    out = merge.fold_repeats(md)
+    if folded:
+        assert out == f"正文\n{WM}\n（识别结果中该行重复 {n} 次，已折叠）\n结尾"
+    else:
+        assert out == md
+
+
+def test_fold_leaves_scattered_long_and_short_table_repeats():
+    from lawbench.ocr import merge
+    scattered = "\n".join(f"{WM}\n第{i}行正文" for i in range(10))          # 散落的水印：每两行夹一行正文
+    assert merge.fold_repeats(scattered) == scattered
+    table = "| 问题 | 回答 |\n|---|---|\n" + "\n".join(["| 是 |"] * 5) + "\n是\n是\n是"   # 表格里合法的重复短行
+    assert merge.fold_repeats(table) == table
+    long = "\n".join(["本页内容系从原卷复印且与原件核对无误特此说明"] * 8)             # 超过 20 字的长行重复不折
+    assert merge.fold_repeats(long) == long
+
+
+def test_watermark_folded_in_material_text_raw_result_kept_and_searchable(env, fake):
+    """395 返回正文 + 790 行水印：识别页\\<编号>\\<页号>.md 原样保留，材料文本里只剩一行加注；检索正文照常命中。"""
+    fake.markdown = WM_SAMPLE
+    m = env.material("讯问笔录")
+    env.st.ocr.start()
+    env.wait(env.submit(m["material_id"], [1])["job_id"], ("done",))
+    raw = (env.root / "工作区" / "材料" / "识别页" / m["material_id"] / "1.md").read_text(encoding="utf-8")
+    assert raw.count(WM) == 790 and raw.strip() == WM_SAMPLE
+    text = env.text(m)
+    assert f"【第1页】\n> 识别所得\n{WM_BODY}\n\n{WM}\n（识别结果中该行重复 790 次，已折叠）\n\n仅供" in text
+    assert text.count(WM) == 1
+    hits = ok(env.client.get("/api/search", params={"case_id": env.case_id, "q": "网上认识"}),
+              "search")["hits"]
+    assert len(hits) == 1 and hits[0]["is_ocr"] and "网上认识" in hits[0]["snippet"]
+
+
 # ---------------------------------------------------------------- T12 第二轮复核 P2-A：在途页写库失败不留孤页
 
 def page_rows(root, job_id):
