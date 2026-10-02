@@ -1,0 +1,26 @@
+Skill 根目录：D:\lawbench-B\skills
+胶囊 14 个，Skill 18 个
+
+共用规则：全部一致
+
+✘ 错误 18 条：
+  - [contract-review] owner（责任律师）未指定
+  - [pre-issue-check] owner（责任律师）未指定
+  - [doc-revise] owner（责任律师）未指定
+  - [contract-draft] owner（责任律师）未指定
+  - [litigation-docs] owner（责任律师）未指定
+  - [criminal-reading-notes] owner（责任律师）未指定
+  - [criminal-evidence-review] owner（责任律师）未指定
+  - [sentence-calc] owner（责任律师）未指定
+  - [criminal-applications] owner（责任律师）未指定
+  - [defense-opinion] owner（责任律师）未指定
+  - [cross-exam-opinion] owner（责任律师）未指定
+  - [general-drafting] owner（责任律师）未指定
+  - [tender-review] owner（责任律师）未指定
+  - [bid-drafting] owner（责任律师）未指定
+  - [case-archiving] owner（责任律师）未指定
+  - [case-reading-notes] owner（责任律师）未指定
+  - [case-wiki-build] owner（责任律师）未指定
+  - [legal-workflow] owner（责任律师）未指定
+
+结果：未通过
