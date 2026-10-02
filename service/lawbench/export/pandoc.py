@@ -51,9 +51,11 @@ def template_path(name: str, settings: dict) -> pathlib.Path:
 
 _INLINE = re.compile(r"(!?)\[((?:[^\[\]\\]|\\.|!\[(?:[^\[\]\\]|\\.)*\]\([^()\n]*\))*)\]\(\s*(?:<([^<>\n]*)>|([^()\s<>]*(?:\([^()\s]*\)[^()\s<>]*)*))"
                      r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)")
-_HTML_A = re.compile(r"<a\b[^>]*?\bhref\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a\s*>", re.I | re.S)
-_HTML_SRC = re.compile(r"<(?:img|source|iframe|embed|object)\b[^>]*?\b(?:src|data)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))[^>]*>",
-                       re.I)
+# 原始 HTML：开始标签、结束标签一遍扫出来再配对（T15 第二轮记录项 5：原来的 <a …>(.*?)</a> 遇到大量不闭合的 <a>
+# 耗时按平方增长）。[^>]* 遇到 > 就停，整体线性
+_HTML_TAG = re.compile(r"<(/?)(a|iframe|object|img|source|embed)\b([^>]*)>", re.I)
+_HTML_ATTR = re.compile(r"\b(?:href|src|data)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))", re.I)
+_PAIRED = ("a", "iframe", "object")
 _AUTO = re.compile(r"<([^<>\s]+)>")
 _REFDEF = re.compile(r"^ {0,3}\[([^\]]+)\]:[ \t]*<?(\S+?)>?(?:[ \t]+.*)?$", re.M)
 _REFUSE = re.compile(r"(!?)\[((?:[^\[\]\\]|\\.)*)\]\[([^\]]*)\]")
@@ -78,10 +80,7 @@ def strip_workspace_links(md: str) -> str:
     while True:                                     # 图片外再套链接 [![图](工作区/a)](工作区/b)：替换到不再变（P3-4）
         new = _INLINE.sub(lambda m: m.group(2) if _is_workspace(m.group(3) if m.group(3) is not None
                                                                   else m.group(4)) else m.group(0), md)
-        new = _HTML_A.sub(lambda m: m.group(4) if _is_workspace(next(g for g in m.group(1, 2, 3) if g is not None))
-                          else m.group(0), new)
-        new = _HTML_SRC.sub(lambda m: "" if _is_workspace(next(g for g in m.group(1, 2, 3) if g is not None))
-                            else m.group(0), new)
+        new = _strip_html(new)
         if new == md:
             break
         md = new
@@ -92,6 +91,42 @@ def strip_workspace_links(md: str) -> str:
         return m.group(2) if target is not None and _is_workspace(target) else m.group(0)
     md = _REFUSE.sub(ref_use, md)
     return _AUTO.sub(lambda m: "" if _looks_path(m.group(1)) and _is_workspace(m.group(1)) else m.group(0), md)
+
+
+def _strip_html(md: str) -> str:
+    """原始 HTML 里指向工作区的：<a href> 去掉开始和配对的结束标签、留链接文字（不闭合的只去开始标签）；
+    <iframe>/<object> 连同里面的内容和结束标签整段去掉（记录项 6）；<img>/<source>/<embed> 去掉标签。"""
+    cut: list[tuple[int, int]] = []
+    stack: dict[str, list] = {t: [] for t in _PAIRED}
+    for m in _HTML_TAG.finditer(md):
+        closing, tag = m.group(1) == "/", m.group(2).lower()
+        if closing:
+            if tag in stack and stack[tag]:
+                start, end, hit = stack[tag].pop()
+                if hit and tag == "a":
+                    cut += [(start, end), (m.start(), m.end())]
+                elif hit:
+                    cut.append((start, m.end()))
+            continue
+        attr = _HTML_ATTR.search(m.group(3))
+        hit = bool(attr) and _is_workspace(next(g for g in attr.groups() if g is not None))
+        if tag in _PAIRED:
+            stack[tag].append((m.start(), m.end(), hit))
+        elif hit:
+            cut.append((m.start(), m.end()))
+    for tag in _PAIRED:                                # 没有结束标签的：只去开始标签
+        cut += [(s, e) for s, e, hit in stack[tag] if hit]
+    if not cut:
+        return md
+    out, pos = [], 0
+    for s, e in sorted(cut):
+        if s < pos:                                    # 已在整段去掉的 iframe / object 里
+            pos = max(pos, e)
+            continue
+        out.append(md[pos:s])
+        pos = e
+    out.append(md[pos:])
+    return "".join(out)
 
 
 def _looks_path(s: str) -> bool:

@@ -382,7 +382,7 @@ W_INS = (b'<w:ins w:id="901" w:author="\xe5\xaf\xb9\xe6\x96\xb9" w:date="2026-01
         rb"(<w:body><w:p\b[^>]*>)", rb'\1<w:pPr><w:pPrChange w:id="903" w:author="x" w:date="2026-01-01T00:00:00Z">'
         rb"<w:pPr/></w:pPrChange></w:pPr>", b, count=1)),
 ])
-def test_revisions_anywhere_rejected(part, fn):
+def test_revisions_anywhere_rejected(part, fn, tmp_path):
     """P2-2：页眉、页脚、正文格式修订、段落属性修订都算"已有修订"，整份拒绝；保存修改清单时也同口径。"""
     data = _patched(CONTRACT.read_bytes(), part, fn)
     assert zipfile.ZipFile(io.BytesIO(data)).read(part) != zipfile.ZipFile(CONTRACT).read(part)   # 真的改进去了
@@ -390,6 +390,10 @@ def test_revisions_anywhere_rejected(part, fn):
         R.generate(data, [dict(id=1, comment="x", **IN_SCOPE[0])])
     assert el.has_revisions(zipfile.ZipFile(io.BytesIO(data)))
     assert not el.has_revisions(zipfile.ZipFile(CONTRACT))
+    p = tmp_path / "有修订.docx"                       # 保存修改清单时同口径（记录项 2）
+    p.write_bytes(data)
+    _items, revised, _extras = el._paragraphs(p)
+    assert revised
 
 
 def test_bad_control_chars_go_manual():
@@ -460,3 +464,65 @@ def test_run_text_must_equal_judged_text(monkeypatch):
     monkeypatch.setattr(R, "_slot_text", lambda slots: "对不上")
     out, applied, manual = R.generate(CONTRACT.read_bytes(), [dict(id=1, comment="x", **IN_SCOPE[0])])
     assert applied == [] and manual == [{"id": 1, "reason": R.R_STRUCTURE}]
+
+
+# ---------------------------------------------------------------- 第二轮复核记录项（0110 注记）
+
+def _link_doc(kind: str) -> bytes:
+    """一段：前文 + 链接文字"附件清单" + （链接末尾后跟书签结束 / 校对标记）+ 后文。kind：hyperlink / fldsimple / complex。"""
+    d = pydocx.Document()
+    p = d.add_paragraph()
+    p.add_run("详见")
+    tail = '<w:bookmarkEnd w:id="7"/><w:proofErr w:type="spellEnd"/>'
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' \
+         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    if kind == "hyperlink":
+        xml = f'<w:hyperlink {ns} r:id="rId99"><w:r><w:t>附件清单</w:t></w:r>{tail}</w:hyperlink>'
+    elif kind == "fldsimple":
+        xml = f'<w:fldSimple {ns} w:instr=\' HYPERLINK "http://127.0.0.1:9/x" \'><w:r><w:t>附件清单</w:t></w:r>{tail}</w:fldSimple>'
+    else:
+        xml = None
+    from lxml import etree as ET
+    if xml:
+        p._p.append(ET.fromstring(xml))
+    else:
+        for frag in ('<w:r {ns}><w:fldChar w:fldCharType="begin"/></w:r>',
+                     '<w:r {ns}><w:instrText xml:space="preserve"> HYPERLINK "http://127.0.0.1:9/x" </w:instrText></w:r>',
+                     '<w:r {ns}><w:fldChar w:fldCharType="separate"/></w:r>', '<w:r {ns}><w:t>附件清单</w:t></w:r>',
+                     '<w:bookmarkEnd {ns} w:id="7"/>', '<w:r {ns}><w:fldChar w:fldCharType="end"/></w:r>'):
+            p._p.append(ET.fromstring(frag.format(ns=ns)))
+    p.add_run("。")
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("kind", ["hyperlink", "fldsimple", "complex"])
+def test_insert_after_link_end_variants(kind):
+    """记录项 1：链接末尾跟着书签结束 / 校对标记；HYPERLINK 简单域、复杂域：insert_after 都进需人工。"""
+    data = _link_doc(kind)
+    assert el._para_chars(body_paras(data)[0])
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 1, "action": "insert_after", "find": "附件清单", "text": "（另附）", "comment": "c"}])
+    assert applied == [] and manual == [{"id": 1, "reason": R.R_IN_LINK}], kind
+
+
+def test_insert_after_inside_link_not_at_end_still_applied():
+    data = _link_doc("hyperlink")
+    out, applied, manual = R.generate(data, [
+        {"id": 1, "para": 1, "action": "insert_after", "find": "附件", "text": "一", "comment": "c"}])
+    assert applied == [1] and manual == []
+
+
+def test_lone_surrogate_goes_manual():
+    """记录项 4：孤立代理字符也写不进 XML：进需人工，不出 500。"""
+    out, applied, manual = R.generate(CONTRACT.read_bytes(), [
+        {"id": 1, "para": 27, "action": "replace", "find": "九十日", "text": "三十\ud800日", "comment": "c"}])
+    assert applied == [] and manual == [{"id": 1, "reason": R.R_BAD_CHAR}]
+
+
+def test_text_format_version_guard():
+    """记录项 3：段落属性子树不再读成正文后，材料文本格式版本是 3（撤回到 2 应变红）；Word 类在重解析的类型里。"""
+    from lawbench.case import materials as M
+    assert M.TEXT_FORMAT_VERSION == 3
+    assert {"docx", "doc", "wps"} <= set(M.REFORMAT_TYPES)

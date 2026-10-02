@@ -34,7 +34,7 @@ R_OVERLAP = "与本清单另一条修改的文字重叠"
 R_STRUCTURE = "find 的文字分属不同的段内结构（如内容控件），无法安全修改"
 R_BAD_CHAR = "修改文字或批注里有 Word 文件不能保存的控制字符"
 R_IN_LINK = "插入点在超链接文字的末尾，插入的文字会成为链接的一部分"
-_BAD_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+_BAD_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")   # 含孤立代理字符（记录项 4）
 
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
@@ -50,6 +50,7 @@ def q(tag: str) -> str:
 _R, _RPR, _T, _DELTEXT = q("r"), q("rPr"), q("t"), q("delText")
 _INS, _DEL = q("ins"), q("del")
 _HYPERLINK = q("hyperlink")
+_FLDSIMPLE, _FLDCHAR = q("fldSimple"), q("fldChar")
 _INSTR, _DELINSTR = q("instrText"), q("delInstrText")
 _TEXTUAL = {dx._T: None, dx._TAB: "\t", dx._BR: " ", dx._CR: " "}   # 与 edit_list._para_chars 同口径：段内可见字符
 
@@ -191,6 +192,24 @@ def _max_id(*roots) -> int:
 
 # ---------------------------------------------------------------- 一条修改
 
+def _ends_link(parent, last) -> bool:
+    """find 落在超链接文字的末尾（之后同一链接里再没有 run）：w:hyperlink、HYPERLINK 简单域、HYPERLINK 复杂域都算
+    （T15 第二轮记录项 1：链接末尾跟着 w:bookmarkEnd / w:proofErr 时也要认出来）。"""
+    if parent.tag == _HYPERLINK or (parent.tag == _FLDSIMPLE and "HYPERLINK" in (parent.get(q("instr")) or "").upper()):
+        return not any(s.tag == _R for s in last.itersiblings())
+    nxt = next((s for s in last.itersiblings() if s.tag == _R), None)
+    if nxt is None or nxt.find(f"{_FLDCHAR}[@{q('fldCharType')}='end']") is None:
+        return False
+    instr = []                                          # 往前找到这个域的开始，收它的指令
+    for s in last.itersiblings(preceding=True):
+        if s.tag != _R:
+            continue
+        instr += [t.text or "" for t in s.iter(_INSTR)]
+        if s.find(f"{_FLDCHAR}[@{q('fldCharType')}='begin']") is not None:
+            break
+    return "HYPERLINK" in " ".join(instr).upper()
+
+
 def _slot_text(slots: list[_Slot]) -> str:
     return "".join(s.child.text[s.i] if s.child.tag in (dx._T, _DELTEXT) else _TEXTUAL[s.child.tag]
                    for s in slots)
@@ -213,7 +232,7 @@ def _apply(p, edit: dict, original: str, rev_id, cmt_id: str, date: str) -> str 
     if any(r.getparent() is not parent for r in runs):
         p.getparent().replace(p, backup)
         return R_STRUCTURE
-    if edit["action"] == "insert_after" and parent.tag == _HYPERLINK and runs[-1].getnext() is None:
+    if edit["action"] == "insert_after" and _ends_link(parent, runs[-1]):
         p.getparent().replace(p, backup)                # 复核 NOTE-2：选"进需人工修改"，不猜放在链接里还是外
         return R_IN_LINK
     attrs = {q("author"): AUTHOR, q("date"): date}

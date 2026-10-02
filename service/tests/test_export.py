@@ -338,3 +338,19 @@ def test_logs_have_no_titles_or_content(env, tid):
     assert '"op": "confirm"' in log and '"op": "redline"' in log
     for word in ("日志核对标题甲", "日志核对正文乙", "日志核对新文字丙", "日志核对批注丁", "采购合同", "修订版", "九十日"):
         assert word not in log, word
+
+
+# ---------------------------------------------------------------- 第二轮复核记录项（0110 注记）
+
+def test_strip_html_unclosed_anchors_fast_and_iframe_closed():
+    """记录项 5：大量不闭合的 <a href> 不再按平方增长；记录项 6：<iframe>/<object> 连结束标签和里面的内容一起去掉。"""
+    import time as _t
+    s = P.strip_workspace_links
+    big = '<a href="https://example.com/x">' * 4000 + "正文"
+    t0 = _t.monotonic()
+    assert s(big) == big
+    assert _t.monotonic() - t0 < 2
+    assert s('<a href="工作区/a.md">不闭合' * 3) == "不闭合" * 3
+    assert s('前<iframe src="工作区/a.html">备用</iframe>后<object data="工作区/b.pdf"><p>x</p></object>尾') == "前后尾"
+    assert s('<a href="https://e.com">外<a href="工作区/a">内</a></a>') == '<a href="https://e.com">外内</a>'
+    assert s('<iframe src="https://e.com/v"></iframe>') == '<iframe src="https://e.com/v"></iframe>'
