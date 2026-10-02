@@ -1,0 +1,7 @@
+# N60 ② 水印折叠红绿（2026-10-02）
+改坏：去掉折叠（合并时不调 fold_repeats） → 红｜1 failed, 6 passed, 31 deselected, 1 warning in 17.36s
+改坏：阈值改成 >=5 → 红｜2 failed, 5 passed, 31 deselected, 1 warning in 17.39s
+改坏：不限长度 → 红｜1 failed, 6 passed, 31 deselected, 1 warning in 17.34s
+改坏：空行打断连续（不跳空行） → 红｜2 failed, 5 passed, 31 deselected, 1 warning in 19.42s
+改坏：散落也折（按全文计数） → 红｜1 failed, 6 passed, 31 deselected, 1 warning in 17.22s
+复原 → 绿｜7 passed, 31 deselected, 1 warning in 16.44s

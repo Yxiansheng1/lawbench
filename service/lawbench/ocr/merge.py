@@ -5,7 +5,8 @@
 
 合并规则：
 - 只用与原件当前 sha256 相同的任务的已完成页；同一页有多次结果时取最近提交的任务。
-- 该页块整体换成 "> 识别所得" 加识别文本（无论原来是"（本页需识别）"占位还是图文混排页提取的文字）。
+- 该页块整体换成 "> 识别所得" 加识别文本（无论原来是"（本页需识别）"占位还是图文混排页提取的文字）；
+  识别文本先折叠连续重复的短行（水印，见 fold_repeats）。
 - Source 行的类型：每页都是识别所得 → 识别所得；有一部分 → 部分识别；没有 → 文字版（整份待识别仍写"待识别"）。
 - index.json：is_ocr 同上；pages_need_ocr 改为仍是占位的页；status：有进行中的任务 → ocr_running，
   需识别的页都有结果 → parsed，有结果但还有页没识别（含失败）→ partial，一页结果都没有 → needs_ocr。
@@ -27,6 +28,38 @@ ACTIVE = ("queued", "running", "paused")
 _PAGE_MARK = texts._MARKS["page"]   # 整行恰好是"【第N页】"才是页标记，与读侧同一条正则（formats.md 第 2 节）
 _SOURCE = re.compile(r"^(> Source: .*（)(文字版|部分识别|识别所得|待识别)(，)", re.M)
 OCR_HEAD = "> 识别所得"
+
+# 水印重复行折叠（N60 ②，用户 2026-10-02 定）：395 读带水印的页会在正文后把水印字连续输出几百行。
+# 合并进材料文本时，同一短行连续出现超过 FOLD_MIN_REPEAT 次就只留第一行、下面注一行；
+# 不超过的（如表格里几行"是"）和散落的重复都原样留。识别页\<编号>\<页号>.md 不动，仍是 395 的原文。
+FOLD_MIN_REPEAT = 5   # 连续出现 >5 次才折；5 次及以下原样
+FOLD_MAX_LEN = 20     # 只折去首尾空白后不超过 20 字的短行；长句重复不碰
+FOLD_NOTE = "（识别结果中该行重复 {n} 次，已折叠）"
+
+
+def fold_repeats(md: str) -> str:
+    """把连续重复的短行折成一行加注。"连续"跳过空行（395 常在每行水印之间空一行）；被折掉的行之间的空行一并去掉。"""
+    lines = md.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        key = lines[i].strip()
+        if not key or len(key) > FOLD_MAX_LEN:
+            out.append(lines[i])
+            i += 1
+            continue
+        run, j, last = 1, i + 1, i              # run：同一行出现几次；last：最后一次出现的行号
+        while j < len(lines) and (not lines[j].strip() or lines[j].strip() == key):
+            if lines[j].strip():
+                run, last = run + 1, j
+            j += 1
+        if run > FOLD_MIN_REPEAT:
+            out += [lines[i], FOLD_NOTE.format(n=run)]
+            i = last + 1                         # 最后一次之后的空行留给下文
+        else:
+            out.append(lines[i])
+            i += 1
+    return "\n".join(out)
 
 
 def result_rel(material_id: str, page_no: int) -> str:
@@ -77,7 +110,7 @@ def merge_text(text: str, results: dict[int, str]) -> tuple[str, dict]:
     for no, body in blocks:
         body = body.rstrip("\n")
         if no in results:
-            body = OCR_HEAD + "\n" + escape_marks(results[no].strip("\n"))
+            body = OCR_HEAD + "\n" + escape_marks(fold_repeats(results[no]).strip("\n"))
         if body.startswith(OCR_HEAD):
             ocr_pages.append(no)
         elif body.strip() == texts.PENDING_OCR:
