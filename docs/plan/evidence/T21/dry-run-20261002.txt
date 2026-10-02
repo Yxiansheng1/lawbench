@@ -1,0 +1,365 @@
+# T21 保密验收脚本对新 main 重试跑（2026-10-02，开发机，律所局域网）
+# 代码：line-C rebase 到 origin/main 69f0218；只改 acceptance\ 与证据，不碰 service\、engines\
+# 环境：真工作台服务（python -m lawbench，临时 appdata，未设 Key）；案件 = tests\fixtures 的 attack-01（A，含联接 外部目录链接 → civil-01）、
+#       civil-01（B）、closed-01（归档）副本，放在 D:\验收试跑-T21\案件；日常办公文件夹 D:\验收试跑-T21\日常办公；发票源 = invoices-01 副本
+#       真 395 192.168.8.124:9000（契约 1.3）；6000D 192.168.8.77:8000；Key 只从 .env.local 读、不打印
+# 服务两次无日志退出（不是本脚本问题，见交付说明"试跑发现"第 4 条）；下面的最终结果都出自第 4 次起的服务（受管后台任务），
+# 早先各轮的同名结果与之一致处只在交付说明里提
+
+## case_isolation.py（最终）
+# case_isolation　对应：SEC-05；上线必过第 2 项
+# 运行时间：2026-10-02T18:39:05+08:00
+## 一、工具调用（POST /core/tool，案件 A 的 task_id）
+  case_read_material {"name": "../civil-01/情况说明"} → HTTP 200 ok=False
+  case_read_material {"name": "../civil-01/情况说明", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "..\\civil-01\\情况说明"} → HTTP 200 ok=False
+  case_read_material {"name": "..\\civil-01\\情况说明", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "../../civil-01/情况说明.txt"} → HTTP 200 ok=False
+  case_read_material {"name": "../../civil-01/情况说明.txt", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "C:\\Windows\\win.ini"} → HTTP 200 ok=False
+  case_read_material {"name": "C:\\Windows\\win.ini", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "C:/Windows/win.ini"} → HTTP 200 ok=False
+  case_read_material {"name": "C:/Windows/win.ini", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "\\\\?\\C:\\Windows\\win.ini"} → HTTP 200 ok=False
+  case_read_material {"name": "\\\\?\\C:\\Windows\\win.ini", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "/etc/passwd"} → HTTP 200 ok=False
+  case_read_material {"name": "/etc/passwd", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "外部目录链接/情况说明"} → HTTP 200 ok=False
+  case_read_material {"name": "外部目录链接/情况说明", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "外部目录链接/情况说明.txt"} → HTTP 200 ok=False
+  case_read_material {"name": "外部目录链接/情况说明.txt", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "外部文件链接"} → HTTP 200 ok=False
+  case_read_material {"name": "外部文件链接", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "外部文件链接.txt"} → HTTP 200 ok=False
+  case_read_material {"name": "外部文件链接.txt", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "外部目录链接\\..\\..\\civil-01\\借条"} → HTTP 200 ok=False
+  case_read_material {"name": "外部目录链接\\..\\..\\civil-01\\借条", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "情况说明"} → HTTP 200 ok=False
+  case_read_material {"name": "情况说明", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "借条"} → HTTP 200 ok=False
+  case_read_material {"name": "借条", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "银行流水"} → HTTP 200 ok=False
+  case_read_material {"name": "银行流水", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "%2e%2e/civil-01/情况说明"} → HTTP 200 ok=False
+  case_read_material {"name": "%2e%2e/civil-01/情况说明", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "....//civil-01//情况说明"} → HTTP 200 ok=False
+  case_read_material {"name": "....//civil-01//情况说明", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "AGENTS.md"} → HTTP 200 ok=False
+  case_read_material {"name": "AGENTS.md", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": ".dsh/skills/evil/SKILL"} → HTTP 200 ok=False
+  case_read_material {"name": ".dsh/skills/evil/SKILL", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "CON"} → HTTP 200 ok=False
+  case_read_material {"name": "CON", "start": 1, "max_chars": 2000} → HTTP 200 ok=False
+  case_read_material {"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa → HTTP 200 ok=False
+  case_read_material {"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa → HTTP 200 ok=False
+  case_search {"query": "LBFX-CIVL01-K8M2"} → HTTP 200 ok=True
+  case_search {"query": "李某乙"} → HTTP 200 ok=True
+  case_search {"query": "fonts"} → HTTP 200 ok=True
+  case_read_input {"index": -1} → HTTP 200 ok=False
+  case_read_input {"index": 0} → HTTP 200 ok=False
+  case_read_input {"index": 999999} → HTTP 200 ok=False
+  case_read_wiki {"section": "材料摘要", "name": "../../civil-01/借条"} → HTTP 200 ok=False
+  case_read_wiki {"section": "材料摘要", "name": "C:\\Windows\\win.ini"} → HTTP 200 ok=False
+  case_read_wiki {"section": "材料摘要", "name": "借条"} → HTTP 200 ok=False
+  case_list_materials {} → HTTP 200 ok=True
+  case_archive_match {"catalog": "民事行政卷"} → HTTP 200 ok=True
+  case_archive_match {"catalog": "刑事卷"} → HTTP 200 ok=True
+  case_save_archive_plan {"catalog": "民事行政卷", "client": "某甲", "opponent": "某乙", "cause": "民间借贷纠纷", "lawye → HTTP 200 ok=False
+  case_save_archive_plan {"catalog": "民事行政卷", "client": "某甲", "opponent": "某乙", "cause": "民间借贷纠纷", "lawye → HTTP 200 ok=False
+  case_save_archive_plan {"catalog": "民事行政卷", "client": "某甲", "opponent": "某乙", "cause": "民间借贷纠纷", "lawye → HTTP 200 ok=False
+  case_save_archive_plan {"catalog": "民事行政卷", "client": "某甲", "opponent": "某乙", "cause": "民间借贷纠纷", "lawye → HTTP 200 ok=False
+  case_save_archive_plan {"catalog": "民事行政卷", "client": "某甲", "opponent": "某乙", "cause": "民间借贷纠纷", "lawye → HTTP 200 ok=False
+  case_save_draft {"title": "../../civil-01/写进B", "content": "越权写入测试"} → HTTP 200 ok=False
+  case_save_edit_list {"name": "../../civil-01/写进B", "edits": []} → HTTP 200 ok=False
+  case_save_draft {"title": "..\\..\\civil-01\\写进B", "content": "越权写入测试"} → HTTP 200 ok=False
+  case_save_edit_list {"name": "..\\..\\civil-01\\写进B", "edits": []} → HTTP 200 ok=False
+  case_save_draft {"title": "C:\\Windows\\Temp\\写到外面", "content": "越权写入测试"} → HTTP 200 ok=False
+  case_save_edit_list {"name": "C:\\Windows\\Temp\\写到外面", "edits": []} → HTTP 200 ok=False
+  case_save_draft {"title": "外部目录链接/写进B", "content": "越权写入测试"} → HTTP 200 ok=False
+  case_save_edit_list {"name": "外部目录链接/写进B", "edits": []} → HTTP 200 ok=False
+  case_save_draft {"title": "../写到上一级", "content": "越权写入测试"} → HTTP 200 ok=False
+  case_save_edit_list {"name": "../写到上一级", "edits": []} → HTTP 200 ok=False
+  case_save_draft {"title": "CON", "content": "越权写入测试"} → HTTP 200 ok=True
+  case_save_edit_list {"name": "CON", "edits": []} → HTTP 200 ok=False
+## 二、工作台接口（案件 A 的身份，越权参数与混搭）
+  （准备）用案件 A 的材料 ['案情材料'] 存归档方案 → HTTP 200 ok=True
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False MATERIAL_NOT_FOUND
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False MATERIAL_NOT_FOUND
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False MATERIAL_NOT_FOUND
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False MATERIAL_NOT_FOUND
+  POST /api/archive/build {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False MATERIAL_NOT_FOUND
+  POST /api/archive/build {"case_id": "aa8ef111-00f5-41d4-8251-26de60dc2b1a", "task_id": "T-20261002183901-b6a0", "p → HTTP 200 ok=False TASK_NOT_FOUND
+  POST /api/outputs/confirm {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "d → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/redline {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "e → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/outputs/confirm {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "d → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/redline {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "e → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/outputs/confirm {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "d → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/redline {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "e → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/outputs/confirm {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "d → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/redline {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "e → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/outputs/confirm {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "d → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/redline {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "task_id": "T-20261002183901-b6a0", "e → HTTP 200 ok=False INVALID_ARGUMENT
+  POST /api/outputs/confirm {"case_id": "aa8ef111-00f5-41d4-8251-26de60dc2b1a", "task_id": "T-20261002183901-b6a0", "d → HTTP 200 ok=False TASK_NOT_FOUND
+  GET /api/search {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "q": "LBFX-CIVL01-K8M2"} → HTTP 200 ok=True 
+  GET /api/search {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0", "q": "李某乙"} → HTTP 200 ok=True 
+  GET /api/materials {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0"} → HTTP 200 ok=True 
+  GET /api/outputs {"case_id": "b77bd597-cc8d-4460-a9ef-24e746e0aea0"} → HTTP 200 ok=True 
+  GET /api/pipeline/T-20261002183901-b6a0 null → HTTP 200 ok=False TASK_NOT_FOUND
+共 98 次越权调用；案件 B 与案件文件夹上一级调用前后变化的文件 0 个
+
+结论：通过（所有越权调用都没有读到案件 B 或案件外文件的内容，也没有在案件 A 之外写文件）
+
+## case_isolation.py 红测：把案件 B 的 情况说明.txt 复制进案件 A 并重扫 → 应不通过（之后删副本、整个环境重建）
+  case_search {"query": "LBFX-CIVL01-K8M2"} → HTTP 200 ok=True  ← 泄露
+  case_search {"query": "李某乙"} → HTTP 200 ok=True  ← 泄露
+  GET /api/search {"case_id": "7e4c044e-d929-4cd8-8f12-415a0a8c3a01", "q": "LBFX-CIVL01-K8M2"} → HTTP 200 ok=True   ← 泄露
+  GET /api/search {"case_id": "7e4c044e-d929-4cd8-8f12-415a0a8c3a01", "q": "李某乙"} → HTTP 200 ok=True   ← 泄露
+结论：不通过（4 次调用读到了案件 B 或系统文件的内容；案件外 0 个文件被写或改）
+
+## 归档、导出、发票整理全过程（t21_flow.py，最终一轮）
+设置 converter=auto: HTTP 200 ok=True  0.0s
+归档方案保存: HTTP 200 ok=True  0.1s
+归档生成: HTTP 200 ok=True  31.1s converter=word files=['卷宗', '发票', '立卷申请书', '结案报告', '归档目录'] skipped=0
+草稿保存: HTTP 200 ok=True  0.1s
+草稿确认导出 md+docx: HTTP 200 ok=True  0.4s
+发票 env_check: HTTP 200 ok=True  34.6s exit=0 failed=False attention=False files=0
+发票 plan local: HTTP 200 ok=True  3.0s exit=0 failed=False attention=False files=1
+发票 run: HTTP 200 ok=True  8.0s exit=2 failed=False attention=True files=1
+发票 prepare: HTTP 200 ok=True  4.6s exit=2 failed=True attention=False files=0
+发票 report: HTTP 200 ok=True  2.8s exit=0 failed=False attention=False files=0
+DONE
+
+## 同一流程连跑两轮（第 3 次服务；第二次归档生成 -v2 正常）
+=== 第 2026-09 轮
+设置 converter=auto: HTTP 200 ok=True  0.0s
+归档方案保存: HTTP 200 ok=True  0.1s
+归档生成: HTTP 200 ok=True  28.8s converter=word files=['卷宗', '发票', '立卷申请书', '结案报告', '归档目录'] skipped=0
+草稿保存: HTTP 200 ok=True  0.1s
+草稿确认导出 md+docx: HTTP 200 ok=True  0.4s
+发票 env_check: HTTP 200 ok=True  36.3s exit=0 failed=False attention=False files=0
+发票 plan local: HTTP 200 ok=True  3.4s exit=0 failed=False attention=False files=1
+发票 run: HTTP 200 ok=True  8.5s exit=2 failed=False attention=True files=1
+发票 prepare: HTTP 200 ok=True  4.7s exit=2 failed=True attention=False files=0
+发票 report: HTTP 200 ok=True  2.9s exit=0 failed=False attention=False files=0
+DONE
+=== 第 2026-08 轮
+设置 converter=auto: HTTP 200 ok=True  0.0s
+归档方案保存: HTTP 200 ok=True  0.0s
+归档生成: HTTP 200 ok=True  28.1s converter=word files=['卷宗', '发票', '立卷申请书', '结案报告', '归档目录'] skipped=0
+草稿保存: HTTP 200 ok=True  0.0s
+草稿确认导出 md+docx: HTTP 200 ok=True  0.3s
+发票 env_check: HTTP 200 ok=True  8.4s exit=0 failed=False attention=False files=0
+发票 plan local: HTTP 200 ok=True  3.0s exit=0 failed=False attention=False files=1
+发票 run: HTTP 200 ok=True  7.9s exit=2 failed=False attention=True files=1
+发票 prepare: HTTP 200 ok=True  4.7s exit=2 failed=True attention=False files=0
+发票 report: HTTP 200 ok=True  3.0s exit=0 failed=False attention=False files=0
+DONE
+
+## hash_originals.py compare（归档 + 发票整理之后）
+# hash_originals-compare　对应：SEC-08；上线必过第 4、21 项
+# 运行时间：2026-10-02T18:41:53+08:00
+验收前 6 个原件，现在 6 个
+
+结论：通过（已有原件全部未变；新增 0 个）
+
+## net_watch.ps1（最终一轮流程期间 200 秒）
+# net_watch　对应：SEC-03、SEC-10；上线必过第 1、24、25 项
+# 运行时间：2026-10-02T18:40:22+08:00，时长 200 秒
+# 进程名：律师工作台*, lawbench*, dsh*, electron*, python*, pythonw*, soffice*, pandoc*, node*, WINWORD*, wps*
+# 白名单：192.168.8.77, 10.126.126.1, 192.168.8.124, 10.126.126.3, 127.0.0.1, ::1
+
+看到的相关进程：node, node_repl, python, soffice.bin, WINWORD
+远端地址（11 个）：
+  127.0.0.1:53412　python（首次 18:41:50，状态 Established）
+  127.0.0.1:54537　python（首次 18:40:25，状态 Established）
+  127.0.0.1:54538　python（首次 18:40:25，状态 Established）
+  127.0.0.1:59905　python（首次 18:40:27，状态 Established）
+  127.0.0.1:61489　python（首次 18:41:45，状态 Established）
+  127.0.0.1:61741　python（首次 18:41:37，状态 Established）
+  127.0.0.1:62049　python（首次 18:40:27，状态 Established）
+  127.0.0.1:62051　python（首次 18:40:29，状态 Established）
+  127.0.0.1:63621　python（首次 18:41:00，状态 Established）
+  127.0.0.1:64500　python（首次 18:41:33，状态 Established）
+  127.0.0.1:7890　WINWORD（首次 18:40:29，状态 Established）
+期间新增的 DNS 解析（全机，供参考）：无
+
+结论：通过（相关进程只连接了律所两台服务器和本机）
+证据文件：D:\验收试跑-T21\out\net_watch-20261002-184022.txt
+exit=0
+
+## net_watch.ps1（两轮连跑期间 420 秒；127.0.0.1 的 116 行略）
+# net_watch　对应：SEC-03、SEC-10；上线必过第 1、24、25 项
+# 运行时间：2026-10-02T18:26:44+08:00，时长 420 秒
+# 进程名：律师工作台*, lawbench*, dsh*, electron*, python*, pythonw*, soffice*, pandoc*, node*, WINWORD*, wps*
+# 白名单：192.168.8.77, 10.126.126.1, 192.168.8.124, 10.126.126.3, 127.0.0.1, ::1
+
+看到的相关进程：electron, node, node_repl, python, soffice.bin, WINWORD
+远端地址（116 个）：
+期间新增的 DNS 解析（全机，供参考）：stun.hot-chilli.net, stun.radiojar.com, stun.chat.bilibili.com, hotfix.lenovo.com.cn, dns.weixin.q
+q.com.cn
+
+结论：通过（相关进程只连接了律所两台服务器和本机）
+证据文件：D:\验收试跑-T21\out\net_watch-20261002-182644.txt
+exit=0
+
+## engine_net_inventory.py（最终）
+# engine_net_inventory　对应：Spec 13.3、13.5、14.3；上线必过第 24、25 项
+# 运行时间：2026-10-02T18:39:08+08:00
+## 引擎里的联网代码
+  engines/invoice-ledger/scripts/build_env_zip.py：urllib.request
+  engines/invoice-ledger/scripts/mail_collect.py：imaplib, socket, ssl, urllib.request
+  engines/retainer/app/idscan.js：fetch
+  engines/retainer/tools/ocr-driver/driver.py：http.server
+  engines/retainer/tools/ocr-driver/test/channel.js：fetch
+## 工作台调用入口能加载到的联网文件
+  engines/invoice-ledger/scripts/mail_collect.py（经 engines/invoice-ledger/scripts/workflow.py）护栏 flags：成立
+    登记说明：workflow.py 在模块顶层 import 它（T21 重试跑 2026-10-02 登记）。联网的只有 collect_imap（--imap-host）、download_links / fetch_document（--download-links）；collect_eml 只解析本地 .eml、把正文链接记成待下载，不发请求。runner 不拼这些参数、不开放 collect / attach 子命令
+  engines/retainer/app/idscan.js（经 启动.html）护栏 loopback：成立
+    登记说明：委托材料窗口（启动.html）加载；证件识别只 fetch 本机驱动 BASE = http://127.0.0.1:17801 的 /health、/ocr
+  engines/retainer/tools/ocr-driver/driver.py（经 入口）护栏 loopback：成立
+    登记说明：本机证件识别驱动，ThreadingHTTPServer 监听；工作台（service/lawbench/retainer/driver.py）以 --host 127.0.0.1 --engine rapidocr 启动，模型缺失时不启动（防驱动自己联网下模型）
+  无调用入口：engines/invoice-ledger/scripts/build_env_zip.py
+  无调用入口：engines/retainer/tools/ocr-driver/test/channel.js
+
+结论：通过（联网代码与已知清单一致（5 个文件）；入口可达的 3 个都在清单里且护栏成立，其余 2 个没有调用入口）
+
+## engine_net_inventory.py 红测：改坏已知清单四处 → 应不通过；复原 → 通过
+## 改坏：drop
+结论：不通过（engines/invoice-ledger/scripts/mail_collect.py 新可达）
+exit=1
+## 改坏：src
+结论：不通过（engines/invoice-ledger/scripts/mail_collect.py：assert_allowed 放行了 --src；engines/invoice-ledger/scripts/mail_collect.py：assert_allowed 放行了 --src）
+exit=1
+## 改坏：sub
+结论：不通过（engines/invoice-ledger/scripts/mail_collect.py：assert_allowed 放行了子命令 run）
+exit=1
+## 改坏：const
+结论：不通过（engines/retainer/app/idscan.js：NOPE 不是 127.0.0.1：没找到；engines/retainer/app/idscan.js：fetch 没用 NOPE：BASE + '/health'；engines/retainer/app/idscan.js：fetch 没用 NOPE：BASE + '/ocr'）
+exit=1
+## 复原
+结论：通过（联网代码与已知清单一致（5 个文件）；入口可达的 3 个都在清单里且护栏成立，其余 2 个没有调用入口）
+
+## dewatermark_395.py（最终）
+# dewatermark_395　对应：上线必过第 16a 项；SEC-12
+# 运行时间：2026-10-02T18:39:21+08:00
+第 2 页（蓝色批注）：红色像素 0 → 0，蓝色像素 2095 → 2095；与原图不同的像素 0
+第 3 页（红章）：红色像素 10944 → 10944，蓝色像素 0 → 0；与原图不同的像素 0
+原件 sha256 前后一致
+
+结论：前提不满足（395 返回的工作副本与原图逐像素相同（第 2 页、第 3 页）：去水印没有生效，红章 / 批注未被去除无从验证；395 打开去水印后重跑）
+
+## 去水印是否生效的核对（一次性探查脚本，讯问笔录 3 页各发 dewatermark=true / false）
+第1页 dewatermark=true: HTTP 200 尺寸同 差异像素 0 / 2174960
+第1页 dewatermark=false: HTTP 200 尺寸同 差异像素 0 / 2174960
+第2页 dewatermark=true: HTTP 200 尺寸同 差异像素 0 / 2174960
+第2页 dewatermark=false: HTTP 200 尺寸同 差异像素 0 / 2174960
+第3页 dewatermark=true: HTTP 200 尺寸同 差异像素 0 / 2174960
+第3页 dewatermark=false: HTTP 200 尺寸同 差异像素 0 / 2174960
+→ 395 返回的工作副本与原图逐像素相同：去水印没有生效（T11 止损关闭）。改脚本前它据此报"通过"，改后报"前提不满足"。
+
+## residue_395.py
+# residue_395　对应：SEC-12；上线必过第 5 项（395 无残留）
+# 运行时间：2026-10-02T18:39:10+08:00
+需要用户在 395 上运行下面的命令（--print-command 可单独打印），再用 --result 传回结果：
+# 在 395 上以管理员身份运行（PowerShell）；结果写到桌面 residue.txt
+$feats = @('LBFX-CRIM01-7Q3Z', 'LBFX-CIVL01-K8M2', 'LBFX-CONT01-R5T9', 'LBFX-ATTK01-W2N6', 'LBFX-BRKN00-J4H7', 'LBFX-CLSD01-P6V3', 'LBFX-TNDR01-X9C4', 'LBFX-INVC01-D3F8')
+$roots = @('C:\prep395', 'C:\Windows\Temp') + (Get-ChildItem 'C:\Users' -Directory | ForEach-Object { Join-Path $_.FullName 'AppData\Local\Temp' }) + (Get-ChildItem 'C:\' -Directory -Filter 'llama*' | ForEach-Object FullName)
+$out = Join-Path ([Environment]::GetFolderPath('Desktop')) 'residue.txt'
+"ROOTS: $($roots -join ' | ')" | Out-File $out -Encoding utf8
+$n = 0
+foreach ($r in $roots) { if (Test-Path $r) {
+  Get-ChildItem $r -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Length -lt 256MB } | ForEach-Object {
+    $n++; $f = $_.FullName
+    foreach ($enc in 'utf8','unicode') {
+      $hit = Select-String -LiteralPath $f -SimpleMatch -Pattern $feats -Encoding $enc -List -ErrorAction SilentlyContinue
+      if ($hit) { "HIT: $f <- $($hit.Pattern)" | Out-File $out -Append -Encoding utf8; break }
+    }
+  } } }
+"FILES: $n" | Out-File $out -Append -Encoding utf8
+"PREP395_TEMP_PREFIX: $((Get-ChildItem $roots -Recurse -Force -Filter 'prep395-*' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike 'C:\prep395\services\*' -and $_.FullName -notlike 'C:\prep395\python\*' } | Measure-Object).Count)" | Out-File $out -Append -Encoding utf8
+"DONE" | Out-File $out -Append -Encoding utf8
+Write-Host "已写入 $out"
+
+
+结论：前提不满足（还没有 395 上的搜索结果）
+
+## key_check.py
+# key_check　对应：SEC-06；上线必过第 6 项
+# 运行时间：2026-10-02T18:40:12+08:00
+6000D：连通 http://192.168.8.77:8000；395：连通 http://192.168.8.124:9000
+  6000D 无 Key：HTTP 200
+  6000D 错误 Key：HTTP 200
+  395 无 Key：HTTP 401 {"error":{"code":"KEY_INVALID","message":"Key 无效或已停用"}}
+  395 错误 Key：HTTP 200 
+
+结论：前提不满足（6000D 不带 Key 也返回 200：甲方尚未开启 require_key（Spec 6.3），开启后重测；395 收下错误 / 停用 Key 是同一原因：395 按 Spec 6.3 拿这个 Key 向 6000D 发最小请求校验，网关不校验就都算有效）
+
+## port_scan.py
+# port_scan　对应：SEC-13；上线必过第 6 项（局域网不能绕过网关）
+# 运行时间：2026-10-02T18:39:11+08:00
+6000D（所内 192.168.8.77）：开放端口 [22, 8000, 8080]
+6000D（所外 10.126.126.1）：开放端口 [8000, 8080]
+395（所内 192.168.8.124）：开放端口 [22, 135, 3389, 9000]
+395（所外 10.126.126.3）：开放端口 [9000]
+  注意（运维端口，是否保留由甲方决定）：6000D（所内 192.168.8.77） 22
+  注意（运维端口，是否保留由甲方决定）：395（所内 192.168.8.124） 22
+  注意（运维端口，是否保留由甲方决定）：395（所内 192.168.8.124） 3389
+
+结论：不通过（不应开放的端口：6000D（所内 192.168.8.77） 8080、6000D（所外 10.126.126.1） 8080、395（所内 192.168.8.124） 135）
+
+## cloud_sync.py
+# cloud_sync　对应：SEC-14；上线必过第 20 项
+# 运行时间：2026-10-02T18:39:09+08:00
+  OneDrive：HTTP 200 ok=False {"ok":false,"error":{"code":"CASE_IN_SYNC_FOLDER","message":"该文件夹在云同步目录中，请移到本机普通文件夹后再打开"}}
+  坚果云：HTTP 200 ok=False {"ok":false,"error":{"code":"CASE_IN_SYNC_FOLDER","message":"该文件夹在云同步目录中，请移到本机普通文件夹后再打开"}}
+  百度网盘：HTTP 200 ok=False {"ok":false,"error":{"code":"CASE_IN_SYNC_FOLDER","message":"该文件夹在云同步目录中，请移到本机普通文件夹后再打开"}}
+  普通目录（对照）：HTTP 200 ok=True {"ok":true,"value":{"case_id":"d19f2c13-04a6-44e8-96f9-e8ebdebabb76","name":"lbfx-云同步验收-案件","created":false,"folders_cre
+
+结论：通过（云同步目录下的案件都被拒绝，普通目录能打开）
+
+## dsh_locations.py
+# dsh_locations　对应：Spec 3.3；SEC-01、SEC-11；上线必过第 21 项
+# 运行时间：2026-10-02T18:39:10+08:00
+
+结论：前提不满足（找不到 DSH 数据目录 %USERPROFILE%\.dsh（客户端装好并用测试案卷走一遍后再测，T17 之后））
+
+## injection_check.py --case <案件 A>
+# injection_check　对应：SEC-07；上线必过第 3 项
+# 运行时间：2026-10-02T18:40:13+08:00
+
+结论：前提不满足（案件工作区里还没有会话记录：请先按操作单在该案件里完成对话）
+
+## find_leaks.py --root %USERPROFILE%\AppData --fresh（开发机只扫 AppData；2 小时 21 分钟后按用户意见停止）
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-10-02T18:01:27+08:00
+特征字符串：LBFX-CRIM01-7Q3Z, LBFX-CIVL01-K8M2, LBFX-CONT01-R5T9, LBFX-ATTK01-W2N6, LBFX-BRKN00-J4H7, LBFX-CLSD01-P6V3, LBFX-TNDR01-X9C4, LBFX-INVC01-D3F8
+搜索范围：%USERPROFILE%\AppData
+排除（案件目录与指定目录）：无
+本次运行开始：2026-10-02 18:01:27
+--fresh：从头开始
+共 4 批；每批结果单独写进 <scratch>\t21\out\find_leaks-1ded0c08b28343a3
+[1/4] %USERPROFILE%\AppData（顶层文件）：文件 0 个，命中 0，用时 0.0 秒
+（后台任务记的 exit=127 是手动结束所致）
+（20:22:44 按用户意见手动结束，未到结论行；起止见上）
+
+## find_leaks.py --root <服务 appdata> --root <日常办公文件夹> --case-dir <发票台账>（工作台自己的数据目录）
+# find_leaks　对应：SEC-01、SEC-11；上线必过第 5、21 项
+# 运行时间：2026-10-02T18:32:32+08:00
+特征字符串：LBFX-CRIM01-7Q3Z, LBFX-CIVL01-K8M2, LBFX-CONT01-R5T9, LBFX-ATTK01-W2N6, LBFX-BRKN00-J4H7, LBFX-CLSD01-P6V3, LBFX-TNDR01-X9C4, LBFX-INVC01-D3F8
+搜索范围：D:\验收试跑-T21\appdata；D:\验收试跑-T21\日常办公
+排除（案件目录与指定目录）：D:\验收试跑-T21\日常办公\发票台账
+本次运行开始：2026-10-02 18:32:32
+--fresh：从头开始
+共 5 批；每批结果单独写进 D:\验收试跑-T21\out\find_leaks-81cc34e872998a7d
+已搜索 1456 个文件：本次实际扫描 1456 个（用时 2 秒），沿用中断前的结果 0 个；无权限或读取失败 0 个；超过 256MB 跳过 0 个
+
+结论：通过（案件目录外没有命中）
+
+## find_leaks.ps1 / demo_find_leaks_resume.py
+find_leaks.ps1 -Root D:\验收试跑-T21\案件 -CaseDir 三个案件：通过（扫 0 个文件——三个子目录都是案件目录，此项只证明脚本能跑）
+demo_find_leaks_resume.py：演示脚本，六步按设计（中间一步故意放副本 → 不通过），脚本自身退出码 0

@@ -3,7 +3,8 @@
 python acceptance\\sec\\dewatermark_395.py
 用 tests\\fixtures\\criminal-01\\讯问笔录.pdf 的第 2 页（蓝色批注）、第 3 页（红章）请求真实 395：
 /v1/ocr/page?dewatermark=true&return_image=true，比较返回的工作副本与原图的红色、蓝色像素数，
-并核对原件 PDF 的 sha256 前后不变。需要 395 已部署（T11）和一个可用的测试 Key（.env.local 的 LAWFIRM_TEST_KEY_A）。
+并核对原件 PDF 的 sha256 前后不变。返回的工作副本与原图逐像素相同（395 没有真的去水印，T11 止损关闭时
+即如此）时结论为"前提不满足"，不报通过。需要 395 已部署（T11）和一个可用的测试 Key（.env.local 的 LAWFIRM_TEST_KEY_A）。
 "引用仍指向原件"由 T12 的测试覆盖（识别页的出处写原件页码），这里不重复。
 """
 from __future__ import annotations
@@ -28,6 +29,14 @@ def counts(img):
     return red, blue
 
 
+def changed_pixels(a, b) -> int:
+    """两张图有多少像素明显不同（任一通道差 > 10）；尺寸不同时按原图尺寸比。"""
+    import numpy as np
+    x = np.asarray(a.convert("RGB")).astype(int)
+    y = np.asarray(b.convert("RGB").resize(a.size)).astype(int)
+    return int((np.abs(x - y).max(axis=2) > 10).sum())
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path)
@@ -48,7 +57,7 @@ def main() -> None:
     pdf = FIXTURES / "criminal-01" / "讯问笔录.pdf"
     before = hashlib.sha256(pdf.read_bytes()).hexdigest()
     doc = pdfium.PdfDocument(str(pdf))
-    bad = []
+    bad, same = [], []
     for idx, what in ((1, "蓝色批注"), (2, "红章")):
         obj = list(doc[idx].get_objects(filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE]))[0]
         img = obj.get_bitmap().to_pil().convert("RGB")
@@ -63,12 +72,19 @@ def main() -> None:
         shot = json.loads(body)["image_png_base64"]
         out = Image.open(io.BytesIO(base64.b64decode(shot)))
         (r0, b0), (r1, b1) = counts(img), counts(out)
-        r.log(f"第 {idx + 1} 页（{what}）：红色像素 {r0} → {r1}，蓝色像素 {b0} → {b1}")
+        moved = changed_pixels(img, out)
+        r.log(f"第 {idx + 1} 页（{what}）：红色像素 {r0} → {r1}，蓝色像素 {b0} → {b1}；与原图不同的像素 {moved}")
+        if moved == 0:
+            same.append(f"第 {idx + 1} 页")
         if r1 != r0 or b1 != b0:
             bad.append(f"第 {idx + 1} 页")
     doc.close()
     after = hashlib.sha256(pdf.read_bytes()).hexdigest()
     r.log(f"原件 sha256 前后{'一致' if before == after else '不一致'}")
+    if same and not bad and before == after:
+        # 工作副本与原图逐像素相同 = 395 没做去水印（T11 止损关闭时就是这样）：像素数不变是必然的，证明不了 16a
+        r.finish(UNMET, "395 返回的工作副本与原图逐像素相同（" + "、".join(same) + "）：去水印没有生效，"
+                        "红章 / 批注未被去除无从验证；395 打开去水印后重跑")
     if bad or before != after:
         r.finish(FAIL, "印章或批注像素有变化：" + "、".join(bad) if bad else "原件被改动")
     r.finish(PASS, "去水印后红章、蓝色批注像素数不变，原件不变")

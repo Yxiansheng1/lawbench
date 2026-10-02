@@ -1,5 +1,5 @@
 {
- "说明": "律所引擎自带的联网代码；工作台只开放 Spec 13.3 的白名单动作，这些文件没有调用入口",
+ "说明": "律所引擎自带的联网代码（files）；其中工作台调用入口能加载到的登记在 入口可达，各带一条可机器核对的护栏，其余没有调用入口。工作台只开放 Spec 13.3 的白名单动作与 13.5 的本机驱动",
  "files": {
   "engines/invoice-ledger/scripts/build_env_zip.py": [
    "urllib.request"
@@ -13,8 +13,29 @@
   "engines/retainer/app/idscan.js": [
    "fetch"
   ],
+  "engines/retainer/tools/ocr-driver/driver.py": [
+   "http.server"
+  ],
   "engines/retainer/tools/ocr-driver/test/channel.js": [
    "fetch"
   ]
+ },
+ "入口可达": {
+  "engines/invoice-ledger/scripts/mail_collect.py": {
+   "护栏": "flags",
+   "禁止参数": ["--imap-host", "--download-links", "--account", "--folder"],
+   "禁止子命令": ["collect", "attach"],
+   "说明": "workflow.py 在模块顶层 import 它（T21 重试跑 2026-10-02 登记）。联网的只有 collect_imap（--imap-host）、download_links / fetch_document（--download-links）；collect_eml 只解析本地 .eml、把正文链接记成待下载，不发请求。runner 不拼这些参数、不开放 collect / attach 子命令"
+  },
+  "engines/retainer/app/idscan.js": {
+   "护栏": "loopback",
+   "地址常量": "BASE",
+   "说明": "委托材料窗口（启动.html）加载；证件识别只 fetch 本机驱动 BASE = http://127.0.0.1:17801 的 /health、/ocr"
+  },
+  "engines/retainer/tools/ocr-driver/driver.py": {
+   "护栏": "loopback",
+   "工作台传入 host": true,
+   "说明": "本机证件识别驱动，ThreadingHTTPServer 监听；工作台（service/lawbench/retainer/driver.py）以 --host 127.0.0.1 --engine rapidocr 启动，模型缺失时不启动（防驱动自己联网下模型）"
+  }
  }
 }

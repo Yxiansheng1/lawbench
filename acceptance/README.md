@@ -11,9 +11,9 @@ PRD 第 12 节"上线必过"全部 27 项（第 1–26 条和 16a）逐条对应
 | 项 | 内容（PRD 12） | SEC | 脚本 | 人工操作单 | 其他工单的自动测试 |
 |---|---|---|---|---|---|
 | 1 | 抓包只见律所两台服务器 | 03、10 | `sec\net_watch.ps1`（看不到 UDP，只作辅助） | `manual\抓包.md`（全量抓包，判定依据） | — |
-| 2 | 案件 A 读不到案件 B 和其他文件（含 `../`、链接、junction） | 05 | `sec\case_isolation.py` | `manual\案件隔离.md` | T3 路径闸门测试 |
+| 2 | 案件 A 读不到案件 B 和其他文件（含 `../`、链接、junction） | 05 | `sec\case_isolation.py`（工具调用 + 归档、导出、修订版、检索、流水线接口；T21 2026-10-02 补） | `manual\案件隔离.md` | T3 路径闸门测试 |
 | 3 | 植入越权指令无效；案件内配置、指令文件、Skill 不被加载 | 07 | `sec\injection_check.py` | `manual\越权植入.md` | T7、T17 |
-| 4 | 原件哈希不变 | 08 | `sec\hash_originals.py`（验收前 snapshot、验收后 compare） | — | T5、T23 |
+| 4 | 原件哈希不变 | 08 | `sec\hash_originals.py`（验收前 snapshot、验收后 compare；归档生成、发票整理之后各 compare 一次，发票源文件夹同样拍快照） | — | T5、T23、T25 |
 | 5 | 6000D、395（含硬盘和系统临时目录）和本机案件目录外都查不到测试案卷正文；395 每个请求结束后无残留 | 01、09、11、12 | 本机：`sec\find_leaks.py`（或 `find_leaks.ps1`）；395：`sec\residue_395.py` | `manual\395残留检查.md`、`manual\6000D残留检查.md` | T6（50 张图不落盘）、T17 |
 | 6 | 无 Key / 停用 Key 不能用；局域网不能绕过网关 | 06、13 | `sec\key_check.py`、`sec\port_scan.py` | — | T6（Key 校验） |
 | 7 | 覆盖清单准确，引用能回读原文 | — | — | `manual\功能验收.md` 第 7 项 | T5、T10 |
@@ -26,15 +26,15 @@ PRD 第 12 节"上线必过"全部 27 项（第 1–26 条和 16a）逐条对应
 | 14 | 缺依据的法律内容都标"法律依据待律师核实" | — | — | `manual\功能验收.md` 第 14 项 | T18 |
 | 15 | 14 个胶囊能打开；Skill 类都能跑通；成果可被后续 Skill 选用并记录版本 | — | — | `manual\功能验收.md` 第 15 项 | T13、T18 |
 | 16 | 业务 Skill 符合六部分规格；必问问题规则；自检结果显示 | — | `contracts\check_examples.py --skills skills` | `manual\功能验收.md` 第 16 项 | T18 |
-| 16a | 去水印后原件不变，印章、签名、手写批注未被去除，引用仍指向原件 | 12 | `sec\dewatermark_395.py` | `manual\395残留检查.md` 第 1 步 | T6（去水印测试）、T12 |
+| 16a | 去水印后原件不变，印章、签名、手写批注未被去除，引用仍指向原件 | 12 | `sec\dewatermark_395.py`（395 去水印没打开时判前提不满足） | `manual\395残留检查.md` 第 1 步 | T6（去水印测试）、T12 |
 | 17 | 预算到上限停并存草稿；草稿确认后才进成果目录 | — | — | `manual\功能验收.md` 第 17 项 | T8、T15 |
 | 18 | 长截图切分符合 F-TOOL-01 | — | — | `manual\功能验收.md` 第 18 项 | T19 |
 | 19 | Windows 10 / 11 能安装运行，界面全中文 | 03 | — | `manual\功能验收.md` 第 19 项 | T20 |
 | 20 | 案件文件夹位于云同步目录时拒绝打开并提示 | 14 | `sec\cloud_sync.py` | — | T3 |
 | 21 | 拖入文件和文件夹复制进案件并解析；软件自己的附件目录为空；原文件和已有原件哈希不变 | 01、08 | `sec\dsh_locations.py`、`sec\hash_originals.py`、`sec\find_leaks.py` | `manual\功能验收.md` 第 21 项 | T5、T17 |
 | 22 | 胶囊管理：排序、改名、隐藏、新增、恢复默认，重启后保持；没有删除入口 | — | — | `manual\功能验收.md` 第 22 项 | T13 |
-| 23 | 案卷归档：生成四个文件，页码连续且与立卷申请书一致；办案结果未确认不能生成 | 08 | `sec\hash_originals.py`（归档后） | `manual\功能验收.md` 第 23 项 | T23 |
-| 24 | 发票整理走完一期；全过程抓包只见两台服务器和本机 | 03 | `sec\net_watch.ps1`、`sec\engine_net_inventory.py` | `manual\抓包.md` 第 3 步 | T25 |
+| 23 | 案卷归档：生成四个文件，页码连续且与立卷申请书一致；办案结果未确认不能生成 | 08 | `sec\hash_originals.py`（归档后）、`sec\net_watch.ps1`（转换期间） | `manual\功能验收.md` 第 23 项、`manual\网络打印机.md` | T23 |
+| 24 | 发票整理走完一期；全过程抓包只见两台服务器和本机 | 03 | `sec\net_watch.ps1`、`sec\engine_net_inventory.py`、`sec\hash_originals.py`（发票源文件夹） | `manual\抓包.md` 第 3 步 | T25 |
 | 25 | 委托材料进入"01委托手续"、同名不覆盖；证件识别不发往服务器；窗口抓包只见本机 | 03 | `sec\net_watch.ps1`、`sec\engine_net_inventory.py` | `manual\抓包.md` 第 3 步 | T25、T26 |
 | 26 | 刑期计算：跨月末、闰年、多段羁押样例正确 | — | — | `manual\功能验收.md` 第 26 项 | T24（`sentence-cases.json`） |
 
@@ -44,15 +44,15 @@ PRD 第 12 节"上线必过"全部 27 项（第 1–26 条和 16a）逐条对应
 
 | 脚本 | 做什么 | 前提 |
 |---|---|---|
-| `sec\find_leaks.py` / `find_leaks.ps1` | 案件目录外按字节搜索特征字符串（UTF-8、UTF-16LE），不跟随链接；不排除任何目录。按顶层目录分批，每批打印一行进度（文件数、命中数、耗时）、结果单独落证据文件；中断后用同样参数再运行即从没扫完的批继续（`--fresh` / `-Fresh` 从头） | 无；搜索范围缺省为用户目录、AppData、临时目录、`$DSH_HOME`。T17 的 `scripts\find_leaks.ps1` 合并后改调它 |
-| `sec\hash_originals.py` | 原件区 sha256 快照与比对 | 案件目录 |
-| `sec\case_isolation.py` | 以案件 A 的 task_id 调 `/core/tool`，用 `../`、绝对路径、链接、联接、案件 B 材料名等越权参数读 | 工作台服务（T3）；`LB_URL`、`LB_TOKEN`、`LB_TASK_A` |
+| `sec\find_leaks.py` / `find_leaks.ps1` | 案件目录外按字节搜索特征字符串（UTF-8、UTF-16LE），不跟随链接；不排除任何目录。按顶层目录分批，每批打印一行进度（文件数、命中数、耗时）、结果单独落证据文件；中断后用同样参数再运行即从没扫完的批继续（`--fresh` / `-Fresh` 从头） | 无；搜索范围缺省为用户目录、AppData、临时目录、`$DSH_HOME`。`<日常办公文件夹>\发票台账` 按设计存发票副本（formats.md 1.2），和案件目录一样用 `--case-dir` 列入；工作台服务自己的数据目录（appdata）不该有命中。T17 的 `scripts\find_leaks.ps1` 合并后改调它 |
+| `sec\hash_originals.py` | 原件区 sha256 快照与比对（任何文件夹都可以，发票整理的源文件夹也用它） | 案件目录或发票源文件夹 |
+| `sec\case_isolation.py` | 以案件 A 的 task_id 调 `/core/tool`（读、搜、存草稿、存修改清单、归档方案），再以案件 A 的身份调 `/api/archive/build`、`/api/outputs/confirm`、`/api/redline`、`/api/search` 等；参数用 `../`、绝对路径、链接、联接、案件 B 材料名，以及"案件 B 的 case_id + 案件 A 的 task_id"；读到 B 的特征串或 win.ini、或在案件 A 之外写了文件即不通过 | 工作台服务（T3）；`LB_URL`、`LB_TOKEN`、`LB_TASK_A`；案件 B 的文件夹名 `civil-01`（或 `LB_CASE_B`） |
 | `sec\injection_check.py` | 在 attack-01 副本的工作区里找读系统文件、加载 evil、外发的痕迹 | 已按操作单做过对话 |
-| `sec\key_check.py` | 无 Key、错误 Key、停用 Key 调 6000D 和 395 | 在律所网络内；甲方开启 require_key；停用 Key 放 `LAWFIRM_REVOKED_KEY` |
+| `sec\key_check.py` | 无 Key、错误 Key、停用 Key 调 6000D 和 395 | 在律所网络内；甲方开启 require_key（395 拿 Key 向 6000D 校验，网关不开 395 也挡不住错误 Key）；停用 Key 放 `LAWFIRM_REVOKED_KEY` |
 | `sec\port_scan.py` | 两台服务器只开 8000 / 9000（运维端口 22、3389 只提示） | 在律所网络或 EasyTier 虚拟网内 |
 | `sec\residue_395.py` | 打印 395 上要执行的搜索命令；判定结果文件 | 用户在 395 上执行 |
-| `sec\dewatermark_395.py` | 真实 395 去水印前后红章、蓝色批注像素数不变，原件不变 | 395 已部署（T11）；`.env.local` 的测试 Key |
+| `sec\dewatermark_395.py` | 真实 395 去水印前后红章、蓝色批注像素数不变，原件不变；返回图与原图逐像素相同（去水印没生效）判前提不满足 | 395 已部署（T11）且打开去水印（T11 止损关着）；`.env.local` 的测试 Key |
 | `sec\cloud_sync.py` | OneDrive、"坚果云""百度网盘"目录下的案件被拒绝，普通目录能打开 | 工作台服务（T3） |
 | `sec\dsh_locations.py` | Spec 3.3：附件目录为空、会话不在 `$DSH_HOME`、凭据文件无 Key、无溢出文件 | 客户端装好并走过一遍（T17 之后） |
 | `sec\net_watch.ps1` | 运行期间相关进程的 TCP 远端地址与白名单比对，另列新增 DNS 解析。**看不到 UDP 流量和不经本机 DNS 缓存的解析，不能单独判第 1 项**，必须配合 `manual\抓包.md` 的全量抓包 | 客户端在运行 |
-| `sec\engine_net_inventory.py` | 引擎里的联网代码与已知清单（`engine_net_known.json`）比对；核对发票调用代码不引用它们 | 发票调用代码（T25）存在时才能给出"通过" |
+| `sec\engine_net_inventory.py` | 引擎里的联网代码（含 `http.server` 监听）与已知清单（`engine_net_known.json`）比对；再从工作台实际调用的入口（发票 `invoke.py` 与白名单脚本、委托材料驱动 `driver.py`、`启动.html` 加载的脚本）沿 import 找可达的联网文件，逐个核清单登记的护栏（runner 拒绝联网参数 / 只连 127.0.0.1） | 发票、委托材料调用代码（T25）存在 |

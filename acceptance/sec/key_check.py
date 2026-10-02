@@ -6,7 +6,8 @@ python acceptance\\sec\\key_check.py [--revoked-key-env LAWFIRM_REVOKED_KEY]
   无 Key 也返回 200 说明甲方还没开启 require_key（Spec 6.3），结论为"前提不满足"。
 - 停用 Key：由管理员在网关 /admin 停用一个测试 Key，放进环境变量（缺省 LAWFIRM_REVOKED_KEY）后运行；
   没有提供时结论为"前提不满足"。395 按 Spec 6.3 最迟 30 秒内拒绝，本脚本等 35 秒后再测 395。
-- 395：POST /v1/ocr/page（一张 8×8 的白图）同样测无 Key、错误 Key、停用 Key，应返回 401。
+- 395：POST /v1/ocr/page（一张 8×8 的白图）同样测无 Key、错误 Key、停用 Key，应返回 401。395 不另存 Key，
+  拿请求里的 Key 向 6000D 校验（Spec 6.3）：网关没开 require_key 时错误 Key 在 395 上也返回 200，归入同一"前提不满足"。
 Key 不打印，证据里只写"无 / 错误 / 停用"。
 """
 from __future__ import annotations
@@ -79,7 +80,10 @@ def main() -> None:
             if st == 200:
                 accepted.append(f"395 {label}")
     if require_key_off:
-        r.finish(UNMET, "6000D 不带 Key 也返回 200：甲方尚未开启 require_key（Spec 6.3），开启后重测")
+        extra = ""
+        if "395 错误 Key" in accepted or "395 停用 Key" in accepted:
+            extra = "；395 收下错误 / 停用 Key 是同一原因：395 按 Spec 6.3 拿这个 Key 向 6000D 发最小请求校验，网关不校验就都算有效"
+        r.finish(UNMET, "6000D 不带 Key 也返回 200：甲方尚未开启 require_key（Spec 6.3），开启后重测" + extra)
     if accepted:
         r.finish(FAIL, "以下请求没有被拒绝：" + "、".join(accepted))
     if not revoked:
