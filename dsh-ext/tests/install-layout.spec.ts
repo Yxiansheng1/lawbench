@@ -41,11 +41,16 @@ describe('打包后的固定布局', () => {
 
   it('装好的客户端：命令、服务目录、Skill 目录、工具位置都按安装目录；环境变量给的命令、目录、额外环境变量一概不用', () => {
     const { inst } = installed()
-    const c = packagedConfig(DEV, inst, 'C:\\ProgramData')
+    const c = packagedConfig(DEV, inst, 'C:\\ProgramData', 'C:\\Windows\\system32')
     expect(c.command).toEqual([join(inst, 'python', 'python.exe'), '-I', '-m', 'lawbench'])
     expect(c.cwd).toBe(join(inst, 'service'))
     expect(c.skillDirs).toEqual([join('C:\\ProgramData', ADMIN_DIR_NAME, 'skills'), join(inst, 'skills')])
-    expect(c.env).toEqual({})
+    // 随包工具：服务进程拿到 LAWBENCH_SOFFICE、LAWBENCH_PANDOC，PATH 前置两个工具目录（第二轮复核 P2-C）；开发期给的 LB_EXTRA 不带
+    expect(c.env).toEqual({
+      LAWBENCH_SOFFICE: join(inst, 'tools', 'libreoffice', 'program', 'soffice.exe'),
+      LAWBENCH_PANDOC: join(inst, 'tools', 'pandoc', 'pandoc.exe'),
+      PATH: `${join(inst, 'tools', 'libreoffice', 'program')};${join(inst, 'tools', 'pandoc')};C:\\Windows\\system32`,
+    })
     expect(c.portRange).toBeUndefined()
     expect(c.sofficeCandidates).toEqual([join(inst, 'tools', 'libreoffice', 'program', 'soffice.exe')])
     expect(c.pandocCandidates).toEqual([join(inst, 'tools', 'pandoc', 'pandoc.exe')])
@@ -69,14 +74,14 @@ describe('打包后的固定布局', () => {
 
   it('apply 用的分支（复核 NOTE）：装好的客户端按安装目录、查内置 Python；开发期照配置，命令是 node 时不查、是 python 时查', () => {
     const { inst, exe } = installed()
-    const p = effectiveConfig(DEV, exe, exists, 'C:\ProgramData')
+    const p = effectiveConfig(DEV, exe, exists, 'C:\\ProgramData')
     expect(p.packaged).toBe(true)
     expect(p.config.command[0]).toBe(join(inst, 'python', 'python.exe'))
     expect(p.checkPython).toBe(true)
-    const node = effectiveConfig({ ...DEV, command: ['D:\node\node.exe', 'fake-service.mjs'] }, development(), exists, 'C:\ProgramData')
+    const node = effectiveConfig({ ...DEV, command: ['D:\\node\\node.exe', 'fake-service.mjs'] }, development(), exists, 'C:\\ProgramData')
     expect(node).toMatchObject({ packaged: false, checkPython: false })
-    expect(node.config.command[0]).toBe('D:\node\node.exe')
-    const py = effectiveConfig({ ...DEV, command: ['C:\Py\python.exe', '-m', 'lawbench'] }, development(), exists, 'C:\ProgramData')
+    expect(node.config.command[0]).toBe('D:\\node\\node.exe')
+    const py = effectiveConfig({ ...DEV, command: ['C:\\Py\\python.exe', '-m', 'lawbench'] }, development(), exists, 'C:\\ProgramData')
     expect(py).toMatchObject({ packaged: false, checkPython: true })
   })
 })

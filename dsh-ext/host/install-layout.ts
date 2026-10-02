@@ -23,17 +23,23 @@ export function packagedSkillDirs(installDir: string, programData: string): stri
 /**
  * 装好的客户端的 Host 配置：命令、目录全部按安装目录，环境变量给的一概不用。
  * 应用数据目录、转发端口照原配置（它们本来就不取自开发期环境变量）。
+ * 随包的 LibreOffice、pandoc 在 <安装目录>\tools\ 下：给服务进程传 LAWBENCH_SOFFICE、LAWBENCH_PANDOC，PATH 前置这两个目录
+ * （主编排定，T20 第二轮复核 P2-C；服务侧优先读这两个变量归线 C）。
+ * @param basePath - Host 自己的 PATH（服务进程原本继承的那份）。
  */
-export function packagedConfig(config: Config, installDir: string, programData: string): Config {
+export function packagedConfig(config: Config, installDir: string, programData: string, basePath = ''): Config {
+  const soffice = join(installDir, 'tools', 'libreoffice', 'program', 'soffice.exe')
+  const pandoc = join(installDir, 'tools', 'pandoc', 'pandoc.exe')
+  const toolDirs = [dirname(soffice), dirname(pandoc)].join(';')
   return {
     command: [join(installDir, 'python', 'python.exe'), '-I', '-m', 'lawbench'],
     cwd: join(installDir, 'service'),
     appData: config.appData,
     forwardPort: config.forwardPort,
-    env: {},
+    env: { LAWBENCH_SOFFICE: soffice, LAWBENCH_PANDOC: pandoc, PATH: basePath ? `${toolDirs};${basePath}` : toolDirs },
     skillDirs: packagedSkillDirs(installDir, programData),
-    sofficeCandidates: [join(installDir, 'tools', 'libreoffice', 'program', 'soffice.exe')],
-    pandocCandidates: [join(installDir, 'tools', 'pandoc', 'pandoc.exe')],
+    sofficeCandidates: [soffice],
+    pandocCandidates: [pandoc],
   }
 }
 
@@ -41,8 +47,8 @@ export function packagedConfig(config: Config, installDir: string, programData: 
  * Host 实际用的配置和要不要查内置 Python：装好的客户端按安装目录写死；开发期照配置（环境变量给的）。
  * 启动命令不是 Python（开发期用 node 起假服务）时自检不查内置 Python。apply 里用，单独拿出来便于测。
  */
-export function effectiveConfig(given: Config, execPath: string, exists: (p: string) => boolean, programData: string): { config: Config; packaged: boolean; checkPython: boolean } {
+export function effectiveConfig(given: Config, execPath: string, exists: (p: string) => boolean, programData: string, basePath = ''): { config: Config; packaged: boolean; checkPython: boolean } {
   const installDir = packagedInstallDir(execPath, exists)
-  const config = installDir ? packagedConfig(given, installDir, programData) : given
+  const config = installDir ? packagedConfig(given, installDir, programData, basePath) : given
   return { config, packaged: installDir !== undefined, checkPython: /python(w)?(\.exe)?$/i.test(config.command[0] ?? '') }
 }

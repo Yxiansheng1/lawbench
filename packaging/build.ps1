@@ -80,6 +80,7 @@ $Steps = [ordered]@{
     Push-Location $Dsh
     try {
       $env:CI = 'true'
+      $env:COREPACK_ENABLE_NETWORK = '0'  # corepack must not fetch pnpm either
       Run 'corepack' @('pnpm@11.7.0', 'install', '--frozen-lockfile', '--offline')
       Run 'corepack' @('pnpm@11.7.0', 'run', 'build')
     } finally { Pop-Location }
@@ -114,8 +115,17 @@ $Steps = [ordered]@{
     # processing (pywin32). sitecustomize stays as a second guard.
     Copy-Item -Force (Join-Path $Root 'packaging\python\python312._pth') (Join-Path $Stage 'python\')
     Copy-Item -Force (Join-Path $Root 'packaging\python\sitecustomize.py') $site
+    # Each step clears only what it places: keep the tokenizer.json the tools step put under service\ (re-running
+    # the python step alone must not drop it).
+    $tok = Join-Path $Stage 'service\lawbench\llm\tokenizer.json'
+    $keptTok = $null
+    if (Test-Path $tok) { $keptTok = Join-Path $Stage 'tokenizer.json.keep'; Move-Item -Force $tok $keptTok }
     Reset-Dir (Join-Path $Stage 'service')
     Copy-Item -Recurse -Force (Join-Path $Root 'service\lawbench') (Join-Path $Stage 'service\lawbench')
+    if ($keptTok) { Move-Item -Force $keptTok $tok }
+    # The service finds contracts\ at <install>\contracts (REPO_ROOT = parents[2] of service\lawbench\config.py)
+    Reset-Dir (Join-Path $Stage 'contracts')
+    Copy-Item -Recurse -Force (Join-Path $Root 'contracts\*') (Join-Path $Stage 'contracts')
     # The Host starts the service as: <install>\python\python.exe -I -m lawbench
     Run $py @('-I', '-m', 'lawbench', '--help')
   }
@@ -157,7 +167,9 @@ $Steps = [ordered]@{
     $files | Group-Object { $_.FullName.Substring($Stage.Length + 1).Split('\')[0] } | Sort-Object Name | ForEach-Object {
       Say ("  {0,-10} {1,7} files {2,9:N1} MB" -f $_.Name, $_.Count, (($_.Group | Measure-Object -Sum Length).Sum / 1MB))
     }
-    foreach ($need in 'python\python.exe', 'service\lawbench\__main__.py', 'skills', 'engines') {
+    foreach ($need in 'python\python.exe', 'python\python312._pth', 'service\lawbench\__main__.py', 'service\lawbench\llm\tokenizer.json',
+                      'contracts\VERSION', 'skills', 'engines', 'tools\libreoffice\program\soffice.exe', 'tools\pandoc\pandoc.exe',
+                      'installer\set-skills-acl.ps1') {
       if (-not (Test-Path (Join-Path $Stage $need))) { Say "  MISSING: $need" }
     }
     Say 'admin Skill folder: run packaging\installer\set-skills-acl.ps1 elevated once per machine (the NSIS installer is per-user)'

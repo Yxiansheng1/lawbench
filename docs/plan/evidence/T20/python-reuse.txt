@@ -38,3 +38,13 @@ DSH 桌面端内置的 Python：python-build-standalone 3.12.14（20260901，x86
   暂存解释器实测（PYTHONPATH=C:\evil、不带 -I）：sys.path 只有这几项加 pywin32 自己的三项，没有 C:\evil、没有用户目录；site.ENABLE_USER_SITE=False；
   lawbench、win32api、onnxruntime 都能导入；-I -m lawbench --help 正常。
 
+补记三（第二轮复核 P3-1 改准，2026-10-02 11:0x）：补记二说"没有用户目录、ENABLE_USER_SITE=False"是 sitecustomize 事后改的结果，不是 ._pth 拦下的。
+  ._pth 里有 import site 时，site 模块照常处理用户目录（no_user_site=0）：用户目录 site-packages 里的 .pth 会先被执行，随后 sitecustomize
+  才把那条路径从 sys.path 删掉。所以 ._pth 管住的是 PYTHONPATH（不再生效）和 sys.path 的组成，管不住用户目录 .pth 的执行；
+  服务另起子进程（证件识别驱动）时传 PYTHONNOUSERSITE=1 仍然必须做（归线 C，主编排另排）。
+
+补记四（第二轮复核 P2-A，2026-10-02 11:1x）：暂存目录原来缺 contracts\，装好后服务按 <安装目录>\contracts 找不到契约，/health 报 500、
+  test_main 两例红。python 步改为一并拷 contracts\ 到 stage\contracts。重建后：暂存服务 python.exe -I -m lawbench 起来，/health 返回
+  200 {"status":"ok","contract_version":"1.3"}；用带 python312._pth 的暂存解释器跑服务全部测试（pytest 经 sys.path 加入，._pth 下 PYTHONPATH 不生效）：
+  945 通过、6 跳过、0 失败（test_main 两例通过）。
+

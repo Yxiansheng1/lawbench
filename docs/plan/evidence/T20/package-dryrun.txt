@@ -1,13 +1,11 @@
-﻿[build] == tools
-[build] == skills
-[build] == engines
-[build] == package
-[build] payload from D:\lawbench-A\packaging\stage: 28079 files, 1,503 MB
+﻿[build] == package
+[build] payload from D:\lawbench-A\packaging\stage: 28348 files, 1,505 MB
+[build]   contracts      126 files       0.3 MB
 [build]   engines        587 files      91.4 MB
 [build]   installer        1 files       0.0 MB
-[build]   python       13627 files     501.8 MB
+[build]   python       13770 files     503.2 MB
 [build]   service         99 files      19.8 MB
 [build]   skills          27 files       0.1 MB
 [build]   tools        13738 files     889.9 MB
-[build] admin Skill folder: run packaging\installer\set-skills-acl.ps1 elevated once per machine (the NSIS installer is
+[build] admin Skill folder: run packaging\installer\set-skills-acl.ps1 elevated once per machine (the NSIS installer is per-user)
 [build] done

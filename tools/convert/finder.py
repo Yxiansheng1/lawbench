@@ -2,7 +2,8 @@
 
 查找顺序：
 1. 环境变量 LAWBENCH_SOFFICE / LAWBENCH_PANDOC（调试或特殊部署时指定）；
-2. 已安装客户端的内置路径（按当前用户安装：%LOCALAPPDATA%\\Programs\\<客户端目录>\\resources\\…）；
+2. 已安装客户端的内置路径（按当前用户安装：%LOCALAPPDATA%\\Programs\\<客户端目录>\\tools\\libreoffice\\program\\soffice.exe、
+   …\\tools\\pandoc\\pandoc.exe；T20 打包布局，载荷在 exe 旁）；
 3. 小工具自带的一份（打包后程序所在目录下的 libreoffice\\、pandoc\\）；
 4. 系统安装（Program Files、pandoc 默认的 %LOCALAPPDATA%\\Pandoc）和 PATH。
 都找不到时返回 None，由调用方给出中文提示。
@@ -14,8 +15,9 @@ import shutil
 import sys
 from pathlib import Path
 
-# 客户端安装目录名。产品名和包内布局在 T20 定，定了以后在这里对齐。
-CLIENT_DIR_NAMES = ["lawbench", "律师工作台"]
+# 客户端安装目录名（electron-builder 按当前用户装到 %LOCALAPPDATA%\Programs\<产品名>）。软件名称未定，
+# 第一个是占位名（同 dsh\apps\desktop\scripts\lawbench-product.mjs，候 owner N58），定了在这里对齐。
+CLIENT_DIR_NAMES = ["连越律师工作台", "lawbench", "律师工作台"]
 
 MISSING = {
     "soffice": "没有找到 LibreOffice。请先安装律师工作台客户端（其中自带 LibreOffice），或安装 LibreOffice 后重试。",
@@ -32,7 +34,7 @@ def _client_roots() -> list[Path]:
     local = os.environ.get("LOCALAPPDATA")
     if not local:
         return []
-    return [Path(local) / "Programs" / n / "resources" for n in CLIENT_DIR_NAMES]
+    return [Path(local) / "Programs" / n / "tools" for n in CLIENT_DIR_NAMES]
 
 
 def _bundled_root() -> Path:

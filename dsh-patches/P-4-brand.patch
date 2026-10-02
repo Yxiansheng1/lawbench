@@ -25,7 +25,7 @@ index c885816c75..db024718b2 100644
      report += L"Result: " + DescribeResult(code) + L"\r\n";
      report += L"Archive: " + archive + L"\r\n";
 diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
-index 174ebfa28b..265940ac6a 100644
+index 174ebfa28b..2795bc053b 100644
 --- a/apps/desktop/installer/strings.nsh
 +++ b/apps/desktop/installer/strings.nsh
 @@ -19,20 +19,20 @@ LangString INSTALLER_BROWSE ${LANG_ENGLISH} "Browse"
@@ -34,8 +34,8 @@ index 174ebfa28b..265940ac6a 100644
  LangString INSTALLER_LAUNCH ${LANG_SIMPCHINESE} "立即启动"
 -LangString INSTALLER_LAUNCH_FAILED ${LANG_ENGLISH} "DeepSeek Harness could not be launched. Retry, or clear Launch now and close the installer."
 -LangString INSTALLER_LAUNCH_FAILED ${LANG_SIMPCHINESE} "无法启动 DeepSeek Harness。请重试，或取消勾选立即启动后关闭安装程序。"
-+LangString INSTALLER_LAUNCH_FAILED ${LANG_ENGLISH} "连越律师工作台 could not be launched. Retry, or clear Launch now and close the installer."
-+LangString INSTALLER_LAUNCH_FAILED ${LANG_SIMPCHINESE} "无法启动 连越律师工作台。请重试，或取消勾选立即启动后关闭安装程序。"
++LangString INSTALLER_LAUNCH_FAILED ${LANG_ENGLISH} "${PRODUCT_NAME} could not be launched. Retry, or clear Launch now and close the installer."
++LangString INSTALLER_LAUNCH_FAILED ${LANG_SIMPCHINESE} "无法启动 ${PRODUCT_NAME}。请重试，或取消勾选立即启动后关闭安装程序。"
  LangString INSTALLER_UI_ERROR ${LANG_ENGLISH} "The installer could not initialize its window. Close it and try again."
  LangString INSTALLER_UI_ERROR ${LANG_SIMPCHINESE} "无法初始化安装窗口，请关闭后重试。"
  LangString INSTALLER_THEME_ERROR ${LANG_ENGLISH} "Use /THEME=auto, /THEME=light or /THEME=dark."
@@ -44,14 +44,14 @@ index 174ebfa28b..265940ac6a 100644
  LangString INSTALLER_FAILED ${LANG_SIMPCHINESE} "安装未完成，请关闭安装程序后重试。如仍然失败，请重新下载安装包。"
 -LangString INSTALLER_RUNNING ${LANG_ENGLISH} "DeepSeek Harness is running. Quit it from the system tray and try again."
 -LangString INSTALLER_RUNNING ${LANG_SIMPCHINESE} "DeepSeek Harness 正在运行，请先在系统托盘中退出应用后重试。"
-+LangString INSTALLER_RUNNING ${LANG_ENGLISH} "连越律师工作台 is running. Quit it from the system tray and try again."
-+LangString INSTALLER_RUNNING ${LANG_SIMPCHINESE} "连越律师工作台 正在运行，请先在系统托盘中退出应用后重试。"
++LangString INSTALLER_RUNNING ${LANG_ENGLISH} "${PRODUCT_NAME} is running. Quit it from the system tray and try again."
++LangString INSTALLER_RUNNING ${LANG_SIMPCHINESE} "${PRODUCT_NAME} 正在运行，请先在系统托盘中退出应用后重试。"
  LangString INSTALLER_PATH_INVALID ${LANG_ENGLISH} "Choose a full local folder path. Drive roots, system folders, links and special characters are not supported."
  LangString INSTALLER_PATH_INVALID ${LANG_SIMPCHINESE} "请选择本地磁盘上的完整文件夹路径，不能使用磁盘根目录、系统目录、链接目录或包含特殊字符的路径。"
 -LangString INSTALLER_PATH_OWNERSHIP ${LANG_ENGLISH} "Choose an empty folder or the registered DeepSeek Harness installation folder."
 -LangString INSTALLER_PATH_OWNERSHIP ${LANG_SIMPCHINESE} "请选择空文件夹，或 DeepSeek Harness 原来的安装目录。"
-+LangString INSTALLER_PATH_OWNERSHIP ${LANG_ENGLISH} "Choose an empty folder or the registered 连越律师工作台 installation folder."
-+LangString INSTALLER_PATH_OWNERSHIP ${LANG_SIMPCHINESE} "请选择空文件夹，或 连越律师工作台 原来的安装目录。"
++LangString INSTALLER_PATH_OWNERSHIP ${LANG_ENGLISH} "Choose an empty folder or the registered ${PRODUCT_NAME} installation folder."
++LangString INSTALLER_PATH_OWNERSHIP ${LANG_SIMPCHINESE} "请选择空文件夹，或 ${PRODUCT_NAME} 原来的安装目录。"
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
@@ -77,7 +77,7 @@ index ff09b8b783..bbeb22f823 100644
      for (const [key, value] of Object.entries(values)) {
        execFileSync('/usr/bin/plutil', ['-replace', key, '-json', JSON.stringify(value), plist])
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
-index 2bb56c359f..d9398e42f6 100644
+index 2bb56c359f..e2d37def03 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
 +++ b/apps/desktop/scripts/electron-builder-config.mjs
 @@ -12,6 +12,7 @@ import {
@@ -123,7 +123,7 @@ index 2bb56c359f..d9398e42f6 100644
        forceCodeSigning: true,
        hardenedRuntime: true,
 -      extendInfo: { NSMicrophoneUsageDescription: 'DeepSeek Harness uses your microphone to transcribe speech into message drafts.' },
-+      extendInfo: { NSMicrophoneUsageDescription: '连越律师工作台 uses your microphone to transcribe speech into message drafts.' },
++      extendInfo: { NSMicrophoneUsageDescription: `${LAWBENCH_PRODUCT_NAME} uses your microphone to transcribe speech into message drafts.` },
        // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
        signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
        notarize: true,

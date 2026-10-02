@@ -135,6 +135,9 @@ def license_of(d: Distribution) -> str:
 
 
 def client_sections(sites: list[pathlib.Path], stage: pathlib.Path | None = None) -> tuple[str, list[tuple[str, str, str]], list[str]]:
+    # 子模块没检出时 dsh\ 是空目录，git -C dsh 会落到外层仓库、记成外层提交号——直接报错（第二轮复核 NOTE）
+    if not (ROOT / "dsh" / "package.json").is_file():
+        sys.exit("gen_lock: dsh 子模块没有检出（dsh\\package.json 不在），读不到 DSH 的提交和内置运行时版本")
     dsh_commit = subprocess.run(["git", "-C", str(ROOT / "dsh"), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip() or PENDING
     rt = json.loads((ROOT / "dsh" / "scripts" / "primary-runtime" / "lock.json").read_text(encoding="utf-8"))
     win = rt["targets"]["win-x64"]

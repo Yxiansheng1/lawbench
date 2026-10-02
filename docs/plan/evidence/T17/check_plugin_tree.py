@@ -229,7 +229,7 @@ def norm(v):
 
 
 # 期望的 !!js 原文（与 dsh-ext\cordis.patch.yml 一致；导出后的反斜杠是两个）
-EXPECTED_SKILL_DIRS = norm(r"!!js [process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)")
+EXPECTED_SKILL_DIRS = norm(r"!!js ((p, fs) => { const inst = p.dirname(process.execPath); const packaged = fs.existsSync(p.join(inst, 'resources', 'app.asar')); return [p.join(process.env.ProgramData ?? 'C:\\ProgramData', 'lawbench', 'skills'), packaged ? p.join(inst, 'skills') : process.env.LAWBENCH_SKILLS_DIR].filter(Boolean) })(process.getBuiltinModule('node:path'), process.getBuiltinModule('node:fs'))")
 EXPECTED_PERSONA_PREFIX = norm(r"!!js process.getBuiltinModule('node:fs').readFileSync(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('lawbench-dsh/persona.md'), 'utf8').replace(/^【草稿[^\n]*\n+/, '').trim()")
 PERSONA_FILE = __import__("pathlib").Path(__file__).resolve().parents[4] / "dsh-ext" / "persona.md"
 

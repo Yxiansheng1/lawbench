@@ -419,7 +419,7 @@ Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS_KEY, {
 
 export function apply(ctx: Ctx, given: Config): void {
   // 装好的客户端：命令、目录按安装目录写死，不用开发期环境变量给的（T20 步骤 3，install-layout.ts）
-  const { config, packaged, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData')
+  const { config, packaged, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData', process.env.PATH ?? '')
   // 只记元数据（Spec 4.5）：事件名、状态、端口、退出码、次数
   const log = makeLogger('host', config.appData, ctx.logger?.('lawbench-host'))
   if (packaged) log('info', 'config.packaged_layout')

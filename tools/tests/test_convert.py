@@ -207,10 +207,11 @@ def test_no_print_calls_in_converter():
 def test_finder_order(isolated_temp, monkeypatch):
     tmp_path = isolated_temp
     fake_client = tmp_path / "local"
-    exe = fake_client / "Programs" / "lawbench" / "resources" / "libreoffice" / "program" / "soffice.exe"
+    # T20 打包布局：载荷在 exe 旁的 tools\\（产品名占位"连越律师工作台"）
+    exe = fake_client / "Programs" / "连越律师工作台" / "tools" / "libreoffice" / "program" / "soffice.exe"
     exe.parent.mkdir(parents=True)
     exe.write_bytes(b"")
-    pan = fake_client / "Programs" / "lawbench" / "resources" / "pandoc" / "pandoc.exe"
+    pan = fake_client / "Programs" / "连越律师工作台" / "tools" / "pandoc" / "pandoc.exe"
     pan.parent.mkdir(parents=True)
     pan.write_bytes(b"")
     monkeypatch.setenv("LOCALAPPDATA", str(fake_client))

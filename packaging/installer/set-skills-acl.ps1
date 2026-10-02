@@ -9,7 +9,8 @@
   - Grants use well-known SIDs so it works on any display language:
       S-1-5-18 SYSTEM, S-1-5-32-544 Administrators : full control
       S-1-5-32-545 Users                            : read and execute
-  - Existing files below get the same rights (/T).
+  - The folder itself gets these rights (no /T: applied to files, /inheritance:r /grant:r would leave them with
+    an empty ACL nobody can read); everything already inside is then reset to inherit from the folder.
   Keep this file ASCII-only (Windows PowerShell 5 reads BOM-less files in the ANSI code page).
 #>
 param(
@@ -19,8 +20,12 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $Dir)) { New-Item -ItemType Directory -Force $Dir | Out-Null }
 
-& icacls.exe $Dir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /T /C /Q
+& icacls.exe $Dir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /C /Q
 if ($LASTEXITCODE -ne 0) { throw "icacls failed ($LASTEXITCODE)" }
+if (Get-ChildItem -Force $Dir) {
+  & icacls.exe (Join-Path $Dir '*') /reset /T /C /Q
+  if ($LASTEXITCODE -ne 0) { throw "icacls reset of the contents failed ($LASTEXITCODE)" }
+}
 
 if ($Verify) {
   # The current process is not elevated here, so Administrators is a deny-only group in its token:
@@ -35,7 +40,13 @@ if ($Verify) {
   if ($mkdir) { Remove-Item -Force $sub }
   "acl:"
   & icacls.exe $Dir
+  # existing content must stay readable (only the folder's own ACL changes; children inherit it)
+  $unreadable = @()
+  foreach ($f in Get-ChildItem -Recurse -File -Force $Dir) {
+    try { [IO.File]::ReadAllBytes($f.FullName) | Out-Null } catch { $unreadable += $f.FullName.Substring($Dir.Length) }
+  }
+  "existing files readable as current user: $(-not $unreadable)$(if ($unreadable) { ' (not: ' + ($unreadable -join ', ') + ')' })"
   "write file as current (non-elevated) user: $writable"
   "create folder as current (non-elevated) user: $mkdir"
-  if ($writable -or $mkdir) { exit 1 }
+  if ($writable -or $mkdir -or $unreadable) { exit 1 }
 }
