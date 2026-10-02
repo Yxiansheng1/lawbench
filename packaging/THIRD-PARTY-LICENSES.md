@@ -11,8 +11,8 @@
 
 | 组件 | 许可证 | 说明 |
 |---|---|---|
-| LibreOffice | MPL-2.0 | 版本候补（T20 步骤 3） |
-| pandoc | GPL-2.0-or-later | 版本候补；**作为独立程序随包分发，按 GPL 要附许可证全文并提供对应源码的获取方式**，候主编排确认分发方式 |
+| LibreOffice | MPL-2.0 | 版本、哈希见 `versions.lock` 的 `[client]` |
+| pandoc | GPL-2.0-or-later | 版本、哈希见 `versions.lock`；**作为独立程序随包分发，按 GPL 要附许可证全文并提供对应源码的获取方式**，候主编排确认分发方式 |
 | 发票整理引擎（invoice-ledger-db 3.9.4.1） | 作者授权 | 律所周海沺律师提供，原样使用；署名保留 |
 | 委托材料网页与证件识别驱动（retainer-offline 3.4.1） | 作者授权 | 同上；驱动内附 RapidOCR 及模型，许可证见驱动目录 |
 | Qwen3 分词文件 tokenizer.json | Apache-2.0 | |
@@ -26,15 +26,25 @@
 | certifi | 2026.7.22 | MPL-2.0 |
 | charset-normalizer | 3.5.1 | MIT |
 | click | 8.5.0 | BSD-3-Clause |
+| colorama | 0.4.6 | BSD License |
 | et_xmlfile | 2.0.0 | MIT |
+| filelock | 4.0.7 | MIT |
 | flatbuffers | 25.12.19 | Apache 2.0 |
+| fsspec | 2026.9.0 | BSD-3-Clause |
 | h11 | 0.16.0 | MIT |
+| hf-xet | 1.6.0 | Apache-2.0 |
 | httpcore | 1.0.9 | BSD-3-Clause |
 | httpx | 0.28.1 | BSD-3-Clause |
+| huggingface_hub | 1.33.0 | Apache-2.0 |
 | idna | 3.20 | BSD-3-Clause |
+| jaraco.classes | 3.4.0 | MIT License |
+| jaraco.context | 6.1.2 | MIT |
+| jaraco.functools | 4.6.0 | MIT |
 | jsonschema | 4.26.0 | MIT |
 | jsonschema-specifications | 2025.9.1 | MIT |
+| keyring | 25.7.0 | MIT |
 | lxml | 6.1.3 | BSD-3-Clause |
+| more-itertools | 11.1.0 | MIT |
 | mpmath | 1.3.0 | BSD |
 | numpy | 2.5.3 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | olefile | 0.47 | BSD |
@@ -49,6 +59,7 @@
 | pypdf | 6.19.0 | BSD-3-Clause |
 | pypdfium2 | 5.13.0 | BSD-3-Clause, Apache-2.0, dependency licenses |
 | pywin32 | 312 | PSF |
+| pywin32-ctypes | 0.2.3 | BSD-3-Clause |
 | PyYAML | 6.0.3 | MIT |
 | referencing | 0.37.0 | MIT |
 | reportlab | 5.0.1 | BSD License |
@@ -56,7 +67,7 @@
 | shapely | 2.1.2 | BSD 3-Clause |
 | starlette | 1.7.0 | BSD-3-Clause |
 | sympy | 1.14.0 | BSD |
+| tokenizers | 0.23.2 | Apache Software License |
+| tqdm | 4.70.1 | MPL-2.0 AND MIT |
 | typing_extensions | 4.16.0 | PSF-2.0 |
 | uvicorn | 0.54.0 | BSD-3-Clause |
-
-候补：keyring, omegaconf, tokenizers（依赖目录里没有，打包时装上再生成）。

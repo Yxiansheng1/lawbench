@@ -27,3 +27,8 @@ DSH 桌面端内置的 Python：python-build-standalone 3.12.14（20260901，x86
 
 结论：复用 DSH 内置的同一份 3.12.14 发行包，单独解压一份，不改 DSH 的运行时载荷，也不另带 python-build-standalone。
 代价：安装包里多一份约 50MB 的解释器（DSH 载荷里那份照旧给 DSH 自己的 Office 工作区工具用；P-12 已关掉那组工具，T20 步骤 3 可再看能否不打 DSH 那份）。
+
+补记（步骤 3 第 2 条，2026-10-02 08:0x–08:2x）：packaging\build.ps1 -Step python 在本机全程跑通——
+  从 DSH 下载缓存取压缩包、核 sha256、解压到 packaging\stage\python，从离线 wheelhouse（repack_wheels.py 从线 C、线 B 已装环境回装的 50 个轮子）
+  pip install --no-index 装进它自己的 site-packages，放 sitecustomize.py 与 lawbench-service.pth，拷 service\lawbench，-I -m lawbench --help 正常。
+  用这个暂存解释器（只另给 pytest 本身的几个包走 PYTHONPATH，产品里不带 pytest）跑服务全部测试：945 通过、6 跳过、0 失败（tokenizers、keyring 这次都装上了）。

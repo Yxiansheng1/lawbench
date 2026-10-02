@@ -24,7 +24,14 @@ param(
   [string]$Stage = (Join-Path $PSScriptRoot 'stage'),
   [string]$Out = (Join-Path $PSScriptRoot 'out'),
   # Build-machine Python used for the helper scripts (brand assets need Pillow); not shipped.
-  [string]$BuildPython = 'python'
+  [string]$BuildPython = 'python',
+  # Payload sources for the 'tools' step (offline: an installed LibreOffice folder, a pandoc.exe, the Qwen3
+  # tokenizer.json). Versions and hashes are recorded by the 'lock' step.
+  [string]$LibreOfficeDir = '',
+  [string]$PandocExe = '',
+  [string]$Tokenizer = '',
+  # 'package' step: list what would be packaged instead of running electron-builder.
+  [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -41,7 +48,11 @@ $PyArchive = Join-Path $Dsh ('apps\desktop\.desktop-build\downloads\' + $PySha)
 function Say([string]$m) { Write-Host "[build] $m" }
 function Pending([string]$what) { throw "PENDING (T20 step 3/6): $what" }
 function Run([string]$exe, [string[]]$argv) {
-  & $exe @argv
+  # Native tools write warnings to stderr; in Windows PowerShell 5.1 that becomes an error record when output is
+  # redirected, which 'Stop' would turn fatal. Judge native commands by their exit code only.
+  $saved = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { & $exe @argv 2>&1 | ForEach-Object { "$_" } } finally { $ErrorActionPreference = $saved }
   if ($LASTEXITCODE -ne 0) { throw "failed ($LASTEXITCODE): $exe $($argv -join ' ')" }
 }
 
@@ -91,7 +102,7 @@ $Steps = [ordered]@{
     if (-not $pins) { throw 'no [client.pip] pins in packaging\versions.lock (run the lock step)' }
     $pins | Set-Content -Encoding ascii $req
     if (-not (Test-Path $Wheelhouse)) { Pending "offline wheelhouse $Wheelhouse (pip download -r $req on a build machine)" }
-    Run $py @('-I', '-m', 'pip', 'install', '--no-index', '--find-links', $Wheelhouse, '-r', $req)
+    Run $py @('-I', '-m', 'pip', 'install', '--no-index', '--no-warn-script-location', '--find-links', $Wheelhouse, '-r', $req)
     # sitecustomize drops the per-user site-packages for child processes; the .pth puts <install>\service on the path
     Copy-Item -Force (Join-Path $Root 'packaging\python\sitecustomize.py') $site
     Copy-Item -Force (Join-Path $Root 'packaging\python\lawbench-service.pth') $site
@@ -100,21 +111,48 @@ $Steps = [ordered]@{
     Run $py @('-I', '-m', 'lawbench', '--help')
   }
   tools = {
-    Pending 'LibreOffice and pandoc payloads and tokenizer.json location (versions.lock [client] marks them PENDING)'
+    $missing = @()
+    if ($LibreOfficeDir -and (Test-Path (Join-Path $LibreOfficeDir 'program\soffice.exe'))) {
+      Copy-Item -Recurse -Force $LibreOfficeDir (Join-Path $Stage 'tools\libreoffice')
+    } else { $missing += 'LibreOffice (-LibreOfficeDir <folder with program\soffice.exe>)' }
+    if ($PandocExe -and (Test-Path $PandocExe)) {
+      New-Item -ItemType Directory -Force (Join-Path $Stage 'tools\pandoc') | Out-Null
+      Copy-Item -Force $PandocExe (Join-Path $Stage 'tools\pandoc\pandoc.exe')
+    } else { $missing += 'pandoc (-PandocExe <pandoc.exe>)' }
+    if ($Tokenizer -and (Test-Path $Tokenizer)) {
+      New-Item -ItemType Directory -Force (Join-Path $Stage 'service\lawbench\llm') | Out-Null
+      Copy-Item -Force $Tokenizer (Join-Path $Stage 'service\lawbench\llm\tokenizer.json')
+    } else { $missing += 'tokenizer.json (-Tokenizer <file>)' }
+    if ($missing) { Pending ('payload sources not given: ' + ($missing -join '; ')) }
   }
   skills = {
     Run $BuildPython @((Join-Path $Root 'skills\_scripts\install.py'), '--out', (Join-Path $Stage 'skills'))
+    # the one-time elevated step for the admin Skill folder ships with the install
+    New-Item -ItemType Directory -Force (Join-Path $Stage 'installer') | Out-Null
+    Copy-Item -Force (Join-Path $Root 'packaging\installer\set-skills-acl.ps1') (Join-Path $Stage 'installer\')
   }
   engines = {
     Copy-Item -Recurse -Force (Join-Path $Root 'engines') (Join-Path $Stage 'engines')
   }
   lock = {
-    Run $BuildPython @((Join-Path $Root 'packaging\gen_lock.py'), '--site', (Join-Path $Stage 'python\site-packages'))
+    Run $BuildPython @((Join-Path $Root 'packaging\gen_lock.py'), '--site', (Join-Path $Stage 'python\Lib\site-packages'), '--stage', $Stage)
   }
   package = {
-    if (-not $Package) { Say 'package skipped (pass -Package)'; return }
-    Pending 'electron-builder extraResources for stage\ (python, service, skills, engines, tools) and the ProgramData skills ACL in installer.nsh'
+    if (-not $Package -and -not $DryRun) { Say 'package skipped (pass -Package, or -DryRun to list the payload)'; return }
+    # P-4 hands $Stage to electron-builder as extraFiles (next to the executable); requirements.txt is left out.
+    $files = Get-ChildItem -Recurse -File $Stage | Where-Object { $_.FullName -ne (Join-Path $Stage 'requirements.txt') }
+    Say ("payload from {0}: {1} files, {2:N0} MB" -f $Stage, $files.Count, (($files | Measure-Object -Sum Length).Sum / 1MB))
+    $files | Group-Object { $_.FullName.Substring($Stage.Length + 1).Split('\')[0] } | Sort-Object Name | ForEach-Object {
+      Say ("  {0,-10} {1,7} files {2,9:N1} MB" -f $_.Name, $_.Count, (($_.Group | Measure-Object -Sum Length).Sum / 1MB))
+    }
+    foreach ($need in 'python\python.exe', 'service\lawbench\__main__.py', 'skills', 'engines') {
+      if (-not (Test-Path (Join-Path $Stage $need))) { Say "  MISSING: $need" }
+    }
+    Say 'admin Skill folder: run packaging\installer\set-skills-acl.ps1 elevated once per machine (the NSIS installer is per-user)'
+    if ($DryRun) { return }
+    Pending 'real installer build: run after T20 step 3 payloads are final and with the owner present (step 6)'
     $env:DSH_DESKTOP_APP_ID = $AppId
+    $env:LAWBENCH_STAGE_DIR = $Stage
     Push-Location (Join-Path $Dsh 'apps\desktop')
     try { Run 'corepack' @('pnpm@11.7.0', 'run', 'package:win:x64:unsigned') } finally { Pop-Location }
   }

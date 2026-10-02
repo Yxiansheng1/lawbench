@@ -30,7 +30,7 @@ index 174ebfa28b..265940ac6a 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
-index 2bb56c359f..a8d6c82a64 100644
+index 2bb56c359f..09be1f0c9e 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
 +++ b/apps/desktop/scripts/electron-builder-config.mjs
 @@ -99,16 +99,16 @@ export function createElectronBuilderConfig(
@@ -53,7 +53,17 @@ index 2bb56c359f..a8d6c82a64 100644
      directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
      asar: true,
      electronDist: buildPaths.electron,
-@@ -156,7 +156,7 @@ export function createElectronBuilderConfig(
+@@ -148,6 +148,9 @@ export function createElectronBuilderConfig(
+       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
+       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
+     ],
++    // lawbench P-4 (T20 step 3): the workbench payload staged by packaging\build.ps1 (python\, service\, skills\,
++    // engines\, tools\) goes next to the executable, where the Host's packaged layout expects it.
++    ...(env.LAWBENCH_STAGE_DIR ? { extraFiles: [{ from: env.LAWBENCH_STAGE_DIR, to: '.', filter: ['**/*', '!requirements.txt'] }] } : {}),
+     mac: {
+       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
+       category: 'public.app-category.developer-tools',
+@@ -156,7 +159,7 @@ export function createElectronBuilderConfig(
        identity: macOSSigning?.signingIdentity,
        forceCodeSigning: true,
        hardenedRuntime: true,
@@ -464,6 +474,38 @@ index 15a4610d98..095c6bb985 100644
    })
  
    it('packages every preload entry point the shell loads', async () => {
+diff --git a/apps/desktop/tests/lawbench-stage.spec.ts b/apps/desktop/tests/lawbench-stage.spec.ts
+new file mode 100644
+index 0000000000..7b2a28f01b
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-stage.spec.ts
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from 'vitest'
++
++// lawbench P-4（T20 步骤 3 第 4 条）：packaging\build.ps1 暂存的工作台载荷（python\、service\、skills\、engines\、tools\）
++// 经 LAWBENCH_STAGE_DIR 交给 electron-builder，以 extraFiles 放到 exe 旁边（Host 打包布局按这里找）；不给就不带。
++
++const base = {
++  DSH_DESKTOP_APP_ID: 'cn.lianyue.lawbench',
++  DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
++  DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
++  DSH_DESKTOP_TARGET_PLATFORM: 'win32',
++  DSH_DESKTOP_TARGET_ARCH: 'x64',
++  DSH_DESKTOP_UNSIGNED: '1',
++}
++
++describe('打包带上工作台载荷（lawbench P-4）', () => {
++  it('给了 LAWBENCH_STAGE_DIR：整个目录放到安装目录根（exe 旁），requirements.txt 不带', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const config = createElectronBuilderConfig({ ...base, LAWBENCH_STAGE_DIR: 'D:\\build\\stage' }, 'win32', 'x64') as { extraFiles?: unknown }
++    expect(config.extraFiles).toEqual([{ from: 'D:\\build\\stage', to: '.', filter: ['**/*', '!requirements.txt'] }])
++  })
++  it('没给：不带（开发期、DSH 自己的打包测试照旧）', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraFiles?: unknown }
++    expect(config.extraFiles).toBeUndefined()
++  })
++})
 diff --git a/apps/desktop/tests/macos-signature.spec.ts b/apps/desktop/tests/macos-signature.spec.ts
 index 8ce24c2250..78b0af7da5 100644
 --- a/apps/desktop/tests/macos-signature.spec.ts

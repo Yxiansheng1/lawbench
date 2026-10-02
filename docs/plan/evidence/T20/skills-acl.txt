@@ -1,0 +1,23 @@
+T20 步骤 3 第 3 条：管理员 Skill 目录普通用户只读，在本机临时目录模拟（不碰 %ProgramData%），2026-10-02 08:2x
+脚本：packaging\installer\set-skills-acl.ps1 -Dir <临时目录> -Verify（当前用户，未提权运行）
+
+准备：<临时目录> 下先放一个已有文件 existing.txt。
+elevated: False
+Successfully processed 2 files; Failed processing 0 files
+acl:
+<临时目录> BUILTIN\Users:(OI)(CI)(RX)
+           BUILTIN\Administrators:(OI)(CI)(F)
+           NT AUTHORITY\SYSTEM:(OI)(CI)(F)
+Successfully processed 1 files; Failed processing 0 files
+write file as current (non-elevated) user: False
+create folder as current (non-elevated) user: False
+script exit: 0
+modify existing file as current user: False
+清理：目录所有者用 icacls /reset 恢复权限后删除，成功。
+
+说明：
+- 继承自 %ProgramData% 的权限（默认允许所有用户在下面新建文件和文件夹）被去掉；只给 SYSTEM、Administrators 完全控制，Users 读取和执行。用的是固定 SID，不依赖系统语言。
+- 当前用户虽在 Administrators 组，但进程没提权，令牌里该组只用于拒绝，所以等同普通用户：不能新建文件、不能新建文件夹、不能改已有文件。
+- 桌面端安装器只装给当前用户（不提权，Spec 14.1），所以这一步不放进 NSIS 安装器：随包放在 <安装目录>\installer\，由管理员每台机器提权运行一次
+  （set-skills-acl.ps1 -Dir "%ProgramData%\lawbench\skills"）。目录名随产品名定（候 owner N58，见 host\install-layout.ts 的 ADMIN_DIR_NAME）。
+- 启动自检（selfCheck 的 admin_skills）会在这个目录普通用户能写时提示。
