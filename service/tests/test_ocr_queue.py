@@ -678,3 +678,119 @@ def test_settings_save_fast_while_case_db_locked(env, fake):
         hold.close()
         fake.hold.set()
     assert dt < 3, dt
+
+
+
+# ---------------------------------------------------------------- T12 第三轮复核（N56 ①）：收尾写库失败也能自愈
+
+def job_row(root, job_id):
+    con = sqlite3.connect(str(pathlib.Path(root) / "工作区" / "case.db"))
+    try:
+        return con.execute("SELECT status FROM ocr_jobs WHERE job_id = ?", (job_id,)).fetchone()[0]
+    finally:
+        con.close()
+
+
+def test_finalize_db_error_after_pages_done_self_heals(env, fake, monkeypatch):
+    """复核员 y1：收尾时（页都完成了）写库失败一次（_other_active 抛 database is locked）：任务留在内存，
+    退避后自己收尾成 done，不需要 case_open / 重启。"""
+    from lawbench.ocr import queue as Q
+    real = Q.OcrQueue._other_active
+    n = []
+
+    def flaky(root, mid, jid):
+        n.append(1)
+        if len(n) == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return real(root, mid, jid)
+    monkeypatch.setattr(Q.OcrQueue, "_other_active", staticmethod(flaky))
+    monkeypatch.setattr(Q, "LOCKED_BACKOFF_S", 0.5)
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    assert env.wait(v["job_id"], ("done",), timeout=15)["done"] == 1
+    assert len(n) >= 2 and v["job_id"] not in env.st.ocr._jobs
+    assert all(t.is_alive() for t in env.st.ocr._threads)
+
+
+def test_finalize_final_update_locked_12s_self_heals(env, fake, monkeypatch):
+    """复核员 y2：合并返回后另一连接 BEGIN IMMEDIATE 占 case.db 12 秒，"标完成"写不进去（10 秒超时）；
+    放开后不重开、不重启，任务自己变 done。"""
+    from lawbench.ocr import queue as Q
+    real_apply = Q.OcrQueue._apply
+    held = {}
+    monkeypatch.setattr(Q, "LOCKED_BACKOFF_S", 0.5)
+
+    def apply_then_lock(self, case_id, root, material_id, active=None):
+        real_apply(self, case_id, root, material_id, active=active)
+        if active is not None and "hold" not in held:
+            h = sqlite3.connect(str(pathlib.Path(root) / "工作区" / "case.db"), timeout=1,
+                                isolation_level=None, check_same_thread=False)
+            h.execute("BEGIN IMMEDIATE")
+            held["hold"] = h
+
+            def release():
+                time.sleep(12)
+                h.execute("ROLLBACK")
+                h.close()
+                held["released"] = time.monotonic()
+            threading.Thread(target=release, daemon=True).start()
+    monkeypatch.setattr(Q.OcrQueue, "_apply", apply_then_lock)
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    end = time.monotonic() + 30
+    while "released" not in held and time.monotonic() < end:
+        time.sleep(0.2)
+    assert "released" in held
+    end = time.monotonic() + 20
+    while job_row(env.root, v["job_id"]) != "done" and time.monotonic() < end:
+        time.sleep(0.2)
+    assert job_row(env.root, v["job_id"]) == "done"
+    assert v["job_id"] not in env.st.ocr._jobs and all(t.is_alive() for t in env.st.ocr._threads)
+
+
+def test_finalizing_guard_no_double_finalize(env, fake, monkeypatch):
+    """P3（复核员 C3）：补收尾进行中，另一个发送线程不再挑同一个任务收尾——合并只做一次。"""
+    from lawbench.ocr import queue as Q
+    real_other, real_apply = Q.OcrQueue._other_active, Q.OcrQueue._apply
+    n, merges = [], []
+
+    def flaky(root, mid, jid):
+        n.append(1)
+        if len(n) == 1:
+            raise sqlite3.OperationalError("database is locked")    # 第一次收尾失败：之后由 _next 补收尾
+        return real_other(root, mid, jid)
+
+    def slow_apply(self, case_id, root, material_id, active=None):
+        if active is not None:
+            merges.append(threading.current_thread().name)
+            time.sleep(2)                                           # 补收尾的合并慢：另一线程这期间也在挑
+        return real_apply(self, case_id, root, material_id, active=active)
+    monkeypatch.setattr(Q.OcrQueue, "_other_active", staticmethod(flaky))
+    monkeypatch.setattr(Q.OcrQueue, "_apply", slow_apply)
+    monkeypatch.setattr(Q, "LOCKED_BACKOFF_S", 0.3)
+    env.st.ocr.concurrency = 2
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    assert env.wait(v["job_id"], ("done",), timeout=20)["done"] == 1
+    time.sleep(1)
+    assert len(merges) == 1, merges
+
+
+def test_finished_job_left_in_memory_is_dropped(env, fake):
+    """P3（复核员 C7）：库里已结束、却还在内存里的任务（收尾与 case_open 竞争留下的），_next 读到后移出内存，不空转。"""
+    env.st.ocr.concurrency = 1
+    env.st.ocr.start()
+    v = env.submit(env.material("讯问笔录")["material_id"], [1])
+    env.wait(v["job_id"], ("done",), timeout=15)
+    m = env.material("讯问笔录")
+    from lawbench.ocr import queue as Q
+    with env.st.ocr._cv:
+        env.st.ocr._jobs[v["job_id"]] = Q.Job(v["job_id"], env.case_id, str(env.root), m["material_id"], m["sha256"],
+                                              m["rel_path"], m["type"])
+        env.st.ocr._cv.notify_all()
+    end = time.monotonic() + 5
+    while v["job_id"] in env.st.ocr._jobs and time.monotonic() < end:
+        time.sleep(0.1)
+    assert v["job_id"] not in env.st.ocr._jobs

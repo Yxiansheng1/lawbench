@@ -472,13 +472,24 @@ class OcrQueue:
         if row is None or row[0] not in UNFINISHED:
             return
         final = "partial_failed" if row[1] else "done"
+        # 收尾期间任务留在内存、标 finalizing（别的发送线程不再挑它收尾，case_open 也不会再放一份进来）；
+        # 标完成写成了才移出内存——中途写库失败时任务还在内存，退避后 _next 发现它"没有待发、没有在途"再收尾
+        # （T12 第三轮复核：原来先移出内存，之后写库失败就只能靠 case_open 或重启救回）
         with self._cv:
-            self._jobs.pop(job_id, None)
-        others = self._other_active(root, material_id, job_id)
-        self._apply(case_id, root, material_id, active=others)         # 先合并文本，再标完成
-        with merge.connect(root) as con:
-            con.execute("UPDATE ocr_jobs SET status = ?, pause_reason = NULL, updated_at = ? WHERE job_id = ? "
-                        "AND status IN ('queued', 'running', 'paused')", (final, now(), job_id))
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job.finalizing = True
+        try:
+            others = self._other_active(root, material_id, job_id)
+            self._apply(case_id, root, material_id, active=others)     # 先合并文本，再标完成
+            with merge.connect(root) as con:
+                con.execute("UPDATE ocr_jobs SET status = ?, pause_reason = NULL, updated_at = ? WHERE job_id = ? "
+                            "AND status IN ('queued', 'running', 'paused')", (final, now(), job_id))
+            with self._cv:
+                self._jobs.pop(job_id, None)
+        finally:
+            if job is not None:
+                job.finalizing = False
         logs.event("ocr", "job_" + final, case_id=case_id)          # 界面轮询任务列表见到 done 后发系统通知
 
     def _pause(self, job: Job, reason: str) -> None:
