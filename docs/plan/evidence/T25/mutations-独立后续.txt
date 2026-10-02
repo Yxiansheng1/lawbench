@@ -1,0 +1,4 @@
+# T25 独立后续红绿（2026-10-02）
+改坏：去掉批次记录读不了时的 buyer_copy_read 日志 → 红｜3 failed, 68 deselected, 1 warning in 1.24s
+复原 → 绿｜3 passed, 68 deselected, 1 warning in 1.98s
+抖动修复：test_buyer_copy_write_failure_returns_original 在未改的 HEAD 上连跑 3 次 2 次失败（假引擎 os.utime 取当前时间，与文件刚写时同一时钟刻）；改 _touch_later（修改时间推后 5 秒）后连跑 10 次全过

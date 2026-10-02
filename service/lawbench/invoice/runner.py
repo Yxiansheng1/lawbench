@@ -115,7 +115,8 @@ class InvoiceRunner:
             folder = ledger / rec["folder_relative"] if rec.get("folder_relative") else pathlib.Path(rec["folder"])
             src = folder / LIST_NAME
             text = src.read_text(encoding="utf-8")
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError) as e:              # 批次记录或清单读不了：照常返回原清单，记一条（T25 复核 A-P3-4）
+            logs.event("invoice", req["action"], status="fail", error=f"buyer_copy_read:{type(e).__name__}")
             return paths
         if HARDCODED_BUYER not in text:
             return paths

@@ -390,6 +390,13 @@ def test_buyer_copy_written_and_original_untouched(period):
     assert res["reimburse"]["failed"] is False                                 # check_artifacts 之后照常
 
 
+def _touch_later(path: pathlib.Path) -> None:
+    """假引擎"改动"文件：修改时间推后 5 秒。直接 os.utime(path) 取当前时间，常与文件刚写时同一时钟刻，
+    产出快照比不出变化（2026-10-02 本机 3 次里 2 次失败）。"""
+    t = path.stat().st_mtime + 5
+    os.utime(path, (t, t))
+
+
 def _fake_batch(tmp_path, html_text: str) -> tuple[pathlib.Path, pathlib.Path]:
     ledger = tmp_path / "日常办公" / "发票台账"
     folder = ledger / "_打印包" / "2026-09" / "2026-09_九月" / "v001"
@@ -521,7 +528,7 @@ def test_buyer_copy_write_failure_returns_original(tmp_path, monkeypatch):
     r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公")), tmp_path / "ad")
 
     def fake_exec(argv):
-        os.utime(folder / "贴票清单.html")                            # 让它算作本次改动的产出
+        _touch_later(folder / "贴票清单.html")                        # 让它算作本次改动的产出
         return 0, "ok"
     monkeypatch.setattr(r, "_exec", fake_exec)
     log_dir = logs.setup(tmp_path / "lg")
@@ -529,6 +536,24 @@ def test_buyer_copy_write_failure_returns_original(tmp_path, monkeypatch):
     logs.close()
     assert v["failed"] is False and str(folder / "贴票清单.html") in v["files"]
     assert '"error": "buyer_copy"' in (log_dir / "service.log").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("breakage", ["no_record", "bad_json", "no_list"])
+def test_buyer_copy_read_failure_logged(tmp_path, breakage):
+    """批次记录不在、不是 JSON、或清单文件不在：照常返回原清单、不生成副本，记一条不含内容的 buyer_copy_read
+    日志（T25 复核 A-P3-4：原来静默跳过）。"""
+    from lawbench import logs
+    ledger, folder = _fake_batch(tmp_path, f"<p>购买方：{R.HARDCODED_BUYER}。</p>")
+    rec = ledger / "_报销批次" / "2026-09_九月.json"
+    {"no_record": rec.unlink, "bad_json": lambda: rec.write_text("{", encoding="utf-8"),
+     "no_list": (folder / "贴票清单.html").unlink}[breakage]()
+    r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公")), tmp_path / "ad")
+    log_dir = logs.setup(tmp_path / "lg")
+    out = r._with_buyer_copy(ledger, {"action": "reprint", "batch": "2026-09_九月"}, ["x"])
+    logs.close()
+    assert out == ["x"] and not any("（" in f.name for f in folder.iterdir())
+    text = (log_dir / "service.log").read_text(encoding="utf-8")
+    assert '"error": "buyer_copy_read:' in text and "九月" not in text and str(folder) not in text
 
 
 
@@ -553,7 +578,7 @@ def test_run_exit0_still_writes_copy(tmp_path, monkeypatch):
     r = R.InvoiceRunner(FakeSettings(str(tmp_path / "日常办公")), tmp_path / "ad")
 
     def fake_exec(argv):
-        os.utime(folder / "贴票清单.html")
+        _touch_later(folder / "贴票清单.html")
         return 0, "ok"
     monkeypatch.setattr(r, "_exec", fake_exec)
     v = r.run({"action": "run", "period": "2026-09", "batch": "九月", "src": str(FIXTURES), "channel": "local"})
