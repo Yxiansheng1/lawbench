@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|---|
 | relay | 阿里云 `47.107.140.75`（律所提供） | 无（不加入网络，只做见面和中转） | 2.6.4 | systemd `easytier-relay.service` | — | — |
 | firm-gw | 6000D `192.168.8.77`（Ubuntu） | `10.126.126.1` | 2.6.4 | systemd `easytier-gw.service`，开机自启 | 不代理 | TCP 8000 |
-| node-395 | 395 `192.168.8.124`（Windows 11） | `10.126.126.3` | 2.6.4 | Windows 服务 `easytier`，自动启动 | 不代理 | TCP 9000；Windows 防火墙规则 `EasyTier-9000-In` 只允许 `10.126.126.0/24` 访问 9000 |
+| node-395 | 395 `192.168.8.124`（Windows 11） | `10.126.126.3` | 2.6.4 | 9-29 记为 Windows 服务 `easytier`、自动启动；10-03 停电恢复后实际是否自启**未查清**（见第 6 节，改用 `easytier-cli service install` 重装） | 不代理 | TCP 9000；Windows 防火墙规则 `EasyTier-9000-In` 只允许 `10.126.126.0/24` 访问 9000 |
 
 - 网络名：`lawbench`。
 - 访问地址：**所内**用局域网地址（6000D `http://192.168.8.77:8000`，395 `http://192.168.8.124:9000`）；**所外**用虚拟 IP（`http://10.126.126.1:8000`、`http://10.126.126.3:9000`）。客户端设置里两套地址都填，先连所内地址、连不上自动改连所外地址（Spec 第 15 节）。
@@ -56,3 +56,11 @@ python deploy\easytier\check_remote.py --save docs\plan\evidence\T27\remote-chec
 2. **加固中转节点**（方案 V2 的 G-1 至 G-5）：三台都加 `--secure-mode true`；中转节点用固定私钥 `--local-private-key`（私钥只存律所的密码管理器）；按方案决定中转节点是否加入 `lawbench` 并开 `--private-mode true`、`--relay-all-peer-rpc`。这几项要三台同时改、并先在测试时间窗验证，改前准备好第 3 节的回退命令。
 3. **律师电脑接入**：按方案 V2 为每位律师发放单独凭据，不分发主密钥。
 4. 改完重跑第 4 节的检查。
+
+## 6. 395 服务化与检查（2026-10-03，停电后补）
+
+- `install_service_395.ps1`：用 EasyTier 2.6.4 自带的 `easytier-cli service install`（依据：`docs\plan\evidence\T27\easytier-service-help.txt`，默认开机自启、失败自动重启）把 easytier-core 装成服务 `easytier`，参数只有 `--config-file C:\EasyTier\lawbench.toml`（只有管理员可读，脚本里不写密钥）；另用 `sc.exe` 明确设自动启动和失败重启。没选 WinSW：EasyTier 自带、版本支持、少一层包装。
+- `check_service_395.ps1`（只读）：服务在、在跑、自启、失败重启、命令行无密钥、配置文件只有管理员可读、`et_*` 网卡上有 `10.126.126.3`、经虚拟网能到 6000D:8000、局域网地址 `.124` 是静态。
+- `uninstall_service_395.ps1`：回退，按安装时的备份恢复原来的服务定义或手动进程。
+- 用户在 395 上的完整步骤：`deploy\操作单-395停电后恢复.md`；固定 IP：`deploy\操作单-服务器固定IP.md`。
+- 两台服务器一键检查（开发机）：`python deploy\check_servers.py`。

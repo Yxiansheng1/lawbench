@@ -1,0 +1,19 @@
+﻿# ps1 static check + read-only smoke run on the dev machine (2026-10-03); the scripts were NOT run on 395
+
+install_service_395.ps1 : parse errors 0, non-ASCII lines 0
+check_service_395.ps1 : parse errors 0, non-ASCII lines 0
+uninstall_service_395.ps1 : parse errors 0, non-ASCII lines 0
+
+## check_service_395.ps1 on the dev machine (-VpnIp 10.126.126.11; dev has no 'easytier' service -> FAIL rows expected)
+[FAIL] service exists - no service 'easytier'
+[FAIL] no extra hand-started easytier-core - 1 extra
+[FAIL] config file - missing: C:\EasyTier\lawbench.toml
+[PASS] virtual address 10.126.126.11 - on 'et_7_anb1', Up
+[PASS] reach 6000D over EasyTier (10.126.126.1:8000) - True
+[PASS] LAN address 192.168.8.124 - present, origin Manual
+[PASS] LAN address is static - Manual
+
+RESULT: 3 FAIL
+exit=1
+
+Note: 'LAN address 192.168.8.124 - present, origin Manual' above is the DEV machine's own disconnected Ethernet adapter (static .124, AddressState Tentative) - see the fixed-IP sheet, last section.

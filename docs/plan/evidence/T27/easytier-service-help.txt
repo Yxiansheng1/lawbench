@@ -1,0 +1,47 @@
+# EasyTier 2.6.4 服务化依据（开发机 C:\EasyTier，与 395 同版本；2026-10-03）
+$ easytier-core.exe --version
+easytier-core 2.6.4-8428a89d
+
+$ easytier-cli.exe service --help
+manage easytier-core as a system service
+
+Usage: easytier-cli.exe service [OPTIONS] <COMMAND>
+
+Commands:
+  install    register easytier-core as a system service
+  uninstall  unregister easytier-core system service
+  status     check easytier-core system service status
+  start      start easytier-core system service
+  stop       stop easytier-core system service
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+  -n, --name <NAME>  service name [default: easytier]
+  -h, --help         Print help
+
+$ easytier-cli.exe service install --help
+register easytier-core as a system service
+
+Usage: easytier-cli.exe service install [OPTIONS] [CORE_ARGS]...
+
+Arguments:
+  [CORE_ARGS]...  args to pass to easytier-core
+
+Options:
+      --description <DESCRIPTION>
+          service description [default: "A full meshed p2p VPN, connecting all your devices in one
+          network with one command."]
+      --display-name <DISPLAY_NAME>
+          display name shown by the service manager
+      --disable-autostart <DISABLE_AUTOSTART>
+          whether to disable starting the service automatically on boot (true/false) [possible
+          values: true, false]
+      --disable-restart-on-failure <DISABLE_RESTART_ON_FAILURE>
+          whether to disable automatic restart when the service fails (true/false) [possible values:
+          true, false]
+      --core-path <CORE_PATH>
+          path to easytier-core binary
+      --service-work-dir <SERVICE_WORK_DIR>
+          working directory for the easytier-core service
+  -h, --help
+          Print help

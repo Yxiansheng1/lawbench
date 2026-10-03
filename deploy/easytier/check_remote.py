@@ -38,9 +38,12 @@ def reachable(host, port, timeout=2.0):
         return False
 
 
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # 不走系统代理（开了代理时会把"连不上"变成代理的 502）
+
+
 def http_200(url, timeout=8.0):
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with OPENER.open(url, timeout=timeout) as r:
             return r.status == 200
     except Exception:
         return False
