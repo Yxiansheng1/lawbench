@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport, withCase } from './cases.ts'
-import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, useLoad } from './kit.tsx'
+import { Badge, Button, C, CONNECTING_TEXT, Empty, getNav, ErrorLine, S, useRetryLoad } from './kit.tsx'
 import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, setIntent, type CaseRef, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
-import { errorText, lawyerMessage } from './format.ts'
+import { errorText } from './format.ts'
 import { homeView } from './invoice-logic.ts'
 import { InvoicePage } from './invoice.tsx'
 import { openRetainer } from './retainer.ts'
@@ -17,20 +17,34 @@ export function HomePage() {
   return view === 'invoice' ? <InvoicePage /> : <CapsulesPage />
 }
 
+/** 首页要的数据：胶囊、最近案件（写进界面状态）都要服务；Skill 列表是 Host 自己读的，读不到只是不显示中文名。 */
+async function loadHome(): Promise<{ ok: true; value: { caps: Capsules; skills: SkillInfo[] } } | { ok: false; error: { code: string; message: string } }> {
+  const caps = await call<Capsules>('getCapsules')
+  if (!caps.ok) return caps
+  const recent = await loadRecent()
+  if (!Array.isArray(recent)) return { ok: false, error: recent }
+  let skills: SkillInfo[] = []
+  try { skills = (await lb().listSkills()).value.skills } catch { /* 没有中文名时显示 Skill 名 */ }
+  return { ok: true, value: { caps: caps.value, skills } }
+}
+
 function CapsulesPage() {
-  const [caps, reload] = useLoad(() => call<Capsules>('getCapsules'), [])
-  const [skills] = useLoad(async () => { try { return await lb().listSkills() } catch (e) { return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: lawyerMessage((e as Error).message) } } } }, [])
+  // 启动时首页可能先于服务就绪：失败每 2 秒自动重读、最多 30 秒，之后给"重试"（T14 第二次实跑派修 1）
+  const [home, reload] = useRetryLoad(loadHome, [])
   const [managing, setManaging] = useState(false)
-  const skillList = skills.state === 'ok' ? skills.value.skills : []
   return (
     <div style={S.page}>
       <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 22 }}>
-        <Loading data={caps}>{(c) => managing
-          ? <CapsuleManager initial={c} skills={skillList} onDone={() => { setManaging(false); void reload() }} />
-          : <CapsuleHome caps={c} skills={skillList} onManage={() => setManaging(true)} />}
-        </Loading>
+        {home.state === 'loading' ? <Empty>读取中…</Empty> : null}
+        {home.state === 'connecting' ? <Empty>{CONNECTING_TEXT}</Empty> : null}
+        {home.state === 'fail' ? (
+          <div style={S.row}><ErrorLine error={home.error} /><Button size="sm" variant="outline" onClick={() => void reload()}>重试</Button></div>
+        ) : null}
+        {home.state === 'ok' ? (managing
+          ? <CapsuleManager initial={home.value.caps} skills={home.value.skills} onDone={() => { setManaging(false); void reload() }} />
+          : <CapsuleHome caps={home.value.caps} skills={home.value.skills} onManage={() => setManaging(true)} />) : null}
         {!managing ? <SelfCheckBanner /> : null}
-        {!managing ? <RecentCases /> : null}
+        {!managing && home.state === 'ok' ? <RecentCases /> : null}
       </div>
     </div>
   )
@@ -91,12 +105,10 @@ function CapsuleHome({ caps, skills, onManage }: { caps: Capsules; skills: Skill
   )
 }
 
-/** 最近案件；案件卡片接受拖入文件和文件夹（U-12）。 */
+/** 最近案件（首页读成功之后才显示）；案件卡片接受拖入文件和文件夹（U-12）。 */
 function RecentCases() {
-  const cases = useStore(app, (s) => s.cases)
-  const [err, setErr] = useState<{ code: string; message: string } | null>(null)
+  const cases = useStore(app, (s) => s.cases) // 首页读成功时 loadRecent 已写进界面状态
   const [over, setOver] = useState<string | null>(null)
-  useEffect(() => { void loadRecent().then((r) => { if (!Array.isArray(r)) setErr(r) }) }, [])
   const drop = (c: CaseRef) => (e: DragEvent) => {
     e.preventDefault(); e.stopPropagation(); setOver(null) // 不冒泡到 DSH 的 document 拖入监听（否则会被当成聊天附件）
     // 文件夹不在原处的卡片：拦下默认行为（Electron 里可能跳到 file://），不导入
@@ -114,8 +126,7 @@ function RecentCases() {
           <Button variant="outline" size="sm" onClick={() => void openCase(null, 'criminal')}>新建案件（刑事目录）…</Button>
         </div>
       </div>
-      <ErrorLine error={err} />
-      {cases.length === 0 && !err ? <Empty>还没有案件。打开或新建一个案件文件夹开始。</Empty> : null}
+      {cases.length === 0 ? <Empty>还没有案件。打开或新建一个案件文件夹开始。</Empty> : null}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
         {cases.map((c) => (
           <div key={c.case_id} data-lawbench-drop='' onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (c.exists === false) e.dataTransfer.dropEffect = 'none'; else setOver(c.case_id) }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}

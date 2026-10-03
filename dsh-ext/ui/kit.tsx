@@ -77,6 +77,37 @@ export function useLoad<T>(load: () => Promise<{ ok: true; value: T } | { ok: fa
   return [data, reload] as const
 }
 
+/** 首页启动时服务可能还没就绪：读失败每隔这么久自动重读，最多重读到 RETRY_FOR_MS（T14 第二次实跑派修 1）。 */
+export const RETRY_EVERY_MS = 2000
+export const RETRY_FOR_MS = 30_000
+export const CONNECTING_TEXT = '正在连接本机服务…'
+
+/**
+ * 同 useLoad，但读失败时每 RETRY_EVERY_MS 自动重读（期间为 connecting），满 RETRY_FOR_MS 仍失败才给出 fail；
+ * reload() 重新开始一轮（"重试"按钮用）。卸载或重新开始后，上一轮不再改状态。
+ */
+export function useRetryLoad<T>(load: () => Promise<{ ok: true; value: T } | { ok: false; error: { code: string; message: string } }>, deps: unknown[]) {
+  const [data, setData] = useState<Loaded<T> | { state: 'connecting' }>({ state: 'loading' })
+  const seq = useRef(0)
+  const reload = useCallback(async () => {
+    const my = ++seq.current
+    for (let waited = 0; ; waited += RETRY_EVERY_MS) {
+      const r = await load()
+      if (my !== seq.current) return
+      if (r.ok) { setData({ state: 'ok', value: r.value }); return }
+      if (waited + RETRY_EVERY_MS > RETRY_FOR_MS) { setData({ state: 'fail', error: r.error }); return }
+      setData({ state: 'connecting' })
+      await new Promise((res) => setTimeout(res, RETRY_EVERY_MS))
+      if (my !== seq.current) return
+    }
+  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void reload()
+    return () => { seq.current++ }
+  }, [reload])
+  return [data, reload] as const
+}
+
 export function Loading<T>({ data, children }: { data: Loaded<T>; children: (v: T) => ReactNode }) {
   if (data.state === 'loading') return <Empty>读取中…</Empty>
   if (data.state === 'fail') return <ErrorLine error={data.error} />
