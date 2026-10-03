@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import io
 import json
 
@@ -18,7 +19,10 @@ from lawbench.ocr import render
 
 from t8_helpers import fail, ok
 from test_ocr_queue import JPG, PDF, Env, Fake395, expected_md
-from conftest import ServerThread
+from conftest import IS_WIN, ServerThread, make_junction
+from lawbench import logs
+import t8_helpers
+import shutil
 
 FIX = REPO_ROOT / "tests" / "fixtures"
 TEXT_PDF = FIX / "criminal-01" / "起诉意见书.pdf"
@@ -161,3 +165,93 @@ def test_log_only_material_id_and_unit(world, caplog):
     assert {"material_id": m["material_id"], "unit": "para"}.items() <= recs[-1].items()
     for s in ("借条", "起诉意见书", "LBFX-", "识别文本", "第1段"):
         assert s not in log
+
+
+# ---------- 复核 AMEND（P2）：两处路径闸门的回归用例 ----------
+
+win_only = pytest.mark.skipif(not IS_WIN, reason="junction 只在 Windows 上有")
+
+
+@pytest.fixture
+def plain(tmp_path):
+    """不带识别的小案件：卷一/起诉意见书.pdf（文字版）。每例一份，用例会把目录换成联接。"""
+    env = t8_helpers.Env(tmp_path / "案", {"卷一/起诉意见书.pdf": TEXT_PDF})
+    yield env
+    env.close()
+
+
+def _mid(env) -> str:
+    return next(m["material_id"] for m in env.client.app.state.lb.materials.index(env.case_id)["materials"])
+
+
+def _source(env, citation="〔起诉意见书 第1页〕"):
+    return env.client.get("/api/source", params={"case_id": env.case_id, "material_id": _mid(env), "citation": citation})
+
+
+def _events(caplog) -> list[dict]:
+    return [json.loads(r.getMessage()) for r in caplog.records if r.name == "lawbench.events"]
+
+
+@win_only
+def test_gate_original_folder_junction_no_image(plain, tmp_path, caplog):
+    """原件所在文件夹换成指向案外的联接：不读案外的原件出图，文本（工作区里的材料文本）照返，日志有 gate denied。"""
+    outside = tmp_path / "案外"
+    outside.mkdir()
+    shutil.copy(TEXT_PDF, outside / "起诉意见书.pdf")
+    vol = plain.root / "卷一"
+    shutil.rmtree(vol)
+    make_junction(vol, outside)
+    with caplog.at_level("INFO", logger="lawbench.events"):
+        v = ok(_source(plain), SCHEMA)
+    assert v["page_png_base64"] is None and v["text"]
+    ev = _events(caplog)
+    assert any(e["module"] == "gate" and e["op"] == "source_view" and e["status"] == "denied" for e in ev), ev
+    assert any(e["module"] == "source" and e["op"] == "page_image" and e["status"] == "fail" for e in ev)
+
+
+def _stale_result(folder: pathlib.Path, task_id: str, mid: str) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "result.json").write_text(json.dumps({
+        "v": 1, "task_id": task_id, "status": "completed",
+        "usage": {"model_calls": 1, "tool_calls": 1, "elapsed_s": 1}, "drafts": [], "citation_check": None,
+        "coverage": None, "finished_at": None,
+        "citations": [{"material_id": mid, "material_version": "0" * 64, "name": "起诉意见书",
+                       "loc": {"unit": "page", "from": 1}}]}, ensure_ascii=False), encoding="utf-8")
+
+
+@win_only
+def test_gate_task_folder_junction_not_read(plain, tmp_path):
+    """工作区/任务/<id> 换成指向案外的联接：案外那份 result.json（旧版本的出处记录）不被读，source_changed=false。"""
+    tid = "T-20261003000003-cccc"
+    outside = tmp_path / "案外任务"
+    _stale_result(outside, tid, _mid(plain))
+    tasks = plain.root / "工作区" / "任务"
+    tasks.mkdir(parents=True, exist_ok=True)
+    make_junction(tasks / tid, outside)
+    assert ok(_source(plain), SCHEMA)["source_changed"] is False
+    # 对照：同一份记录真放在案内，就会提示
+    os.rmdir(tasks / tid)                                              # 只拆联接，不动案外目录
+    _stale_result(tasks / tid, tid, _mid(plain))
+    assert ok(_source(plain), SCHEMA)["source_changed"] is True
+
+
+@win_only
+def test_gate_tasks_root_junction_out_of_case(plain, tmp_path):
+    """工作区/任务 整个目录换成联接：OUT_OF_CASE。"""
+    outside = tmp_path / "案外任务根"
+    _stale_result(outside / "T-20261003000004-dddd", "T-20261003000004-dddd", _mid(plain))
+    tasks = plain.root / "工作区" / "任务"
+    if tasks.exists():
+        shutil.rmtree(tasks)
+    make_junction(tasks, outside)
+    fail(_source(plain), "OUT_OF_CASE")
+
+
+def test_log_fields_format_checked():
+    with pytest.raises(ValueError):
+        logs.event("source", "view", material_id="借条")          # 不是材料编号，不许借这个字段记别的
+    with pytest.raises(ValueError):
+        logs.event("source", "view", material_id="M00012")
+    with pytest.raises(ValueError):
+        logs.event("source", "view", unit="第1页")
+
