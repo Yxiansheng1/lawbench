@@ -516,3 +516,19 @@ def test_n35_outputs_empty_and_filled(env):
 def test_n35_outputs_unknown_case(env):
     other = env.case_id[:-1] + ("0" if env.case_id[-1] != "0" else "1")   # 格式对、但没登记过
     fail(env.client.get("/api/outputs", params={"case_id": other}), "CASE_NOT_FOUND")
+
+
+# ---------- T14 派修：存过正式草稿的任务不留 进行中.md ----------
+
+def test_t14_in_progress_removed_after_formal_draft(env):
+    tid = env.begin("sess-t14-progress")["task_id"]
+    folder = env.task_dir(tid) / "草稿"
+    ok(progress(env, tid, "写到一半"), "core/progress.schema.json")
+    assert (folder / "进行中.md").exists()
+    env.tool_ok(tid, "case_save_draft", {"title": "结论", "content": "正式"})
+    assert not (folder / "进行中.md").exists()                 # 存正式草稿即清
+    ok(progress(env, tid, "存完又回复了一句"), "core/progress.schema.json")
+    assert (folder / "进行中.md").exists()
+    assert ok(end(env, tid), "core/task_end.schema.json")["status"] == "completed"
+    assert sorted(p.name for p in folder.iterdir()) == ["结论-v1.md"]   # 结束时再清，也不改名为 未完成-*
+

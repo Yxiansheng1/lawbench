@@ -9,6 +9,7 @@ from datetime import datetime
 
 from .. import checks, contracts, logs
 from ..case import gate
+from ..case.task import IN_PROGRESS
 from ..errors import ApiError
 from . import ToolContext
 
@@ -60,6 +61,8 @@ def save_draft(ctx: ToolContext, a: dict) -> dict:
         res["drafts"].append({"title": title, "path": rel, "version": version})
         res.update(citation_check=check, coverage=cov, citations=merge_citations(res["citations"], cites))
         ctx.tasks.save_result(ctx.root, res)
+        # 正式草稿存好了：进度文件清掉（T14 派修；之后模型再回复，progress 会重写，task/end 时再清）
+        gate.delete_work_file(ctx.root, f"{drafts_rel}/{IN_PROGRESS}", op="save_draft")
     not_fully = [p["name"] for p in cov["partially_read"]] + cov["not_read"]
     return {"path": rel, "version": version, "citation_check": check, "coverage": cov, "not_fully_read": not_fully}
 

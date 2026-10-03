@@ -455,6 +455,9 @@ class TaskStore:
                 name = f"未完成-{datetime.now().strftime('%Y%m%d%H%M%S')}.md"
                 gate.write_bytes(root, self.rel(task_id, f"草稿/{name}"), src.read_bytes(), op="task_end")
                 gate.delete_work_file(root, self.rel(task_id, f"草稿/{IN_PROGRESS}"), op="task_end")
+        else:
+            # 存过正式草稿：进度文件不再保留（T14 派修）；save_draft 时已删过，这里清掉之后 progress 又写出来的
+            gate.delete_work_file(root, self.rel(task_id, f"草稿/{IN_PROGRESS}"), op="task_end")
         self.save_result(root, res)
         task["state"] = "finished"
         self._write(root, self.rel(task_id, "task.json"), task, "files/task.schema.json")
