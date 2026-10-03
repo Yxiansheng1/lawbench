@@ -1,0 +1,6 @@
+# 用真 Word 核对兼容模式（2026-10-03；Word 16.0；DispatchEx、不可见、只读打开、AutomationSecurity=3，两份都不含外链）
+旧样本 = docs\plan\evidence\T14\刑事阅卷笔录-v1.docx 的副本；新导出 = 修复后的 文书.docx 模板经 pandoc --sandbox 导出的一段正文
+settings.xml：旧样本 compatibilityMode 未写（Word 按 12）；新导出 15
+Word 16.0
+旧样本.docx：Word 报告 CompatibilityMode = 12（Word 2007 兼容性模式）
+新导出.docx：Word 报告 CompatibilityMode = 15（当前模式，不显示兼容性模式）

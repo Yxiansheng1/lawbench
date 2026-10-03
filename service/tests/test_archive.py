@@ -343,6 +343,20 @@ def test_templates_used(env, tid, tmp_path):
             assert run._element.rPr.rFonts.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}eastAsia") == "仿宋"
 
 
+def test_default_base_documents_not_in_compatibility_mode(tmp_path):
+    """没有律所模板时用 python-docx 默认底板生成的结案报告、立卷申请书、情况说明：兼容版本 15（底板自带的 14 会让
+    Word 显示"兼容性模式"，T14 联调派修）。律所模板生成的保留模板自己的设置，不改。"""
+    from lawbench.export.compat import compat_mode
+    f = D.report_fields(plan(), "孙律师")
+    assert compat_mode(D.make_report(f, False)) == 15
+    assert compat_mode(D.make_application(plan(), [(1, "1", "民事委托代理合同 p1")], "孙律师")) == 15
+    assert compat_mode(D._statement_doc(["情况说明", "正文一段"])) == 15
+    tpl = tmp_path / "结案报告模板.docx"
+    report_template(tpl)                                                   # python-docx 底板做的"律所模板"：14
+    assert compat_mode(tpl.read_bytes()) == 14
+    assert compat_mode(D.fill_report_template(tpl, f)[0]) == 14            # 律所模板原样保留
+
+
 def test_application_rows_renumber():
     cat = json.loads((SKILLS / "case-archiving" / "catalogs" / "常法卷.json").read_text(encoding="utf-8"))
     gen = next(it for it in cat["items"] if it.get("generated"))

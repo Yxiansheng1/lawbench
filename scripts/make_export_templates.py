@@ -1,6 +1,6 @@
 """生成导出用的两个占位模板（T15；Spec 12.1）：service/lawbench/export/templates/文书.docx、合同.docx。
 
-律所的正式模板到位前用：取 pandoc 自带的 reference.docx，只改默认中文字体和字号——
+律所的正式模板到位前用：取 pandoc 自带的 reference.docx，只改默认中文字体和字号、兼容版本设 15（不进 Word 兼容性模式）——
 文书：仿宋，小四（12 磅）；合同：宋体，小四。律所模板到位后在设置里指定，不用改程序。
 
 用法：python scripts\\make_export_templates.py [pandoc.exe 路径]
@@ -18,6 +18,7 @@ from lxml import etree
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "service"))
 from lawbench.export.pandoc import TEMPLATE_DIR, find_pandoc  # noqa: E402
+from lawbench.export.compat import set_compat15  # noqa: E402
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 FONTS = {"文书": "仿宋", "合同": "宋体"}
@@ -44,12 +45,16 @@ def make(base: bytes, font: str) -> bytes:
         if el is None:
             el = etree.SubElement(rpr, q(tag))
         el.set(q("val"), SIZE)
+    settings = etree.fromstring(zin.read("word/settings.xml"))
+    set_compat15(settings)            # pandoc 自带的 reference.docx 没写兼容版本，Word 会按 2007 显示"兼容性模式"；pandoc 原样沿用它
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zout:
         for info in zin.infolist():
             data = zin.read(info.filename)
             if info.filename == "word/styles.xml":
                 data = etree.tostring(styles, xml_declaration=True, encoding="UTF-8", standalone=True)
+            elif info.filename == "word/settings.xml":
+                data = etree.tostring(settings, xml_declaration=True, encoding="UTF-8", standalone=True)
             zi = zipfile.ZipInfo(info.filename, date_time=(2026, 10, 1, 0, 0, 0))  # 固定时间：重跑结果逐字节相同
             zi.compress_type = zipfile.ZIP_DEFLATED
             zout.writestr(zi, data)

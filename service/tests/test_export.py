@@ -156,6 +156,37 @@ def test_templates(env, tid):
 
 
 @needs_pandoc
+def test_exported_docx_not_in_compatibility_mode(env, tid):
+    """导出的 docx 兼容版本是 15（Word 2013 起），Word 标题栏不显示"兼容性模式"（T14 联调派修）：
+    两个内置模板本身是 15，pandoc 原样沿用参考模板的 settings.xml。"""
+    from lawbench.export.compat import compat_mode
+    for name in ("文书", "合同"):
+        assert compat_mode((P.TEMPLATE_DIR / f"{name}.docx").read_bytes()) == 15
+    rel = draft(env, tid, "兼容模式", "# 标题\n\n正文〔借条 第1页〕\n")
+    for tpl in ("文书", "合同", None):
+        v = ok(confirm(env, tid, rel, formats=["docx"], template=tpl), "api/outputs_confirm.schema.json")
+        assert compat_mode((env.root / v["outputs"][0]["path"]).read_bytes()) == 15
+
+
+def test_set_compat15_position_and_keeps_other_settings():
+    """没有 w:compat：插在 w:rsids 前（CT_Settings 的顺序，放错 Word 会报内容有问题）；已有 14：改成 15，其余 compat 项保留。"""
+    from lawbench.export.compat import W, set_compat15
+    ns = f'xmlns:w="{W}" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"'
+    s = etree.fromstring(f'<w:settings {ns}><w:zoom w:percent="100"/><w:footnotePr/><w:rsids/><m:mathPr/>'
+                         f'<w:decimalSymbol w:val="."/></w:settings>')
+    set_compat15(s)
+    tags = [etree.QName(el).localname for el in s]
+    assert tags == ["zoom", "footnotePr", "compat", "rsids", "mathPr", "decimalSymbol"]
+    s = etree.fromstring(f'<w:settings {ns}><w:compat><w:useFELayout/>'
+                         f'<w:compatSetting w:name="compatibilityMode" w:uri="u" w:val="14"/>'
+                         f'<w:compatSetting w:name="enableOpenTypeFeatures" w:uri="u" w:val="1"/></w:compat></w:settings>')
+    set_compat15(s)
+    got = {el.get(f"{{{W}}}name"): el.get(f"{{{W}}}val") for el in s.iter(f"{{{W}}}compatSetting")}
+    assert got == {"compatibilityMode": "15", "enableOpenTypeFeatures": "1"}
+    assert s.find(f"{{{W}}}compat/{{{W}}}useFELayout") is not None
+
+
+@needs_pandoc
 def test_custom_template_from_settings(env, tid, tmp_path):
     s = ok(env.client.get("/api/settings"), "api/settings.schema.json")
     custom = tmp_path / "律所合同模板.docx"

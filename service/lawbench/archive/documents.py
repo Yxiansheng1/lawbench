@@ -18,6 +18,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
+from ..export.compat import set_compat15
+
 FIRM = "广东连越（深圳）律师事务所"
 TODO = "【待填写】"
 _PH = re.compile(r"【[^】]*】")
@@ -64,7 +66,11 @@ def _merge_runs(p) -> None:
             r.text = ""
 
 
-def _save(doc) -> bytes:
+def _save(doc, default_base: bool = False) -> bytes:
+    """default_base：用的是 python-docx 默认底板（没有律所模板）——它写的兼容版本 14 会让 Word 显示"兼容性模式"，
+    改成 15（T14 联调派修）。律所模板原样保留它自己的设置。"""
+    if default_base:
+        set_compat15(doc.settings.element)
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -126,7 +132,7 @@ def make_report(f: dict[str, str], changfa: bool) -> bytes:
             ("八、办案结果：", f["result"])]
     for label, value in rows:
         _para(doc, label + value, before=3)
-    return _save(doc)
+    return _save(doc, default_base=True)
 
 
 # ================================================================ 立卷申请书
@@ -209,7 +215,7 @@ def make_application(plan: dict, rows: list[tuple[int, str, str]], lawyer: str |
         _font(r.cells[1].paragraphs[0].add_run(text), "仿宋", 12, False)
     _para(doc, f"经办律师（签字）：______________　　（{lawyer or TODO}）", before=18)
     _para(doc, "年　　月　　日", before=6)
-    return _save(doc)
+    return _save(doc, default_base=True)
 
 
 # ================================================================ 情况说明
@@ -238,7 +244,7 @@ def _statement_doc(lines: list[str]) -> bytes:
             _para(doc, line.strip(), before=12)
         else:
             _para(doc, line.strip(), indent=not line.endswith("：") and not line.startswith(("一、", "二、")))
-    return _save(doc)
+    return _save(doc, default_base=True)
 
 
 def make_missing_statement(md_path: pathlib.Path, plan: dict, missing: list[dict]) -> bytes:

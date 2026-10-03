@@ -1,0 +1,6 @@
+# T14 派修 docx 兼容性模式 红绿（2026-10-03）
+改坏：导出模板换回旧版（没写兼容版本） → 红｜1 failed, 2 passed, 49 deselected, 1 warning in 10.04s
+改坏：归档默认底板不设兼容版本 → 红｜1 failed, 2 passed, 49 deselected, 1 warning in 10.77s
+改坏：w:compat 一律加在末尾（不按 CT_Settings 顺序） → 红｜1 failed, 2 passed, 49 deselected, 1 warning in 10.46s
+改坏：兼容版本写成 14 → 红｜2 failed, 1 passed, 49 deselected, 1 warning in 10.68s
+复原 → 绿｜3 passed, 49 deselected, 1 warning in 10.20s
