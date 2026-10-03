@@ -1,0 +1,13 @@
+✔ 任务单（pending）不计
+✔ 模型调用 = 时间窗内 step/start
+✔ 工具分列
+✔ 计入预算的工具不含 save_draft、skill、ask_user_question
+✔ 流水线取运行记录
+✔ 分钟
+✔ 没超预算
+✔ 服务日志旁证
+✔ 自报列读得到
+✔ 不读 arguments
+✔ 超预算判得出（实测 5 次 > 上限 4）
+✔ Markdown 表头与行
+自测：通过

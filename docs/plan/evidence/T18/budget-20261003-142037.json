@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-10-03T14:20:37+08:00",
+  "cases": [
+    "张某甲诈骗案（联调）",
+    "大卷宗（T16 真机记录）"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003142007-029b",
+      "case": "张某甲诈骗案（联调）",
+      "kind": "agent",
+      "skill": "criminal-reading-notes",
+      "status": "completed",
+      "start": "2026-10-03T14:20:07+08:00",
+      "end": "2026-10-03T14:20:08+08:00",
+      "minutes": 0.0,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 0,
+        "tool_calls": 4,
+        "elapsed_s": 1
+      },
+      "measured": {
+        "model_calls": null,
+        "tools": {},
+        "tool_calls": null,
+        "source": "无会话记录（不经 DSH 的调用，如联调脚本）"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "tool": 4,
+        "task_end": 1
+      },
+      "over_budget": []
+    },
+    {
+      "task_id": "P-20261001184500-t16a",
+      "case": "大卷宗（T16 真机记录）",
+      "kind": "pipeline",
+      "skill": "case-wiki-build",
+      "status": "completed",
+      "start": "2026-10-01T18:45:00+08:00",
+      "end": "2026-10-01T18:47:29+08:00",
+      "minutes": 2.5,
+      "budget": {
+        "model_calls": 79,
+        "tool_calls": 1,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 30,
+        "tool_calls": 0,
+        "elapsed_s": 149
+      },
+      "measured": {
+        "model_calls": 30,
+        "tools": {},
+        "tool_calls": null,
+        "source": "运行记录.json"
+      },
+      "service_log": {},
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}
