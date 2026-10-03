@@ -182,3 +182,33 @@ describe('trialConnection', () => {
     expect(get()).toBe('sk-old-12345678')
   })
 })
+
+// T14 第二次实跑派修 3（执行令 1751）：设置页"更换 Key"——新 Key 覆盖旧 Key、随后测一次连接；测试不通过也不退回旧 Key
+describe('changeKey', () => {
+  it('新 Key 覆盖旧 Key，返回两台服务器的测试结果；不动地址', async () => {
+    writeFileSync(settingsFile(), JSON.stringify(example), 'utf8')
+    const before = readFileSync(settingsFile(), 'utf8')
+    const { c, get } = memCredentials('sk-old-12345678')
+    const r = await new LawbenchRemote(supervisorFor(fake), fake.appdata, () => c).changeKey('sk-new-12345678')
+    expect(get()).toBe('sk-new-12345678')
+    expect(r.error).toBeNull()
+    expect((r.llm as { reachable: boolean }).reachable).toBe(true)
+    expect((r.prep as { reachable: boolean }).reachable).toBe(true)
+    expect(JSON.stringify(r)).not.toContain('sk-new-12345678')
+    expect(readFileSync(settingsFile(), 'utf8')).toBe(before)
+  })
+
+  it('服务没起来：Key 照样换，返回中文说明', async () => {
+    const { c, get } = memCredentials('sk-old-12345678')
+    const sup = { endpoint: () => undefined, state: 'starting' } as unknown as Supervisor
+    const r = await new LawbenchRemote(sup, fake.appdata, () => c).changeKey('sk-new-12345678')
+    expect(get()).toBe('sk-new-12345678')
+    expect(r).toEqual({ llm: null, prep: null, error: '工作台服务未启动，请稍后重试' })
+  })
+
+  it('参数不对：不写', async () => {
+    const { c, get } = memCredentials('sk-old-12345678')
+    await expect(new LawbenchRemote(supervisorFor(fake), fake.appdata, () => c).changeKey('a b')).rejects.toThrow('请求参数有误')
+    expect(get()).toBe('sk-old-12345678')
+  })
+})

@@ -1,10 +1,10 @@
 // 设置页"律师工作台"一节（PRD 7.9；settings.json 契约 files/settings.schema.json）：
-// 服务器和 Key（T13 执行令 Q7：只读占位，改法待 N34）、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、
+// 服务器和 Key（T13 执行令 Q7：地址只读；Key 可更换，T14 第二次实跑派修 3）、个人参数预设、Word 模板、本机律师姓名、日常办公文件夹、
 // 发票购买方名称、Word 转 PDF 的程序、关于。保存时服务器地址原样带回，不在这里改。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, C, ErrorLine, getNav, S } from './kit.tsx'
 import { lawyerMessage } from './format.ts'
-import { app, lb, MODE_AGENT, type Params, type SkillInfo } from './state.ts'
+import { app, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
 
 interface Settings {
   v: 1
@@ -67,10 +67,10 @@ export function SettingsSection() {
       </div>
       <ErrorLine error={err} />
 
-      <Block title="服务器和 Key" note="修改入口稍后提供；本版只显示当前配置。">
+      <Block title="服务器和 Key" note="服务器地址本版只显示；Key 可以更换。">
         <Field label="律所模型服务器"><Ro>{loaded.servers.llm_base_url}</Ro><Ro>所外：{loaded.servers.llm_alt_base_url ?? '未设置'}</Ro></Field>
         <Field label="律所识别服务器"><Ro>{loaded.servers.prep_base_url}</Ro><Ro>所外：{loaded.servers.prep_alt_base_url ?? '未设置'}</Ro></Field>
-        <Field label="个人 Key"><Ro>{hasKey === null ? '读取中' : hasKey ? '已设置（保存在 Windows 凭据管理器）' : '未设置'}</Ro></Field>
+        <Field label="个人 Key"><Ro>{hasKey === null ? '读取中' : hasKey ? '已设置（保存在 Windows 凭据管理器）' : '未设置'}</Ro><ChangeKey onChanged={() => setHasKey(true)} /></Field>
       </Block>
 
       <Block title="个人参数预设" note="新任务的默认参数；也可以给某个 Skill 单独设一套。">
@@ -131,6 +131,55 @@ export function SettingsSection() {
         <div style={{ ...S.sub, color: C.faint }}>律所与软件标识（双 logo）在正式版提供。</div>
       </Block>
     </div>
+  )
+}
+
+/** 一台服务器测试结果的一句话（服务给的 message 已是中文说明）。 */
+export function connectionLine(label: string, r: ConnectionResult | null): string {
+  if (!r) return `${label}：没有测成`
+  return `${label}：${r.message}`
+}
+
+/**
+ * 更换 Key（执行令 1751 必修 3）：输入新 Key → Host 写进凭据管理器（覆盖旧 Key）→ 自动测一次连接 → 显示结果。
+ * 输入框是密码框；提交后立即清空，界面任何地方都不显示 Key。
+ */
+export function ChangeKey({ onChanged }: { onChanged: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; lines: string[] } | null>(null)
+  const submit = async () => {
+    const k = key.trim()
+    setKey('')
+    if (!/^[!-~]{8,512}$/.test(k)) { setResult({ ok: false, lines: ['Key 格式不对：应为 8 个字符以上、不含空格和中文'] }); return }
+    setBusy(true); setResult(null)
+    try {
+      const r = await lb().changeKey(k)
+      onChanged()
+      setOpen(false)
+      const ok = !r.error && r.llm?.reachable === true && r.llm.key_valid !== false && r.prep?.reachable === true
+      setResult({ ok, lines: ['已换成新 Key', ...(r.error ? [`测试连接没有做成：${r.error}`] : [connectionLine('律所模型服务器', r.llm), connectionLine('律所识别服务器', r.prep)])] })
+    } catch (e) {
+      setResult({ ok: false, lines: [`没有换成：${lawyerMessage((e as Error).message)}`] })
+    } finally { setBusy(false) }
+  }
+  return (
+    <>
+      {open ? (
+        <span style={S.row}>
+          <input type="password" autoComplete="off" aria-label="新 Key" style={{ ...S.input, width: 240 }} value={key} placeholder="粘贴新 Key"
+            onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && key) void submit() }} />
+          <Button size="sm" variant="primary" disabled={!key || busy} onClick={() => void submit()}>保存并测试</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setKey(''); setOpen(false) }}>取消</Button>
+        </span>
+      ) : <Button size="sm" variant="outline" disabled={busy} onClick={() => { setResult(null); setOpen(true) }}>{busy ? '正在测试…' : '更换 Key'}</Button>}
+      {result ? (
+        <div role="status" style={{ width: '100%', paddingLeft: 118, fontSize: 12, color: result.ok ? C.ok : C.err }}>
+          {result.lines.map((l) => <div key={l}>{l}</div>)}
+        </div>
+      ) : null}
+    </>
   )
 }
 

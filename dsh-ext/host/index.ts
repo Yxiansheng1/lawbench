@@ -411,6 +411,24 @@ export class LawbenchRemote {
     return { llm, prep, restored: true }
   }
 
+  /**
+   * 设置页"更换 Key"（T14 第二次实跑派修 3，执行令 1751）：新 Key 写进凭据管理器（覆盖旧 Key，不恢复），再测一次两台服务器。
+   * 与首次配置的 trialConnection 不同：不改地址，测试不通过也不退回旧 Key（律师照提示再换）。Key 不回传、不写日志。
+   * @param key - 新 Key。
+   * @returns 两项测试结果；测试本身出错（服务未启动等）时 llm、prep 为 null，error 为中文说明——Key 此时已经换了。
+   */
+  async changeKey(key: unknown): Promise<{ llm: unknown; prep: unknown; error: string | null }> {
+    if (typeof key !== 'string' || !/^[\x21-\x7e]{8,512}$/.test(key)) throw new Error('请求参数有误')
+    const cred = this.credentials()
+    if (!cred) throw new Error(UNAVAILABLE)
+    await cred.set('LAWFIRM_KEY', key)
+    this.log('info', 'credentials.key_changed', {})
+    try {
+      return { llm: await this.testConnection('llm'), prep: await this.testConnection('prep'), error: null }
+    } catch (e) {
+      return { llm: null, prep: null, error: e instanceof Error && /[一-鿿]/.test(e.message) ? e.message : UNAVAILABLE }
+    }
+  }
 }
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'

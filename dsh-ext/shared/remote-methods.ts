@@ -21,6 +21,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'putSettings', params: ['settings'] },
   { method: 'testConnection', params: ['server'] },
   { method: 'trialConnection', params: ['servers', 'key'] },
+  // T14 第二次实跑派修 3：设置页"更换 Key"（写凭据管理器后测一次连接；不回显 Key）
+  { method: 'changeKey', params: ['key'] },
   // T13 执行令 Q4：Host 自己读 Skill 目录的 SKILL.md 头部，不是 /api 契约接口
   { method: 'listSkills', params: [] },
   // T13 执行令 Q3②：粘贴的截图由 Host 存临时文件后经 /api/materials/import 导入

@@ -141,11 +141,15 @@ export function confirm(title: string, text: string, ok = '确定'): Promise<boo
 
 export function notice(title: string, text: string, lines?: string[]): void { pushDialog({ kind: 'notice', title, text, lines }) }
 
+/** 测试连接一台服务器的结果（contracts\api\connection_test.schema.json）。 */
+export interface ConnectionResult { reachable: boolean; key_valid: boolean | null; latency_ms: number | null; route: 'primary' | 'alternate' | null; message: string }
+
 /** 界面调用 Host 的方法表（ctx.remote.lawbench），在 apply 里填入。 */
 export type LawbenchApi = Record<string, (arg?: unknown) => Promise<ApiResult>> & {
   setupState(): Promise<{ configured: boolean; hasSettings: boolean; hasKey: boolean; service: string }>
   getSettings(): Promise<Record<string, unknown>>
   putSettings(settings: unknown): Promise<unknown>
+  changeKey(key: string): Promise<{ llm: ConnectionResult | null; prep: ConnectionResult | null; error: string | null }>
   listSkills(): Promise<{ ok: true; value: { skills: SkillInfo[] } }>
 }
 
