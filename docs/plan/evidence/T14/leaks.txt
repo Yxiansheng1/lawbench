@@ -1,0 +1,23 @@
+# T14 日志泄漏自检（2026-10-03 15:34）：应用数据目录 <测试目录>\Local\lawbench\logs 与 DSH_HOME 下的日志，逐个特征串计命中文件数（只记数，不记内容）
+日志文件：plugins-20261003.log
+日志文件：service.log
+讯问笔录：命中 0 个 .log 文件
+起诉意见书：命中 0 个 .log 文件
+现场勘验图文：命中 0 个 .log 文件
+转账截图：命中 0 个 .log 文件
+张某甲：命中 0 个 .log 文件
+张某甲诈骗案：命中 0 个 .log 文件
+续做检验案：命中 0 个 .log 文件
+还了网贷：命中 0 个 .log 文件
+保证金：命中 0 个 .log 文件
+虚构区不存在路：命中 0 个 .log 文件
+LBFX-CRIM01-7Q3Z：命中 0 个 .log 文件
+请根据本案：命中 0 个 .log 文件
+请梳理本案：命中 0 个 .log 文件
+刑事阅卷笔录：命中 0 个 .log 文件
+criminal-01：命中 0 个 .log 文件
+测试 Key A：整个应用数据目录命中 0 个文件
+
+## 扩大到整个应用数据目录（任何文件）
+- 张某甲：3 个文件——dsh-home\storages\workspace.json、Local\lawbench\cases.json、Local\lawbench\案件根名单.json（案件名与路径的登记，属设计；不是日志）
+- 还了网贷（识别文本）、LBFX-CRIM01-7Q3Z（材料特征串）、律师两句原话：0

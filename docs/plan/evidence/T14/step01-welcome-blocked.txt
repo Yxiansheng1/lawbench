@@ -1,0 +1,18 @@
+# T14 步骤 1 首次配置窗口空白：控制台（2026-10-03 14:49，CDP 重载 renderer/welcome.html 后 15 秒）
+[log.error] Failed to load resource: net::ERR_BLOCKED_BY_CLIENT file:///<仓库>/dsh/apps/desktop/lib/welcome/brand-font.css
+[log.error] Failed to load resource: net::ERR_BLOCKED_BY_CLIENT file:///<仓库>/dsh/apps/desktop/lib/welcome/welcome.css
+[log.error] Failed to load resource: net::ERR_BLOCKED_BY_CLIENT file:///<仓库>/dsh/apps/desktop/lib/welcome/welcome.js
+[net.fail] net::ERR_BLOCKED_BY_CLIENT 32368.14
+[net.fail] net::ERR_BLOCKED_BY_CLIENT 32368.15
+[net.fail] net::ERR_BLOCKED_BY_CLIENT 32368.17
+
+# 文件都在：
+Montserrat-OFL.txt
+brand-font.css
+montserrat-light.woff2
+montserrat-medium.woff2
+montserrat-regular.woff2
+welcome.css
+welcome.js
+
+# 拦截处：dsh/apps/desktop/src/main.ts（P-9）只放行 renderer 目录下的 file:// —— lawbenchRequestAllowed(url, hostUrl, join(app.getAppPath(), 'renderer'))；welcome.html 引用 ../lib/welcome/*
