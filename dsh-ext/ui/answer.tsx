@@ -19,15 +19,14 @@ export interface TaskAnswerView {
 }
 
 /**
- * 提示那一句（纯函数，测试守着）。
- * - 用完模型调用次数：已用完本次运行的模型调用次数（8/8），结果已保存到成果
- * - 没到次数上限却停了（时间到）：已到本次运行的时间上限，……
- * - 没存过草稿：……，没有存下草稿；做到哪里请看成果里的"未完成"
+ * 提示那一句（纯函数，测试守着）。这块只在到达用量上限时出现（turnNotice 的 BUDGET_STOPPED、成果页里状态为到达上限的任务），
+ * 所以第一句一律按到顶说，不看 result.json 的状态——它由 Agent 在一轮结束后异步写，界面可能读得比它早（T13 派修复核 F2）。
+ * result.json 只用来取次数：用满写"已用完……（8/8）"；没用满（时间到，或用量还没写完）写"已到……用量上限（模型调用 5/8）"；取不到不写括号。
  */
-export function answerNotice(v: Pick<TaskAnswerView, 'status' | 'used' | 'limit' | 'draft'>): string {
-  const byCalls = v.used !== null && v.limit !== null && v.used >= v.limit
-  const head = v.status !== 'budget_stopped' ? '本次运行已结束'
-    : byCalls ? `已用完本次运行的模型调用次数（${v.used}/${v.limit}）` : '已到本次运行的时间上限'
+export function answerNotice(v: Pick<TaskAnswerView, 'used' | 'limit' | 'draft'>): string {
+  const known = v.used !== null && v.limit !== null
+  const head = known && v.used! >= v.limit! ? `已用完本次运行的模型调用次数（${v.used}/${v.limit}）`
+    : known ? `已到本次运行的用量上限（模型调用 ${v.used}/${v.limit}）` : '已到本次运行的用量上限'
   return v.draft ? `${head}，结果已保存到成果` : `${head}，没有存下草稿；做到哪里请看成果里的"未完成"`
 }
 

@@ -60,17 +60,45 @@ describe('Host 读任务结果（host/task-answer.ts）', () => {
     const root = mk()
     for (const id of ['T-1', '../x', `${T}/..`, 12]) expect(readTaskAnswer(root, id)).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
     expect(readTaskAnswer('相对\\路径', T)).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+    // 网络路径、设备路径不收（复核 F4）
+    for (const net of ['\\\\127.0.0.1\\share\\案件', '//127.0.0.1/share/案件', '\\\\?\\D:\\案件', '\\\\.\\D:\\案件']) expect(readTaskAnswer(net, T), net).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
     expect(readTaskAnswer(root, 'T-20261003145955-0000')).toMatchObject({ ok: false, error: { code: 'TASK_NOT_FOUND' } })
   })
-  it('草稿是链接（可能指到案件外）：不读', () => {
+  // 草稿文件本身是符号链接：建符号链接要特权，没有特权的机器上跳过（不静默算过，复核 F1）
+  const canSymlink = (() => {
+    const d = mkdtempSync(join(tmpdir(), 'lb-answer-sl-'))
+    try { writeFileSync(join(d, 'a'), ''); symlinkSync(join(d, 'a'), join(d, 'b'), 'file'); return true } catch { return false } finally { rmSync(d, { recursive: true, force: true }) }
+  })()
+  it.skipIf(!canSymlink)('草稿文件是符号链接（可能指到案件外）：不读', () => {
     const root = mk({ draft: null })
     const outside = mkdtempSync(join(tmpdir(), 'lb-answer-out-')); roots.push(outside)
     writeFileSync(join(outside, 'secret.md'), '案件外的文件')
     const dir = join(root, '工作区', '任务', T)
-    try { symlinkSync(join(outside, 'secret.md'), join(dir, '草稿', 'x.md'), 'file') } catch { return } // 没有建链接权限的机器上跳过
+    symlinkSync(join(outside, 'secret.md'), join(dir, '草稿', 'x.md'), 'file')
     writeFileSync(join(dir, 'result.json'), JSON.stringify({ status: 'budget_stopped', drafts: [{ title: 'x', path: `工作区/任务/${T}/草稿/x.md`, version: 1 }] }))
     const r = readTaskAnswer(root, T)
     expect(r.ok && r.value.draft).toBe(null)
+  })
+  // 目录联接（junction）不需要特权：草稿目录、整个任务目录指到案件外，两种都不读（逐级查链接、核实际位置两道防线，复核 F1）
+  it('草稿目录是联接、指到案件外：草稿不读', () => {
+    const root = mk({ draft: null })
+    const outside = mkdtempSync(join(tmpdir(), 'lb-answer-out-')); roots.push(outside)
+    writeFileSync(join(outside, 'x.md'), '案件外的文件')
+    const dir = join(root, '工作区', '任务', T)
+    rmSync(join(dir, '草稿'), { recursive: true, force: true })
+    symlinkSync(outside, join(dir, '草稿'), 'junction')
+    writeFileSync(join(dir, 'result.json'), JSON.stringify({ status: 'budget_stopped', drafts: [{ title: 'x', path: `工作区/任务/${T}/草稿/x.md`, version: 1 }] }))
+    const r = readTaskAnswer(root, T)
+    expect(r.ok && r.value.draft).toBe(null)
+  })
+  it('整个任务目录是联接、指到案件外：读不到任务', () => {
+    const root = mk({ draft: null })
+    const outside = mkdtempSync(join(tmpdir(), 'lb-answer-out-')); roots.push(outside)
+    const other = caseWith(); roots.push(other)
+    const dir = join(root, '工作区', '任务', T)
+    rmSync(dir, { recursive: true, force: true })
+    symlinkSync(join(other, '工作区', '任务', T), dir, 'junction')
+    expect(readTaskAnswer(root, T)).toMatchObject({ ok: false, error: { code: 'TASK_NOT_FOUND' } })
   })
   it('草稿过长：截到上限并标 truncated', () => {
     const r = readTaskAnswer(mk({ draft: 'a'.repeat(MAX_DRAFT_BYTES + 10) }), T)
@@ -81,13 +109,14 @@ describe('Host 读任务结果（host/task-answer.ts）', () => {
 
 describe('提示文字（answerNotice）', () => {
   const d = { title: 'x', version: 1, path: 'p', text: '', truncated: false }
-  it('用完模型调用次数、有草稿：执行令原文', () => {
-    expect(answerNotice({ status: 'budget_stopped', used: 8, limit: 8, draft: d })).toBe('已用完本次运行的模型调用次数（8/8），结果已保存到成果')
+  it('用完模型调用次数、有草稿：执行令原文；不看 status（result.json 还是 running 也按到顶说，复核 F2）', () => {
+    expect(answerNotice({ used: 8, limit: 8, draft: d })).toBe('已用完本次运行的模型调用次数（8/8），结果已保存到成果')
+    expect(answerNotice({ status: 'running', used: 8, limit: 8, draft: d } as never)).toBe('已用完本次运行的模型调用次数（8/8），结果已保存到成果')
   })
-  it('时间到（次数没用完）、没存草稿、上限读不到', () => {
-    expect(answerNotice({ status: 'budget_stopped', used: 5, limit: 8, draft: d })).toBe('已到本次运行的时间上限，结果已保存到成果')
-    expect(answerNotice({ status: 'budget_stopped', used: 8, limit: 8, draft: null })).toBe('已用完本次运行的模型调用次数（8/8），没有存下草稿；做到哪里请看成果里的"未完成"')
-    expect(answerNotice({ status: 'budget_stopped', used: null, limit: null, draft: d })).toBe('已到本次运行的时间上限，结果已保存到成果')
+  it('没用满（5/8：时间到或用量没写完）写已用/上限，写反能测出来（复核 F3）；没存草稿；次数读不到不写括号', () => {
+    expect(answerNotice({ used: 5, limit: 8, draft: d })).toBe('已到本次运行的用量上限（模型调用 5/8），结果已保存到成果')
+    expect(answerNotice({ used: 8, limit: 8, draft: null })).toBe('已用完本次运行的模型调用次数（8/8），没有存下草稿；做到哪里请看成果里的"未完成"')
+    expect(answerNotice({ used: null, limit: null, draft: d })).toBe('已到本次运行的用量上限，结果已保存到成果')
   })
 })
 

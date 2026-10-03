@@ -48,7 +48,8 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isIn
  */
 export function readTaskAnswer(root: unknown, taskId: unknown): Result {
   const fail = (code: string, message: string): Result => ({ ok: false, error: { code, message } })
-  if (typeof root !== 'string' || !root || !isAbsolute(root) || typeof taskId !== 'string' || !TASK_ID.test(taskId)) {
+  // 网络路径、设备路径（\\host\share、//host、\\?\、\\.\）一律不收（同 P-15，复核 F4）
+  if (typeof root !== 'string' || !root || !isAbsolute(root) || /^[\\/]{2}/.test(root) || typeof taskId !== 'string' || !TASK_ID.test(taskId)) {
     return fail('INVALID_ARGUMENT', '请求参数有误')
   }
   const base = `工作区/任务/${taskId}`

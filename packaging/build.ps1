@@ -84,6 +84,10 @@ $Steps = [ordered]@{
     foreach ($t in 'git', 'node', $BuildPython) { if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { throw "missing tool: $t" } }
     Run $BuildPython @('-c', 'import PIL')  # brand assets need Pillow
     Run 'git' @('-C', $Root, 'diff', '--quiet', '--', 'contracts')  # contracts must be committed
+    # Product version shown in the sidebar (dsh-ext\shared\product.ts) must equal service\pyproject.toml until T20 picks a single source
+    $uiVer = [regex]::Match((Get-Content -Raw (Join-Path $Root 'dsh-ext\shared\product.ts')), "PRODUCT_VERSION = '([^']+)'").Groups[1].Value
+    $svcVer = [regex]::Match((Get-Content -Raw (Join-Path $Root 'service\pyproject.toml')), '(?m)^version = "([^"]+)"').Groups[1].Value
+    if (-not $uiVer -or $uiVer -ne $svcVer) { throw "version mismatch: dsh-ext\shared\product.ts '$uiVer' vs service\pyproject.toml '$svcVer'" }
     Say 'tools present'
   }
   brand = {

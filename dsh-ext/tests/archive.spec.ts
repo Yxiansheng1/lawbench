@@ -193,6 +193,8 @@ describe('Host 读归档方案（host\\archive-plan.ts）', () => {
   it('没有方案、任务编号不合格式、案件根不是绝对路径、内容坏了或不合契约：各自报错', () => {
     expect(readArchivePlan(dir, TASK)).toMatchObject({ ok: false, error: { code: 'TASK_NOT_FOUND', message: NO_PLAN } })
     expect(readArchivePlan(dir, '..\\..\\x')).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+    // 网络路径、设备路径不收（复核 F4）
+    for (const net of ['\\\\127.0.0.1\\share\\案件', '//127.0.0.1/share/案件', '\\\\?\\D:\\案件']) expect(readArchivePlan(net, TASK), net).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
     expect(readArchivePlan('相对路径', TASK)).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
     put('{坏的')
     expect(readArchivePlan(dir, TASK)).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT', message: BAD_PLAN } })
