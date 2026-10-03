@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 import logging
 import logging.handlers
 import pathlib
@@ -38,10 +39,15 @@ def close() -> None:
 
 
 def event(module: str, op: str, *, status: str = "ok", case_id: str | None = None,
-          duration_ms: int | None = None, error: str | None = None) -> None:
-    """error 只能是错误码或异常类名。"""
+          duration_ms: int | None = None, error: str | None = None,
+          material_id: str | None = None, unit: str | None = None) -> None:
+    """error 只能是错误码或异常类名；material_id 只能是材料编号（M0001），unit 只能是定位单位（原文查看用）。"""
     if status not in _STATUS:
         raise ValueError(f"未知日志状态 {status}")
+    if material_id is not None and not re.fullmatch(r"M[0-9]{4}", material_id):
+        raise ValueError("material_id 不是材料编号")
+    if unit is not None and unit not in ("page", "para", "line", "cell"):
+        raise ValueError(f"未知定位单位 {unit}")
     rec = {"t": datetime.now().astimezone().isoformat(timespec="seconds"), "module": module, "op": op,
            "status": status}
     if case_id:
@@ -50,4 +56,8 @@ def event(module: str, op: str, *, status: str = "ok", case_id: str | None = Non
         rec["ms"] = int(duration_ms)
     if error:
         rec["error"] = error
+    if material_id:
+        rec["material_id"] = material_id
+    if unit:
+        rec["unit"] = unit
     _LOGGER.info(json.dumps(rec, ensure_ascii=False))

@@ -81,6 +81,11 @@ def routes(st) -> list[Route]:
         from ..search import fts
         return fts.search(st.cases.root_of(d["case_id"]), d["case_id"], st.materials.index(d["case_id"]), d["q"])
 
+    def source(d: dict) -> dict:  # T9（T14 派修）：原文查看
+        from ..case import source as src
+        return src.view(st.cases.root_of(d["case_id"]), d["case_id"], st.materials.index(d["case_id"]),
+                        d["material_id"], d["citation"])
+
     def case_recent(d: dict) -> dict:
         return {"cases": st.cases.recent()}
 
@@ -170,6 +175,7 @@ def routes(st) -> list[Route]:
         Route("/api/redline", E("redline", redline), methods=["POST"]),
         Route("/api/archive/build", E("archive_build", archive_build), methods=["POST"]),
         Route("/api/search", E("search", search, query=True), methods=["GET"]),
+        Route("/api/source", E("source", source, query=True), methods=["GET"]),
         Route("/api/pipeline/run", E("pipeline_run", pipeline_run), methods=["POST"]),
         Route("/api/pipeline/{task_id}", E("pipeline_status", pipeline_status, query=True), methods=["GET"]),
         Route("/api/pipeline/{task_id}/cancel", E("pipeline_cancel", pipeline_cancel), methods=["POST"]),

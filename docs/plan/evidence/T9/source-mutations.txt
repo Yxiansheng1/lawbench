@@ -1,0 +1,9 @@
+红 无路由 | 1 failed, 1 warning in 4.65s
+红 文本取错单元 | 1 failed, 1 warning in 4.66s
+红 非PDF也出图 | 1 failed, 4 passed, 1 warning in 6.20s
+红 范围取末页图 | 1 failed, 1 passed, 1 warning in 5.06s
+红 不认材料名 | 1 failed, 6 passed, 1 warning in 6.27s
+红 不判位置 | 1 failed, 5 passed, 1 warning in 6.15s
+红 任一旧版即提示 | 1 failed, 8 passed, 1 warning in 7.07s
+红 从不提示 | 1 failed, 8 passed, 1 warning in 6.61s
+红 日志不记编号 | 1 failed, 9 passed, 1 warning in 6.81s
