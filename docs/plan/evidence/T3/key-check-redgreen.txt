@@ -1,0 +1,1 @@
+改坏：假 Key 回 200 也判'有效'（bogus in (200,401,403)）→ test_connection_key_three_states：1 failed, 52 deselected, 1 warning in 1.37s；复原后 test_api_case/test_t3_rework 连接相关 8 passed

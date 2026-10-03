@@ -16,6 +16,7 @@ CHUNK2 = b'data: {"choices":[{"delta":{"content":"LBFAKE-CHUNK-2"},"finish_reaso
 class Fake6000D:
     def __init__(self, key_status: int = 200):
         self.key_status = key_status
+        self.valid_keys: set[str] | None = None   # 设了就"校验 Key"：不在集合里的 Key 回 401；None = 网关不校验（现状）
         self.seen: list[dict] = []
         self.release = threading.Event()  # 流式第二段在测试读到第一段后才发出
         self.hits = 0
@@ -33,6 +34,8 @@ class Fake6000D:
                               "query": str(request.url.query)})
             if not request.headers.get("authorization", "").startswith("Bearer "):
                 return JSONResponse({"error": "no key"}, status_code=401)
+            if self.valid_keys is not None and request.headers["authorization"][7:] not in self.valid_keys:
+                return JSONResponse({"error": "key"}, status_code=401)
             if not body.get("stream"):
                 if self.key_status != 200:
                     return JSONResponse({"error": "key"}, status_code=self.key_status)

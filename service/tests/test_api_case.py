@@ -401,6 +401,7 @@ def _put_servers(client, sv: dict):
 
 def test_connection_primary(make_client, fake_llm, fake_prep):
     c = make_client(key="LBTEST-KEY")
+    fake_llm.fake.valid_keys = {"LBTEST-KEY"}
     _put_servers(c, servers(fake_llm.url + "/v1", None, fake_prep.url, None))
     req_valid("connection_test", {"server": "llm"})
     v = ok(c.post("/api/connection/test", json={"server": "llm"}), "connection_test")
@@ -441,6 +442,22 @@ def test_connection_key_states(make_client, fake_llm):
     c2 = make_client(key="LBTEST-BAD")
     v = ok(c2.post("/api/connection/test", json={"server": "llm"}), "connection_test")
     assert v["key_valid"] is False
+
+
+def test_connection_key_three_states(make_client, fake_llm):
+    """T14 第二次实跑：网关不校验 Key 时假 Key 也回 200，不能报"有效"。另发一次无效 Key 判断网关校不校验。"""
+    c = make_client(key="LBTEST-KEY")
+    _put_servers(c, servers(fake_llm.url + "/v1", None, fake_llm.url, None))
+    v = ok(c.post("/api/connection/test", json={"server": "llm"}), "connection_test")      # 网关不校验
+    assert v["key_valid"] is None and "网关当前未校验 Key" in v["message"] and v["latency_ms"] >= 1
+    sent = [s["headers"]["authorization"] for s in fake_llm.fake.seen if s["path"] == "/v1/chat/completions"]
+    assert sent[0] == "Bearer LBTEST-KEY" and sent[1].startswith("Bearer invalid-")
+    fake_llm.fake.valid_keys = {"LBTEST-KEY"}                                              # 网关校验、Key 对
+    v = ok(c.post("/api/connection/test", json={"server": "llm"}), "connection_test")
+    assert v["key_valid"] is True and "无法确认" not in v["message"]
+    fake_llm.fake.valid_keys = {"OTHER-KEY"}                                               # 网关校验、Key 错
+    v = ok(c.post("/api/connection/test", json={"server": "llm"}), "connection_test")
+    assert v["key_valid"] is False and "Key 无效" in v["message"]
 
 
 def test_connection_bad_request(client):

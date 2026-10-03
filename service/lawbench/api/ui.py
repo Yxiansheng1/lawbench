@@ -7,6 +7,8 @@ capsules、capsules_reset、connection_test；T5 加 materials_scan、materials_
 from __future__ import annotations
 
 import json
+import math
+import secrets
 import time
 from typing import Callable
 
@@ -192,13 +194,13 @@ def routes(st) -> list[Route]:
 def probe_connection(st, server: str) -> dict:
     """对所内、所外地址依次探测；6000D 另发 max_tokens=1 请求判断 Key（Spec 20.7；6000D 目前不校验 Key）。"""
     net = st.net
-    t0 = time.monotonic()
+    t0 = time.perf_counter()
     try:
         base, route = net.select(server, force=True)
     except ApiError as e:
         return {"reachable": False, "key_valid": None, "latency_ms": None, "route": None,
                 "message": MESSAGES[e.code]}
-    latency = int((time.monotonic() - t0) * 1000)
+    latency = math.ceil((time.perf_counter() - t0) * 1000)
     where = "所内" if route == "primary" else "所外"
     key_valid = None
     note = ""
@@ -212,19 +214,31 @@ def probe_connection(st, server: str) -> dict:
                 note = "，尚未设置 Key"
         if key:
             try:
-                r = net.client.post(base + "/chat/completions", timeout=KEY_TIMEOUT,
-                                    headers={"Authorization": f"Bearer {key}"},
-                                    json={"model": LLM_MODEL, "messages": [{"role": "user", "content": "ping"}],
-                                          "max_tokens": 1, "stream": False})
-                if r.status_code == 200:
-                    key_valid = True
-                elif r.status_code in (401, 403):
-                    key_valid = False
-                    note = "，" + MESSAGES["KEY_INVALID"]
-                else:
+                t1 = time.perf_counter()
+                code = _key_probe(net, base, key)
+                latency = math.ceil((time.perf_counter() - t1) * 1000)   # 真实请求的耗时；perf_counter：Windows 上 monotonic 约 16 毫秒一跳，快的请求会显示 0（T14）
+                if code in (401, 403):
+                    key_valid, note = False, "，" + MESSAGES["KEY_INVALID"]
+                elif code != 200:
                     note = "，Key 暂时无法验证"
+                else:
+                    # 网关不校验 Key 时假 Key 也回 200：再发一次明显无效的 Key，它被拒才算真 Key 有效（T14 第二次实跑）
+                    bogus = _key_probe(net, base, "invalid-" + secrets.token_hex(8))
+                    if bogus in (401, 403):
+                        key_valid = True
+                    elif bogus == 200:
+                        note = "，网关当前未校验 Key，无法确认 Key 是否正确"
+                    else:
+                        note = "，Key 暂时无法验证"
             except Exception as e:  # noqa: BLE001 连接中断等：连通性已确认，Key 状态未知
                 logs.event("api", "connection_test_key", status="fail", error=type(e).__name__)
                 note = "，Key 暂时无法验证"
     return {"reachable": True, "key_valid": key_valid, "latency_ms": latency, "route": route,
             "message": f"已连接（{where}）{note}"}
+
+
+def _key_probe(net, base: str, key: str) -> int:
+    """max_tokens=1 的非流式请求，返回状态码。Key 只放在请求头里，不进日志。"""
+    return net.client.post(base + "/chat/completions", timeout=KEY_TIMEOUT, headers={"Authorization": f"Bearer {key}"},
+                           json={"model": LLM_MODEL, "messages": [{"role": "user", "content": "ping"}],
+                                 "max_tokens": 1, "stream": False}).status_code
