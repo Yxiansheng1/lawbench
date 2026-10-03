@@ -189,3 +189,12 @@
 
 AMEND
 
+
+---
+
+## 主编排裁决与补用例亲核（2026-10-03 17:01 (+08:00)）
+
+- 裁决：**AMEND 只补用例**（功能已由复核员二十余种越权构造与只读快照证实）。线 B `d40a55b`（叠在 rebase 后的实现 `23ccbe9` 上）补三例闸门用例 + logs 校验两例，`test_source.py` 14 passed（main 上亲跑）。
+- 我自己的变异：`_page_png` 的 `resolve_read` 换直接拼路径 → 7 红（含 NameError 连带）；`_changed` 每份 result.json 的 `resolve_internal` 换直接拼路径 → 1 红（联接用例）。复原干净。
+- 三处请定：source_changed 启发式一期接受、`task_id` 入契约 1.4 候项；图片材料不出图按 Spec 字面、N66 候用户；图片大小接受。P3-2 交 T18 观察。
+- **通过。** 两提交进 main。
