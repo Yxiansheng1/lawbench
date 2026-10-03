@@ -1,0 +1,6 @@
+﻿merge gate line-A(2) @ 18ce556 2026-10-03 17:46
+check_examples: [对] case-archiving/catalogs/民事行政卷.json (rc=0)
+service: 1282 passed, 7 skipped, 1 warning in 1289.17s (0:21:29)
+prep395: 92 passed, 1 warning in 81.48s (0:01:21)
+dsh-ext (D:\lawbench-rv\gate-A2 副本): Test Files 33 passed; Tests 545 passed | 6 skipped (551); tsc rc=0; check_ui_words 零命中; F1 变异（删两道防线）answer.spec 2 failed（新例守住）
+注：service 全量于 17:46 起跑；线 B 的 T3 Key 判定（3600d0c，只改 api\ui.py）于 18:02 叠入，同树上另跑 test_api_case -k connection 6 passed 并做变异（见 evidence\T3\review-ORCH-Key判定.md）
