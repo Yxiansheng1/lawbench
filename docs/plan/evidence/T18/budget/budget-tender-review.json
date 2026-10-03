@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-10-03T22:51:38+08:00",
+  "cases": [
+    "tender-review-2"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003224908-8442",
+      "case": "tender-review-2",
+      "kind": "agent",
+      "skill": "tender-review",
+      "status": "completed",
+      "start": "2026-10-03T22:49:08+08:00",
+      "end": "2026-10-03T22:51:29+08:00",
+      "minutes": 2.4,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 8,
+        "tool_calls": 4,
+        "elapsed_s": 140
+      },
+      "measured": {
+        "model_calls": 8,
+        "tools": {
+          "ask_user_question": 1,
+          "case_list_materials": 1,
+          "case_read_material": 3,
+          "case_save_draft": 2,
+          "skill": 1
+        },
+        "tool_calls": 4,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 6,
+        "task_end": 1,
+        "progress": 1
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

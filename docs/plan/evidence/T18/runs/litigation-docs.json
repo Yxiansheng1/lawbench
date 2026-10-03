@@ -1,0 +1,56 @@
+{
+ "skill": "litigation-docs",
+ "capsule": "litigation-docs",
+ "case_id": "af42ed0c-4253-4560-a7d0-0030c7149367",
+ "root": "D:\\lawbench-T18\\cases\\litigation-docs",
+ "task_id": "T-20261003195518-4294",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "民事起诉状",
+   "path": "工作区/任务/T-20261003195518-4294/草稿/民事起诉状-v1.md",
+   "version": 1
+  },
+  {
+   "title": "民事起诉状",
+   "path": "工作区/任务/T-20261003195518-4294/草稿/民事起诉状-v2.md",
+   "version": 2
+  },
+  {
+   "title": "民事起诉状",
+   "path": "工作区/任务/T-20261003195518-4294/草稿/民事起诉状-v3.md",
+   "version": 3
+  },
+  {
+   "title": "民事起诉状",
+   "path": "工作区/任务/T-20261003195518-4294/草稿/民事起诉状-v4.md",
+   "version": 4
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "C",
+    "severity": "must_fix",
+    "excerpt": "2. 判令被告支付自2025年9月11日起至实际清偿之日止的逾期利息（按年利率百分之十二计算）",
+    "citation": "〔借条 第8行〕",
+    "message": "2025年9月11日 在所引材料（借条 第8行）中找不到"
+   }
+  ],
+  "stats": {
+   "citations": 12,
+   "must_fix": 1,
+   "hints": 0
+  }
+ },
+ "answers": [],
+ "wall_s": 79,
+ "log": [
+  "9s case opened",
+  "9s capsule litigation-docs",
+  "9s skill litigation-docs",
+  "11s sent",
+  "79s done budget_stopped"
+ ]
+}

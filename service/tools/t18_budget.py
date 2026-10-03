@@ -22,6 +22,7 @@ r"""T18 预算实测的计量工具（联调工具，不是产品功能；不改
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import pathlib
 import re
@@ -59,7 +60,9 @@ def read_lines(p: pathlib.Path) -> list[str]:
             import zstandard
         except ImportError:
             raise RuntimeError("会话记录是 zstd 压缩的，本机没装 zstandard（pip install zstandard 后重跑）") from None
-        raw = zstandard.ZstdDecompressor().decompressobj().decompress(raw)
+        # DSH 每次 flush 追加一个 zstd 帧：要跨帧读完（decompressobj 只解第一帧，T18 实测踩到）
+        with zstandard.ZstdDecompressor().stream_reader(io.BytesIO(raw), read_across_frames=True) as r:
+            raw = r.read()
     return raw.decode("utf-8", "replace").splitlines()
 
 

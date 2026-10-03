@@ -1,0 +1,19 @@
+{
+ "skill": "tender-review",
+ "capsule": "bidding",
+ "case_id": "e477e6e8-90ff-445a-aeac-2afc46ccaf18",
+ "root": "D:\\lawbench-T18\\cases\\tender-review",
+ "task_id": "T-20261003205419-f3b9",
+ "status": "running",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 3007,
+ "log": [
+  "9s case opened",
+  "9s capsule bidding",
+  "9s skill tender-review",
+  "11s sent",
+  "3007s done running"
+ ]
+}

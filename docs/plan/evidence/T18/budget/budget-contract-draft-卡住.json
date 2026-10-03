@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-10-03T19:55:06+08:00",
+  "cases": [
+    "contract-draft"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003190509-08c2",
+      "case": "contract-draft",
+      "kind": "agent",
+      "skill": "contract-draft",
+      "status": "running",
+      "start": "2026-10-03T19:05:09+08:00",
+      "end": null,
+      "minutes": 0.5,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 4,
+        "tool_calls": 3,
+        "elapsed_s": 30
+      },
+      "measured": {
+        "model_calls": 4,
+        "tools": {
+          "ask_user_question": 1,
+          "case_list_materials": 1,
+          "case_read_material": 2,
+          "skill": 1
+        },
+        "tool_calls": 3,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 3
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

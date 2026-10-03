@@ -1,0 +1,139 @@
+{
+ "skill": "doc-revise",
+ "capsule": "litigation-docs",
+ "case_id": "d52c9e8f-6b30-4a43-9713-31aa1511d275",
+ "root": "D:\\lawbench-T18\\cases\\doc-revise",
+ "task_id": "T-20261003223846-d782",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "民事起诉状-修改稿",
+   "path": "工作区/任务/T-20261003223846-d782/草稿/民事起诉状-修改稿-v1.md",
+   "version": 1
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 1 | 事实与理由第1段 | 借条约定借款日期为2025年3月10日  | 借条约定借款日期为2025年3月10日  | 出稿前审查必须改第1条：出处应为借条第3段 |",
+    "citation": "〔借条 第5段〕",
+    "message": "出处位置不对：借条 第5段，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 1 | 事实与理由第1段 | 借条约定借款日期为2025年3月10日  | 借条约定借款日期为2025年3月10日  | 出稿前审查必须改第1条：出处应为借条第3段 |",
+    "citation": "〔借条 第3段〕",
+    "message": "出处位置不对：借条 第3段，这份材料按第N行定位"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "| 2 | 事实与理由第2段 | 并于2025年7月10日归还本金20,000元 | 并于2025年6月10日归还本金20,000元 | 出稿前审查必须改第2条：原件为2025年6月10日  |",
+    "citation": "〔还款记录 第5行〕",
+    "message": "2025年7月10日 标的是 还款记录 第5行，实际在 还款记录 第6行"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "| 3 | 事实与理由第2段 | 至今尚欠本金65,000元 | 至今尚欠本金60,000元 | 出稿前审查必须改第3条：应与诉讼请求一致为60,000元 |",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "原告：李某乙，男，公民身份号码990103197901010000（虚构），住虚构市虚构区不存在街8号，联系电话【待补充：原告联系电话】。",
+    "citation": "〔借条 第7段〕",
+    "message": "出处位置不对：借条 第7段，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "被告：王某丙，男，公民身份号码990104198203030000（虚构），住虚构市虚构区无此巷16号。",
+    "citation": "〔借条 第7段〕",
+    "message": "出处位置不对：借条 第7段，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "一、判令被告归还借款本金人民币陆万元（￥60,000.00）；",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "二、判令被告以 60,000 元为基数，自 2025年9月11日起按年利率百分之十二支付逾期利息至实际清偿之日止；",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "原告与被告系朋友关系。2025年3月10日，被告以经营资金周转为由向原告借款人民币捌万元整（￥80,000.00），原告当日通过手机银行转账支付，被告出具借条一份",
+    "citation": "〔借条 第2段、银行流水 第4行〕",
+    "message": "出处位置不对：借条 第2段，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "。借条约定借款日期为2025年3月10日",
+    "citation": "〔借条 第3段〕",
+    "message": "出处位置不对：借条 第3段，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "，年利率为百分之十二，按月付息",
+    "citation": "〔借条 第4段〕",
+    "message": "出处位置不对：借条 第4段，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "，还款期限为2025年9月10日前一次性归还全部本金",
+    "citation": "〔借条 第5段〕",
+    "message": "出处位置不对：借条 第5段，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "。此后王某丙再未还款，至今尚欠本金60,000元。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "还款期限届满后，原告多次催要，被告均以资金紧张为由拖延",
+    "citation": "〔情况说明 第6行〕",
+    "message": "没有叫“情况说明”的材料，材料名以 case_list_materials 返回的为准"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "根据《中华人民共和国民法典》第六百七十六条的规定，借款人未按照约定的期限返还借款的，应当按照约定或者国家有关规定支付逾期利息。借条同时约定借款人逾期还款的应承担出借人为实现债权支出的律师费",
+    "citation": "〔借条 第6段〕",
+    "message": "出处位置不对：借条 第6段，这份材料按第N行定位"
+   }
+  ],
+  "stats": {
+   "citations": 13,
+   "must_fix": 11,
+   "hints": 4
+  }
+ },
+ "answers": [],
+ "wall_s": 59,
+ "log": [
+  "9s case opened",
+  "9s capsule litigation-docs",
+  "9s skill doc-revise",
+  "11s sent",
+  "59s done budget_stopped"
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "skill": "general-drafting",
+ "capsule": "lawyer-letter",
+ "case_id": "0560b4c7-6ebf-4433-9b43-fa3dd89c8ae8",
+ "root": "D:\\lawbench-T18\\cases\\general-drafting",
+ "task_id": "T-20261003205239-e103",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "律师函（向王某丙催讨借款）",
+   "path": "工作区/任务/T-20261003205239-e103/草稿/律师函（向王某丙催讨借款）-v1.md",
+   "version": 1
+  },
+  {
+   "title": "律师函（向王某丙催讨借款）",
+   "path": "工作区/任务/T-20261003205239-e103/草稿/律师函（向王某丙催讨借款）-v2.md",
+   "version": 2
+  },
+  {
+   "title": "律师函（向王某丙催讨借款）",
+   "path": "工作区/任务/T-20261003205239-e103/草稿/律师函（向王某丙催讨借款）-v3.md",
+   "version": 3
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "2. 双方在借条中约定：借款年利率为百分之十二，按月付息，到期还本；还款期限为2025年9月10日前一次性归还全部本金。",
+    "citation": "〔借条 第5行〕〔借条 第6行〕",
+    "message": "2025年9月10日 标的是 借条 第5行、借条 第6行，实际在 借条 第14行"
+   }
+  ],
+  "stats": {
+   "citations": 8,
+   "must_fix": 1,
+   "hints": 0
+  }
+ },
+ "answers": [],
+ "wall_s": 100,
+ "log": [
+  "9s case opened",
+  "9s capsule lawyer-letter",
+  "9s skill general-drafting",
+  "11s sent",
+  "99s done budget_stopped"
+ ]
+}

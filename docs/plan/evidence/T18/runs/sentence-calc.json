@@ -1,0 +1,19 @@
+{
+ "skill": "sentence-calc",
+ "capsule": "sentence-calc",
+ "case_id": "9a6501f7-7b5e-4046-b482-bee31ea641a7",
+ "root": "D:\\lawbench-T18\\cases\\sentence-calc",
+ "task_id": "T-20261003195839-8c68",
+ "status": "budget_stopped",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 49,
+ "log": [
+  "9s case opened",
+  "9s capsule sentence-calc",
+  "9s skill sentence-calc",
+  "11s sent",
+  "49s done budget_stopped"
+ ]
+}

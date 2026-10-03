@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-10-03T22:36:25+08:00",
+  "cases": [
+    "case-reading-notes"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003223517-9743",
+      "case": "case-reading-notes",
+      "kind": "agent",
+      "skill": "case-reading-notes",
+      "status": "budget_stopped",
+      "start": "2026-10-03T22:35:17+08:00",
+      "end": "2026-10-03T22:36:16+08:00",
+      "minutes": 1.0,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 8,
+        "tool_calls": 6,
+        "elapsed_s": 59
+      },
+      "measured": {
+        "model_calls": 8,
+        "tools": {
+          "case_list_materials": 1,
+          "case_read_material": 5,
+          "case_save_draft": 1,
+          "skill": 1
+        },
+        "tool_calls": 6,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 7,
+        "task_end": 1
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

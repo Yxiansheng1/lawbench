@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-10-03T22:53:19+08:00",
+  "cases": [
+    "case-archiving-2"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003225149-2962",
+      "case": "case-archiving-2",
+      "kind": "agent",
+      "skill": "case-archiving",
+      "status": "budget_stopped",
+      "start": "2026-10-03T22:51:49+08:00",
+      "end": "2026-10-03T22:53:07+08:00",
+      "minutes": 1.3,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 8,
+        "tool_calls": 4,
+        "elapsed_s": 77
+      },
+      "measured": {
+        "model_calls": 8,
+        "tools": {
+          "ask_user_question": 1,
+          "case_archive_match": 1,
+          "case_read_material": 2,
+          "case_save_archive_plan": 1,
+          "case_save_draft": 2,
+          "skill": 1
+        },
+        "tool_calls": 4,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 6,
+        "progress": 3,
+        "task_end": 1
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

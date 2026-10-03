@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-10-03T20:54:07+08:00",
+  "cases": [
+    "general-drafting"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003205239-e103",
+      "case": "general-drafting",
+      "kind": "agent",
+      "skill": "general-drafting",
+      "status": "budget_stopped",
+      "start": "2026-10-03T20:52:39+08:00",
+      "end": "2026-10-03T20:53:50+08:00",
+      "minutes": 1.2,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 8,
+        "tool_calls": 16,
+        "elapsed_s": 71
+      },
+      "measured": {
+        "model_calls": 8,
+        "tools": {
+          "case_read_material": 5,
+          "case_read_wiki": 5,
+          "case_save_draft": 3,
+          "case_search": 6,
+          "skill": 1
+        },
+        "tool_calls": 16,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 19,
+        "task_end": 1
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

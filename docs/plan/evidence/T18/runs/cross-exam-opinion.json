@@ -1,0 +1,22 @@
+{
+ "skill": "cross-exam-opinion",
+ "capsule": "cross-exam",
+ "case_id": "d7ffe796-44b0-4bbf-8a26-31ec310077a3",
+ "root": "D:\\lawbench-T18\\cases\\cross-exam-opinion-2",
+ "task_id": "T-20261003224818-b2a8",
+ "status": "budget_stopped",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [
+  "Q[确认质证范围和发问提纲需求] radio:1 第二组到第四组，需要发问提纲 推荐 证人赵某刚询问笔录、银行交易明细、微信聊天记录截图、辨认笔录"
+ ],
+ "wall_s": 50,
+ "log": [
+  "9s case opened",
+  "9s capsule cross-exam",
+  "9s skill cross-exam-opinion",
+  "11s sent",
+  "22s answered Q[确认质证范围和发问提纲需求] radio:1 第二组到第四组，需要发问提纲 推荐 证人赵某刚询问笔录、银行交易明细、微信聊天记录截图、辨认笔录",
+  "50s done budget_stopped"
+ ]
+}

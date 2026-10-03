@@ -1,0 +1,237 @@
+{
+ "skill": "defense-opinion",
+ "capsule": "defense-opinion",
+ "case_id": "1e19f396-84b5-46b9-8d1a-5d19ec3a3d5b",
+ "root": "D:\\lawbench-T18\\cases\\defense-opinion",
+ "task_id": "T-20261003200110-5b07",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "辩护意见",
+   "path": "工作区/任务/T-20261003200110-5b07/草稿/辩护意见-v1.md",
+   "version": 1
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "（一）吴某第二笔16,500元系借款，不应计入诈骗数额",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "根据讯问笔录，张某甲在被讯问时明确表示：\"第二笔16500元，是她借给我的。\"",
+    "citation": "〔讯问笔录 第2页〕",
+    "message": "出处位置不对：讯问笔录 第2页，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "这一辩解与起诉意见书中\"张某甲对骗取吴某80,000元的事实供认不讳，但辩称16,500元系吴某自愿借给其个人\"的记载一致",
+    "citation": "〔起诉意见书 第3页〕",
+    "message": "出处位置不对：起诉意见书 第3页，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "。张某甲对16,500元性质的辩解具有一贯性，并非到案后为规避责任而临时编造。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "2. 16,500元的性质与80,000元保证金存在明显差异",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "张某甲对80,000元系骗取的事实供认不讳，并称该款用于偿还网贷及花销",
+    "citation": "〔讯问笔录 第2页〕",
+    "message": "出处位置不对：讯问笔录 第2页，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "。但对16,500元，张某甲始终辩称系吴某自愿借给其个人。两笔款项在张某甲的认知和供述中性质不同：前者是以办理贷款为名收取的保证金，后者则是个人之间的借贷关系。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "卷宗中关于16,500元的证据仅有被害人吴某的陈述和转账截图，而卷中电子数据（聊天记录）未见具体内容能够证明该笔款项系以贷款业务名义收取",
+    "citation": "〔起诉意见书 第3页、上游成果-刑事阅卷笔录 第20行〕",
+    "message": "出处位置不对：起诉意见书 第3页，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "综上，16,500元的性质存在合理争议，建议在认定诈骗数额时予以扣除或至少存疑有利于犯罪嫌疑人，将本案诈骗数额认定为110,000元而非126,500元。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "（二）郑某30,000元的证据存在疑问",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "卷中第1次讯问笔录（2026年1月15日）仅问及吴某相关情况，未涉及郑某及30,000元款项",
+    "citation": "〔讯问笔录 第1-3页、上游成果-刑事阅卷笔录 第20行〕",
+    "message": "出处位置不对：讯问笔录 第1-3页，这份材料按第N行定位"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "卷中第1次讯问笔录（2026年1月15日）仅问及吴某相关情况，未涉及郑某及30,000元款项",
+    "citation": "〔讯问笔录 第1-3页、上游成果-刑事阅卷笔录 第20行〕",
+    "message": "2026年1月15日 标的是 上游成果-刑事阅卷笔录 第20行，实际在 上游成果-刑事阅卷笔录 第4行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "卷中第1次讯问笔录（2026年1月15日）仅问及吴某相关情况，未涉及郑某及30,000元款项",
+    "citation": "〔讯问笔录 第1-3页、上游成果-刑事阅卷笔录 第20行〕",
+    "message": "30000 标的是 上游成果-刑事阅卷笔录 第20行，实际在 上游成果-刑事阅卷笔录 第5行、上游成果-刑事阅卷笔录 第12行、上游成果-刑事阅卷笔录 第16行"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "起诉意见书列明认定郑某30,000元的证据为\"转账截图、被害人陈述\"",
+    "citation": "〔起诉意见书 第2页、第3页〕",
+    "message": "出处格式不对：〔起诉意见书 第2页、第3页〕。写法为〔材料名 第N页〕〔材料名 工作表!B12〕等，每处都写材料名，多处用顿号分隔"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "辩护人建议侦查机关或贵院补充侦查，就郑某部分向张某甲核实，以确保事实认定准确。在未完成核实前，对郑某30,000元的认定应持审慎态度。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "G",
+    "severity": "hint",
+    "excerpt": "二、量刑情节",
+    "citation": null,
+    "message": "评价性用语“量刑”：判断性的句子请标明是分析意见并带出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "根据起诉意见书认定，\"犯罪嫌疑人张某甲到案后如实供述了部分犯罪事实，具有坦白情节\"",
+    "citation": "〔起诉意见书 第4页〕",
+    "message": "出处位置不对：起诉意见书 第4页，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "。张某甲对骗取吴某80,000元的事实供认不讳",
+    "citation": "〔讯问笔录 第2页、起诉意见书 第3页〕",
+    "message": "出处位置不对：讯问笔录 第2页，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "。张某甲对骗取吴某80,000元的事实供认不讳",
+    "citation": "〔讯问笔录 第2页、起诉意见书 第3页〕",
+    "message": "出处位置不对：起诉意见书 第3页，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "起诉意见书载明\"案发后已退赔被害人吴某人民币20,000元\"",
+    "citation": "〔起诉意见书 第4页〕",
+    "message": "出处位置不对：起诉意见书 第4页，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "。张某甲主动退赔部分款项，体现了其悔罪态度。此外，张某甲在讯问中明确表示\"我愿意退钱，希望从轻处理\"",
+    "citation": "〔讯问笔录 第3页〕",
+    "message": "出处位置不对：讯问笔录 第3页，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "1. 关于16,500元款项，现有证据不足以认定系诈骗所得，建议不计入诈骗数额；",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "2. 关于郑某30,000元款项，建议补充侦查予以核实；",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "G",
+    "severity": "hint",
+    "excerpt": "3. 若认定诈骗罪成立，张某甲具有坦白、积极退赔等从轻处罚情节。",
+    "citation": null,
+    "message": "评价性用语“从轻”：判断性的句子请标明是分析意见并带出处"
+   },
+   {
+    "class": "G",
+    "severity": "hint",
+    "excerpt": "综上，恳请贵院在审查起诉时充分考虑上述意见，对诈骗数额的认定予以审慎考量，依法作出公正处理。辩护人建议对张某甲从轻处罚，或建议适用缓刑。",
+    "citation": null,
+    "message": "评价性用语“从轻”：判断性的句子请标明是分析意见并带出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "2026年3月",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 关键事实以原件为准：通过（以起诉意见书20,000元为准）",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 不利事实（张某甲对80,000元供认不讳）有陈述：通过",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 退赔金额差异（起诉意见书20,000元 vs 阅卷笔录30,000元）以原件为准：通过",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   }
+  ],
+  "stats": {
+   "citations": 12,
+   "must_fix": 13,
+   "hints": 16
+  }
+ },
+ "answers": [],
+ "wall_s": 79,
+ "log": [
+  "9s case opened",
+  "9s capsule defense-opinion",
+  "9s skill defense-opinion",
+  "11s sent",
+  "79s done budget_stopped"
+ ]
+}

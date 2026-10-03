@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-10-03T20:52:27+08:00",
+  "cases": [
+    "cross-exam-opinion"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261003200230-491f",
+      "case": "cross-exam-opinion",
+      "kind": "agent",
+      "skill": "cross-exam-opinion",
+      "status": "running",
+      "start": "2026-10-03T20:02:30+08:00",
+      "end": null,
+      "minutes": 0.2,
+      "budget": {
+        "model_calls": 8,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 0,
+        "tool_calls": 0,
+        "elapsed_s": 0
+      },
+      "measured": {
+        "model_calls": 3,
+        "tools": {
+          "ask_user_question": 1,
+          "case_read_material": 1,
+          "skill": 1
+        },
+        "tool_calls": 1,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

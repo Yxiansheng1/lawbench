@@ -1,0 +1,19 @@
+{
+ "skill": "legal-workflow",
+ "capsule": "defense-opinion",
+ "case_id": "ae19dc8a-c32a-4743-9f5f-e20d80bd1c4f",
+ "root": "D:\\lawbench-T18\\cases\\legal-workflow",
+ "task_id": "T-20261003223946-3de6",
+ "status": "completed",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 29,
+ "log": [
+  "9s case opened",
+  "9s capsule defense-opinion",
+  "9s skill legal-workflow",
+  "11s sent",
+  "29s done completed"
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "skill": "cross-exam-opinion",
+ "capsule": "cross-exam",
+ "case_id": "fe5ad7d0-7aca-46d6-9bb4-d4603819144c",
+ "root": "D:\\lawbench-T18\\cases\\cross-exam-opinion",
+ "task_id": "T-20261003200230-491f",
+ "status": "running",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 3007,
+ "log": [
+  "9s case opened",
+  "9s capsule cross-exam",
+  "9s skill cross-exam-opinion",
+  "11s sent",
+  "3007s done running"
+ ]
+}

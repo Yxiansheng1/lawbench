@@ -1,0 +1,19 @@
+{
+ "skill": "bid-drafting",
+ "capsule": "bidding",
+ "case_id": "9081e25b-adcb-4d2a-93f9-64678c1e7c80",
+ "root": "D:\\lawbench-T18\\cases\\bid-drafting",
+ "task_id": "T-20261003214428-e04e",
+ "status": "budget_stopped",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 39,
+ "log": [
+  "9s case opened",
+  "9s capsule bidding",
+  "9s skill bid-drafting",
+  "11s sent",
+  "39s done budget_stopped"
+ ]
+}

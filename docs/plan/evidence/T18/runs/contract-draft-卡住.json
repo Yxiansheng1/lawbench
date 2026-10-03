@@ -1,0 +1,19 @@
+{
+ "skill": "contract-draft",
+ "capsule": "contract-draft",
+ "case_id": "931f6b5f-8b60-44a2-a975-26849a157b50",
+ "root": "D:\\lawbench-T18\\cases\\contract-draft",
+ "task_id": "T-20261003190509-08c2",
+ "status": "running",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 3007,
+ "log": [
+  "9s case opened",
+  "9s capsule contract-draft",
+  "9s skill contract-draft",
+  "11s sent",
+  "3007s done running"
+ ]
+}

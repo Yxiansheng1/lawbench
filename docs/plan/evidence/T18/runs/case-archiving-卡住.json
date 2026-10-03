@@ -1,0 +1,19 @@
+{
+ "skill": "case-archiving",
+ "capsule": "archiving",
+ "case_id": "e8d339ab-9fae-4ac3-9483-b1d37cbef2c1",
+ "root": "D:\\lawbench-T18\\cases\\case-archiving",
+ "task_id": "T-20261003214508-35a7",
+ "status": "running",
+ "drafts": [],
+ "citation_check": null,
+ "answers": [],
+ "wall_s": 3008,
+ "log": [
+  "9s case opened",
+  "9s capsule archiving",
+  "9s skill case-archiving",
+  "11s sent",
+  "3008s done running"
+ ]
+}

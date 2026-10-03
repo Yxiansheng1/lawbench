@@ -1,0 +1,317 @@
+{
+ "skill": "contract-draft",
+ "capsule": "contract-draft",
+ "case_id": "f1448c54-889b-4bf2-879c-7b20fe4fbdaf",
+ "root": "D:\\lawbench-T18\\cases\\contract-draft-2",
+ "task_id": "T-20261003224416-a604",
+ "status": "completed",
+ "drafts": [
+  {
+   "title": "钢材采购合同",
+   "path": "工作区/任务/T-20261003224416-a604/草稿/钢材采购合同-v1.md",
+   "version": 1
+  },
+  {
+   "title": "钢材采购合同",
+   "path": "工作区/任务/T-20261003224416-a604/草稿/钢材采购合同-v2.md",
+   "version": 2
+  },
+  {
+   "title": "钢材采购合同",
+   "path": "工作区/任务/T-20261003224416-a604/草稿/钢材采购合同-v3.md",
+   "version": 3
+  },
+  {
+   "title": "钢材采购合同",
+   "path": "工作区/任务/T-20261003224416-a604/草稿/钢材采购合同-v4.md",
+   "version": 4
+  }
+ ],
+ "citation_check": {
+  "passed": true,
+  "problems": [
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "1.1 卖方向买方供应以下钢材：",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "1.2 合同单价及总价：",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "上述钢材单价均为每吨人民币肆仟贰佰元整（¥4,200），含税率为13%的增值税，不含运费。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "合同总价为人民币壹佰贰拾陆万元整（¥1,260,000）。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "2.1 本合同项下钢材质量执行国家现行标准。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "2.2 卖方应随货提供每批次钢材的质量证明书。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "3.1 卖方应采取适当包装措施，确保货物在运输过程中不受损坏。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "3.2 本合同项下运费由卖方承担。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "4.1 交货地点：虚构市虚构区不存在大道100号青禾建材一号仓库。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "4.2 交货时间：",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "（1）热轧H型钢 HW200×200（150吨）：于2026年5月10日前送达交货地点；",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "（2）热轧H型钢 HN300×150（150吨）：于2026年5月20日前送达交货地点。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "4.3 货物所有权及毁损、灭失的风险自买方验收合格后转移至买方。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "5.1 货物送达交货地点后，买方应在【待补充：具体天数】个工作日内组织验收。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "5.2 验收标准详见本合同第二条。如货物数量、规格或质量不符合约定的，买方应在验收后【待补充：具体天数】个工作日内书面通知卖方。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "5.3 卖方应在接到买方书面通知后【待补充：具体天数】个工作日内负责更换或补足，因此产生的一切费用由卖方承担，交货期限相应顺延。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "6.1 付款条件：货物全部验收合格后六十（60）日内，买方向卖方支付合同总价的95%。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "6.2 质保金：合同总价的5%作为质保金，质保期满且无质量问题的，买方向卖方付清剩余款项。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "6.3 卖方收款账户信息：",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "6.4 卖方应在买方付款前向买方开具与合同总价等额的增值税专用发票。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "7.1 本合同项下钢材的质保期为六个月，自货物全部验收合格之日起计算。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "7.2 质保期内，如发现钢材存在质量缺陷，卖方应在接到买方通知后【待补充：具体天数】日内免费维修或更换。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "8.1 卖方逾期交货的，每逾期一日，应向买方支付合同总价【待补充：比例或金额】的违约金。逾期超过【待补充：具体天数】日的，买方有权解除合同。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "8.2 买方逾期付款的，每逾期一日，应向卖方支付应付未付款项【待补充：比例或金额】的违约金。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "8.3 卖方所供钢材质量不符合本合同第二条约定的，买方有权要求卖方更换或退货，卖方应承担由此给买方造成的全部损失，并向买方支付合同总价【待补充：比例或金额】的违约金。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "8.4 任何一方违约，除按本条约定承担违约责任外，还应赔偿守约方因此遭受的实际损失。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "9.1 因地震、台风、洪水、火灾、战争等不可抗力事件致使本合同不能履行或不能完全履行的，遇有不可抗力的一方应在事件发生后【待补充：具体天数】日内通知对方，并在合理期限内提供有关证明。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "9.2 遭受不可抗力的一方应采取适当措施减轻损失，否则应对扩大的损失承担责任。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "9.3 因不可抗力不能履行合同的全部或部分义务，双方可根据不可抗力的影响，协商延期履行、部分履行或解除合同。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "10.1 因本合同的订立、效力、履行、解释及争议解决发生争议的，双方应协商解决。协商不成的，任何一方均可向买方所在地有管辖权的人民法院提起诉讼。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "11.1 本合同项下的通知、函件等应以书面形式（含电子邮件）发送至以下地址：",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "11.2 任何一方变更上述地址或联系人的，应在变更后【待补充：具体天数】日内书面通知对方，否则对方按原地址发送的文件视为有效送达。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "13.1 本合同自双方法定代表人或授权代表签字并加盖公章之日起生效。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "13.2 本合同一式四份，买卖双方各执两份，具有同等法律效力。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "13.3 本合同未尽事宜，双方可另行签订补充协议，补充协议与本合同具有同等效力。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "13.4 卖方2026年3月10日的报价单（含所附报价说明）构成本合同的附件。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "。本合同按买方5%起草，如卖方坚持3%则需修改第六条第1款和第2款。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   }
+  ],
+  "stats": {
+   "citations": 7,
+   "must_fix": 0,
+   "hints": 37
+  }
+ },
+ "answers": [
+  "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 买方方案：验收合格后六十日内付清，另留5%质保金，质保期六个月 推荐 按青禾建材提出的条件，对采",
+  "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 六个月 推荐 按买方邮件中的主张。",
+  "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 向买方所在地人民法院起诉 推荐 对采购方便利。",
+  "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 先标【待补充】 证照信息、账号、违约金比例等先留占位，起草完成后您再核对填写。"
+ ],
+ "wall_s": 242,
+ "log": [
+  "9s case opened",
+  "9s capsule contract-draft",
+  "9s skill contract-draft",
+  "11s sent",
+  "32s answered Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 买方方案：验收合格后六十日内付清，另留5%质保金，质保期六个月 推荐 按青禾建材提出的条件，对采",
+  "42s answered Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 六个月 推荐 按买方邮件中的主张。",
+  "53s answered Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 向买方所在地人民法院起诉 推荐 对采购方便利。",
+  "63s answered Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 先标【待补充】 证照信息、账号、违约金比例等先留占位，起草完成后您再核对填写。",
+  "242s done completed"
+ ]
+}

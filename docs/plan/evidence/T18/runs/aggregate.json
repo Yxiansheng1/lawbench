@@ -1,0 +1,694 @@
+[
+ {
+  "skill": "criminal-reading-notes",
+  "task_id": "T-20261003185017-2bd1",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_read_material": 4,
+    "case_save_draft": 2,
+    "skill": 1
+   },
+   "tool_calls": 4,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 5.8,
+  "drafts": [
+   "刑事阅卷笔录-v1.md",
+   "刑事阅卷笔录-v2.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 45,
+    "must_fix": 56,
+    "hints": 6
+   },
+   "classes": {
+    "B!": 44,
+    "C!": 3,
+    "E!": 8,
+    "F": 6,
+    "G!": 1
+   }
+  },
+  "answers": [],
+  "wall_s": 289
+ },
+ {
+  "skill": "criminal-evidence-review",
+  "task_id": "T-20261003195638-a5b0",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_read_input": 2,
+    "case_read_material": 5,
+    "case_save_draft": 2,
+    "skill": 1
+   },
+   "tool_calls": 7,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 1.6,
+  "drafts": [
+   "证据审查意见-v1.md",
+   "证据审查意见-v2.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 18,
+    "must_fix": 26,
+    "hints": 5
+   },
+   "classes": {
+    "B!": 24,
+    "G": 1,
+    "C!": 2,
+    "F": 4
+   }
+  },
+  "answers": [
+   "Q[从材料可看出周某新为犯罪嫌疑人，您方作为其辩护人，立场为辩护方。是否确认？] text"
+  ],
+  "wall_s": 120
+ },
+ {
+  "skill": "cross-exam-opinion",
+  "task_id": "T-20261003224818-b2a8",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_list_materials": 1,
+    "case_read_material": 5,
+    "skill": 1
+   },
+   "tool_calls": 6,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.4,
+  "drafts": [],
+  "citation_check": {
+   "stats": null,
+   "classes": {}
+  },
+  "answers": [
+   "Q[确认质证范围和发问提纲需求] radio:1 第二组到第四组，需要发问提纲 推荐 证人赵某刚询问笔录、银行交易明细、微信聊天记录截图、辨认笔录"
+  ],
+  "wall_s": 50
+ },
+ {
+  "skill": "defense-opinion",
+  "task_id": "T-20261003200110-5b07",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_list_materials": 1,
+    "case_read_input": 1,
+    "case_read_material": 3,
+    "case_save_draft": 1,
+    "skill": 1
+   },
+   "tool_calls": 5,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.9,
+  "drafts": [
+   "辩护意见-v1.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 12,
+    "must_fix": 13,
+    "hints": 16
+   },
+   "classes": {
+    "F": 13,
+    "E!": 11,
+    "B!": 2,
+    "G": 3
+   }
+  },
+  "answers": [],
+  "wall_s": 79
+ },
+ {
+  "skill": "criminal-applications",
+  "task_id": "T-20261003195929-4bf5",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_read_material": 4,
+    "case_save_draft": 2,
+    "skill": 1
+   },
+   "tool_calls": 4,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 1.3,
+  "drafts": [
+   "取保候审申请书-v1.md",
+   "取保候审申请书-v2.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 10,
+    "must_fix": 3,
+    "hints": 0
+   },
+   "classes": {
+    "E!": 1,
+    "B!": 2
+   }
+  },
+  "answers": [
+   "Q[受理机关全称是什么？（取保候审申请应向当前办案机关提出：侦查阶段向公安机关、审查起诉阶段向检察院、审判阶段向法院）] radio:1 某市公安局某分局 侦查阶段的公安机关"
+  ],
+  "wall_s": 100
+ },
+ {
+  "skill": "sentence-calc",
+  "task_id": "T-20261003195839-8c68",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_calc_sentence": 1,
+    "case_read_material": 4,
+    "case_search": 1,
+    "skill": 1
+   },
+   "tool_calls": 6,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.3,
+  "drafts": [],
+  "citation_check": {
+   "stats": null,
+   "classes": {}
+  },
+  "answers": [],
+  "wall_s": 49
+ },
+ {
+  "skill": "case-wiki-build",
+  "task_id": "P-20261003224448-6b03",
+  "status": "completed",
+  "measured": {
+   "model_calls": 14,
+   "tools": {},
+   "tool_calls": null,
+   "source": "运行记录.json"
+  },
+  "budget": {
+   "model_calls": 37,
+   "tool_calls": 1,
+   "minutes": 45
+  },
+  "minutes": 6.9,
+  "drafts": [
+   "时间线-v1.md",
+   "当事人-v1.md",
+   "概览-v1.md",
+   "争议焦点-v1.md",
+   "案件卡片-v1.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 166,
+    "must_fix": 0,
+    "hints": 5
+   },
+   "classes": {
+    "F": 5
+   }
+  },
+  "answers": [],
+  "wall_s": null
+ },
+ {
+  "skill": "legal-workflow",
+  "task_id": "T-20261003223946-3de6",
+  "status": "completed",
+  "measured": {
+   "model_calls": 2,
+   "tools": {
+    "skill": 1
+   },
+   "tool_calls": 0,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.1,
+  "drafts": [],
+  "citation_check": {
+   "stats": null,
+   "classes": {}
+  },
+  "answers": [],
+  "wall_s": 29
+ },
+ {
+  "skill": "contract-review",
+  "task_id": "T-20261003190150-87e0",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_list_materials": 1,
+    "case_read_material": 2,
+    "case_save_draft": 3,
+    "case_search": 1,
+    "skill": 1
+   },
+   "tool_calls": 4,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 2.9,
+  "drafts": [
+   "合同审查意见-v1.md",
+   "合同审查意见-v2.md",
+   "合同审查意见-v3.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 20,
+    "must_fix": 1,
+    "hints": 10
+   },
+   "classes": {
+    "F": 10,
+    "B!": 1
+   }
+  },
+  "answers": [],
+  "wall_s": 119
+ },
+ {
+  "skill": "contract-draft",
+  "task_id": "T-20261003224416-a604",
+  "status": "completed",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_read_material": 2,
+    "case_save_draft": 4,
+    "skill": 1
+   },
+   "tool_calls": 2,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 3.7,
+  "drafts": [
+   "钢材采购合同-v1.md",
+   "钢材采购合同-v2.md",
+   "钢材采购合同-v3.md",
+   "钢材采购合同-v4.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 7,
+    "must_fix": 0,
+    "hints": 37
+   },
+   "classes": {
+    "F": 37
+   }
+  },
+  "answers": [
+   "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 买方方案：验收合格后六十日内付清，另留5%质保金，质保期六个月 推荐 按青禾建材提出的条件，对采",
+   "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 六个月 推荐 按买方邮件中的主张。",
+   "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 向买方所在地人民法院起诉 推荐 对采购方便利。",
+   "Q[付款条件双方有分歧，请确认按哪套方案写进合同？] radio:1 先标【待补充】 证照信息、账号、违约金比例等先留占位，起草完成后您再核对填写。"
+  ],
+  "wall_s": 242
+ },
+ {
+  "skill": "doc-revise",
+  "task_id": "T-20261003223846-d782",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_list_materials": 1,
+    "case_read_input": 1,
+    "case_read_material": 4,
+    "case_save_draft": 1,
+    "skill": 1
+   },
+   "tool_calls": 6,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.7,
+  "drafts": [
+   "民事起诉状-修改稿-v1.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 13,
+    "must_fix": 11,
+    "hints": 4
+   },
+   "classes": {
+    "E!": 10,
+    "B!": 1,
+    "F": 4
+   }
+  },
+  "answers": [],
+  "wall_s": 59
+ },
+ {
+  "skill": "pre-issue-check",
+  "task_id": "T-20261003223637-91bb",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_read_material": 5,
+    "case_save_draft": 2,
+    "skill": 1
+   },
+   "tool_calls": 5,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 1.7,
+  "drafts": [
+   "出稿前审查-民事起诉状草稿-v1.md",
+   "出稿前审查-民事起诉状草稿-v2.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 19,
+    "must_fix": 3,
+    "hints": 7
+   },
+   "classes": {
+    "F": 7,
+    "B!": 2,
+    "C!": 1
+   }
+  },
+  "answers": [],
+  "wall_s": 129
+ },
+ {
+  "skill": "case-reading-notes",
+  "task_id": "T-20261003223517-9743",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_list_materials": 1,
+    "case_read_material": 5,
+    "case_save_draft": 1,
+    "skill": 1
+   },
+   "tool_calls": 6,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 1.0,
+  "drafts": [
+   "阅卷笔录-v1.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 71,
+    "must_fix": 27,
+    "hints": 4
+   },
+   "classes": {
+    "B!": 10,
+    "F": 4,
+    "E!": 16,
+    "C!": 1
+   }
+  },
+  "answers": [],
+  "wall_s": 79
+ },
+ {
+  "skill": "general-drafting",
+  "task_id": "T-20261003205239-e103",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_read_material": 5,
+    "case_read_wiki": 5,
+    "case_save_draft": 3,
+    "case_search": 6,
+    "skill": 1
+   },
+   "tool_calls": 16,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 1.2,
+  "drafts": [
+   "律师函（向王某丙催讨借款）-v1.md",
+   "律师函（向王某丙催讨借款）-v2.md",
+   "律师函（向王某丙催讨借款）-v3.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 8,
+    "must_fix": 1,
+    "hints": 0
+   },
+   "classes": {
+    "B!": 1
+   }
+  },
+  "answers": [],
+  "wall_s": 100
+ },
+ {
+  "skill": "litigation-docs",
+  "task_id": "T-20261003195518-4294",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_read_material": 2,
+    "case_read_wiki": 1,
+    "case_save_draft": 4,
+    "skill": 1
+   },
+   "tool_calls": 3,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.9,
+  "drafts": [
+   "民事起诉状-v1.md",
+   "民事起诉状-v2.md",
+   "民事起诉状-v3.md",
+   "民事起诉状-v4.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 12,
+    "must_fix": 1,
+    "hints": 0
+   },
+   "classes": {
+    "C!": 1
+   }
+  },
+  "answers": [],
+  "wall_s": 79
+ },
+ {
+  "skill": "tender-review",
+  "task_id": "T-20261003224908-8442",
+  "status": "completed",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_list_materials": 1,
+    "case_read_material": 3,
+    "case_save_draft": 2,
+    "skill": 1
+   },
+   "tool_calls": 4,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 2.4,
+  "drafts": [
+   "招标文件审查意见-v1.md",
+   "招标文件审查意见-v2.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 58,
+    "must_fix": 0,
+    "hints": 1
+   },
+   "classes": {
+    "F": 1
+   }
+  },
+  "answers": [
+   "Q[请确认我方身份：我方代表投标人虚构信息技术有限公司审查该招标文件？] radio:1 是，代表投标人 从投标人角度审查资格、评分、合同条款风险",
+   "Q[请确认我方身份：我方代表投标人虚构信息技术有限公司审查该招标文件？] radio:1 投标人资格和合同条款 推荐 与任务说明一致，重点审查这两项，其他简列"
+  ],
+  "wall_s": 161
+ },
+ {
+  "skill": "bid-drafting",
+  "task_id": "T-20261003214428-e04e",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "case_list_materials": 1,
+    "case_read_input": 1,
+    "case_read_material": 5,
+    "skill": 1
+   },
+   "tool_calls": 7,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 0.3,
+  "drafts": [],
+  "citation_check": {
+   "stats": null,
+   "classes": {}
+  },
+  "answers": [],
+  "wall_s": 39
+ },
+ {
+  "skill": "case-archiving",
+  "task_id": "T-20261003225149-2962",
+  "status": "budget_stopped",
+  "measured": {
+   "model_calls": 8,
+   "tools": {
+    "ask_user_question": 1,
+    "case_archive_match": 1,
+    "case_read_material": 2,
+    "case_save_archive_plan": 1,
+    "case_save_draft": 2,
+    "skill": 1
+   },
+   "tool_calls": 4,
+   "source": "DSH 会话记录"
+  },
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 24,
+   "minutes": 45
+  },
+  "minutes": 1.3,
+  "drafts": [
+   "归档核对表-v1.md",
+   "归档核对表-v2.md"
+  ],
+  "citation_check": {
+   "stats": {
+    "citations": 6,
+    "must_fix": 0,
+    "hints": 2
+   },
+   "classes": {
+    "F": 2
+   }
+  },
+  "answers": [
+   "Q[请确认以下归档信息是否正确： 卷类：民事行政卷 委托人：赵某丁〔委托代理合同 第4行〕 对方当事人：钱某戊〔委托代理合同 第5行〕 案由：买卖合同纠纷〔委托代理合同 第5行〕 委托日期：2026年2月10日（2026-02-10）〔委托代理] radio:1 信息正确，微信图片不入卷 确认以上信息无误，聊天记录已作为证据入卷",
+   "Q[请确认以下归档信息是否正确： 卷类：民事行政卷 委托人：赵某丁〔委托代理合同 第4行〕 对方当事人：钱某戊〔委托代理合同 第5行〕 案由：买卖合同纠纷〔委托代理合同 第5行〕 委托日期：2026年2月10日（2026-02-10）〔委托代理] radio:1 调解 双方达成调解协议，法院出具调解书",
+   "Q[请确认以下归档信息是否正确： 卷类：民事行政卷 委托人：赵某丁〔委托代理合同 第4行〕 对方当事人：钱某戊〔委托代理合同 第5行〕 案由：买卖合同纠纷〔委托代理合同 第5行〕 委托日期：2026年2月10日（2026-02-10）〔委托代理] radio:1 已足额收取 律师费已按合同全额收到"
+  ],
+  "wall_s": 101
+ }
+]

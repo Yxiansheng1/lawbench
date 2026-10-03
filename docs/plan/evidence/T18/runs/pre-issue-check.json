@@ -1,0 +1,109 @@
+{
+ "skill": "pre-issue-check",
+ "capsule": "litigation-docs",
+ "case_id": "16feb6d6-67fd-489b-b972-35491d1b8278",
+ "root": "D:\\lawbench-T18\\cases\\pre-issue-check",
+ "task_id": "T-20261003223637-91bb",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "出稿前审查-民事起诉状草稿",
+   "path": "工作区/任务/T-20261003223637-91bb/草稿/出稿前审查-民事起诉状草稿-v1.md",
+   "version": 1
+  },
+  {
+   "title": "出稿前审查-民事起诉状草稿",
+   "path": "工作区/任务/T-20261003223637-91bb/草稿/出稿前审查-民事起诉状草稿-v2.md",
+   "version": 2
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "| 1 | 事实与理由第2段（第22行） | 事实错误 | 写\"并于2025年7月10日归还本金20,000元\"，但还款记录第5行显示还款日期为2025年6月10日，银行流水第7行和情况说明第4行均印证为2025年6月10日 | 改为\"并于",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "| 2 | 事实与理由第2段（第22行） | 事实错误 | 写\"至今尚欠本金65,000元\"，但借款本金80,000元减去已还20,000元，实际尚欠60,000元（与诉讼请求第一项金额一致） | 改为\"至今尚欠本金60,000元\" | 必",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "| 4 | 事实与理由第1段（第20行） | 出处标注错误 | 写\"借条约定借款日期为2025年3月10日\"，并标注出处为借条第5段，但借条第5行内容为还款期限，借款日期实际在借条第3行 | 将出处改为借条第3行 | 建议改 |",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "| 7 | 诉讼请求第2项（第13行） | 法律依据 | 要求按年利率12%支付逾期利息，但借条仅约定正常利息为年利率12%，未明确约定逾期利息利率 | 请律师核实逾期利息的法律依据及计算标准（法律依据待律师核实） | 必须改 |",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "1. 逾期利息的法律依据及计算标准：起诉状要求按年利率12%自2025年9月11日起支付逾期利息，但借条仅约定正常利息为年利率12%，未明确约定逾期利息。请律师核实适用的法律依据及逾期利息是否可按正常利息标准计算。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "- 借款日期2025年3月10日",
+    "citation": "〔借条 第3行〕",
+    "message": "2025年3月10日 标的是 借条 第3行，实际在 借条 第8行、借条 第29行"
+   },
+   {
+    "class": "C",
+    "severity": "must_fix",
+    "excerpt": "- 年利率12%、按月付息",
+    "citation": "〔借条 第4行〕",
+    "message": "%12 在所引材料（借条 第4行）中找不到"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "- 还款期限2025年9月10日",
+    "citation": "〔借条 第5行〕",
+    "message": "2025年9月10日 标的是 借条 第5行，实际在 借条 第14行"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 还款日期错误（起诉状写2025年7月10日，实际为2025年6月10日）",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 尚欠本金金额错误（起诉状写65,000元，实际为60,000元）",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   }
+  ],
+  "stats": {
+   "citations": 19,
+   "must_fix": 3,
+   "hints": 7
+  }
+ },
+ "answers": [],
+ "wall_s": 129,
+ "log": [
+  "9s case opened",
+  "9s capsule litigation-docs",
+  "9s skill pre-issue-check",
+  "11s sent",
+  "129s done budget_stopped"
+ ]
+}

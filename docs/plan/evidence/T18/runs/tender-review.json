@@ -1,0 +1,51 @@
+{
+ "skill": "tender-review",
+ "capsule": "bidding",
+ "case_id": "a9e076ca-786f-4084-a260-15a4f0159066",
+ "root": "D:\\lawbench-T18\\cases\\tender-review-2",
+ "task_id": "T-20261003224908-8442",
+ "status": "completed",
+ "drafts": [
+  {
+   "title": "招标文件审查意见",
+   "path": "工作区/任务/T-20261003224908-8442/草稿/招标文件审查意见-v1.md",
+   "version": 1
+  },
+  {
+   "title": "招标文件审查意见",
+   "path": "工作区/任务/T-20261003224908-8442/草稿/招标文件审查意见-v2.md",
+   "version": 2
+  }
+ ],
+ "citation_check": {
+  "passed": true,
+  "problems": [
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "审查对象：《虚构市虚构区智慧法院信息化建设项目招标文件》（XG-ZB-2026-0931）及补充通知（第1号）；我方身份：投标人（某某虚构信息技术有限公司）；重点关注：投标人资格、合同条款。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   }
+  ],
+  "stats": {
+   "citations": 58,
+   "must_fix": 0,
+   "hints": 1
+  }
+ },
+ "answers": [
+  "Q[请确认我方身份：我方代表投标人虚构信息技术有限公司审查该招标文件？] radio:1 是，代表投标人 从投标人角度审查资格、评分、合同条款风险",
+  "Q[请确认我方身份：我方代表投标人虚构信息技术有限公司审查该招标文件？] radio:1 投标人资格和合同条款 推荐 与任务说明一致，重点审查这两项，其他简列"
+ ],
+ "wall_s": 161,
+ "log": [
+  "9s case opened",
+  "9s capsule bidding",
+  "9s skill tender-review",
+  "11s sent",
+  "22s answered Q[请确认我方身份：我方代表投标人虚构信息技术有限公司审查该招标文件？] radio:1 是，代表投标人 从投标人角度审查资格、评分、合同条款风险",
+  "32s answered Q[请确认我方身份：我方代表投标人虚构信息技术有限公司审查该招标文件？] radio:1 投标人资格和合同条款 推荐 与任务说明一致，重点审查这两项，其他简列",
+  "160s done completed"
+ ]
+}

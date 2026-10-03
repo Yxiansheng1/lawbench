@@ -1,0 +1,63 @@
+{
+ "skill": "criminal-applications",
+ "capsule": "bail-application",
+ "case_id": "e31e4d75-b76c-4f78-aa4a-63e73d389ed7",
+ "root": "D:\\lawbench-T18\\cases\\criminal-applications",
+ "task_id": "T-20261003195929-4bf5",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "取保候审申请书",
+   "path": "工作区/任务/T-20261003195929-4bf5/草稿/取保候审申请书-v1.md",
+   "version": 1
+  },
+  {
+   "title": "取保候审申请书",
+   "path": "工作区/任务/T-20261003195929-4bf5/草稿/取保候审申请书-v2.md",
+   "version": 2
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "张某甲因涉嫌诈骗罪一案，现由虚构市公安局虚构区分局侦查终结，已于2026年3月20日移送虚构区人民检察院审查起诉",
+    "citation": "〔起诉意见书 第29行、第35行〕",
+    "message": "出处格式不对：〔起诉意见书 第29行、第35行〕。写法为〔材料名 第N页〕〔材料名 工作表!B12〕等，每处都写材料名，多处用顿号分隔"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "张某甲在讯问中，对虚构某某投资业务经理身份、收取吴某8万元\"保证金\"的事实供认不讳",
+    "citation": "〔讯问笔录 第15行〕",
+    "message": "80000 标的是 讯问笔录 第15行，实际在 讯问笔录 第16行、讯问笔录 第17行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "，并表示\"愿意退钱，希望从轻处理\"",
+    "citation": "〔讯问笔录 第22行〕",
+    "message": "引语“愿意退钱，希望从轻处理” 标的是 讯问笔录 第22行，实际在 讯问笔录 第24行"
+   }
+  ],
+  "stats": {
+   "citations": 10,
+   "must_fix": 3,
+   "hints": 0
+  }
+ },
+ "answers": [
+  "Q[受理机关全称是什么？（取保候审申请应向当前办案机关提出：侦查阶段向公安机关、审查起诉阶段向检察院、审判阶段向法院）] radio:1 某市公安局某分局 侦查阶段的公安机关"
+ ],
+ "wall_s": 100,
+ "log": [
+  "9s case opened",
+  "9s capsule bail-application",
+  "9s skill criminal-applications",
+  "11s sent",
+  "22s answered Q[受理机关全称是什么？（取保候审申请应向当前办案机关提出：侦查阶段向公安机关、审查起诉阶段向检察院、审判阶段向法院）] radio:1 某市公安局某分局 侦查阶段的公安机关",
+  "100s done budget_stopped"
+ ]
+}

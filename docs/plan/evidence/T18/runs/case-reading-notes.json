@@ -1,0 +1,251 @@
+{
+ "skill": "case-reading-notes",
+ "capsule": "general-docs",
+ "case_id": "6c54bfc4-91df-4991-9a05-dcbcc9a3e8e6",
+ "root": "D:\\lawbench-T18\\cases\\case-reading-notes",
+ "task_id": "T-20261003223517-9743",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "阅卷笔录",
+   "path": "工作区/任务/T-20261003223517-9743/草稿/阅卷笔录-v1.md",
+   "version": 1
+  }
+ ],
+ "citation_check": {
+  "passed": false,
+  "problems": [
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "- 诉讼请求：归还借款本金60,000元及逾期利息",
+    "citation": "〔案情摘要 第8行〕",
+    "message": "60000 标的是 案情摘要 第8行，实际在 案情摘要 第6行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "2. 2025年6月10日的20,000元是归还本金还是支付利息",
+    "citation": "〔案情摘要 第13行〕",
+    "message": "2025年6月10日 标的是 案情摘要 第13行，实际在 案情摘要 第11行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "2. 2025年6月10日的20,000元是归还本金还是支付利息",
+    "citation": "〔案情摘要 第13行〕",
+    "message": "20000 标的是 案情摘要 第13行，实际在 案情摘要 第11行"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 内容摘要：王某丙出具借条，确认向李某乙借款人民币80,000元，借款期限至2025年9月10日，年利率12%，按月付息，到期还本。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "1. 借款金额：人民币捌万元整（￥80,000.00）",
+    "citation": "〔借条 第1行〕",
+    "message": "80000 标的是 借条 第1行，实际在 借条 第5行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "3. 借款日期：2025年3月10日",
+    "citation": "〔借条 第3行〕",
+    "message": "2025年3月10日 标的是 借条 第3行，实际在 借条 第8行、借条 第29行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "5. 还款期限：2025年9月10日前一次性归还全部本金",
+    "citation": "〔借条 第5行〕",
+    "message": "2025年9月10日 标的是 借条 第5行，实际在 借条 第14行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "2. 2025.3.10，王某丙称经营周转困难，向李某乙借款8万元",
+    "citation": "〔情况说明 第3行〕",
+    "message": "2025年3月10日 标的是 情况说明 第3行，实际在 情况说明 第4行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "2. 2025.3.10，王某丙称经营周转困难，向李某乙借款8万元",
+    "citation": "〔情况说明 第3行〕",
+    "message": "80000 标的是 情况说明 第3行，实际在 情况说明 第4行"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "2. 诉讼请求：归还借款本金60,000元及逾期利息",
+    "citation": "〔案情摘要 第8行〕",
+    "message": "60000 标的是 案情摘要 第8行，实际在 案情摘要 第6行"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 对本方的影响：与争议焦点2（20,000元性质认定）直接相关；还款记录备注将6月10日款项定性为\"归还部分本金\"",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "1. 2025-03-10 向王某丙转账80,000元（备注\"借款80,000元（借条）\"）",
+    "citation": "〔银行流水 流水!A3:G3〕",
+    "message": "出处位置不对：银行流水 流水!A3:G3，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "2. 2025-04-10 收到王某丙转账800元（备注\"利息\"）",
+    "citation": "〔银行流水 流水!A4:G4〕",
+    "message": "出处位置不对：银行流水 流水!A4:G4，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "3. 2025-05-10 收到王某丙转账800元（备注\"利息\"）",
+    "citation": "〔银行流水 流水!A5:G5〕",
+    "message": "出处位置不对：银行流水 流水!A5:G5，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "4. 2025-06-10 收到王某丙转账20,000元（备注\"还款\"）",
+    "citation": "〔银行流水 流水!A6:G6〕",
+    "message": "出处位置不对：银行流水 流水!A6:G6，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "5. 2025-07-10 收到王某丙转账600元（备注\"利息\"）",
+    "citation": "〔银行流水 流水!A7:G7〕",
+    "message": "出处位置不对：银行流水 流水!A7:G7，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "6. 汇总：借出本金80,000元（2025-03-10转出）",
+    "citation": "〔银行流水 汇总!A2:C2〕",
+    "message": "出处位置不对：银行流水 汇总!A2:C2，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "7. 汇总：已收回本金20,000元（2025-06-10）",
+    "citation": "〔银行流水 汇总!A3:C3〕",
+    "message": "出处位置不对：银行流水 汇总!A3:C3，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "8. 汇总：已收利息2,200元（公式重算所得）",
+    "citation": "〔银行流水 汇总!A4:C4〕",
+    "message": "出处位置不对：银行流水 汇总!A4:C4，这份材料按第N行定位"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 对本方的影响：与还款记录内容基本一致，银行流水6月10日备注为\"还款\"，未明确性质，与争议焦点2相关",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "- 存疑点：银行流水6月10日备注仅写\"还款\"，而还款记录备注写\"归还部分本金\"，两处表述不完全一致",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 2025-03-10 | 借款发放、出具借条 |  、 、  |",
+    "citation": "〔银行流水 流水!A3:G3〕",
+    "message": "出处位置不对：银行流水 流水!A3:G3，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 2025-04-10 | 支付3月利息800元 |  、  |",
+    "citation": "〔银行流水 流水!A4:G4〕",
+    "message": "出处位置不对：银行流水 流水!A4:G4，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 2025-05-10 | 支付4月利息800元 |  、  |",
+    "citation": "〔银行流水 流水!A5:G5〕",
+    "message": "出处位置不对：银行流水 流水!A5:G5，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 2025-06-10 | 支付20,000元 |  、 、  |",
+    "citation": "〔银行流水 流水!A6:G6〕",
+    "message": "出处位置不对：银行流水 流水!A6:G6，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 2025-07-10 | 支付5月利息600元 |  、  |",
+    "citation": "〔银行流水 流水!A7:G7〕",
+    "message": "出处位置不对：银行流水 流水!A7:G7，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 借款本金 | 80,000元 |  、 、  |",
+    "citation": "〔银行流水 流水!A3:G3〕",
+    "message": "出处位置不对：银行流水 流水!A3:G3，这份材料按第N行定位"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 已付利息合计 | 2,200元（800+800+600） |  、  |",
+    "citation": "〔银行流水 汇总!A4:C4〕",
+    "message": "出处位置不对：银行流水 汇总!A4:C4，这份材料按第N行定位"
+   },
+   {
+    "class": "C",
+    "severity": "must_fix",
+    "excerpt": "| 已付利息合计 | 2,200元（800+800+600） |  、  |",
+    "citation": "〔还款记录 第3-6行〕〔银行流水 汇总!A4:C4〕",
+    "message": "2200 在所引材料（还款记录 第3-6行）中找不到"
+   },
+   {
+    "class": "E",
+    "severity": "must_fix",
+    "excerpt": "| 2025-06-10还款 | 20,000元 |  、  |",
+    "citation": "〔银行流水 流水!A6:G6〕",
+    "message": "出处位置不对：银行流水 流水!A6:G6，这份材料按第N行定位"
+   },
+   {
+    "class": "B",
+    "severity": "must_fix",
+    "excerpt": "| 诉讼请求本金 | 60,000元 |   |",
+    "citation": "〔案情摘要 第8行〕",
+    "message": "60000 标的是 案情摘要 第8行，实际在 案情摘要 第6行"
+   }
+  ],
+  "stats": {
+   "citations": 71,
+   "must_fix": 27,
+   "hints": 4
+  }
+ },
+ "answers": [],
+ "wall_s": 79,
+ "log": [
+  "9s case opened",
+  "9s capsule general-docs",
+  "9s skill case-reading-notes",
+  "11s sent",
+  "79s done budget_stopped"
+ ]
+}
