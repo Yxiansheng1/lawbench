@@ -6,23 +6,39 @@ const MAX = 200
 
 export class TurnNotices {
   private readonly codes = new Map<string, string>()
+  /** 到达用量上限（BUDGET_STOPPED）时一并记下任务编号，界面据此取草稿显示在对话区（T14 派修 2）。 */
+  private readonly tasks = new Map<string, string>()
 
   /** 记下某会话这一轮被拦下的错误码（同一会话只留最新的；超过上限丢最早的）。 */
-  note(sessionId: string, code: string): void {
+  note(sessionId: string, code: string, taskId?: string): void {
     this.codes.delete(sessionId)
     this.codes.set(sessionId, code)
-    if (this.codes.size > MAX) this.codes.delete(this.codes.keys().next().value!)
+    this.tasks.delete(sessionId)
+    if (taskId !== undefined) this.tasks.set(sessionId, taskId)
+    if (this.codes.size > MAX) {
+      const oldest = this.codes.keys().next().value!
+      this.codes.delete(oldest)
+      this.tasks.delete(oldest)
+    }
   }
 
   /** 某会话这一轮顺利开始（取任务、取上下文都成功）：清掉之前没被取走的记录，免得之后误报。 */
   clear(sessionId: string): void {
     this.codes.delete(sessionId)
+    this.tasks.delete(sessionId)
   }
 
   /** 取走某会话记下的错误码；没有返回 null。 */
   take(sessionId: string): string | null {
+    return this.takeWithTask(sessionId).code
+  }
+
+  /** 取走错误码和随它记下的任务编号。 */
+  takeWithTask(sessionId: string): { code: string | null; task_id: string | null } {
     const code = this.codes.get(sessionId) ?? null
+    const taskId = this.tasks.get(sessionId) ?? null
     this.codes.delete(sessionId)
-    return code
+    this.tasks.delete(sessionId)
+    return { code, task_id: taskId }
   }
 }

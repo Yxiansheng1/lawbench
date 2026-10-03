@@ -81,3 +81,17 @@ apps/desktop/lib/welcome/welcome.css:tic-deepseek-500);--dsw-alias-button-primar
       2 subprocess/subprocess
       2 util/home-paths
       1 util/http-proxy
+
+## 中文口径补查（T14 联调派修 3，2026-10-03 16:40）：T20 收尾只搜了英文，漏了下面这些律师看得到的中文原版字样
+# scripts\check_ui_words.py 新加禁词：探索未至之境、预览版、深度求索、描述你想要构建的内容、DSH 本地构建；并扫 DSH 三个中文词条表
+### 补丁前（P-4 本轮改动之前的 dsh 工作区）
+dsh/packages/client/ui-conversation/src/client/locales.ts:24  描述你想要构建的内容（输入框占位）
+dsh/packages/client/ui-conversation/src/client/locales.ts:78  探索未至之境（空白会话大字）
+dsh/packages/client/ui-conversation/src/client/locales.ts:79  预览版（大字旁的标）
+dsh/packages/client/ui-chat/src/client/locale.ts:65、:90  深度求索中（生成中状态；深度求索即 DSH 厂商公司名）
+dsh/packages/client/locale/src/locales/zh.ts:34  DSH 本地构建（侧栏品牌位兜底名、窗口标题）
+侧栏版本号：DSH 构建号 0.1.7-rc.2-477b4f4-dirty
+### 补丁后
+check_ui_words.py：零命中
+侧栏品牌位由我方界面插件填（dsh-ext\ui\brand.tsx）：产品名 + 我方版本号（dsh-ext\shared\product.ts，与 service\pyproject.toml 一致，0.1.0）
+未改：侧栏与空白会话的鲸鱼图标（DSH 默认标志；执行令点名的四处里没有它，产品图标随 N58 定名一起换）

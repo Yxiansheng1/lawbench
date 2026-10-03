@@ -106,7 +106,7 @@ beforeEach(() => {
     getSettings: async () => settings,
     invoiceRun: async (req: unknown) => { sent.push(req as Record<string, unknown>); const next = replies.shift(); return next ? next(req as Record<string, unknown>) : value() },
   } as unknown as LawbenchApi)
-  setNav({ pickDirectory: async () => 'D:\\发票\\九月', pathFor: () => '', openCaseWorkspace: async () => {}, openTab: () => {}, goHome: () => {}, refreshModels: () => {} })
+  setNav({ pickDirectory: async () => 'D:\\发票\\九月', pathFor: () => '', openCaseWorkspace: async () => {}, openTab: () => {}, goHome: () => {}, refreshModels: () => {}, openSession: () => {} })
   app.set((s) => ({ ...s, dialogs: [] }))
   // 确认框：按 confirms 队列回答（默认确定）
   unsub = app.subscribe(() => {

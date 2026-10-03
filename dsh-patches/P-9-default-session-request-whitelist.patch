@@ -1,9 +1,9 @@
 diff --git a/apps/desktop/src/lawbench-request-policy.ts b/apps/desktop/src/lawbench-request-policy.ts
 new file mode 100644
-index 0000000000..d711363098
+index 0000000000..fafb29cb94
 --- /dev/null
 +++ b/apps/desktop/src/lawbench-request-policy.ts
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,60 @@
 +/**
 + * lawbench P-9 (Spec 3.2, owner decision N38): the desktop default session may only reach the
 + * application's own resources and the local Host. Every other http, https, ws and wss request
@@ -12,7 +12,7 @@ index 0000000000..d711363098
 + */
 +
 +import { fileURLToPath } from 'node:url'
-+import { resolve, sep } from 'node:path'
++import { join, resolve, sep } from 'node:path'
 +
 +/**
 + * Non-network schemes the application itself uses, none of which leaves the machine:
@@ -20,18 +20,29 @@ index 0000000000..d711363098
 + * `devtools:` the developer tools window; `about:` the `about:blank` a frame or window starts on.
 + * `chrome:` / `chrome-extension:` are not listed (no internal pages or extensions are used).
 + * `file:` is handled separately: only the application's own renderer files (the first-run window
-+ * is loaded from there with `loadFile`), never other local files or `file://host/share` (SMB).
++ * is loaded from there with `loadFile`) and the first-run window's bundle in `lib/welcome/`
++ * (`renderer/welcome.html` loads `../lib/welcome/welcome.js|css` and `brand-font.css`; T14 found
++ * them blocked), never other local files, the rest of `lib/`, or `file://host/share` (SMB).
 + */
 +const LOCAL_SCHEMES = new Set(['dsh-app:', 'data:', 'blob:', 'devtools:', 'about:'])
 +
-+/** Whether a `file:` URL names a local file inside the application's renderer directory. */
-+function appFile(target: URL, appFiles: string | undefined): boolean {
++/**
++ * The directories whose files the default session may load over `file:` (the same layout in the
++ * development tree and in the packaged `app.asar`).
++ * @param appPath - `app.getAppPath()`.
++ * @returns the renderer directory and the first-run window's bundle directory, nothing else under `lib/`.
++ */
++export function lawbenchAppFileRoots(appPath: string): string[] {
++  return [join(appPath, 'renderer'), join(appPath, 'lib', 'welcome')]
++}
++
++/** Whether a `file:` URL names a local file inside one of the allowed application directories. */
++function appFile(target: URL, appFiles: string | readonly string[] | undefined): boolean {
 +  if (appFiles === undefined || target.host !== '') return false
 +  let path: string
 +  try { path = resolve(fileURLToPath(target)) } catch { return false }
 +  const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
-+  const root = fold(resolve(appFiles))
-+  return fold(path).startsWith(root + sep)
++  return (typeof appFiles === 'string' ? [appFiles] : appFiles).some((dir) => fold(path).startsWith(fold(resolve(dir)) + sep))
 +}
 +const NETWORK_SCHEMES = new Set(['http:', 'https:', 'ws:', 'wss:'])
 +
@@ -39,10 +50,10 @@ index 0000000000..d711363098
 + * Whether a default-session request may proceed.
 + * @param url - the request URL as Electron reports it.
 + * @param hostUrl - the local Host URL once known (only its exact host:port is allowed, over http or ws).
-+ * @param appFiles - the application's renderer directory; `file:` URLs are allowed only inside it.
++ * @param appFiles - the allowed application directories (see `lawbenchAppFileRoots`); `file:` URLs are allowed only inside them.
 + * @returns true when the request stays inside the application or reaches the Host itself.
 + */
-+export function lawbenchRequestAllowed(url: string, hostUrl: string | undefined, appFiles?: string): boolean {
++export function lawbenchRequestAllowed(url: string, hostUrl: string | undefined, appFiles?: string | readonly string[]): boolean {
 +  let target: URL
 +  try { target = new URL(url) } catch { return false }
 +  if (LOCAL_SCHEMES.has(target.protocol)) return true
@@ -54,14 +65,14 @@ index 0000000000..d711363098
 +  return (target.protocol === 'http:' || target.protocol === 'ws:') && target.host === host.host && target.username === '' && target.password === ''
 +}
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index fb7cbfdf41..4e03717ea9 100644
+index fb7cbfdf41..b6caa3c626 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -32,6 +32,7 @@ import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLoc
  import { claimDesktopSingleInstance } from './single-instance.ts'
  import { DesktopUpdateCoordinator } from './update-coordinator.ts'
  import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
-+import { lawbenchRequestAllowed } from './lawbench-request-policy.ts'
++import { lawbenchAppFileRoots, lawbenchRequestAllowed } from './lawbench-request-policy.ts'
  import { DesktopFatalRecovery } from './fatal-recovery.ts'
  import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
  import { openWelcomeWindow } from './welcome-window.ts'
@@ -98,20 +109,21 @@ index fb7cbfdf41..4e03717ea9 100644
 +
 +  // lawbench P-9 (N38): the default session only reaches app resources and the local Host; other network requests are cancelled.
 +  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-+    callback({ cancel: !lawbenchRequestAllowed(details.url, hostUrl, join(app.getAppPath(), 'renderer')) })
++    callback({ cancel: !lawbenchRequestAllowed(details.url, hostUrl, lawbenchAppFileRoots(app.getAppPath())) })
    })
  
    session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['ws://127.0.0.1/*'] }, (details, callback) => {
 diff --git a/apps/desktop/tests/lawbench-request-policy.spec.ts b/apps/desktop/tests/lawbench-request-policy.spec.ts
 new file mode 100644
-index 0000000000..e5ed4de276
+index 0000000000..066bd09c78
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-request-policy.spec.ts
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,60 @@
 +import { describe, expect, it } from 'vitest'
-+import { join } from 'node:path'
-+import { pathToFileURL } from 'node:url'
-+import { lawbenchRequestAllowed } from '../src/lawbench-request-policy.ts'
++import { readFileSync } from 'node:fs'
++import { dirname, join, resolve } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { lawbenchAppFileRoots, lawbenchRequestAllowed } from '../src/lawbench-request-policy.ts'
 +
 +const HOST = 'http://127.0.0.1:3080/?token=x'
 +
@@ -134,6 +146,18 @@ index 0000000000..e5ed4de276
 +      expect(lawbenchRequestAllowed(url, HOST, app), url).toBe(false)
 +    }
 +    expect(lawbenchRequestAllowed(pathToFileURL(join(app, 'welcome.html')).href, HOST)).toBe(false) // root unknown
++  })
++  it('T14: every local resource the real first-run page references loads; the rest of lib/ stays blocked', () => {
++    const appPath = resolve(dirname(fileURLToPath(import.meta.url)), '..')
++    const roots = lawbenchAppFileRoots(appPath)
++    const page = join(appPath, 'renderer', 'welcome.html')
++    const refs = [...readFileSync(page, 'utf8').matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]!).filter((r) => !/^[a-z]+:/i.test(r))
++    expect(refs).toEqual(expect.arrayContaining(['../lib/welcome/brand-font.css', '../lib/welcome/welcome.css', '../lib/welcome/welcome.js']))
++    expect(lawbenchRequestAllowed(pathToFileURL(page).href, HOST, roots)).toBe(true)
++    for (const ref of refs) expect(lawbenchRequestAllowed(pathToFileURL(resolve(dirname(page), ref)).href, HOST, roots), ref).toBe(true)
++    for (const other of [join(appPath, 'lib', 'main.js'), join(appPath, 'lib', 'preload-app.cjs'), join(appPath, 'lib', 'welcome-x', 'a.js'), join(appPath, 'lib', 'welcome', '..', 'main.js'), join(appPath, 'package.json')]) {
++      expect(lawbenchRequestAllowed(pathToFileURL(other).href, HOST, roots), other).toBe(false)
++    }
 +  })
 +  it('refuses chrome: and chrome-extension: (no internal pages or extensions are used)', () => {
 +    for (const url of ['chrome://gpu', 'chrome-extension://abc/x.js']) {

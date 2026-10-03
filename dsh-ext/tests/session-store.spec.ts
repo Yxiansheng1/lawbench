@@ -732,3 +732,24 @@ describe('第十轮：接回的上限与迟到句柄、记录目录编码', () =
     expect(() => orig.encodeSegment('')).toThrow()
   })
 })
+
+describe('T14 派修 4：工作台 Host 插件起不来时记一条元数据错误', () => {
+  let tmp: string
+  beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'lb-store-host-')) })
+  afterEach(() => { vi.useRealTimers(); rmSync(tmp, { recursive: true, force: true }) })
+  const logged = (appData: string) => files(join(appData, 'logs')).map((f) => readFileSync(f, 'utf8')).join('')
+
+  it('启动 30 秒后仍没有 lawbenchCore：记 session_store.host_missing（只有秒数）；有 Host 时不记', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const without = join(tmp, 'a'); const withHost = join(tmp, 'b')
+    const s1 = await startStore(without, join(tmp, 'h1'))
+    const s2 = await startStore(withHost, join(tmp, 'h2'), {}, () => [])
+    try {
+      vi.advanceTimersByTime(29_000)
+      expect(logged(without)).not.toContain('host_missing')
+      vi.advanceTimersByTime(2_000)
+      expect(logged(without)).toContain('"event":"session_store.host_missing","after_s":30')
+      expect(logged(withHost)).not.toContain('host_missing')
+    } finally { await s1.dispose(); await s2.dispose() }
+  })
+})

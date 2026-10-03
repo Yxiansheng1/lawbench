@@ -106,3 +106,33 @@ export function citationMark(deps: OpenDeps): CitationMark {
     open: (text) => { void openCitation(citationItem(text), deps) },
   }
 }
+
+/** MarkdownText 的 inlineMarks 一段文字拆出的片段：原文或可点的出处。 */
+export type InlinePart = string | { text: string; label: string; open: () => void }
+
+/**
+ * 我方自己用 DSH 的 MarkdownText 画文字时（对话区的草稿，T14 派修 2）给它的出处拆分：
+ * 与 ui-chat 的 buildInlineMarks 同一算法，只一种标记（出处）。
+ */
+export function citationInlineMarks(deps: OpenDeps): { split(value: string): InlinePart[] | undefined } {
+  const mark = citationMark(deps)
+  return {
+    split(value) {
+      const spans: Array<{ start: number; end: number }> = []
+      for (const m of value.matchAll(citationScanner())) {
+        for (const [from, to] of mark.ranges(m[0])) spans.push({ start: m.index + from, end: m.index + to })
+      }
+      if (spans.length === 0) return undefined
+      const out: InlinePart[] = []
+      let at = 0
+      for (const s of spans) {
+        if (s.start > at) out.push(value.slice(at, s.start))
+        const text = value.slice(s.start, s.end)
+        out.push({ text, label: mark.label(text), open: () => mark.open(text) })
+        at = s.end
+      }
+      if (at < value.length) out.push(value.slice(at))
+      return out
+    },
+  }
+}

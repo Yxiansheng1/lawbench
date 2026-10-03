@@ -19,6 +19,7 @@ import { listSkills, type SkillInfo } from './skills.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
 import { requestJson } from './http-json.ts'
 import { readArchivePlan } from './archive-plan.ts'
+import { readTaskAnswer } from './task-answer.ts'
 import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
@@ -177,9 +178,21 @@ export class LawbenchRemote {
    * 某会话上一轮被 Agent 插件拦下的原因（错误码，取一次即删；没有为 null）。ORCH 注记 2026-09-30 13:18：
    * 1.2 语义下输入材料变了，/core/context 报 INPUT_CHANGED、整轮被拒，DSH 的 reject 带不了消息，输入区经这里知道。
    */
-  async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null } }> {
+  async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null; task_id: string | null } }> {
     const sessionId = (request as { session_id?: unknown } | null)?.session_id
-    return { ok: true, value: { code: typeof sessionId === 'string' ? this.notices.take(sessionId) : null } }
+    return { ok: true, value: typeof sessionId === 'string' ? this.notices.takeWithTask(sessionId) : { code: null, task_id: null } }
+  }
+
+  /**
+   * 对话区显示某任务的结果（T14 派修 2：到达用量上限时模型没写出回答，显示刚存的草稿），见 task-answer.ts。
+   * 只读该任务目录下 task.json、result.json 和最新一版草稿；日志只记结果和错误码。
+   * @param request - { root, task_id }：当前案件根、任务编号。
+   */
+  async taskAnswer(request: unknown): Promise<ApiResult> {
+    const r = request as { root?: unknown; task_id?: unknown } | null
+    const out = readTaskAnswer(r?.root, r?.task_id)
+    this.log(out.ok ? 'info' : 'warn', 'task.answer_read', { ok: out.ok, code: out.ok ? undefined : out.error.code, draft: out.ok ? out.value.draft !== null : undefined })
+    return out as ApiResult
   }
 
   /**
@@ -470,7 +483,7 @@ export function apply(ctx: Ctx, given: Config): void {
   ctx.provide('lawbenchCore', Object.freeze({
     endpoint: () => supervisor.endpoint(),
     /** Agent 插件拒绝整轮时记下原因，界面经 turnNotice 取走。 */
-    noteTurnBlocked: (sessionId: string, code: string) => notices.note(sessionId, code),
+    noteTurnBlocked: (sessionId: string, code: string, taskId?: string) => notices.note(sessionId, code, taskId),
     /** 这一轮顺利开始：清掉该会话没被取走的旧记录。 */
     clearTurnBlocked: (sessionId: string) => notices.clear(sessionId),
     state: () => supervisor.state,

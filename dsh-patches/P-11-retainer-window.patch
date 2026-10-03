@@ -261,13 +261,13 @@ index 0000000000..d791412274
 +  })
 +}
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index 1470b99356..bae6af8ad7 100644
+index 8d76a39908..eb6f2ed0b0 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -32,6 +32,7 @@ import { claimDesktopSingleInstance } from './single-instance.ts'
  import { DesktopUpdateCoordinator } from './update-coordinator.ts'
  import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
- import { lawbenchRequestAllowed } from './lawbench-request-policy.ts'
+ import { lawbenchAppFileRoots, lawbenchRequestAllowed } from './lawbench-request-policy.ts'
 +import { installRetainerWindow } from './lawbench-retainer.ts'
  import { DesktopFatalRecovery } from './fatal-recovery.ts'
  import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'

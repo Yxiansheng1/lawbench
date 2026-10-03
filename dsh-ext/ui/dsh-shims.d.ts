@@ -8,6 +8,12 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     open: boolean; onClose: () => void; title?: ReactNode; closeLabel?: string; description?: ReactNode
     children?: ReactNode; footer?: ReactNode; className?: string; contentClassName?: string; headless?: boolean
   }>
+  /** P-16：settled 文字里的可点片段（出处）；我方画对话区草稿时用（T14 派修 2）。 */
+  export const MarkdownText: ComponentType<{
+    text: string; streaming?: boolean; variant?: 'body' | 'compact'
+    labels: { code: { copyLabel: string; copiedLabel: string }; footnotes: string }
+    inlineMarks?: { split(value: string): ReadonlyArray<string | { text: string; label: string; open: () => void }> | undefined }
+  }>
   export const Input: Loose
   export const Checkbox: Loose
   export const Switch: Loose

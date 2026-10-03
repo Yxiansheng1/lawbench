@@ -10,6 +10,9 @@ import { CaseRoots } from './case-roots.ts'
 import { CaseProjectionTable, caseProjectionDomain, type CacheRecord } from './projection-cache.ts'
 import { SessionRouter, type Backend, type Header, type LogFn } from './router.ts'
 
+/** 启动后等工作台 Host 插件多久仍不在就记错误（T14 派修 4）。 */
+export const HOST_WAIT_S = 30
+
 export const name = 'lawbench-session-store'
 
 export interface Config {
@@ -182,6 +185,9 @@ export async function apply(ctx: Ctx, config: Config): Promise<void> {
   }
   new LawbenchSessionPersistence(ctx)
   log('info', 'session_store.started', { case_roots: roots.list().length, allow_outside_case: config.allowOutsideCase ?? false })
+  // 启动 30 秒后工作台的 Host 插件仍没起来（它的配置求值抛错、包缺失时 DSH 不报，界面一直转圈；T14 派修 4）：记一条元数据错误
+  const hostWatch = setTimeout(() => { if (core() === undefined) log('error', 'session_store.host_missing', { after_s: HOST_WAIT_S }) }, HOST_WAIT_S * 1000)
+  hostWatch.unref?.()
 
   // 投影缓存：原版类放进一个只隔离 storageDomain 的作用域，交给它按案件落盘的替身存储域；
   // 它对外仍以 sessionProjectionCache 提供。它要等 sessions（而 sessions 要等本插件），所以不等它起来。

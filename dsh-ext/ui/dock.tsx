@@ -7,7 +7,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
 import { statusErrorText } from './format.ts'
 import { Badge, Button, C, getNav, S } from './kit.tsx'
-import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, notice as showNotice, setSelection, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
+import { TaskAnswerSlot } from './answer.tsx'
+import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, notice as showNotice, setSelection, showTaskAnswer, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
 import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
@@ -23,6 +24,8 @@ export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在
 /** 上一轮取任务时服务说这个对话不属于任何已打开的案件（/core/task/begin 报 CASE_NOT_FOUND，第六轮复核 A-P2-3 / B-F2）。 */
 export const CASE_NOT_FOUND_TEXT = '没有找到这个对话所在的案件。请回到首页重新打开案件；如果案件文件夹刚挪过位置，请重启软件后在这个对话里继续，或新开一个对话。'
 /** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */
+/** Agent 插件到达用量上限时记的提示码（agent/index.ts 的 BUDGET_STOPPED；界面不引 Agent 插件，照写一份）。 */
+export const BUDGET_STOPPED = 'BUDGET_STOPPED'
 export const TURN_ENDED = 'lawbench:turn-ended'
 
 let capsCache: Promise<Capsules | undefined> | undefined
@@ -61,7 +64,7 @@ export function ComposerDock(p: SessionProps) {
       </div>
     )
   }
-  return <Dock caseRef={caseRef} sessionId={p.sessionId} />
+  return <><TaskAnswerSlot caseRef={caseRef} sessionId={p.sessionId} /><Dock caseRef={caseRef} sessionId={p.sessionId} /></>
 }
 
 function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
@@ -125,10 +128,12 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
     // 取提示出错（Host 方法抛错、返回不合形状）不挡读取：两处调用都是取完再读（第四轮复核 N1、N2）
     const notice = async (): Promise<void> => {
       try {
-        const r = await call<{ code: string | null }>('turnNotice', { session_id: sid })
+        const r = await call<{ code: string | null; task_id?: string | null }>('turnNotice', { session_id: sid })
         if (r.ok && r.value?.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
         if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)
         if (r.ok && r.value?.code === 'CASE_NOT_FOUND') showNotice(CASE_MOVED_TITLE, CASE_NOT_FOUND_TEXT)
+        // 到达用量上限：对话区（输入区上方）显示提示和刚存的草稿（T14 派修 2）
+        if (r.ok && r.value?.code === BUDGET_STOPPED && typeof r.value.task_id === 'string') showTaskAnswer(sid, r.value.task_id)
       } catch { /* 当没有提示 */ }
     }
     setError(null)
