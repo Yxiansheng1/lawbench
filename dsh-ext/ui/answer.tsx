@@ -49,7 +49,7 @@ function TaskAnswerPanel({ caseRef, sessionId, taskId }: { caseRef: CaseRef; ses
         <>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
             <strong style={{ color: C.warn }}>{answerNotice(v)}</strong>
-            <Button size="sm" variant="ghost" onClick={() => hideTaskAnswer(sessionId)}>收起</Button>
+            <Button size="sm" variant="ghost" style={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => hideTaskAnswer(sessionId)}>收起</Button>
           </div>
           {v.draft ? (
             <>
