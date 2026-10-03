@@ -21,6 +21,12 @@ import sys
 BANNED_EN = ["token", "context", "prompt", "LLM", "API", "agent", "preset", "session", "JSON",
              "embedding", "schema", "payload", "endpoint", "runtime", "workspace"]
 BANNED_ZH = ["上下文", "提示词"]
+# T14 联调派修 3（执行令 2026-10-03 15:41）：律师看得到的 DSH 原版字样（品牌、编程用语）。我方界面源码照查；
+# 另扫 DSH 的中文词条表（下面 DSH_LOCALES，补丁打上后的工作区），只查这几条——DSH 词条里本来就有"上下文"这类词，不能整表套用
+BANNED_BRAND = ["探索未至之境", "预览版", "深度求索", "描述你想要构建的内容", "DSH 本地构建"]
+BANNED_ZH += BANNED_BRAND
+DSH_LOCALES = ["packages/client/ui-conversation/src/client/locales.ts", "packages/client/ui-chat/src/client/locale.ts",
+               "packages/client/locale/src/locales/zh.ts"]
 
 EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
 SKIP_DIRS = {"node_modules", "lib", "fixtures", "tests", "__tests__"}
@@ -96,16 +102,35 @@ def scan(root: pathlib.Path):
     return hits
 
 
+def scan_dsh_locales(dsh: pathlib.Path):
+    """DSH 中文词条表里的原版品牌字样（只查 BANNED_BRAND）；文件不在（dsh 子模块没检出）报一条。"""
+    hits = []
+    for rel in DSH_LOCALES:
+        path = dsh / rel
+        if not path.is_file():
+            hits.append((f"dsh/{rel}", 0, "文件不在", "dsh 子模块没检出或补丁没打"))
+            continue
+        for line, text in visible_texts(path.read_text(encoding="utf-8", errors="replace"), path.suffix):
+            for w in BANNED_BRAND:
+                if w in text:
+                    hits.append((f"dsh/{rel}", line, w, text.strip()[:60]))
+    return hits
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("root", nargs="?", default=str(pathlib.Path(__file__).resolve().parents[1] / "dsh-ext" / "ui"))
     ap.add_argument("--out", help="把报告写到这个文件（UTF-8）")
+    ap.add_argument("--dsh", default=str(pathlib.Path(__file__).resolve().parents[1] / "dsh"), help="DSH 工作区（补丁已打），查其中文词条表的原版品牌字样")
+    ap.add_argument("--no-dsh", action="store_true", help="不查 DSH 词条表")
     a = ap.parse_args(argv)
     root = pathlib.Path(a.root)
     if not root.is_dir():
         print(f"目录不存在：{root}", file=sys.stderr)
         return 2
     hits = scan(root)
+    if not a.no_dsh:
+        hits += scan_dsh_locales(pathlib.Path(a.dsh))
     lines = [f"界面用语检查：{root}", f"词表（英文按整词、不分大小写，含复数）：{', '.join(BANNED_EN)}；中文：{', '.join(BANNED_ZH)}", ""]
     lines += [f"{f}:{ln}  「{w}」  …{ctx}…" for f, ln, w, ctx in hits]
     lines += ["", f"命中 {len(hits)} 处" if hits else "零命中"]

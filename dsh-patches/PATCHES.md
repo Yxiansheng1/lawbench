@@ -104,8 +104,9 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 
 ## T14 联调派修（执行令 `致A-ORCH-执行令-T14派修-首次配置白名单与预算到顶界面-20261003-1541.md`）
 
-改 P-9 补丁（P-4 的品牌字样见下一个 T20 提交）；其后的补丁 P-14 至 P-11 按原样叠回重新导出（P-11 的 `main.ts` 导入行与新 P-9 相邻，三方合并两边都留，内容不变）。重导做法：基线克隆从固定提交起按本文件顺序打旧补丁，在 P-9、P-4 之后各跑一次本轮的改动脚本再导出；导出后 114 个改动路径（含 P-3 删掉的 4 个测试）与线 A `dsh\` 工作区逐字节一致。
+改 P-9、P-4 两个补丁；其后的补丁 P-14 至 P-11 按原样叠回重新导出（P-11 的 `main.ts` 导入行与新 P-9 相邻，三方合并两边都留，内容不变）。重导做法：基线克隆从固定提交起按本文件顺序打旧补丁，在 P-9、P-4 之后各跑一次本轮的改动脚本再导出；导出后 114 个改动路径（含 P-3 删掉的 4 个测试）与线 A `dsh\` 工作区逐字节一致。
 
 | 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
 |---|---|---|---|
 | P-9 | `apps/desktop/src/lawbench-request-policy.ts`：`file:` 白名单由只放 `renderer\` 改为 `lawbenchAppFileRoots(appPath)` = `renderer\` 与 `lib\welcome\`（**只多这一个目录**，`lib\` 其余仍拦）；`main.ts` 改用它；`tests/lawbench-request-policy.spec.ts` 新增 1 例：读真 `renderer/welcome.html` 引用的每个本地资源都放行，`lib/main.js`、`lib/preload-app.cjs`、`lib/welcome-x/`、`lib/welcome/../main.js`、`package.json` 仍拦 | T14 实跑：首次配置页 `welcome.html` 引用的 `../lib/welcome/welcome.js`、`welcome.css`、`brand-font.css` 被拦（`ERR_BLOCKED_BY_CLIENT`），窗口空白、律师无从配置。装好的客户端是 `app.asar\renderer` 与 `app.asar\lib\welcome`（`electron-builder-config.mjs` 的 files 含 `lib/welcome/**/*`），同一函数同样放行 | 6 例全过；把 `lib\welcome` 从函数里拿掉，新例红 |
+| P-4 | 律师看得到的 DSH 原版字样（T14 实跑发现）：`ui-conversation/src/client/locales.ts` 空白会话大字"探索未至之境"改为产品名、"预览版"标改为空（`skeleton/EmptyHero.tsx` 空串时不画标），输入框占位"描述你想要构建的内容"改为"说明要办的事"；`ui-chat/src/client/locale.ts`"深度求索中"改为"思考中"；`locale/src/locales/zh.ts`、`en.ts` 的 `brand.localBuild`"DSH 本地构建"改为产品名（窗口标题、侧栏兜底名）。英文同改。原版测试里断言旧字样的随改：`ui-chat/tests/chat-view.client.spec.tsx`、`ui-conversation/tests/skeleton.client.spec.tsx`、`ui-sidebar/tests/sidebar-root.client.spec.tsx`、`ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap` | 深度求索是 DSH 厂商的公司名；"构建"是编程用语。侧栏品牌位的版本号由我方界面插件填（`dsh-ext\ui\brand.tsx`：产品名加我方版本），不再显示 DSH 构建号 | 上述 DSH 测试文件全过；`scripts\check_ui_words.py` 新加五条禁词并扫这三个 DSH 词条表，补丁前命中 6 处、补丁后 0 |
