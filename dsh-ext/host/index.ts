@@ -184,6 +184,16 @@ export class LawbenchRemote {
   }
 
   /**
+   * 输入区写任务单（POST /api/task）明确失败时记上、写成时去掉（T14 第二次实跑派修 2）；记着的会话 Agent 插件整轮拒绝。
+   * @param request - { session_id, hold }。
+   */
+  async sheetHold(request: unknown): Promise<{ ok: true; value: { held: boolean } }> {
+    const r = request as { session_id?: unknown; hold?: unknown } | null
+    if (typeof r?.session_id === 'string' && typeof r.hold === 'boolean') this.notices.hold(r.session_id, r.hold)
+    return { ok: true, value: { held: typeof r?.session_id === 'string' && this.notices.held(r.session_id) } }
+  }
+
+  /**
    * 对话区显示某任务的结果（T14 派修 2：到达用量上限时模型没写出回答，显示刚存的草稿），见 task-answer.ts。
    * 只读该任务目录下 task.json、result.json 和最新一版草稿；日志只记结果和错误码。
    * @param request - { root, task_id }：当前案件根、任务编号。
@@ -400,6 +410,7 @@ export class LawbenchRemote {
     }
     return { llm, prep, restored: true }
   }
+
 }
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
@@ -486,6 +497,8 @@ export function apply(ctx: Ctx, given: Config): void {
     noteTurnBlocked: (sessionId: string, code: string, taskId?: string) => notices.note(sessionId, code, taskId),
     /** 这一轮顺利开始：清掉该会话没被取走的旧记录。 */
     clearTurnBlocked: (sessionId: string) => notices.clear(sessionId),
+    /** 该会话的任务单没写成（输入区经 sheetHold 记）：Agent 插件据此整轮拒绝。 */
+    sheetHeld: (sessionId: string) => notices.held(sessionId),
     state: () => supervisor.state,
     onState: (fn: (s: SupervisorState) => void) => supervisor.onState(fn),
   }))

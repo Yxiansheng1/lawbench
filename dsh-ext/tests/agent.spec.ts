@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { BUDGET_STOPPED, DENY_BUDGET, DENY_NOT_ALLOWED, LegalAgent } from '../agent/index.ts'
+import { BUDGET_STOPPED, DENY_BUDGET, DENY_NOT_ALLOWED, LegalAgent, TASK_SHEET_FAILED } from '../agent/index.ts'
 import { CoreClient } from '../shared/core-client.ts'
 import { startFake, type Fake } from './helpers/fake.ts'
 
@@ -67,6 +67,19 @@ describe('会话的写入位置已失效（T17 第五轮复核 F1）', () => {
     expect(blocked).toEqual([['s-moved', 'CASE_MOVED']])
     expect(a.tasks.has('s-moved')).toBe(false)
     expect(events).toContain('agent.case_moved')
+    expect((await a.preStep(agentObj('s-ok'), 1, enter())).kind).toBe('enter')
+  })
+})
+
+describe('任务单没写成（T14 第二次实跑派修 2，执行令 1751）', () => {
+  it('输入区记了 hold 的会话：step 1 整轮拒绝、记 TASK_SHEET_FAILED，不取任务（不拿上一张发）；没记的照常', async () => {
+    const blocked: Array<[string, string]> = []
+    const held = new Set(['s-held'])
+    const a = new LegalAgent(new CoreClient(() => ({ port: fake.port, token: fake.token }), log), log, (id, code) => { blocked.push([id, code]) }, () => {}, () => false, (id) => held.has(id))
+    expect(await a.preStep(agentObj('s-held'), 1, enter())).toEqual({ kind: 'reject' })
+    expect(blocked).toEqual([['s-held', TASK_SHEET_FAILED]])
+    expect(a.tasks.has('s-held')).toBe(false)
+    expect(events).toContain('agent.sheet_held')
     expect((await a.preStep(agentObj('s-ok'), 1, enter())).kind).toBe('enter')
   })
 })

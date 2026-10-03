@@ -33,6 +33,20 @@ export class TurnNotices {
     return this.takeWithTask(sessionId).code
   }
 
+  /**
+   * 任务单没写成的会话（T14 第二次实跑派修 2，执行令 1751）：输入区写 POST /api/task 明确失败时记上、之后写成时去掉；
+   * 记着的会话 Agent 插件整轮拒绝（TASK_SHEET_FAILED），不拿服务上一张任务单发。
+   */
+  private readonly holds = new Set<string>()
+
+  hold(sessionId: string, on: boolean): void {
+    this.holds.delete(sessionId)
+    if (on) this.holds.add(sessionId)
+    if (this.holds.size > MAX) this.holds.delete(this.holds.values().next().value!)
+  }
+
+  held(sessionId: string): boolean { return this.holds.has(sessionId) }
+
   /** 取走错误码和随它记下的任务编号。 */
   takeWithTask(sessionId: string): { code: string | null; task_id: string | null } {
     const code = this.codes.get(sessionId) ?? null

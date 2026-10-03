@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, forgetDockSyncs, NO_CASE_TEXT, TURN_ENDED } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockSyncs, NO_CASE_TEXT, SHEET_FAILED_SEND_TEXT, SHEET_FAILED_TEXT, TURN_ENDED } from '../ui/dock.tsx'
 import { toRequest, turnEnds } from '../ui/tasksheet.ts'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 
@@ -37,6 +37,8 @@ class Service {
   /** 输入材料变了：发消息时 /core/context 报 INPUT_CHANGED，整轮被拦下（Agent 插件记下，Host 的 turnNotice 取走）。 */
   inputChanged = false
   blocked = new Map<string, string>()
+  /** 输入区写任务单明确失败时经 Host 的 sheetHold 记上的会话：发消息时 Agent 插件整轮拒绝（执行令 1751 必修 2）。 */
+  holds = new Set<string>()
   write(req: { session_id: string; entry: string | null; skill: string | null; inputs: string[]; params: unknown }) {
     if (this.failWrite) return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } }
     const t = { task_id: `T-20260930120000-${String(++this.n).padStart(4, '0')}`, entry: req.entry, skill: req.skill, inputs: req.inputs, params: req.params, updated_at: '2026-09-30T12:00:00+08:00' }
@@ -51,6 +53,7 @@ class Service {
   /** 发一条消息：按当前选择新建执行中的任务（复制一份），返回这条按什么跑；当前选择不消耗。 */
   send(sessionId: string): string {
     if (this.inputChanged) { this.blocked.set(sessionId, 'INPUT_CHANGED'); return '被拦下' }
+    if (this.holds.has(sessionId)) { this.blocked.set(sessionId, 'TASK_SHEET_FAILED'); return '被拦下' }
     const s = this.selections.get(sessionId)
     return s && s.entry ? s.entry : '自由对话'
   }
@@ -75,6 +78,11 @@ function api(): LawbenchApi {
       const code = svc.blocked.get(id) ?? null
       svc.blocked.delete(id)
       return { ok: true, value: { code } }
+    },
+    sheetHold: async (r) => {
+      const { session_id, hold } = r as { session_id: string; hold: boolean }
+      if (hold) svc.holds.add(session_id); else svc.holds.delete(session_id)
+      return { ok: true, value: { held: hold } }
     },
     getCapsules: async () => ({ ok: true, value: CAPSULES }),
     caseRecent: async () => ({ ok: true, value: { cases: [CASE] } }),
@@ -126,6 +134,8 @@ async function send(sessionId: string): Promise<string> {
   return ran
 }
 
+/** 弹出过的提示框正文（showNotice 放进界面状态的）。 */
+const dialogs = () => app.get().dialogs.map((d) => (d as { text?: string }).text)
 const READY = (name: string) => `下一条消息按「${name}」运行（直到你改掉）`
 
 beforeEach(async () => {
@@ -212,15 +222,16 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     expect(shown()).toBe(A.id)
   })
 
-  it('写失败（R8、R12：服务不可用）：显示错误、保留下拉框的值，不显示已就绪；一轮结束的重读不盖掉错误；恢复后点重试写成', async () => {
+  it('写失败（R8、R12：服务不可用）：红字"任务单没有写成，请重试"、保留下拉框的值，发送被拦下（不按上一张 A 发）；一轮结束的重读不盖掉错误；恢复后点重试写成', async () => {
     await pick(A.id); await flush(600)
     svc.failWrite = true
     await pick(B.id); await flush(600)
     expect(shown()).toBe(B.id)
-    expect(status()).toContain('工作台服务未启动')
-    expect(await send('S1')).toBe(A.id) // 实际按服务的 A 跑；界面此刻显示的是红字错误，没有声称按 B
+    expect(status()).toBe(SHEET_FAILED_TEXT)
+    expect(await send('S1')).toBe('被拦下') // 执行令 1751 必修 2：修前这里按服务的上一张 A 发了出去
+    expect(dialogs()).toContain(SHEET_FAILED_SEND_TEXT)
     expect(shown()).toBe(B.id)
-    expect(status()).toContain('工作台服务未启动')
+    expect(status()).toBe(SHEET_FAILED_TEXT)
     svc.failWrite = false
     const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === '重试')!
     await act(async () => { retry.click() })
@@ -390,7 +401,7 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
         svc.failAfterCreate = error
         await pick(B.id); await flush(600)
         expect(svc.selections.get('S1')).toMatchObject({ entry: B.id }) // 服务那边其实已经是 B
-        expect(status()).toBe(error.message)
+        expect(status()).toBe(SHEET_FAILED_TEXT)
         svc.failAfterCreate = null
         const n = svc.n
         await pick(A.id)
@@ -406,8 +417,8 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
       await pick(A.id); await flush(600)
       svc.failAfterCreate = { code: 'TIMEOUT', message: '工作台服务响应超时，请稍后重试' }
       await pick(B.id); await flush(600)
-      expect([shown(), status()]).toEqual([B.id, '工作台服务响应超时，请稍后重试'])
-      expect(await send('S1')).toBe(B.id)
+      expect([shown(), status()]).toEqual([B.id, SHEET_FAILED_TEXT])
+      expect(await send('S1')).toBe('被拦下') // 明确失败（超时）就拦下，即使服务其实已建了 B（执行令 1751 必修 2）
     })
 
     it('X3 改过选择、别处改成 B，一轮结束时读失败：显示读错误，不再显示绿字 A（P3-1）', async () => {
@@ -462,7 +473,7 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
         await pick(A.id); await flush(600)
         svc.failWrite = true
         await pick(B.id); await flush(600)
-        expect(status()).toContain('工作台服务未启动')
+        expect(status()).toBe(SHEET_FAILED_TEXT)
         await mount('S2', remount)
         svc.failWrite = false
         await flush(1000)

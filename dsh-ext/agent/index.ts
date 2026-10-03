@@ -38,6 +38,8 @@ export const DENY_NOT_ALLOWED = '该工具在律师工作台不可用'
 export const DENY_BUDGET = '已达到本次任务的上限，已保存草稿'
 /** 到达用量上限（模型调用次数或时间）整轮收尾时记的提示码，见 shared/turn-notices.ts。 */
 export const BUDGET_STOPPED = 'BUDGET_STOPPED'
+/** 输入区写任务单明确失败、还没重写成（T14 第二次实跑派修 2）：整轮拒绝，不拿上一张任务单发。 */
+export const TASK_SHEET_FAILED = 'TASK_SHEET_FAILED'
 export const DENY_NO_TASK = '工作台服务未启动，请稍后重试'
 
 type ContextValue = { l0: { text: string }; l1: { text: string; truncated: boolean; toc: Array<{ index: number; title: string; tokens: number }> } }
@@ -52,8 +54,9 @@ export class LegalAgent {
    * @param noteBlocked - 拒绝整轮时记下错误码，界面经 Host 的 turnNotice 取走（DSH 的 reject 带不了消息）。
    * @param clearBlocked - 这一轮顺利开始时清掉该会话没被取走的旧记录（复核 P3-C ①）。
    * @param caseMoved - 这个会话所在的案件文件夹是否已不在原位置（N55 ②；见会话存储 router.ts）。
+   * @param sheetHeld - 这个会话的任务单是否没写成（输入区经 Host 的 sheetHold 记；T14 第二次实跑派修 2）。
    */
-  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string, taskId?: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly caseMoved: (sessionId: string) => boolean = () => false) {}
+  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string, taskId?: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly caseMoved: (sessionId: string) => boolean = () => false, private readonly sheetHeld: (sessionId: string) => boolean = () => false) {}
 
   /**
    * 案件文件夹已不在原处（N55 ②）：整轮拒绝，不写旧处；界面提示重启软件后在这个对话里继续，或新开一个对话。
@@ -72,6 +75,13 @@ export class LegalAgent {
     let state = this.tasks.get(agent.id)
     const added: UserMessage[] = []
     if (step === 1 && this.caseMoved(agent.id)) return this.rejectMoved(agent.id)
+    // 律师改了选择、写任务单明确失败还没重写成：服务那边还是上一张，整轮拒绝（不在第 2 步之后拦：一轮已按取到的任务单开始）
+    if (step === 1 && this.sheetHeld(agent.id)) {
+      this.log('warn', 'agent.sheet_held', {})
+      this.noteBlocked(agent.id, TASK_SHEET_FAILED)
+      this.tasks.delete(agent.id)
+      return { kind: 'reject' }
+    }
     if (step === 1 || !state) {
       const begin = await this.core.call<{ task_id: string; params: Params; budget: Budget }>('task/begin', {
         session_id: agent.id, cwd: agent.session?.header?.cwd ?? '',
@@ -180,7 +190,7 @@ type Ctx = {
   on(event: string, fn: (...a: never[]) => unknown, opts?: { prepend?: boolean }): void
   get?(name: string): unknown
   tools: { register(def: unknown): () => void }
-  lawbenchCore: { endpoint(): Endpoint | undefined; noteTurnBlocked?(sessionId: string, code: string, taskId?: string): void; clearTurnBlocked?(sessionId: string): void }
+  lawbenchCore: { endpoint(): Endpoint | undefined; noteTurnBlocked?(sessionId: string, code: string, taskId?: string): void; clearTurnBlocked?(sessionId: string): void; sheetHeld?(sessionId: string): boolean }
   effect(fn: () => () => void, label?: string): void
   logger?(name: string): { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void }
 }
@@ -194,7 +204,8 @@ export function apply(ctx: Ctx, config: Config = {}): void {
   const agent = new LegalAgent(core, log,
     (sessionId, code, taskId) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code, taskId),
     (sessionId) => ctx.lawbenchCore.clearTurnBlocked?.(sessionId),
-    caseMoved)
+    caseMoved,
+    (sessionId) => ctx.lawbenchCore.sheetHeld?.(sessionId) === true)
 
   for (const tool of TOOL_NAMES) {
     ctx.effect(() => ctx.tools.register({

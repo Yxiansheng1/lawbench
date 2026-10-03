@@ -1,7 +1,7 @@
 // 会话输入区上方（DSH 插槽 conversation.input.dock）：当前胶囊和 Skill 选择、必问问题、参数、选用的前序成果（PRD 7.9）。
 // 契约 1.2（N37）：服务管该会话"当前的选择"，管到律师改掉为止（执行时不消耗）。界面按会话存（与服务同口径），不另记：
 // 挂上、切换会话、每轮结束之后从 GET /api/task/current 读，下拉框和状态行都设成服务返回的；律师改动时 POST /api/task，
-// 写成功之前状态行显示"正在保存选择…"，写失败显示错误并保留下拉框的值。entry 填胶囊 id（T13 执行令 Q5）。
+// 写成功之前状态行显示"正在保存选择…"，写失败显示"任务单没有写成，请重试"并保留下拉框的值，此时发送被拦下（执行令 1751）。entry 填胶囊 id（T13 执行令 Q5）。
 // 运行状态和停止沿用 DSH 对话区自带的。
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
@@ -23,6 +23,11 @@ export const CASE_MOVED_TITLE = '这条消息没有发出'
 export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在原来的位置。刚才这句没有发出，重启软件后请在这个对话里重新发送这句话，或新开一个对话。'
 /** 上一轮取任务时服务说这个对话不属于任何已打开的案件（/core/task/begin 报 CASE_NOT_FOUND，第六轮复核 A-P2-3 / B-F2）。 */
 export const CASE_NOT_FOUND_TEXT = '没有找到这个对话所在的案件。请回到首页重新打开案件；如果案件文件夹刚挪过位置，请重启软件后在这个对话里继续，或新开一个对话。'
+/** 写任务单（POST /api/task）明确失败时状态行的话（T14 第二次实跑派修 2，执行令 1751）；此时发送被 Agent 插件拦下。 */
+export const SHEET_FAILED_TEXT = '任务单没有写成，请重试'
+/** 任务单没写成时律师仍点了发送：这一轮被拒（Agent 插件记 TASK_SHEET_FAILED）。 */
+export const SHEET_FAILED_SEND_TEXT = '输入区的任务单没有写成，刚才这句没有发出。请先点输入区的"重试"，写成之后再发送。'
+export const TASK_SHEET_FAILED = 'TASK_SHEET_FAILED'
 /** 一轮结束的事件名（index.tsx 按会话列表的 running 由真变假发出，detail 为会话 id）。 */
 /** Agent 插件到达用量上限时记的提示码（agent/index.ts 的 BUDGET_STOPPED；界面不引 Agent 插件，照写一份）。 */
 export const BUDGET_STOPPED = 'BUDGET_STOPPED'
@@ -132,6 +137,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
         if (r.ok && r.value?.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
         if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)
         if (r.ok && r.value?.code === 'CASE_NOT_FOUND') showNotice(CASE_MOVED_TITLE, CASE_NOT_FOUND_TEXT)
+        if (r.ok && r.value?.code === TASK_SHEET_FAILED) showNotice(CASE_MOVED_TITLE, SHEET_FAILED_SEND_TEXT)
         // 到达用量上限：对话区（输入区上方）显示提示和刚存的草稿（T14 派修 2）
         if (r.ok && r.value?.code === BUDGET_STOPPED && typeof r.value.task_id === 'string') showTaskAnswer(sid, r.value.task_id)
       } catch { /* 当没有提示 */ }
@@ -163,12 +169,14 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
     const sid = sessionId
     clearInputChanged(sid)
     // 服务那份的输入快照过期了（INPUT_CHANGED 之后）：选回同一份也要真写，服务才会重算快照（返修 P3-B）
-    if (key === serverKey.current && !app.get().staleServer[sid]) { markSelectionSaved(sid, () => true); setError(null); return }
+    if (key === serverKey.current && !app.get().staleServer[sid]) { markSelectionSaved(sid, () => true); setError(null); void call('sheetHold', { session_id: sid, hold: false }); return }
     const t = setTimeout(() => {
       const writing = ui
       const writingKey = key
       void sync.save(writing).then((r) => {
         const here = shownSession.current === sid
+        // 明确失败就请 Host 记上：律师此时发送，Agent 插件整轮拒绝，不拿服务上一张任务单发；写成了去掉（执行令 1751 必修 2）
+        void call('sheetHold', { session_id: sid, hold: !r.ok })
         if (r.ok) {
           // 写成了，服务那份的输入快照已是新的：提示一并清（被拦那一轮前后刚改过选择时，否则红字误报到下次改动，第三轮复核 P3-2）
           clearStaleServer(sid)
@@ -178,7 +186,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
           if (here) setError((e) => (e?.sessionId === sid && e.key === writingKey ? null : e))
         } else if (here) {
           serverKey.current = null
-          setError({ sessionId: sid, key: writingKey, op: 'write', error: { code: r.error.code, message: statusErrorText(r.error) } })
+          setError({ sessionId: sid, key: writingKey, op: 'write', error: { code: r.error.code, message: SHEET_FAILED_TEXT } })
         }
       })
     }, WRITE_DELAY_MS)

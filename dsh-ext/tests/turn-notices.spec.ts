@@ -58,3 +58,14 @@ describe('Host 接线：Agent 经 lawbenchCore 记下 / 清掉，界面经远程
     } finally { rmSync(appData, { recursive: true, force: true }) }
   })
 })
+
+describe('任务单没写成的会话（执行令 1751 必修 2）', () => {
+  it('hold 记上、写成后去掉；只管本会话', () => {
+    const n = new TurnNotices()
+    n.hold('s1', true)
+    expect(n.held('s1')).toBe(true)
+    expect(n.held('s2')).toBe(false)
+    n.hold('s1', false)
+    expect(n.held('s1')).toBe(false)
+  })
+})

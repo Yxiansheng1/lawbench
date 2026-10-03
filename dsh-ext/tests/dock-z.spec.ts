@@ -115,7 +115,7 @@ describe('Z：新挂上的输入区、Skill 列表还没读回时写入', () => 
     await pick(B); await flush(100)
     await unmount(); svc.mode = 'unavailable'
     await mount('S1'); for (let i = 0; i < 20; i++) await flush(50)
-    expect(status()).toContain('工作台服务未启动') // 写失败要显示错误
+    expect(status()).toBe('任务单没有写成，请重试') // 写失败要显示错误（执行令 1751 必修 2 的说法）
     expect(!!button('重试')).toBe(true) // 并有"重试"
     svc.mode = 'ok'; await unmount(); await mount('S1'); for (let i = 0; i < 20; i++) await flush(50)
     await click('参数')
