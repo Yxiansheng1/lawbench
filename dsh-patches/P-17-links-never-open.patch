@@ -1,5 +1,5 @@
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index 4e03717ea9..1470b99356 100644
+index b6caa3c626..8d76a39908 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -16,7 +16,6 @@ import {

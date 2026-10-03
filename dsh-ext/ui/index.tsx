@@ -15,7 +15,8 @@ import { TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
-import { citationMark, type CitationMark, type MaterialLite, type OpenDeps } from './citation.ts'
+import { citationMark, type CitationMark } from './citation.ts'
+import { citationDeps } from './citation-deps.ts'
 
 export const inject = ['slots', 'remote']
 
@@ -34,7 +35,7 @@ type Ctx = {
   layout: { selectPanel(id: string | null): void }
   sessions: { list: Observable<{ byId: Record<string, { cwd?: string; running?: boolean } | undefined> }> }
   uiSession: { adapter: { current: Observable<{ key?: string } | undefined> } }
-  uiWorkspace: { openWorkspace(id: string): Promise<unknown>; pickDirectory?(): Promise<string | null | undefined> }
+  uiWorkspace: { openWorkspace(id: string): Promise<unknown>; openSession(id: string): void; pickDirectory?(): Promise<string | null | undefined> }
   workspaces: { create(req: { path: string }): Promise<{ workspaceId: string }> }
   sidebarRight: { openTab(kind: string, opts?: { params?: Record<string, string> }): unknown; mounted: Observable<string | undefined> }
   sidebarRightTabs: { register(def: Record<string, unknown>): Disposer }
@@ -65,6 +66,7 @@ const nav: Nav = {
   openTab: (kind, params) => { if (navImpl.openTab) navImpl.openTab(kind, params); else navImpl.pending = { kind, params } },
   goHome: () => navImpl.goHome?.(),
   refreshModels: () => navImpl.refreshModels!(),
+  openSession: (id) => navImpl.openSession?.(id),
 }
 
 function HomeIcon({ size = 16 }: { size?: number }) {
@@ -75,16 +77,6 @@ function HomeIcon({ size = 16 }: { size?: number }) {
   )
 }
 
-/** 出处点击用到的工作台状态：当前案件、材料列表、打开原文标签。 */
-const citationDeps: OpenDeps = {
-  caseId: () => currentCase(app.get())?.case_id,
-  materials: async (caseId) => {
-    const r = await call<{ materials: MaterialLite[] }>('materialsList', { case_id: caseId })
-    return r.ok ? r.value.materials : undefined
-  },
-  notice,
-  openSource: (materialId, citation) => getNav().openTab(TABS.source, { material_id: materialId, citation }),
-}
 
 /** 设置页一节、弹框：只要 slots 和 remote.lawbench。 */
 function registerCore(ctx: Ctx): void {
@@ -122,9 +114,10 @@ function registerWorkspace(ctx: Ctx): void {
     if (r?.ok && r.value.listed === false) notice(ROOTS_NOT_REFRESHED[0], ROOTS_NOT_REFRESHED[1])
     await ctx.uiWorkspace.openWorkspace(ws.workspaceId)
   }
+  navImpl.openSession = (id) => { try { ctx.uiWorkspace.openSession(id) } catch { /* 会话已不在：不转 */ } }
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
-  ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined }, '律师工作台界面：打开案件')
+  ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined }, '律师工作台界面：打开案件')
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */

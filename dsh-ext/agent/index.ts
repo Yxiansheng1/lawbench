@@ -36,6 +36,8 @@ const snapshot = (sections: Array<{ name: string; text: string }>): UserMessage 
 
 export const DENY_NOT_ALLOWED = '该工具在律师工作台不可用'
 export const DENY_BUDGET = '已达到本次任务的上限，已保存草稿'
+/** 到达用量上限（模型调用次数或时间）整轮收尾时记的提示码，见 shared/turn-notices.ts。 */
+export const BUDGET_STOPPED = 'BUDGET_STOPPED'
 export const DENY_NO_TASK = '工作台服务未启动，请稍后重试'
 
 type ContextValue = { l0: { text: string }; l1: { text: string; truncated: boolean; toc: Array<{ index: number; title: string; tokens: number }> } }
@@ -51,7 +53,7 @@ export class LegalAgent {
    * @param clearBlocked - 这一轮顺利开始时清掉该会话没被取走的旧记录（复核 P3-C ①）。
    * @param caseMoved - 这个会话所在的案件文件夹是否已不在原位置（N55 ②；见会话存储 router.ts）。
    */
-  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly caseMoved: (sessionId: string) => boolean = () => false) {}
+  constructor(private readonly core: CoreClient, private readonly log: Logger, private readonly noteBlocked: (sessionId: string, code: string, taskId?: string) => void = () => {}, private readonly clearBlocked: (sessionId: string) => void = () => {}, private readonly caseMoved: (sessionId: string) => boolean = () => false) {}
 
   /**
    * 案件文件夹已不在原处（N55 ②）：整轮拒绝，不写旧处；界面提示重启软件后在这个对话里继续，或新开一个对话。
@@ -101,6 +103,9 @@ export class LegalAgent {
     const d = state.beforeModelCall()
     if (d.kind === 'reject') {
       this.log('info', 'agent.model_budget', { reason: d.reason, model_calls: state.modelCalls })
+      // 到达用量上限：模型这时往往刚存完草稿、没写文字回答（T14 实跑）。记下任务编号，输入区据此在对话区显示
+      // 提示和刚存的草稿（出处可点；T14 派修 2，用户选"对话区显示草稿"）
+      this.noteBlocked(agent.id, BUDGET_STOPPED, state.taskId)
       return { kind: 'reject' }
     }
     if (d.wrapUp) added.push(notice('lawbench-budget', '立即收尾', WRAP_UP_TEXT))
@@ -175,7 +180,7 @@ type Ctx = {
   on(event: string, fn: (...a: never[]) => unknown, opts?: { prepend?: boolean }): void
   get?(name: string): unknown
   tools: { register(def: unknown): () => void }
-  lawbenchCore: { endpoint(): Endpoint | undefined; noteTurnBlocked?(sessionId: string, code: string): void; clearTurnBlocked?(sessionId: string): void }
+  lawbenchCore: { endpoint(): Endpoint | undefined; noteTurnBlocked?(sessionId: string, code: string, taskId?: string): void; clearTurnBlocked?(sessionId: string): void }
   effect(fn: () => () => void, label?: string): void
   logger?(name: string): { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void }
 }
@@ -187,7 +192,7 @@ export function apply(ctx: Ctx, config: Config = {}): void {
   const store = (): Store => ctx.get?.('sessionPersistence') as Store
   const caseMoved = (sessionId: string): boolean => store()?.caseMoved?.(sessionId) === true
   const agent = new LegalAgent(core, log,
-    (sessionId, code) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code),
+    (sessionId, code, taskId) => ctx.lawbenchCore.noteTurnBlocked?.(sessionId, code, taskId),
     (sessionId) => ctx.lawbenchCore.clearTurnBlocked?.(sessionId),
     caseMoved)
 

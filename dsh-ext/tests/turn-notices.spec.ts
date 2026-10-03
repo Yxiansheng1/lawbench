@@ -43,15 +43,18 @@ describe('Host 接线：Agent 经 lawbenchCore 记下 / 清掉，界面经远程
         subprocess: { spawn: () => { throw new Error('测试里不启动服务') } },
       }
       applyHost(ctx as never, { command: ['node'], cwd: appData, appData } as never)
-      const core = provided.get('lawbenchCore') as { noteTurnBlocked(s: string, c: string): void; clearTurnBlocked(s: string): void }
+      const core = provided.get('lawbenchCore') as { noteTurnBlocked(s: string, c: string, t?: string): void; clearTurnBlocked(s: string): void }
       const remote = provided.get(LAWBENCH_SERVICE) as LawbenchRemote
       expect(remote).toBeInstanceOf(LawbenchRemote)
       core.noteTurnBlocked('S1', 'INPUT_CHANGED')
-      expect(await remote.turnNotice({ session_id: 'S1' })).toEqual({ ok: true, value: { code: 'INPUT_CHANGED' } })
-      expect(await remote.turnNotice({ session_id: 'S1' })).toEqual({ ok: true, value: { code: null } })
+      expect(await remote.turnNotice({ session_id: 'S1' })).toEqual({ ok: true, value: { code: 'INPUT_CHANGED', task_id: null } })
+      expect(await remote.turnNotice({ session_id: 'S1' })).toEqual({ ok: true, value: { code: null, task_id: null } })
       core.noteTurnBlocked('S2', 'INPUT_CHANGED')
       core.clearTurnBlocked('S2')
-      expect(await remote.turnNotice({ session_id: 'S2' })).toEqual({ ok: true, value: { code: null } })
+      expect(await remote.turnNotice({ session_id: 'S2' })).toEqual({ ok: true, value: { code: null, task_id: null } })
+      // T14 派修 2：到达用量上限时连同任务编号一起取走
+      core.noteTurnBlocked('S3', 'BUDGET_STOPPED', 'T-20261003145955-de5b')
+      expect(await remote.turnNotice({ session_id: 'S3' })).toEqual({ ok: true, value: { code: 'BUDGET_STOPPED', task_id: 'T-20261003145955-de5b' } })
     } finally { rmSync(appData, { recursive: true, force: true }) }
   })
 })

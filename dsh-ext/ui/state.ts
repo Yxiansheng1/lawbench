@@ -40,9 +40,24 @@ export interface AppState {
   presets: Record<string, Params>
   /** DSH 当前显示的会话的工作目录（apply 里按 uiSession、sessions 更新）；没有会话为 null。 */
   currentRoot: string | null
+  /**
+   * 按会话 id：输入区上方要显示的任务结果（任务编号）。到达用量上限那一轮模型没写出回答，显示提示和刚存的草稿
+   * （T14 派修 2，用户选"对话区显示草稿"）；成果页"在对话区查看"也写这里。只在内存，草稿正文每次从案件里读。
+   */
+  answers: Record<string, string>
 }
 
-export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null })
+export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {} })
+
+/** 在某会话的输入区上方显示某任务的结果（T14 派修 2）。 */
+export function showTaskAnswer(sessionId: string, taskId: string): void {
+  app.set((s) => ({ ...s, answers: { ...s.answers, [sessionId]: taskId } }))
+}
+
+/** 收起某会话输入区上方的任务结果。 */
+export function hideTaskAnswer(sessionId: string): void {
+  app.set((s) => { const answers = { ...s.answers }; delete answers[sessionId]; return { ...s, answers } })
+}
 
 /** 当前会话对应的已登记案件。 */
 export const currentCase = (s: AppState): CaseRef | undefined =>

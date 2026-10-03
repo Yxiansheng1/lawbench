@@ -1,0 +1,53 @@
+# T14 联调派修变异（撤回单处修法）
+
+## 派修 2：Agent 到达用量上限时不记 BUDGET_STOPPED
+文件：dsh-ext/agent/index.ts；跑：tests/agent.spec.ts
+结果：1 failed | 12 passed (13)
+- tests/agent.spec.ts > T14 派修 2：模型调用次数用完整轮收尾时记下 BUDGET_STOPPED 和任务编号（对话区据此显示草稿） > 前 N 步照常；第 N+1 步拒绝并记 [会话, BUDGET_STOPPED, 任务编号]；未到上限时不记
+- 前 N 步照常；第 N+1 步拒绝并记 [会话, BUDGET_STOPPED, 任务编号]；未到上限时不记
+
+## 派修 2：输入区收到 BUDGET_STOPPED 不显示草稿
+文件：dsh-ext/ui/dock.tsx；跑：tests/answer.spec.ts
+结果：2 failed | 11 passed (13)
+- tests/answer.spec.ts > 输入区上方显示草稿（dock）与成果页"在对话区查看" > 上一轮 BUDGET_STOPPED：显示执行令原文提示和草稿，三处出处是按钮，点了打开原文标签
+- tests/answer.spec.ts > 输入区上方显示草稿（dock）与成果页"在对话区查看" > 别的码（或没有）不显示；"收起"后消失
+- 上一轮 BUDGET_STOPPED：显示执行令原文提示和草稿，三处出处是按钮，点了打开原文标签
+- 别的码（或没有）不显示；"收起"后消失
+
+## 派修 2：Host turnNotice 不带任务编号
+文件：dsh-ext/shared/turn-notices.ts；跑：tests/answer.spec.ts、tests/turn-notices.spec.ts
+结果：2 failed | 15 passed (17)
+- noteTurnBlocked 记下的，turnNotice 取得到且只取一次；clearTurnBlocked 清掉的取不到
+- tests/answer.spec.ts > turnNotice 带任务编号（shared/turn-notices.ts） > 记 BUDGET_STOPPED 时一并记任务编号，取一次即删；别的码不带任务编号；界面与 Agent 插件用同一个码
+- tests/turn-notices.spec.ts > Host 接线：Agent 经 lawbenchCore 记下 / 清掉，界面经远程方法 turnNotice 取走 > noteTurnBlocked 记下的，turnNotice 取得到且只取一次；clearTurnBlocked 清掉的取不到
+- 记 BUDGET_STOPPED 时一并记任务编号，取一次即删；别的码不带任务编号；界面与 Agent 插件用同一个码
+
+## 派修 2：读草稿不核路径（result.json 写的任何 .md 都读）
+文件：dsh-ext/host/task-answer.ts；跑：tests/answer.spec.ts
+结果：1 failed | 12 passed (13)
+- result.json 里的草稿路径不是这个任务自己的 草稿\ 下一层：不读（那个文件真的在也不读）
+- tests/answer.spec.ts > Host 读任务结果（host/task-answer.ts） > result.json 里的草稿路径不是这个任务自己的 草稿\ 下一层：不读（那个文件真的在也不读）
+
+## 派修 2：草稿不设上限（整个读进来）
+文件：dsh-ext/host/task-answer.ts；跑：tests/answer.spec.ts
+结果：1 failed | 12 passed (13)
+- tests/answer.spec.ts > Host 读任务结果（host/task-answer.ts） > 草稿过长：截到上限并标 truncated
+- 草稿过长：截到上限并标 truncated
+
+## 派修 2：草稿正文出处不成按钮（不给 inlineMarks）
+文件：dsh-ext/ui/answer.tsx；跑：tests/answer.spec.ts
+结果：1 failed | 12 passed (13)
+- tests/answer.spec.ts > 输入区上方显示草稿（dock）与成果页"在对话区查看" > 上一轮 BUDGET_STOPPED：显示执行令原文提示和草稿，三处出处是按钮，点了打开原文标签
+- 上一轮 BUDGET_STOPPED：显示执行令原文提示和草稿，三处出处是按钮，点了打开原文标签
+
+## 派修 2：成果页"在对话区查看"不转会话
+文件：dsh-ext/ui/results.tsx；跑：tests/answer.spec.ts
+结果：1 failed | 12 passed (13)
+- tests/answer.spec.ts > 输入区上方显示草稿（dock）与成果页"在对话区查看" > 成果页"在对话区查看"：转到任务记下的会话并在那里显示；读不到任务时给中文提示、不转
+- 成果页"在对话区查看"：转到任务记下的会话并在那里显示；读不到任务时给中文提示、不转
+
+## 派修 4：Host 没起来不记日志
+文件：dsh-ext/session-store/index.ts；跑：tests/session-store.spec.ts
+结果：1 failed | 91 passed (92)
+- tests/session-store.spec.ts > T14 派修 4：工作台 Host 插件起不来时记一条元数据错误 > 启动 30 秒后仍没有 lawbenchCore：记 session_store.host_missing（只有秒数）；有 Host 时不记
+- 启动 30 秒后仍没有 lawbenchCore：记 session_store.host_missing（只有秒数）；有 Host 时不记

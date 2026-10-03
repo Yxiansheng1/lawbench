@@ -91,6 +91,8 @@ export interface Nav {
   openTab(kind: string, params?: Record<string, string>): void
   goHome(): void
   refreshModels(): void
+  /** 转到某个会话（成果页"在对话区查看"，T14 派修 2）。 */
+  openSession(sessionId: string): void
 }
 let nav: Nav | undefined
 export const setNav = (n: Nav | undefined): void => { nav = n }

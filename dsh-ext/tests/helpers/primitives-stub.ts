@@ -12,3 +12,10 @@ export function Modal(p: { open: boolean; title?: ReactNode; footer?: ReactNode;
   return createElement('div', { role: 'dialog', 'aria-label': typeof p.title === 'string' ? p.title : undefined },
     createElement('h2', null, p.title), p.children, createElement('footer', null, p.footer))
 }
+
+/** Markdown 正文：不解析 Markdown，整段按 inlineMarks 拆开，出处画成 button（与真组件一样是可点的按钮，带读屏标签）。 */
+export function MarkdownText(p: { text: string; inlineMarks?: { split(v: string): ReadonlyArray<string | { text: string; label: string; open: () => void }> | undefined } }) {
+  const parts = p.inlineMarks?.split(p.text) ?? [p.text]
+  return createElement('div', { 'data-markdown': '' }, ...parts.map((x, i) => typeof x === 'string' ? x
+    : createElement('button', { key: i, type: 'button', 'aria-label': x.label, onClick: x.open }, x.text)))
+}

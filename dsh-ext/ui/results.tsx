@@ -5,8 +5,9 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { citationSummary, coverageLines, errorText, type CitationCheck, type Coverage } from './format.ts'
-import { Badge, Button, C, Empty, Loading, S, useLoad } from './kit.tsx'
-import { app, call, lb, notice, setIntent, type CaseRef } from './state.ts'
+import { Badge, Button, C, Empty, getNav, Loading, S, useLoad } from './kit.tsx'
+import { app, call, lb, notice, setIntent, showTaskAnswer, type CaseRef } from './state.ts'
+import type { TaskAnswerView } from './answer.tsx'
 import { useStore } from './store.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
 import { ARCHIVE_SKILL, ArchiveDialog } from './archive.tsx'
@@ -61,6 +62,11 @@ function Results({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }
                   </div>
                 </div>
               ))}
+              {t.status === 'budget_stopped' ? (
+                <div style={S.row}>
+                  <Button size="sm" variant="outline" onClick={() => void openAnswer(caseRef, sessionId, t.task_id)}>在对话区查看</Button>
+                </div>
+              ) : null}
               {t.skill === ARCHIVE_SKILL ? (
                 <div style={S.row}>
                   <Button size="sm" variant="outline" disabled={t.status === 'running'} onClick={() => setArchiving(t.task_id)}>核对归档方案并生成归档文件…</Button>
@@ -137,4 +143,16 @@ function CheckLine({ title, tone, summary, lines }: { title: string; tone: 'ok' 
       <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12, color: C.sub }}>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
     </details>
   )
+}
+
+/**
+ * 成果页"在对话区查看"（T14 派修 2）：到达用量上限的任务，转到它所在的会话，在输入区上方显示提示和草稿（出处可点）。
+ * 任务记下的会话读不到（旧任务、会话已删）就显示在当前会话。
+ */
+export async function openAnswer(caseRef: CaseRef, currentSession: string, taskId: string): Promise<void> {
+  const r = await call<TaskAnswerView>('taskAnswer', { root: caseRef.root, task_id: taskId })
+  if (!r.ok) { notice('没能打开这次运行的结果', errorText(r.error)); return }
+  const target = r.value.session_id ?? currentSession
+  showTaskAnswer(target, taskId)
+  if (target !== currentSession) getNav().openSession(target)
 }

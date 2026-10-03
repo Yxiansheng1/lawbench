@@ -33,6 +33,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'selfCheck', params: [] },
   // T26 第 3 步：归档面板读 <案件>\工作区\任务\<任务ID>\归档方案.json（服务没有读它的接口；只读）
   { method: 'archivePlan', params: ['request'] },
+  // T14 派修 2：到达用量上限时对话区显示刚存的草稿（只读该任务的 task.json、result.json、最新一版草稿）
+  { method: 'taskAnswer', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

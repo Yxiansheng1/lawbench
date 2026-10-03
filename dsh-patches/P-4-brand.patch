@@ -427,7 +427,7 @@ index b3f9e535c9..6413d619ac 100644
    later: '稍后',
    updateFailedTitle: '更新失败',
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index bae6af8ad7..456a736b9e 100644
+index eb6f2ed0b0..7a48a15b05 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
 @@ -27,7 +27,7 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'

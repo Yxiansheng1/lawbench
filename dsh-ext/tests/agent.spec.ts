@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DENY_BUDGET, DENY_NOT_ALLOWED, LegalAgent } from '../agent/index.ts'
+import { BUDGET_STOPPED, DENY_BUDGET, DENY_NOT_ALLOWED, LegalAgent } from '../agent/index.ts'
 import { CoreClient } from '../shared/core-client.ts'
 import { startFake, type Fake } from './helpers/fake.ts'
 
@@ -68,6 +68,19 @@ describe('会话的写入位置已失效（T17 第五轮复核 F1）', () => {
     expect(a.tasks.has('s-moved')).toBe(false)
     expect(events).toContain('agent.case_moved')
     expect((await a.preStep(agentObj('s-ok'), 1, enter())).kind).toBe('enter')
+  })
+})
+
+describe('T14 派修 2：模型调用次数用完整轮收尾时记下 BUDGET_STOPPED 和任务编号（对话区据此显示草稿）', () => {
+  it('前 N 步照常；第 N+1 步拒绝并记 [会话, BUDGET_STOPPED, 任务编号]；未到上限时不记', async () => {
+    const noted: Array<[string, string, string | undefined]> = []
+    const a = new LegalAgent(new CoreClient(() => ({ port: fake.port, token: fake.token }), log), log, (id, code, taskId) => { noted.push([id, code, taskId]) })
+    expect((await a.preStep(agentObj('s-b'), 1, enter())).kind).toBe('enter')
+    const state = a.tasks.get('s-b')!
+    for (let step = 2; step <= state.budget.model_calls; step++) expect((await a.preStep(agentObj('s-b'), step, enter())).kind).toBe('enter')
+    expect(noted).toEqual([])
+    expect(await a.preStep(agentObj('s-b'), state.budget.model_calls + 1, enter())).toEqual({ kind: 'reject' })
+    expect(noted).toEqual([['s-b', BUDGET_STOPPED, state.taskId]])
   })
 })
 
