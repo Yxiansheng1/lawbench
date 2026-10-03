@@ -1795,7 +1795,7 @@ li{margin:3px 0}
 <li><strong>中断时由程序保存</strong>（F-RUN-04）：不依赖模型调用工具。
 <ul>
 <li>执行中：插件监听 <code>session/event</code> 中的 <code>assistant/message</code> 事件（模型每完成一次回复就有一条），把回复文本交给工作台服务，覆盖写入 <code>草稿/进行中.md</code>，并更新结果清单中的进度（已用调用次数、已读材料）。</li>
-<li>结束时（<code>turn/end</code>，含取消、预算停止、输出上限、出错）：由程序写结果清单的最终状态；本任务没有保存过正式草稿的，把 <code>进行中.md</code> 改名为 <code>未完成-&lt;时间&gt;.md</code>。</li>
+<li>结束时（<code>turn/end</code>，含取消、预算停止、输出上限、出错）：由程序写结果清单的最终状态；本任务没有保存过正式草稿的，把 <code>进行中.md</code> 改名为 <code>未完成-&lt;时间&gt;.md</code>。（2026-10-03 N67 用户定：<code>进行中.md</code> 只在模型写出过回复正文时存在；模型全程只有思考与工具调用时，中断后没有未完成稿——验收口径为&quot;模型已写出正文时，取消后有 <code>未完成-*.md</code>&quot;。）</li>
 <li>硬退出（进程被结束、断电）：下次打开案件时，发现状态仍为&quot;执行中&quot;的任务，标为&quot;异常中断&quot;，保留已有的 <code>进行中.md</code>。</li>
 <li>模型主动调用 <code>case_save_draft</code> 用于保存结构化的正式草稿，不是异常情况下唯一的保存途径。</li>
 </ul>
