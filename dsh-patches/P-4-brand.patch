@@ -120,18 +120,30 @@ index ff09b8b783..bbeb22f823 100644
      for (const [key, value] of Object.entries(values)) {
        execFileSync('/usr/bin/plutil', ['-replace', key, '-json', JSON.stringify(value), plist])
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
-index 2bb56c359f..e2d37def03 100644
+index 2bb56c359f..e8b746ce45 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
 +++ b/apps/desktop/scripts/electron-builder-config.mjs
 @@ -12,6 +12,7 @@ import {
    resolveMacOSSigningEnvironment,
  } from './desktop-release-environment.mjs'
  import { notarizeMacOSDiskImageArtifact } from './notarize-macos-disk-images.mjs'
-+import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
++import { LAWBENCH_PRODUCT_NAME, LAWBENCH_VERSION } from './lawbench-product.mjs'
  import { verifyMacOSSignatureAfterSign } from './verify-macos-signature.mjs'
  import {
    createWindowsTokenSigner,
-@@ -99,16 +100,16 @@ export function createElectronBuilderConfig(
+@@ -51,7 +52,10 @@ export function createElectronBuilderConfig(
+   preparedRuntimeVersion = undefined,
+ ) {
+   const appId = resolveDesktopAppId(env)
+-  const policy = resolveDesktopPolicyEnvironment(env)
++  // lawbench P-4 (order 1756): the packaged app never carries the mandatory-update policy, so it never polls a remote
++  // policy origin (Spec 14.3: no outbound connections). The settings are still validated so DSH's packaging checks hold.
++  resolveDesktopPolicyEnvironment(env)
++  const policy = undefined
+   const targetPlatform = env.DSH_DESKTOP_TARGET_PLATFORM
+   const resolvedPlatform = targetPlatform ?? hostPlatform
+   const resolvedArch = env.DSH_DESKTOP_TARGET_ARCH ?? hostArch
+@@ -99,16 +103,17 @@ export function createElectronBuilderConfig(
    const packaged = resolveDesktopBuildCommit(env)
    return {
      appId,
@@ -140,7 +152,9 @@ index 2bb56c359f..e2d37def03 100644
      extraMetadata: {
        dshDesktopAppId: appId,
        dshMandatoryUpdatePolicy: policy,
-       ...buildVersion === productVersion ? {} : { version: buildVersion },
+-      ...buildVersion === productVersion ? {} : { version: buildVersion },
++      // lawbench P-4: an ordinary build ships as the lawbench version; DSH's test/qualification build versions stay as they are
++      version: buildVersion === productVersion ? LAWBENCH_VERSION : buildVersion,
        ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
      },
 -    productName: 'DeepSeek Harness',
@@ -151,7 +165,7 @@ index 2bb56c359f..e2d37def03 100644
      directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
      asar: true,
      electronDist: buildPaths.electron,
-@@ -148,6 +149,9 @@ export function createElectronBuilderConfig(
+@@ -148,6 +153,9 @@ export function createElectronBuilderConfig(
        // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
        ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
      ],
@@ -161,7 +175,7 @@ index 2bb56c359f..e2d37def03 100644
      mac: {
        icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
        category: 'public.app-category.developer-tools',
-@@ -156,7 +160,7 @@ export function createElectronBuilderConfig(
+@@ -156,7 +164,7 @@ export function createElectronBuilderConfig(
        identity: macOSSigning?.signingIdentity,
        forceCodeSigning: true,
        hardenedRuntime: true,
@@ -172,18 +186,20 @@ index 2bb56c359f..e2d37def03 100644
        notarize: true,
 diff --git a/apps/desktop/scripts/lawbench-product.d.mts b/apps/desktop/scripts/lawbench-product.d.mts
 new file mode 100644
-index 0000000000..5855290d62
+index 0000000000..083a586d0f
 --- /dev/null
 +++ b/apps/desktop/scripts/lawbench-product.d.mts
-@@ -0,0 +1,2 @@
+@@ -0,0 +1,4 @@
 +/** lawbench P-4: product name used by the build, packaging and smoke scripts (see lawbench-product.mjs). */
 +export const LAWBENCH_PRODUCT_NAME: string
++/** lawbench P-4: version of the packaged app (see lawbench-product.mjs). */
++export const LAWBENCH_VERSION: string
 diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
 new file mode 100644
-index 0000000000..3f7c8385d4
+index 0000000000..7e1fe411b0
 --- /dev/null
 +++ b/apps/desktop/scripts/lawbench-product.mjs
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,10 @@
 +/**
 + * lawbench P-4: the product name in one place for the build scripts (electron-builder productName and protocol
 + * name, packaged executable and app bundle paths in the packaging and smoke scripts).
@@ -191,6 +207,9 @@ index 0000000000..3f7c8385d4
 + * Runtime strings (menus, dialogs, About) take it from src/locale.ts LAWBENCH_PRODUCT; change both together.
 + */
 +export const LAWBENCH_PRODUCT_NAME = '连越律师工作台'
++
++/** lawbench P-4 (order 1756): the version of the packaged app (installer name, About, app.getVersion()); equals dsh-ext/shared/product.ts PRODUCT_VERSION. DSH's own package version stays for the bundled runtime checks. */
++export const LAWBENCH_VERSION = '0.1.0'
 diff --git a/apps/desktop/scripts/package-macos.ts b/apps/desktop/scripts/package-macos.ts
 index c1a2cb5c71..a72ac62c2b 100644
 --- a/apps/desktop/scripts/package-macos.ts
@@ -213,7 +232,7 @@ index c1a2cb5c71..a72ac62c2b 100644
    const zipApp = join(root, 'zip', basename(appPath))
    const dmgApp = join(root, 'dmg', basename(appPath))
 diff --git a/apps/desktop/scripts/package-target.ts b/apps/desktop/scripts/package-target.ts
-index 62f4fcbbb2..9a729e01ed 100644
+index 62f4fcbbb2..1dc097e60d 100644
 --- a/apps/desktop/scripts/package-target.ts
 +++ b/apps/desktop/scripts/package-target.ts
 @@ -24,6 +24,7 @@ import { suggestDesktopBuildVersion } from './desktop-build-version-discovery.ts
@@ -224,7 +243,18 @@ index 62f4fcbbb2..9a729e01ed 100644
  
  const APP_ROOT = resolve(import.meta.dirname, '..')
  const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
-@@ -489,7 +490,7 @@ export async function packageTarget(
+@@ -467,6 +468,10 @@ export async function packageTarget(
+     '--pack-destination',
+     buildPaths.packedLandlock,
+   ], buildEnv, REPOSITORY_ROOT)
++  // lawbench P-4 (order 1756): our bundle lawbench-dsh (dsh-ext, built by packaginguild.ps1) joins the package set.
++  // apps/cli depends on it as link:../../../dsh-ext, which does not resolve from the runtime build folder; packed here,
++  // the package-set overrides point it at this tarball like every other local package.
++  await execute(['--dir', join(REPOSITORY_ROOT, '..', 'dsh-ext'), 'pack', '--pack-destination', buildPaths.packedLandlock], buildEnv, REPOSITORY_ROOT)
+   await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
+   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
+   await execute(['run', 'prepare:packages'], targetEnv)
+@@ -489,7 +494,7 @@ export async function packageTarget(
    } else if (target.platform === 'darwin') {
      await execute([...desktopElectronBuilderArguments(target, true), '--config.mac.notarize=false'], electronBuilderEnv)
      await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
@@ -728,10 +758,10 @@ index 15a4610d98..095c6bb985 100644
    it('packages every preload entry point the shell loads', async () => {
 diff --git a/apps/desktop/tests/lawbench-stage.spec.ts b/apps/desktop/tests/lawbench-stage.spec.ts
 new file mode 100644
-index 0000000000..7b2a28f01b
+index 0000000000..ec87878106
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-stage.spec.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,37 @@
 +import { describe, expect, it } from 'vitest'
 +
 +// lawbench P-4（T20 步骤 3 第 4 条）：packaging\build.ps1 暂存的工作台载荷（python\、service\、skills\、engines\、tools\）
@@ -756,6 +786,17 @@ index 0000000000..7b2a28f01b
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
 +    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraFiles?: unknown }
 +    expect(config.extraFiles).toBeUndefined()
++  })
++  it('打出的包版本是工作台版本 0.1.0（安装包名、关于页；令 1756），不是 DSH 的', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraMetadata: { version?: string } }
++    expect(config.extraMetadata.version).toBe('0.1.0')
++  })
++  it('打出的包不带强制更新策略（不会去轮询远端策略地址，Spec 14.3 产品不外连；令 1756）', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraMetadata: Record<string, unknown> }
++    expect(config.extraMetadata.dshMandatoryUpdatePolicy).toBeUndefined()
++    expect(JSON.parse(JSON.stringify(config.extraMetadata))).not.toHaveProperty('dshMandatoryUpdatePolicy')
 +  })
 +})
 diff --git a/apps/desktop/tests/macos-signature.spec.ts b/apps/desktop/tests/macos-signature.spec.ts

@@ -17,3 +17,4 @@ Thumbs.db
 packaging/stage/
 packaging/wheelhouse/
 packaging/out/
+packaging/build-tools/

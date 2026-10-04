@@ -1,0 +1,53 @@
+T20 第一版候选包 · 构建记录（执行令 1756 第 2、3 条）· 2026-10-04 (+08:00)
+
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小 816432744 B（779 MB）
+  sha256 c0ce0ae465a8f024e698b48e117101d21e0e267848f96816a56a6cbc2b364240
+  未签名（无证书）；产品名"连越律师工作台"，版本 0.1.0，appId cn.lianyue.lawbench
+
+命令（仓库根，PowerShell）：
+  .\packaging\build.ps1 -Package -PnpmStore D:\.pnpm-store -BuildPython D:\lawbench-C\.venv\Scripts\python.exe `
+    -LibreOfficeDir 'C:\Program Files\LibreOffice' -PandocExe "$env:LOCALAPPDATA\Pandoc\pandoc.exe" `
+    -Tokenizer 'D:\lawbench-B\service\lawbench\llm\tokenizer.json'
+  （本机 PATH 上的 python 没有 Pillow，构建用 Python 指到线 C 的环境；只跑构建脚本，不进安装包）
+  package 一步因下面的两处 DSH 问题改过后单独重跑：.\packaging\build.ps1 -Step package -Package
+
+各步耗时（第一次全量，18:10 起）：
+  preflight 0 s · brand 2 s · dsh 122 s（13+ 补丁已在工作区、离线安装、pnpm run build、dsh-ext 打包）
+  python 66 s（DSH 同一份 Python 3.12.14，核哈希、离线装 [client.pip]）· tools 17 s（LibreOffice、pandoc、tokenizer.json）
+  smalltools 75 s（PyInstaller 6.22.3 打 splitter.exe、convert.exe，单文件夹、无控制台）· skills 0 s · engines 1 s
+  lock 2 s（versions.lock、THIRD-PARTY-LICENSES.md 重新生成后与已提交的一致，无改动）
+  package（最终一次）1021 s：DSH 打包流程（build:official、打包本机包、准备运行时、装运行时、运行时自检）＋ electron-builder NSIS
+
+载荷（exe 旁）：30696 个文件、1664 MB
+  contracts 0.3 MB · engines 91.4 MB · installer 0.0 MB · python 504.5 MB · service 19.6 MB · skills 0.2 MB
+  tools 1047.9 MB（LibreOffice 完整版、pandoc、两个小工具）
+安装包 779 MB（7z BCJ 压缩）
+
+网络（只在下面三处）：
+  1. 联网载荷一步（18:01–18:04），见 payload-fetch.txt。
+  2. DSH prepare:dsh 每次在临时目录新建 store，从 registry.npmjs.org 装内置运行时的第三方 npm 包（234 个，清单 runtime-npm-packages.txt）。
+     原令只许第 1 步联网；用户 2026-10-04 当场准许这一步联网（偏离，记交付说明）。
+  3. 第一次打包时 DSH prepare-runtime 的 @electron/get 去 GitHub 下载 Electron 44.0.0（缓存目录与本机 %LOCALAPPDATA%\electron\Cache 不同），
+     热点下卡在 0 字节约 30 分钟，用户在任务管理器结束。改法：build.ps1 起 127.0.0.1 的本机镜像（packaging\electron-mirror.mjs），
+     给本机缓存里的 zip（sha256 e61aa3bc…42f9）和由 electron 包自带 checksums.json 写出的 SHASUMS256.txt；最终一次打包镜像日志只有本机请求。
+  electron / electron-builder 缓存：最终一次打包前后都是 9 个文件，未新增。
+
+打包中改的 DSH（补丁链 144 个路径、0 处不一致）：
+  P-4：打出的包版本 = 工作台版本 0.1.0（lawbench-product.mjs LAWBENCH_VERSION → extraMetadata.version；DSH 自己的测试/验证版本号照旧）；
+       包里不带强制更新策略（不会轮询远端策略地址）；package-target 把 dsh-ext 打成 lawbench-dsh 包放进本机包集合
+       （apps\cli 对它的依赖是 link:../../../dsh-ext，从运行时临时目录解析不到，原来装出的运行时缺我方组合包，P-14 拒绝启动）。
+  P-12：DSH 打包时的运行时自检去掉 Office 转换与 Office Skill 两项（P-12 本来就不挂 DSH 的 Office 组合，这两项必然失败）；前端与插件路由两项保留。
+  apps\desktop\.env.windows（git 忽略）由 build.ps1 写：appId、production、强制更新地址 https://update.invalid（只过 DSH 的配置校验，不进包）。无密钥。
+
+冒烟（本机，装到临时目录后已卸载）：
+  "lawbench-0.1.0-win-x64-unsigned.exe /S /D=D:\lawbench-smoke-install"：退出 0，76 s。
+  布局：contracts\VERSION、python\python.exe、service\lawbench\__main__.py、service\lawbench\llm\tokenizer.json、
+        tools\libreoffice\program\soffice.exe、tools\pandoc\pandoc.exe、tools\splitter\splitter.exe、tools\convert\convert.exe、
+        engines\retainer、engines\invoice-ledger、installer\set-skills-acl.ps1、skills\ 都在；resources\app.asar 里有 lib\welcome\。
+  %ProgramData%\连越律师工作台\skills：没有建（安装器按当前用户装、不提权；由管理员每台机器提权跑一次 installer\set-skills-acl.ps1，T20 步骤 3 定的做法）。
+  启动一次：弹"首次配置"（截图 smoke-首次配置.png）；主窗口首页启动检查只报 1 项——"管理员 Skill 目录不存在"（同上，预期）；
+        分词文件、LibreOffice 两项已不再报。Key 一栏显示"已保存"，是本机凭据管理器里已有测试 Key（与开发实例共用），未改动。
+  发现：主窗口页面标题（document.title）仍是"DeepSeek Harness"，见交付说明遗留。
+  卸载：自带卸载程序 /S，退出 0，安装目录主程序已删。
+  capture-hosts、干净机断网安装：留给验收日（令第 5 条）。

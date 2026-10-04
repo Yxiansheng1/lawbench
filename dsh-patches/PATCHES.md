@@ -154,3 +154,14 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
 |---|---|---|---|
 | P-4 | `packages/client/ui-settings-general/src/client/CurrentVersionRow.tsx`：显示常量 `LAWBENCH_VERSION = '0.1.0'`（工作台版本），不再显示构建时的 `DSH_CLIENT_VERSION`（"0.1.7-rc.2"）；`DSH_CLIENT_VERSION` 本身不动（DSH 的更新检查等仍用它）。`tests/components.client.spec.tsx` 两例改为期望 0.1.0、没有构建元数据时也显示 | 律师在设置里看到的应是工作台版本 | `components.client.spec.tsx` 13 例通过；dsh-ext `brand.spec` 一例核对它与 `dsh-ext/shared/product.ts` 的 `PRODUCT_VERSION` 一致。同目录 `apply`、`shell` 两个测试文件在本机单独跑时加载不了（`cannot resolve plugin package @deepseek-ai/dsh-web-app`，测试环境问题，与本改动无关） |
+
+## T20 打第一版候选包时的补丁增补（令 `致A-ORCH-执行令-T20打包-20261004-1756.md`）
+
+只改 P-4、P-12。`electron-builder-config.mjs` P-11 也碰：P-4 那一节按"P-11 之后的状态 → 工作区"重新生成；其余文件只有本补丁碰，按工作区对固定提交的差分重写。改完从固定提交按本文件顺序打全部补丁，144 个路径与工作区逐字一致。
+
+| 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | `scripts/lawbench-product.mjs`（`.d.mts` 同）加 `LAWBENCH_VERSION = '0.1.0'`；`electron-builder-config.mjs` 普通构建的 `extraMetadata.version` 取它（DSH 自己的测试/验证构建版本号照旧） | 安装包名和关于页（`app.getVersion()`）要是工作台版本 0.1.0，不是 DSH 的 0.1.7-rc.2。运行时自检按 DSH 自己的 `package.json` 版本，不受影响 | `lawbench-stage.spec.ts` 加一例；dsh-ext `brand.spec` 核对与 `PRODUCT_VERSION` 一致；真包文件名 `lawbench-0.1.0-…` |
+| P-4 | `electron-builder-config.mjs`：强制更新策略只做配置校验，不写进包（`dshMandatoryUpdatePolicy` 为空） | 包里带了策略，装好的程序启动就去轮询远端策略地址（主进程 `fetch`，不经会话白名单），违反 Spec 14.3 | `lawbench-stage.spec.ts` 加一例（序列化后的 `extraMetadata` 没有这个字段） |
+| P-4 | `scripts/package-target.ts`：打本机包时把 `dsh-ext` 打成 `lawbench-dsh` 包，放进本机包集合 | `apps/cli` 对它的依赖是 `link:../../../dsh-ext`，从运行时临时目录解析成 `C:\Users\<用户名>\AppData\dsh-ext`，装出的运行时缺我方组合包，P-14 拒绝启动。放进集合后与其他本机包一样由覆盖项指到这个 tarball | 真打包：运行时自检通过、`desktop-runtime.json` 旁装上了 `lawbench-dsh`；装好的程序启动到首次配置 |
+| P-12 | `apps/desktop/scripts/smoke-runtime.ts`：DSH 打包时的运行时自检只留前端与插件路由两项，自检插件只注入 `webServer`；Office 转换、Office Skill 两项去掉 | P-12 不挂 DSH 的 Office 组合，自检插件要 `officeToPdf`、`skills` 就起不来，打包必然失败。我方文书转换走工作台服务自己的 LibreOffice | 真打包日志"frontend and plugin route passed (Office checks skipped: lawbench P-12)" |

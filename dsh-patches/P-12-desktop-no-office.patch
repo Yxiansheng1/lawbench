@@ -17,3 +17,46 @@ index 4a47a92ce8..e021ef69b8 100644
    installPlatformSessionPublisher(ctx, (session) => {
      if (process.connected) process.send?.({ type: 'platform-session', session })
    })
+diff --git a/apps/desktop/scripts/smoke-runtime.ts b/apps/desktop/scripts/smoke-runtime.ts
+index f15f10a928..151eeba4bf 100644
+--- a/apps/desktop/scripts/smoke-runtime.ts
++++ b/apps/desktop/scripts/smoke-runtime.ts
+@@ -90,7 +90,7 @@ export function apply(ctx) {
+   }
+ }
+ `)
+-    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeToPdf, skills]\n')
++    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer]\n') // lawbench P-12: the desktop Office bundle is not mounted, so the smoke plugin needs only webServer
+     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
+       dependencies: Record<string, string>
+       dsh: { profile: { bundles: string[] } }
+@@ -111,26 +111,9 @@ export function apply(ctx) {
+     }
+     const pluginResponse = await fetch(new URL('/desktop-smoke', ready.url), { headers: { cookie } })
+     if (await pluginResponse.text() !== 'plugin route ready') throw new Error('desktop runtime: plugin HTTP route failed')
+-    for (const { extension } of inputs) {
+-      const converted = await fetch(new URL(`/desktop-smoke-office/${extension}`, ready.url), {
+-        headers: { cookie }, signal: AbortSignal.timeout(120_000),
+-      })
+-      if (!converted.ok) throw new Error(`desktop runtime: ${extension} conversion failed: ${await converted.text()}`)
+-      const pdf = Buffer.from(await converted.arrayBuffer())
+-      if (!/^%PDF-\d\.\d/u.test(pdf.subarray(0, 8).toString())
+-        || !pdf.subarray(-1024).toString().trimEnd().endsWith('%%EOF')) {
+-        throw new Error(`desktop runtime: invalid ${extension} PDF output`)
+-      }
+-    }
+-    const cliResponse = await fetch(new URL('/desktop-smoke-office-cli', ready.url), {
+-      headers: { cookie }, signal: AbortSignal.timeout(120_000),
+-    })
+-    if (!cliResponse.ok) throw new Error(`desktop runtime: skill CLI failed: ${await cliResponse.text()}`)
+-    const cliResult = await cliResponse.json() as { capabilities: { runtime: { cliPath: string } }; pdf: string }
+-    if (!cliResult.capabilities.runtime.cliPath.endsWith('cli.js') || Buffer.from(cliResult.pdf, 'base64').subarray(0, 5).toString() !== '%PDF-') {
+-      throw new Error('desktop runtime: skill CLI did not return capabilities and a PDF')
+-    }
+-    console.log('desktop runtime: DOCX, XLSX, PPTX to PDF and skill CLI discovery passed')
++    // lawbench P-12: DSH's Office conversion and Office Skill are not mounted in lawbench (documents go through the
++    // workbench service's own LibreOffice), so their checks do not apply; the frontend and plugin route are checked above.
++    console.log('desktop runtime: frontend and plugin route passed (Office checks skipped: lawbench P-12)')
+   } finally {
+     clearTimeout(timer)
+     await host.stop()

@@ -7,9 +7,9 @@
     .\packaging\build.ps1 -List                # print the steps
     .\packaging\build.ps1 -Package             # also run the final 'package' step (electron-builder, NSIS)
 
-  Status 2026-10-02 (T20 preparation, order 2301): skeleton. Steps marked PENDING stop with a clear message;
-  they belong to T20 step 3 (LibreOffice, pandoc, tokenizer, payload layout) and step 6 (clean-machine install,
-  needs the owner). No installer is produced tonight.
+  Status 2026-10-04 (order 1756): first candidate installer. All steps run offline; the only online fetch
+  (DSH runtime cache check, electron-builder NSIS toolsets, PyInstaller wheels) is recorded in
+  docs\plan\evidence\T20\payload-fetch.txt. Step 6 (clean-machine offline install, capture-hosts) is the owner's.
 
   Keep this file ASCII-only: Windows PowerShell 5 reads BOM-less files in the ANSI code page.
   No keys, passwords or real case files are read or written here.
@@ -181,6 +181,42 @@ $Steps = [ordered]@{
     } else { $missing += 'tokenizer.json (-Tokenizer <file>)' }
     if ($missing) { Pending ('payload sources not given: ' + ($missing -join '; ')) }
   }
+  # The two small tools (tools\splitter, tools\convert) as windowed PyInstaller one-folder programs under
+  # $Stage\tools\<name>\. Built with a separate copy of the same Python (build-tools\python, not shipped) holding
+  # PyInstaller (packaging\build-tools\pyinstaller, fetched once, see evidence\T20\payload-fetch.txt) and the
+  # tools' pinned dependencies from the offline wheelhouse. Offline: --no-index only.
+  smalltools = {
+    $pyLock = Get-Content -Raw (Join-Path $Dsh 'scripts\primary-runtime\lock.json') | ConvertFrom-Json
+    $PyArchive = Join-Path $Dsh ('apps\desktop\.desktop-build\downloads\' + $pyLock.targets.'win-x64'.pythonSha256)
+    if (-not (Test-Path $PyArchive)) { throw "DSH Python archive not in the download cache: $PyArchive" }
+    $bt = Join-Path $PSScriptRoot 'build-tools'
+    $piDir = Join-Path $bt 'pyinstaller'
+    if (-not (Get-ChildItem -ErrorAction SilentlyContinue (Join-Path $piDir 'pyinstaller-*.whl'))) { throw "PyInstaller wheels missing in $piDir (see evidence\T20\payload-fetch.txt)" }
+    if (-not (Test-Path $Wheelhouse)) { throw "offline wheelhouse missing: $Wheelhouse" }
+    Reset-Dir (Join-Path $bt 'py')
+    Run (Join-Path $env:SystemRoot 'System32\tar.exe') @('-xzf', $PyArchive, '-C', (Join-Path $bt 'py'))
+    $bpy = Join-Path $bt 'py\python\python.exe'
+    $want = 'pillow', 'numpy', 'pypdfium2', 'pypdf', 'python-docx', 'openpyxl', 'lxml', 'typing-extensions', 'et-xmlfile'
+    $pins = foreach ($l in Get-Content (Join-Path $Root 'packaging\versions.lock')) {
+      if ($l -match '^([A-Za-z0-9_.\-]+)==' -and ($want -contains $Matches[1].ToLower().Replace('_', '-'))) { $l }
+    }
+    $pins = @($pins | Select-Object -Unique)
+    Run $bpy (@('-m', 'pip', 'install', '--no-index', '--no-warn-script-location', '--find-links', $Wheelhouse, '--find-links', $piDir, 'pyinstaller') + $pins)
+    $entry = Join-Path $bt 'entry'
+    Reset-Dir $entry
+    foreach ($t in 'splitter', 'convert') {
+      Set-Content -Encoding ascii (Join-Path $entry "$t-main.py") "from $t.app import main`r`nmain()`r`n"
+      Reset-Dir (Join-Path $Stage "tools\$t")
+      Remove-Item -Recurse -Force (Join-Path $Stage "tools\$t")
+      Run $bpy @('-m', 'PyInstaller', '--noconfirm', '--clean', '--windowed', '--onedir', '--name', $t,
+                 '--distpath', (Join-Path $Stage 'tools'), '--workpath', (Join-Path $bt "work-$t"), '--specpath', $entry,
+                 '--paths', (Join-Path $Root 'tools'), '--paths', (Join-Path $Root "tools\$t"),
+                 '--hidden-import', 'pypdfium2', '--collect-all', 'pypdfium2', '--collect-all', 'pypdfium2_raw',
+                 (Join-Path $entry "$t-main.py"))
+      if (-not (Test-Path (Join-Path $Stage "tools\$t\$t.exe"))) { throw "small tool not built: $t" }
+    }
+    Say 'small tools: tools\splitter\splitter.exe, tools\convert\convert.exe'
+  }
   skills = {
     Reset-Dir (Join-Path $Stage 'skills')
     Run $BuildPython @((Join-Path $Root 'skills\_scripts\install.py'), '--out', (Join-Path $Stage 'skills'))
@@ -206,18 +242,70 @@ $Steps = [ordered]@{
     $missingPayload = @()
     foreach ($need in 'python\python.exe', 'python\python312._pth', 'service\lawbench\__main__.py', 'service\lawbench\llm\tokenizer.json',
                       'contracts\VERSION', 'skills', 'engines', 'tools\libreoffice\program\soffice.exe', 'tools\pandoc\pandoc.exe',
-                      'installer\set-skills-acl.ps1') {
+                      'installer\set-skills-acl.ps1', 'tools\splitter\splitter.exe', 'tools\convert\convert.exe') {
       if (-not (Test-Path (Join-Path $Stage $need))) { Say "  MISSING: $need"; $missingPayload += $need }
     }
     Say 'admin Skill folder: run packaging\installer\set-skills-acl.ps1 elevated once per machine (the NSIS installer is per-user)'
     # A missing payload item fails the step, -DryRun included (T20 third review NOTE: it used to exit 0)
     if ($missingPayload) { throw ('payload incomplete: ' + ($missingPayload -join ', ')) }
     if ($DryRun) { return }
-    Pending 'real installer build: run after T20 step 3 payloads are final and with the owner present (step 6)'
-    $env:DSH_DESKTOP_APP_ID = $AppId
     $env:LAWBENCH_STAGE_DIR = $Stage
+    $env:CI = 'true'
+    $env:COREPACK_ENABLE_NETWORK = '0'
+    # DSH's packager reads its settings from apps\desktop\.env.windows (git-ignored; ambient DSH_DESKTOP_* values
+    # are dropped). No secrets: unsigned build, no update feed. The mandatory-update origin is only validated, never
+    # shipped (P-4 leaves the policy out of the package), so it points at the reserved .invalid domain.
+    $envFile = Join-Path $Dsh 'apps\desktop\.env.windows'
+    @(
+      '# Written by packaging\build.ps1 (lawbench). No secrets. Unsigned build without update feed.',
+      "DSH_DESKTOP_APP_ID=$AppId",
+      'DSH_DESKTOP_AUTO_UPDATE_ENV=production',
+      'DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://update.invalid',
+      'DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY=4'
+    ) | Set-Content -Encoding ascii $envFile
+    # Network: Electron and the NSIS/rcedit/7za/icons toolsets come from their local caches (fetched once, see
+    # evidence\T20\payload-fetch.txt); the cache listings before and after are logged to show nothing was added.
+    # DSH's prepare:dsh installs the bundled runtime's third-party npm packages from registry.npmjs.org into a fresh
+    # temporary store on every run (owner decision 2026-10-04: allowed for this step only; recorded in build.txt).
+    $caches = @((Join-Path $env:LOCALAPPDATA 'electron\Cache'), (Join-Path $env:LOCALAPPDATA 'electron-builder\Cache\downloads'))
+    $before = @($caches | ForEach-Object { Get-ChildItem -Recurse -File $_ -ErrorAction SilentlyContinue } | ForEach-Object { $_.FullName })
+    # Electron for DSH's prepare-runtime comes from a 127.0.0.1 mirror of the local cache (packaging\electron-mirror.mjs):
+    # the zip from %LOCALAPPDATA%\electron\Cache and a SHASUMS256.txt written from the official hashes shipped in the
+    # electron npm package (node_modules\electron\checksums.json); @electron/get checks the zip against it.
+    $eVer = (Get-Content -Raw (Join-Path $Dsh 'apps\desktop\node_modules\electron\package.json') | ConvertFrom-Json).version
+    $eZip = "electron-v$eVer-win32-x64.zip"
+    $cached = Get-ChildItem -Recurse -File (Join-Path $env:LOCALAPPDATA 'electron\Cache') -Filter $eZip -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cached) { throw "Electron $eVer not in %LOCALAPPDATA%\electron\Cache (see evidence\T20\payload-fetch.txt)" }
+    $mirror = Join-Path $PSScriptRoot 'build-tools\electron-mirror'
+    Reset-Dir (Join-Path $mirror "v$eVer")
+    Copy-Item -Force $cached.FullName (Join-Path $mirror "v$eVer\")
+    $sums = Join-Path $mirror "v$eVer\SHASUMS256.txt"
+    Run 'node' @('-e', "const c=require(process.argv[1]);require('fs').writeFileSync(process.argv[2],Object.entries(c).map(([f,h])=>h+' *'+f).join('\n')+'\n')",
+                 (Join-Path $Dsh 'apps\desktop\node_modules\electron\checksums.json'), $sums)
+    $want = (Select-String -Path $sums -SimpleMatch " *$eZip").Line.Split(' ')[0]
+    if ((Get-FileHash -Algorithm SHA256 $cached.FullName).Hash.ToLower() -ne $want) { throw "cached $eZip does not match the official checksum" }
+    $port = 18780
+    $mirrorLog = Join-Path $Out 'electron-mirror.log'
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    $server = Start-Process -PassThru -WindowStyle Hidden -FilePath 'node' -ArgumentList @((Join-Path $PSScriptRoot 'electron-mirror.mjs'), $mirror, $port) -RedirectStandardOutput $mirrorLog
+    $env:ELECTRON_MIRROR = "http://127.0.0.1:$port/"
     Push-Location (Join-Path $Dsh 'apps\desktop')
-    try { Run 'corepack' @('pnpm@11.7.0', 'run', 'package:win:x64:unsigned') } finally { Pop-Location }
+    try { Run 'corepack' @('pnpm@11.7.0', 'run', 'package:win:x64:unsigned') } finally {
+      Pop-Location
+      Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+      if (Test-Path $mirrorLog) { Get-Content $mirrorLog | ForEach-Object { Say $_ } }
+    }
+    $after = @($caches | ForEach-Object { Get-ChildItem -Recurse -File $_ -ErrorAction SilentlyContinue } | ForEach-Object { $_.FullName })
+    $added = @($after | Where-Object { $before -notcontains $_ })
+    Say ("electron / electron-builder caches: {0} files before, {1} after, added: {2}" -f $before.Count, $after.Count, $(if ($added) { $added -join ', ' } else { 'none' }))
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    # electron-builder writes to .desktop-build\targets\win-x64\unsigned-artifacts (desktop-build-paths.mjs)
+    $built = Get-ChildItem -Recurse -File (Join-Path $Dsh 'apps\desktop\.desktop-build\targets') -Filter 'lawbench-*-unsigned.exe' -ErrorAction SilentlyContinue |
+      Where-Object { $_.FullName -notmatch '\\win-unpacked\\' } | Sort-Object LastWriteTime | Select-Object -Last 1
+    if (-not $built) { throw 'installer not found under dsh\apps\desktop\.desktop-build\targets' }
+    Copy-Item -Force $built.FullName $Out
+    $outExe = Join-Path $Out $built.Name
+    Say ("installer: {0}  {1:N0} MB  sha256 {2}" -f $outExe, ((Get-Item $outExe).Length / 1MB), (Get-FileHash -Algorithm SHA256 $outExe).Hash.ToLower())
   }
 }
 
@@ -227,7 +315,9 @@ $Step = @($Step | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() 
 $todo = if ($Step.Count) { $Step } else { @($Steps.Keys) }
 foreach ($s in $todo) {
   if (-not $Steps.Contains($s)) { throw "unknown step: $s (use -List)" }
-  Say "== $s"
+  Say "== $s  (start $(Get-Date -Format 'HH:mm:ss'))"
+  $t0 = Get-Date
   & $Steps[$s]
+  Say ("== $s done in {0:N0} s" -f ((Get-Date) - $t0).TotalSeconds)
 }
 Say 'done'
