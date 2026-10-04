@@ -91,8 +91,8 @@ def render(units: list[Unit], unit: str) -> str:
         if unit in ("page", "para"):
             out.append(f"{u.header}\n{u.text}" if u.text else u.header)
         elif unit == "line":
-            mark = u.header or (f"【第{u.no}行】" if i == 0 else "")
-            out.append(f"{mark}\n{u.text}" if mark else u.text)
+            # 每行都标行号（T18 实测：只在块首标时模型要自己数行，常差一行，出处核对报 B 类）；存储文件仍按 formats.md 每 50 行一标
+            out.append(f"【第{u.no}行】\n{u.text}")
         else:
             if u.sheet != prev_sheet:
                 out.append(f"【表:{u.sheet}】\n{u.header}\n{u.text}" if u.header else f"【表:{u.sheet}】\n{u.text}")

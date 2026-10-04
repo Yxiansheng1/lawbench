@@ -328,3 +328,15 @@ def test_edit_list_revised_and_errors(env, tid):
     fail(env.tool(tid, "case_save_edit_list", {"name": "不存在", "edits": _edits(
         {"para": 1, "action": "delete", "find": "x"})}), "MATERIAL_NOT_FOUND")
     fail(env.tool(tid, "case_save_edit_list", {"name": "采购合同", "edits": []}), "INVALID_ARGUMENT")
+
+
+def test_line_material_every_line_numbered(tmp_path_factory):
+    """T18 后续（T10）：按行定位的材料，读取时每行都带【第N行】，模型不用自己数（只标块首时常差一行，出处核对报 B 类）。"""
+    src = tmp_path_factory.mktemp("lines-src") / "笔录.txt"
+    src.write_text("".join(f"第{i}句内容\n" for i in range(1, 8)), encoding="utf-8")
+    e = Env(tmp_path_factory.mktemp("t18lines"), {"笔录.txt": src})
+    try:
+        v = e.tool_ok(e.begin()["task_id"], "case_read_material", {"name": "笔录", "start": 3})
+        assert v["text"].splitlines() == [x for i in range(3, 8) for x in (f"【第{i}行】", f"第{i}句内容")]
+    finally:
+        e.close()
