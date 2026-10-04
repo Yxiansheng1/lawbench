@@ -175,3 +175,8 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | P-4 | `apps/desktop/scripts/prepare-dsh.ts`：有 `LAWBENCH_RUNTIME_LOCK` 时先把它放进运行时构建目录再 `pnpm install --lockfile-only`；解析后的锁拷到 `LAWBENCH_RUNTIME_LOCK_OUT` | 复核 P2-2：运行时的第三方 npm 包每次重挑版本、不可复现。先放锁，第三方版本照锁，只重解析每次重打的本机包；`build.ps1` 第一次打包时存锁入库，之后对账 | 明早重打包时核：第一次存锁，第二次对账一致 |
 | P-4 | `apps/desktop/scripts/installer.nsh`：加 `customInstall`，装完删掉 electron-builder 拷到 `%LOCALAPPDATA%\<更新缓存目录>\installer.exe` 的整包拷贝，目录空了就删 | 令 2033 第 3 条：干净机上出现 `@deepseek-aidsh-desktop-updater`，是安装程序为差分更新拷的 779 MB 整包；我方不带更新源，用不上 | `windows-directory-installer.spec.ts`（编译 installer.nsh）通过；装出效果明早重打包后核 |
 | P-4 | `packages/client/ui-layout/src/client/AppFrame.tsx`：窗口标题一律用本地化的产品名（`brand.localBuild`，中文为"连越律师工作台"），不用 `DSH_CLIENT_TITLE`；`tests/app-frame.client.spec.tsx` 随改 | 复核：DSH 官方构建把 `DSH_CLIENT_TITLE` 设成"DeepSeek Harness"，装好的程序窗口标题是它 | `app-frame.client.spec.tsx` 45 例通过 |
+
+| 补丁 | 本轮改了什么（令 2048、注记 2053） | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | `apps/desktop/scripts/installer.nsh` 开头把 `APP_FILENAME` 改为 `${PRODUCT_NAME}` | 产品名不是 ASCII 时 electron-builder 用包名当安装目录名（`@deepseek-aidsh-desktop`） | `windows-directory-installer`、`installer-packaging` 测试通过；装出的目录名明早重打包后核 |
+| P-4 | `installer.nsh` 的 `customInstall` 末尾：非静默安装时问一次是否创建律所统一 Skill 目录（默认否），选是就以管理员身份跑 `installer\set-skills-acl.ps1`；`apps/desktop/installer/strings.nsh` 加中英文问句 `LAWBENCH_SKILLS_DIR_ASK` | 注记 2053：DSH 完成页是 C++ 自绘，加勾选框要改 C++，改用一次询问 | 同上 |

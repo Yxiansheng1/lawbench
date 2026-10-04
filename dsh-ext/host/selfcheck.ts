@@ -7,8 +7,8 @@ export type CheckId = 'python' | 'tokenizer' | 'libreoffice' | 'pandoc' | 'admin
 
 export interface CheckItem {
   id: CheckId
-  /** ok：就位；warn：能用但有隐患或某项功能受影响；error：对应功能用不了。 */
-  level: 'ok' | 'warn' | 'error'
+  /** ok：就位；info：只是说明、不算问题（设置"关于"里显示）；warn：能用但有隐患或某项功能受影响；error：对应功能用不了。 */
+  level: 'ok' | 'info' | 'warn' | 'error'
   /** 给律师看的一句话（ok 时为空）。 */
   message: string
 }
@@ -46,7 +46,8 @@ export const TEXT = {
   tokenizer: '缺少分词文件（tokenizer.json），字数按估算计，长材料可能被截断得不准。请重新安装律师工作台。',
   libreoffice: '没找到 LibreOffice，旧版 Word、WPS 文件和表格公式的转换用不了。请重新安装律师工作台。',
   pandoc: '没找到 pandoc，导出 Word 用不了。请重新安装律师工作台。',
-  adminSkillsMissing: '管理员 Skill 目录不存在，律所统一下发的 Skill 不会加载。请联系技术支持检查安装。',
+  // 注记 2053：律所现在没有统一下发的 Skill，目录不在不算问题，只在设置"关于"里说明一行
+  adminSkillsMissing: '未配置律所统一 Skill 目录',
   adminSkillsWritable: '管理员 Skill 目录普通用户也能改，统一下发的 Skill 可能被改动。请联系技术支持设置为只读。',
   cachePath: (n: number) => `应用数据目录的路径太长（发票整理的缓存目录 ${n} 个字符，超过 ${CACHE_PATH_LIMIT}），发票整理可能失败。请联系技术支持开启系统长路径支持，或把应用数据放到较短的位置。`,
 } as const
@@ -69,7 +70,7 @@ export async function selfCheck(d: SelfCheckDeps): Promise<CheckItem[]> {
   out.push(found('pandoc', d.pandocCandidates) ? ok('pandoc') : { id: 'pandoc', level: 'warn', message: TEXT.pandoc })
 
   if (d.adminSkillsDir !== undefined) {
-    if (!d.isDir(d.adminSkillsDir)) out.push({ id: 'admin_skills', level: 'warn', message: TEXT.adminSkillsMissing })
+    if (!d.isDir(d.adminSkillsDir)) out.push({ id: 'admin_skills', level: 'info', message: TEXT.adminSkillsMissing })
     else out.push(d.canWrite(d.adminSkillsDir) ? { id: 'admin_skills', level: 'warn', message: TEXT.adminSkillsWritable } : ok('admin_skills'))
   }
 
@@ -81,4 +82,6 @@ export async function selfCheck(d: SelfCheckDeps): Promise<CheckItem[]> {
 }
 
 /** 只留有问题的项（界面据此提示）。 */
-export const problems = (items: readonly CheckItem[]): CheckItem[] => items.filter((i) => i.level !== 'ok')
+export const problems = (items: readonly CheckItem[]): CheckItem[] => items.filter((i) => i.level === 'warn' || i.level === 'error')
+/** 只是说明的项（level info），设置"关于"里显示。 */
+export const notes = (items: readonly CheckItem[]): CheckItem[] => items.filter((i) => i.level === 'info')

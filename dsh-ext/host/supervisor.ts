@@ -12,6 +12,8 @@ export interface ChildHandle {
   /** 进程结束时 resolve 退出码（被信号结束时可能是 null）。 */
   readonly exited: Promise<number | null>
   kill(): void
+  /** 进程的标准错误输出（收集到的尾部）；进程结束后读，用来说清楚为什么没起来（令 2048）。 */
+  errorText?(): string
 }
 
 export interface SupervisorDeps {
@@ -22,6 +24,8 @@ export interface SupervisorDeps {
   newToken(): string
   expectedVersion: string
   log(level: 'info' | 'warn' | 'error', event: string, meta?: Record<string, unknown>): void
+  /** 把服务标准错误里的路径换掉（安装目录换成"<安装目录>"）；不给就按原样取最后的异常行。 */
+  scrubPaths?(text: string): string
   now?(): number
   setTimer?(fn: () => void, ms: number): unknown
   clearTimer?(handle: unknown): void
@@ -35,7 +39,7 @@ export type SupervisorState = 'stopped' | 'starting' | 'running' | 'failed' | 'v
  * - exited：进程退出（还没就绪或运行中）；
  * - startup_timeout：30 秒内 /health 没通过。
  */
-export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null }
+export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null; error?: string }
 
 export const PROBE_INTERVAL_MS = 5_000
 export const MAX_MISSED_PROBES = 3
@@ -61,6 +65,7 @@ export class Supervisor {
   lastFailure: StartFailure | undefined
   /** 哪一代是因为 30 秒没就绪被 Host 杀掉的（它退出时原因仍记"没就绪"，不记成"退出"）。 */
   private timedOutGen = -1
+  private exitingChild: ChildHandle | undefined
 
   constructor(private readonly deps: SupervisorDeps) {}
 
@@ -127,7 +132,7 @@ export class Supervisor {
     const child = this.deps.spawn(this.port, this.token)
     this.child = child
     this.deps.log('info', 'service.spawn', { pid: child.pid, port: this.port })
-    void child.exited.then((code) => this.onExit(gen, code, portRetries))
+    void child.exited.then((code) => this.onExit(gen, code, portRetries, child))
 
     // 等首次 /health 通过再比对版本
     const deadline = this.now() + STARTUP_TIMEOUT_MS
@@ -178,14 +183,18 @@ export class Supervisor {
     this.schedulePing(gen)
   }
 
-  private onExit(gen: number, code: number | null, portRetries: number): void {
+  private onExit(gen: number, code: number | null, portRetries: number, child?: ChildHandle): void {
     if (gen !== this.generation) return
+    this.exitingChild = child
     this.clearTimer(this.timer)
     this.timer = undefined
     this.child = undefined
     this.deps.log(code === 0 || this.stopping ? 'info' : 'warn', 'service.exit', { code })
     if (this.stopping || this.state === 'version_mismatch') return
-    if (this.timedOutGen !== gen) this.lastFailure = { reason: 'exited', exitCode: code }
+    if (this.timedOutGen !== gen) {
+      const error = lastErrorLine(this.exitingChild?.errorText?.() ?? '', this.deps.scrubPaths)
+      this.lastFailure = { reason: 'exited', exitCode: code, ...(error ? { error } : {}) }
+    }
     if (code === EXIT_PORT_IN_USE && portRetries < MAX_PORT_RETRIES) {
       this.relaunch(portRetries + 1)
       return
@@ -218,9 +227,23 @@ export function launchErrorKind(e: unknown): string {
 export function startFailureText(f: StartFailure | undefined): string {
   if (!f) return '原因不明'
   if (f.reason === 'startup_timeout') return '30 秒内没有就绪'
-  if (f.reason === 'exited') return `服务启动后退出（代码 ${f.exitCode ?? '无'}）`
+  if (f.reason === 'exited') return f.error ?? `服务启动后退出（代码 ${f.exitCode ?? '无'}）`
   if (f.detail === 'PYTHON_MISSING') return '找不到内置的 Python'
   if (f.detail === 'EACCES' || f.detail === 'EPERM') return '程序被拒绝运行（可能被安全软件拦截）'
   if (f.detail === 'ENOENT') return '找不到要运行的程序'
   return `程序没能运行（${f.detail ?? '未知错误'}）`
+}
+
+/**
+ * 服务标准错误最后 20 行里最后一条"异常类名: 消息"（Python 回溯的末行，如
+ * "ImportError: DLL load failed while importing _sqlite3: 应用程序控制策略已阻止此文件。"）。
+ * 只要这一行，不要整段回溯；路径交 scrub 换掉，最长 300 字。找不到异常行返回 undefined。
+ */
+export function lastErrorLine(text: string, scrub: (t: string) => string = (t) => t): string | undefined {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-20)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = /^([A-Za-z_][\w.]*(?:Error|Exception|Exit|Interrupt)):\s*(.*)$/.exec(lines[i]!)
+    if (m) return scrub(`${m[1]}: ${m[2]}`).slice(0, 300)
+  }
+  return undefined
 }

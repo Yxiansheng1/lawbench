@@ -2,7 +2,8 @@
   Admin Skill directory: ordinary users may read, only SYSTEM and Administrators may write (T20 step 3 item 3;
   Spec 10.1 "%ProgramData%\<product>\skills, ordinary users read-only").
 
-  Usage (elevated, from the installer):  set-skills-acl.ps1 -Dir "$env:ProgramData\lawbench\skills"
+  Usage (elevated; the installer's optional finish-page item runs it the same way):  set-skills-acl.ps1
+        (same as  set-skills-acl.ps1 -Dir "$env:ProgramData\lawbench\skills")
   Simulation (not elevated, any test folder you own):  set-skills-acl.ps1 -Dir <temp folder> -Verify
 
   - Inheritance from %ProgramData% is removed (by default it lets every user create files and folders there).
@@ -14,7 +15,9 @@
   Keep this file ASCII-only (Windows PowerShell 5 reads BOM-less files in the ANSI code page).
 #>
 param(
-  [Parameter(Mandatory = $true)][string]$Dir,
+  # Default: the admin Skill folder the client reads (%ProgramData%\lawbench\skills; dsh-ext\host\install-layout.ts
+  # ADMIN_DIR_NAME). Run without arguments in most cases (note 2053: users did not know what to pass).
+  [string]$Dir = (Join-Path $env:ProgramData 'lawbench\skills'),
   [switch]$Verify
 )
 $ErrorActionPreference = 'Stop'

@@ -25,7 +25,7 @@ index c885816c75..db024718b2 100644
      report += L"Result: " + DescribeResult(code) + L"\r\n";
      report += L"Archive: " + archive + L"\r\n";
 diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
-index 174ebfa28b..2795bc053b 100644
+index 174ebfa28b..c1b7d72188 100644
 --- a/apps/desktop/installer/strings.nsh
 +++ b/apps/desktop/installer/strings.nsh
 @@ -19,20 +19,20 @@ LangString INSTALLER_BROWSE ${LANG_ENGLISH} "Browse"
@@ -55,6 +55,13 @@ index 174ebfa28b..2795bc053b 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
+@@ -55,3 +55,6 @@ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_ENGLISH} "The full report could not
+ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_SIMPCHINESE} "无法保存完整错误报告，请使用“复制错误信息”保留。"
+ LangString INSTALLER_EXTRACT_COPIED ${LANG_ENGLISH} "Error details were copied to the clipboard."
+ LangString INSTALLER_EXTRACT_COPIED ${LANG_SIMPCHINESE} "错误信息已复制到剪贴板。"
++; lawbench P-4 (note 2053): optional admin Skill folder after installing (default No; skipped with /S)
++LangString LAWBENCH_SKILLS_DIR_ASK ${LANG_ENGLISH} "Create the firm's shared Skill folder now? This needs administrator rights. If the firm does not hand out shared Skills yet, choose No."
++LangString LAWBENCH_SKILLS_DIR_ASK ${LANG_SIMPCHINESE} "是否创建律所统一 Skill 目录？需要管理员权限。律所还没有统一下发 Skill 时不用创建，选“否”即可。"
 diff --git a/apps/desktop/renderer/update-dialog.css b/apps/desktop/renderer/update-dialog.css
 index 98183989a5..9db70a3695 100644
 --- a/apps/desktop/renderer/update-dialog.css
@@ -1357,10 +1364,25 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..015102a14d 100644
+index 0f4d859e78..365445bc57 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
-@@ -91,6 +91,19 @@ ManifestDPIAware true
+@@ -3,6 +3,14 @@
+ !define INSTALLER_SOURCE_DIR "${__FILEDIR__}\..\installer"
+ !define /ifndef INSTALLER_BUILD_DIR "${__FILEDIR__}\..\.desktop-build\targets\win-x64\installer-ui"
+ 
++; lawbench P-4 (order 2048): the install folder (%LOCALAPPDATA%\Programs\<name>) is the product name. electron-builder
++; only uses the product name when it is ASCII and otherwise falls back to the package name ("@deepseek-aidsh-desktop").
++; This file is included ahead of multiUser.nsh and the install pages, so redefining it here covers all of them.
++!ifdef APP_FILENAME
++  !undef APP_FILENAME
++!endif
++!define APP_FILENAME "${PRODUCT_NAME}"
++
+ ManifestDPIAware true
+ !ifndef BUILD_UNINSTALLER
+   !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
+@@ -91,6 +99,26 @@ ManifestDPIAware true
    Call un.CleanData
  !macroend
  
@@ -1375,6 +1397,13 @@ index 0f4d859e78..015102a14d 100644
 +    RMDir "$0"
 +    Pop $0
 +  !endif
++  ; lawbench P-4 (note 2053): optionally create the firm's shared Skill folder (%ProgramData%\lawbench\skills, ordinary
++  ; users read-only). Default No; silent installs (/S) never ask. The script's default -Dir is that folder.
++  ${IfNot} ${Silent}
++    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "$(LAWBENCH_SKILLS_DIR_ASK)" IDNO lawbench_skills_skip
++    ExecShell "runas" "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" '-NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\set-skills-acl.ps1"' SW_HIDE
++    lawbench_skills_skip:
++  ${EndIf}
 +!macroend
 +
  !macro customPageAfterChangeDir

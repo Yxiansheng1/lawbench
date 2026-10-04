@@ -2,7 +2,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CACHE_PATH_LIMIT, problems, selfCheck, TEXT, type SelfCheckDeps } from '../host/selfcheck.ts'
+import { CACHE_PATH_LIMIT, notes, problems, selfCheck, TEXT, type SelfCheckDeps } from '../host/selfcheck.ts'
 import { nodeSelfCheckDeps } from '../host/selfcheck-node.ts'
 import { LawbenchRemote } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
@@ -48,8 +48,10 @@ describe('启动自检', () => {
     expect(await level({ isFile: (p) => p === PY, which: (n) => `C:\\bin\\${n}.exe` })).toMatchObject({ libreoffice: 'ok', pandoc: 'ok' })
   })
 
-  it('管理员 Skill 目录：不存在 warn；普通用户能写 warn（应只读）；只读 ok；没配不查', async () => {
-    expect((await level({ isDir: () => false })).admin_skills).toBe('warn')
+  it('管理员 Skill 目录：不存在只作说明 info、不算问题（注记 2053）；普通用户能写 warn（应只读）；只读 ok；没配不查', async () => {
+    expect((await level({ isDir: () => false })).admin_skills).toBe('info')
+    expect(problems([{ id: 'admin_skills', level: 'info', message: TEXT.adminSkillsMissing }])).toEqual([])
+    expect(notes([{ id: 'admin_skills', level: 'info', message: TEXT.adminSkillsMissing }]).map((i) => i.message)).toEqual(['未配置律所统一 Skill 目录'])
     expect((await level({ canWrite: () => true })).admin_skills).toBe('warn')
     expect((await level({})).admin_skills).toBe('ok')
     expect(await level({ adminSkillsDir: undefined })).not.toHaveProperty('admin_skills')
@@ -70,12 +72,12 @@ describe('启动自检', () => {
   it('Host：只回有问题的项，只跑一次；自检本身出错不影响（回空）', async () => {
     let runs = 0
     const up = { endpoint: () => undefined, state: 'running' } as unknown as Supervisor
-    const r = new LawbenchRemote(up, tmpdir(), () => undefined, [], () => {}, undefined, undefined, async () => { runs++; return [{ id: 'pandoc', level: 'warn', message: TEXT.pandoc }, { id: 'python', level: 'ok', message: '' }] })
-    expect(await r.selfCheck()).toEqual({ ok: true, value: { items: [{ id: 'pandoc', level: 'warn', message: TEXT.pandoc }] } })
+    const r = new LawbenchRemote(up, tmpdir(), () => undefined, [], () => {}, undefined, undefined, async () => { runs++; return [{ id: 'pandoc', level: 'warn', message: TEXT.pandoc }, { id: 'python', level: 'ok', message: '' }, { id: 'admin_skills', level: 'info', message: TEXT.adminSkillsMissing }] })
+    expect(await r.selfCheck()).toEqual({ ok: true, value: { items: [{ id: 'pandoc', level: 'warn', message: TEXT.pandoc }], notes: [{ id: 'admin_skills', level: 'info', message: TEXT.adminSkillsMissing }] } })
     await r.selfCheck()
     expect(runs).toBe(1)
     const bad = new LawbenchRemote(up, tmpdir(), () => undefined, [], () => {}, undefined, undefined, async () => { throw new Error('x') })
-    expect(await bad.selfCheck()).toEqual({ ok: true, value: { items: [] } })
+    expect(await bad.selfCheck()).toEqual({ ok: true, value: { items: [], notes: [] } })
   })
 
   it('真实依赖：能写的临时目录判为能写、不留文件；长路径设置读得到（Windows）', async () => {

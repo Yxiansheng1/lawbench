@@ -37,7 +37,15 @@ param(
   # 'dsh' step: pnpm content-addressable store for the offline install (the folder that holds v11\). Default: the
   # storeDir recorded in dsh\node_modules\.modules.yaml by an earlier install. Without it pnpm falls back to the
   # user's default store, which may lack packages (T17 round 9 finding), so a clean clone must pass this.
-  [string]$PnpmStore = ''
+  [string]$PnpmStore = '',
+  # 'python' step (order 2048): the official python.org build as the NuGet package "python" (nuget.org, PSF-signed
+  # binaries) and its sha256. Without it the unsigned python-build-standalone interpreter is used, with a warning.
+  [string]$PythonPackage = '',
+  [string]$PythonPackageSha256 = '',
+  # 'sign' step: code-signing certificate thumbprint in the current user's store (owner N73). Without it nothing is
+  # signed and build.txt records "unsigned".
+  [string]$SignCert = '',
+  [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -120,16 +128,35 @@ $Steps = [ordered]@{
     Run 'node' @((Join-Path $Root 'dsh-ext\scripts\build.mjs'))
   }
   python = {
-    $pyLock = Get-Content -Raw (Join-Path $Dsh 'scripts\primary-runtime\lock.json') | ConvertFrom-Json
-    $PySha = $pyLock.targets.'win-x64'.pythonSha256
-    $PyArchive = Join-Path $Dsh ('apps\desktop\.desktop-build\downloads\' + $PySha)
-    if (-not (Test-Path $PyArchive)) { throw "DSH Python archive not in the download cache: $PyArchive (run the dsh step first)" }
-    $hash = (Get-FileHash -Algorithm SHA256 $PyArchive).Hash.ToLower()
-    if ($hash -ne $PySha) { throw "DSH Python archive hash mismatch: $hash" }
     if (Test-Path (Join-Path $Stage 'python')) { Remove-Item -Recurse -Force (Join-Path $Stage 'python') }
     New-Item -ItemType Directory -Force $Stage | Out-Null
-    # Windows' own bsdtar (Git's GNU tar on PATH misreads D:\ paths); unpacks to stage\python
-    Run (Join-Path $env:SystemRoot 'System32\tar.exe') @('-xzf', $PyArchive, '-C', $Stage)
+    if ($PythonPackage) {
+      # Official python.org build (order 2048): Smart App Control / App Control blocks unsigned .pyd/.dll, and the
+      # python-build-standalone interpreter is unsigned. The NuGet package "python" from nuget.org is the PSF build
+      # with PSF-signed binaries (python.exe, python312.dll, DLLs\*.pyd); its tools\ folder is a full interpreter.
+      if (-not $PythonPackageSha256) { throw '-PythonPackage needs -PythonPackageSha256 (recorded in evidence\T20\payload-fetch.txt)' }
+      $hash = (Get-FileHash -Algorithm SHA256 $PythonPackage).Hash.ToLower()
+      if ($hash -ne $PythonPackageSha256.ToLower()) { throw "python package hash mismatch: $hash" }
+      $unz = Join-Path $PSScriptRoot 'build-tools\python-nupkg'
+      Reset-Dir $unz
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      [IO.Compression.ZipFile]::ExtractToDirectory($PythonPackage, $unz)
+      Move-Item (Join-Path $unz 'tools') (Join-Path $Stage 'python')
+      $py = Join-Path $Stage 'python\python.exe'
+      Run $py @('-I', '-m', 'ensurepip', '--default-pip')  # bundled pip wheel, offline
+      Say "python: official package $(Split-Path -Leaf $PythonPackage) (sha256 $hash)"
+    } else {
+      # Fallback: the python-build-standalone archive DSH bundles (UNSIGNED: blocked where Smart App Control is on)
+      $pyLock = Get-Content -Raw (Join-Path $Dsh 'scripts\primary-runtime\lock.json') | ConvertFrom-Json
+      $PySha = $pyLock.targets.'win-x64'.pythonSha256
+      $PyArchive = Join-Path $Dsh ('apps\desktop\.desktop-build\downloads\' + $PySha)
+      if (-not (Test-Path $PyArchive)) { throw "DSH Python archive not in the download cache: $PyArchive (run the dsh step first)" }
+      $hash = (Get-FileHash -Algorithm SHA256 $PyArchive).Hash.ToLower()
+      if ($hash -ne $PySha) { throw "DSH Python archive hash mismatch: $hash" }
+      # Windows' own bsdtar (Git's GNU tar on PATH misreads D:\ paths); unpacks to stage\python
+      Run (Join-Path $env:SystemRoot 'System32\tar.exe') @('-xzf', $PyArchive, '-C', $Stage)
+      Say 'python: WARNING unsigned python-build-standalone interpreter (pass -PythonPackage with the official build)'
+    }
     $py = Join-Path $Stage 'python\python.exe'
     $site = Join-Path $Stage 'python\Lib\site-packages'
     $req = Join-Path $Stage 'requirements.txt'
@@ -244,6 +271,43 @@ $Steps = [ordered]@{
     Run $BuildPython @((Join-Path $Root 'packaging\gen_lock.py'), '--site', (Join-Path $Stage 'python\Lib\site-packages'), '--stage', $Stage)
     # The license table ships at the install root (T20 review P2-1)
     Copy-Item -Force (Join-Path $Root 'packaging\THIRD-PARTY-LICENSES.md') (Join-Path $Stage 'THIRD-PARTY-LICENSES.md')
+  }
+  # Authenticode status of every binary we ship from stage\ (order 2048): Smart App Control / App Control for Business
+  # refuses unsigned .exe/.dll/.pyd. Writes docs\plan\evidence\T20\python-signatures.txt: the interpreter files one by
+  # one, and the unsigned files grouped by package (the "to be signed" list until the code-signing certificate, N73).
+  signcheck = {
+    $report = Join-Path $Root 'docs\plan\evidence\T20\python-signatures.txt'
+    $bins = Get-ChildItem -Recurse -File $Stage -Include '*.exe', '*.dll', '*.pyd' | Where-Object { $_.FullName -notmatch '\\tools\\libreoffice\\' }
+    $rows = foreach ($b in $bins) {
+      $sig = Get-AuthenticodeSignature $b.FullName
+      $signer = if ($sig.SignerCertificate) { ($sig.SignerCertificate.Subject -split ',')[0] -replace '^CN=', '' } else { '' }
+      [pscustomobject]@{ Rel = $b.FullName.Substring($Stage.Length + 1); Status = "$($sig.Status)"; Signer = $signer }
+    }
+    $interp = @($rows | Where-Object { $_.Rel -match '^python\\[^\\]+$' -or $_.Rel -match '^python\\DLLs\\' })
+    $unsigned = @($rows | Where-Object { $_.Status -ne 'Valid' })
+    $group = { param($r) if ($r.Rel -match '^python\\Lib\\site-packages\\([^\\]+)') { 'python site-packages\' + $Matches[1] } elseif ($r.Rel -match '^([^\\]+\\[^\\]+)') { $Matches[1] } else { $r.Rel } }
+    $lines = @("T20 Authenticode signatures of shipped binaries (packaging\build.ps1 signcheck, $(Get-Date -Format 'yyyy-MM-dd HH:mm'))",
+      "stage: $($rows.Count) binaries (.exe/.dll/.pyd, LibreOffice excluded: its own release is signed by The Document Foundation), $($unsigned.Count) not validly signed", '',
+      '== Python interpreter (python\*.exe, python\*.dll, python\DLLs\*)')
+    $lines += $interp | Sort-Object Rel | ForEach-Object { '  {0,-12} {1,-40} {2}' -f $_.Status, $_.Signer, $_.Rel }
+    $lines += '', '== Not validly signed, by package (to be signed with our certificate, N73)'
+    $lines += $unsigned | Group-Object { & $group $_ } | Sort-Object Name | ForEach-Object { '  {0,-48} {1,4} files: {2}' -f $_.Name, $_.Count, (($_.Group | ForEach-Object { Split-Path -Leaf $_.Rel } | Select-Object -First 6) -join ', ') + $(if ($_.Count -gt 6) { ', ...' } else { '' }) }
+    $lines | Set-Content -Encoding utf8 $report
+    Say ("signcheck: {0} binaries, {1} not validly signed -> {2}" -f $rows.Count, $unsigned.Count, $report)
+  }
+  # Code signing (order 2048, owner N73): with -SignCert, sign our unsigned binaries in stage\ before packaging (the
+  # installer itself is signed after the package step). Without a certificate nothing is signed.
+  sign = {
+    if (-not $SignCert) { Say 'sign: no -SignCert, binaries stay UNSIGNED (recorded in build.txt; Smart App Control will block them)'; return }
+    $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+    if (-not $signtool) { $signtool = Get-ChildItem -Recurse -File "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -Last 1 -ExpandProperty FullName }
+    if (-not $signtool) { throw 'signtool.exe not found (Windows SDK)' }
+    $todo = @(Get-ChildItem -Recurse -File $Stage -Include '*.exe', '*.dll', '*.pyd' | Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne 'Valid' })
+    foreach ($chunk in 0..([math]::Ceiling($todo.Count / 50) - 1)) {
+      $files = @($todo | Select-Object -Skip ($chunk * 50) -First 50 | ForEach-Object { $_.FullName })
+      if ($files) { Run $signtool (@('sign', '/sha1', $SignCert, '/fd', 'sha256', '/tr', $TimestampUrl, '/td', 'sha256') + $files) }
+    }
+    Say "sign: signed $($todo.Count) binaries with certificate $SignCert"
   }
   package = {
     if (-not $Package -and -not $DryRun) { Say 'package skipped (pass -Package, or -DryRun to list the payload)'; return }

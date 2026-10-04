@@ -23,7 +23,7 @@ import { readArchivePlan } from './archive-plan.ts'
 import { readTaskAnswer } from './task-answer.ts'
 import { ensureDailyCase, type DailyResult } from './daily-case.ts'
 import { pathState, type PathStateResult } from './path-state.ts'
-import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
+import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
 
@@ -51,7 +51,7 @@ export interface Config {
 }
 
 type Ctx = {
-  subprocess: { spawn(spec: unknown): { done: Promise<{ exitCode: number | null }>; terminate(): void } }
+  subprocess: { spawn(spec: unknown): { done: Promise<{ exitCode: number | null }>; terminate(): void; collected?: { stderr?: { readFrom(fromByte: number): { text: string } } } } }
   provide(name: string, value: unknown): () => void
   get(name: string): unknown
   effect(fn: () => () => void, label?: string): void
@@ -332,13 +332,14 @@ export class LawbenchRemote {
 
   private selfCheckResult: Promise<CheckItem[]> | undefined
 
-  /** 启动自检里有问题的项（界面首页提示；只跑一次，结果缓存到本次运行结束）。 */
-  async selfCheck(): Promise<{ ok: true; value: { items: CheckItem[] } }> {
+  /** 启动自检：items 是有问题的项（首页提示），notes 是只作说明的项（设置"关于"）；只跑一次，结果缓存到本次运行结束。 */
+  async selfCheck(): Promise<{ ok: true; value: { items: CheckItem[]; notes: CheckItem[] } }> {
     this.selfCheckResult ??= this.checker().then((items) => {
       this.log('info', 'selfcheck.done', Object.fromEntries(items.map((i) => [i.id, i.level])))
-      return problems(items)
+      return items
     }, () => [])
-    return { ok: true, value: { items: await this.selfCheckResult } }
+    const all = await this.selfCheckResult
+    return { ok: true, value: { items: problems(all), notes: notes(all) } }
   }
 
   /** 首次配置状态（执行令 Q3：settings.json 不存在，或凭据管理器没有 Key，就算没配置过）。Host 自己看文件，不经服务。 */
@@ -470,9 +471,16 @@ export class LawbenchRemote {
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
 
+/** 去掉文字里的本机路径：安装目录换成"<安装目录>"，其余绝对路径只留文件名（日志只记元数据，令 2048）。 */
+export function scrubPaths(text: string, installDir: string | undefined): string {
+  let t = text
+  if (installDir) t = t.split(installDir).join('<安装目录>').split(installDir.toLowerCase()).join('<安装目录>')
+  return t.replace(/[A-Za-z]:[\\/][^\s'"<>|:]*/g, (p) => basename(p))
+}
+
 /** 服务不可用时给律师的话：重启也救不回来（failed）时说出原因、请联系技术支持；还在启动 / 重启中照旧"请稍后重试"（令 2033）。 */
 export function unavailableText(s: Pick<Supervisor, 'state' | 'lastFailure'>): string {
-  return s.state === 'failed' ? `本机服务未能启动：${startFailureText(s.lastFailure)}，请联系技术支持` : UNAVAILABLE
+  return s.state === 'failed' ? `本机服务未能启动：${startFailureText(s.lastFailure).replace(/[。.]+$/, '')}，请联系技术支持` : UNAVAILABLE
 }
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 
@@ -547,10 +555,15 @@ export function apply(ctx: Ctx, given: Config): void {
           LB_FORWARD_PORT: String(config.forwardPort ?? 18765),
         },
       })
-      return { pid: undefined, exited: handle.done.then((d) => d.exitCode, () => null), kill: () => handle.terminate() }
+      return {
+        pid: undefined, exited: handle.done.then((d) => d.exitCode, () => null), kill: () => handle.terminate(),
+        // 收集到的标准错误尾部：只用来取最后一条异常行（令 2048），不进日志全文
+        errorText: () => { try { return handle.collected?.stderr?.readFrom(0).text ?? '' } catch { return '' } },
+      }
     },
     probe: probeHealth,
     pickPort: () => freePort(config.portRange),
+    scrubPaths: (t) => scrubPaths(t, installDir),
     newToken: () => randomBytes(32).toString('hex'),
     expectedVersion: CONTRACT_VERSION,
     log,
