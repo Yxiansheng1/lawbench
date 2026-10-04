@@ -1,44 +1,20 @@
-// 侧栏"案件"一块点开的页面（原首页，PRD 6.3、7.9；Spec U-11、U-12）：最近案件、新建 / 打开 / 切换案件；"发票整理"在这里换成发票页（U-13）。
+// 首页（PRD 6.3、7.9；Spec U-11、U-12；令 1426 升级为大首页，见 home-page.tsx）："发票整理"在这里换成发票页（U-13）。
 // 用户 10-04 改版（执行令 1156 第 3 条）：两层胶囊和分流提示挪到输入框上方（dock.tsx），胶囊管理挪到设置页（CapsuleSettings）。
 import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, type Capsules } from './capsules.ts'
-import { loadRecent, openCase, startImport } from './cases.ts'
-import { Badge, Button, C, CONNECTING_TEXT, Empty, getNav, ErrorLine, Loading, S, useLoad, useRetryLoad } from './kit.tsx'
-import { app, call, confirm, lb, MODE_AGENT, notice, type CaseRef, type SkillInfo } from './state.ts'
+import { Badge, Button, C, Empty, ErrorLine, Loading, S, useLoad } from './kit.tsx'
+import { call, confirm, lb, MODE_AGENT, notice, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { errorText, lawyerMessage } from './format.ts'
 import { forgetDockCache } from './dock.tsx'
 import { homeView } from './invoice-logic.ts'
 import { InvoicePage } from './invoice.tsx'
+import { HomeLanding } from './home-page.tsx'
 
 export function HomePage() {
   const view = useStore(homeView, (v) => v)
-  return view === 'invoice' ? <InvoicePage /> : <CasesPage />
-}
-
-/**
- * 侧栏"案件"一块点开的页面（执行令 1156 第 3 条：取消单独首页，胶囊放到输入框上方、胶囊管理放到设置页）：
- * 启动检查提示、最近案件、新建 / 打开 / 切换案件。服务还没就绪时每 2 秒自动重读、最多 30 秒，之后给"重试"（T14 第二次实跑派修 1）。
- */
-function CasesPage() {
-  const [recent, reload] = useRetryLoad(async () => {
-    const r = await loadRecent()
-    return Array.isArray(r) ? { ok: true as const, value: r } : { ok: false as const, error: r }
-  }, [])
-  return (
-    <div style={S.page}>
-      <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 22 }}>
-        <SelfCheckBanner />
-        {recent.state === 'loading' ? <Empty>读取中…</Empty> : null}
-        {recent.state === 'connecting' ? <Empty>{CONNECTING_TEXT}</Empty> : null}
-        {recent.state === 'fail' ? (
-          <div style={S.row}><ErrorLine error={recent.error} /><Button size="sm" variant="outline" onClick={() => void reload()}>重试</Button></div>
-        ) : null}
-        {recent.state === 'ok' ? <RecentCases /> : null}
-      </div>
-    </div>
-  )
+  return view === 'invoice' ? <InvoicePage /> : <HomeLanding banner={<SelfCheckBanner />} />
 }
 
 /** 设置页"胶囊"一节（U-11 保留在设置页）：点"管理胶囊"进入排序、改名、隐藏、新增；保存后输入区重读。 */
@@ -59,48 +35,6 @@ export function CapsuleSettings() {
   }
   return (
     <Loading data={caps}>{(c) => <CapsuleManager initial={c} skills={skillList} onDone={() => { setManaging(false); forgetDockCache(); void reload() }} />}</Loading>
-  )
-}
-
-/** 最近案件（首页读成功之后才显示）；案件卡片接受拖入文件和文件夹（U-12）。 */
-function RecentCases() {
-  const cases = useStore(app, (s) => s.cases) // 首页读成功时 loadRecent 已写进界面状态
-  const [over, setOver] = useState<string | null>(null)
-  const drop = (c: CaseRef) => (e: DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); setOver(null) // 不冒泡到 DSH 的 document 拖入监听（否则会被当成聊天附件）
-    // 文件夹不在原处的卡片：拦下默认行为（Electron 里可能跳到 file://），不导入
-    if (c.exists === false) return
-    const paths = [...e.dataTransfer.files].map((f) => getNav().pathFor(f))
-    startImport(c, paths, '案件卡片')
-  }
-  return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={S.between}>
-        <h3 style={S.h3}>最近案件</h3>
-        <div style={S.row}>
-          <Button variant="outline" size="sm" onClick={() => void openCase(null, null)}>打开案件…</Button>
-          <Button variant="outline" size="sm" onClick={() => void openCase(null, 'civil')}>新建案件（民商事目录）…</Button>
-          <Button variant="outline" size="sm" onClick={() => void openCase(null, 'criminal')}>新建案件（刑事目录）…</Button>
-        </div>
-      </div>
-      {cases.length === 0 ? <Empty>还没有案件。打开或新建一个案件文件夹开始。</Empty> : null}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
-        {cases.map((c) => (
-          <div key={c.case_id} data-lawbench-drop='' onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (c.exists === false) e.dataTransfer.dropEffect = 'none'; else setOver(c.case_id) }} onDragLeave={(e) => { e.stopPropagation(); setOver(null) }} onDrop={drop(c)}
-            style={{ ...S.card, borderColor: over === c.case_id ? C.brand : C.border, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={S.between}>
-              <span style={{ fontWeight: 600 }}>{c.name}</span>
-              {c.exists === false ? <Badge tone="warn">文件夹不在原处</Badge> : null}
-            </div>
-            <div style={{ ...S.sub, wordBreak: 'break-all' }}>{c.root}</div>
-            <div style={S.between}>
-              <span style={{ ...S.sub, color: C.faint }}>{over === c.case_id ? '松开即导入到这个案件' : '可把文件拖到这里导入'}</span>
-              <Button size="sm" variant="ghost" disabled={c.exists === false} onClick={() => void openCase(c.root, null)}>进入</Button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
   )
 }
 

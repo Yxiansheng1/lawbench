@@ -6,7 +6,8 @@ import type { ApiResult } from '../host/index.ts'
 import { createStore } from './store.ts'
 import { lawyerMessage } from './format.ts'
 
-export interface CaseRef { case_id: string; name: string; root: string; exists?: boolean }
+/** last_opened：最近案件列表给的上次打开时间（首页卡片显示，令 1426）。 */
+export interface CaseRef { case_id: string; name: string; root: string; exists?: boolean; last_opened?: string }
 
 export interface Params { thinking: '关闭' | '低' | '中' | '高'; window: '32K' | '64K' | '128K'; max_tokens: number; temperature?: number }
 
@@ -50,9 +51,11 @@ export interface AppState {
   dailyRoot: string | null
   /** 日常事务建不了、且不会自己好时的说明（令 1347 一并做 P3-1，侧栏显示一行）；没有为 null。 */
   dailyError: { code: string; message: string } | null
+  /** 设置里的本机律师姓名（首页右上角显示，令 1426）；没设为 null。 */
+  lawyerName: string | null
 }
 
-export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null })
+export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null, lawyerName: null })
 
 /** 在某会话的输入区上方显示某任务的结果（T14 派修 2）。 */
 export function showTaskAnswer(sessionId: string, taskId: string): void {

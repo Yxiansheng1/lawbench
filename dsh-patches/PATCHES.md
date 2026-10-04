@@ -20,6 +20,7 @@ git -C dsh apply ..\dsh-patches\P-11-retainer-window.patch
 git -C dsh apply ..\dsh-patches\P-4-brand.patch
 git -C dsh apply ..\dsh-patches\P-19-awaiting-user-answer.patch
 git -C dsh apply ..\dsh-patches\P-20-no-workspace-word.patch
+git -C dsh apply ..\dsh-patches\P-21-home-above-new-session.patch
 # P-4 的图片不放进补丁（与 packaging\brand\desktop\ 重复，且二进制补丁约 2MB）：由 packaging\brand\make_brand.py 从 logo\ 原件生成，打补丁后拷进去
 Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 ```
@@ -139,3 +140,9 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
 |---|---|---|---|---|
 | P-20 | 中文词条：`ui-workspace`、`ui-conversation`、`ui-permission-presets`、`ui-sidebar-files`、`ui-reference`、`ui-open-in-app`、`ui-settings-general`、`ui-sidebar-terminal` 的 `locales.ts`，`locale/src/locales/zh.ts`，`ui-directory-picker-browse/src/client/index.ts`，`ui-agent-preset/src/client/guide-locales.ts`，`apps/desktop/src/locale.ts`；随改的测试 11 个（补丁 `P-20-no-workspace-word.patch`，排在 P-19 之后，对"固定提交 + 前面全部补丁"做差分） | 中文界面里"工作区"一律换成"案件"一类说法："工作区"栏目名→"案件"，"选择工作区"→"选择案件"，"默认工作区"→"未归入案件"，"添加 / 重命名 / 删除工作区"→"添加案件 / 重命名案件 / 从列表移除案件"，侧栏文件、引用、打开方式等提示里的"工作区"→"案件文件夹"，权限档"工作区内修改"→"可改案件文件"（这个开关另由我方界面插件藏掉）。英文不动 | 用户 10-04："工作区和案件是分开的吗"。我方一个案件就是 DSH 的一个工作区（Spec 1.2），律师只该看到"案件" | DSH 受影响的测试按新说法改，`ui-workspace`、`ui-conversation`、`ui-permission-presets`、`ui-directory-picker-browse` 等 37 个测试文件 729 项通过；`scripts\check_ui_words.py` 把这些词条表纳入、"工作区"列为禁词（后跟 `\` 或 `/` 的目录名放过）零命中。补丁链 137 个路径与工作区逐字节一致 |
+
+## P-21：侧栏"首页"在"新会话"上方（令 `致A-ORCH-执行令-首页入口与首页做大气-20261004-1426.md` 第 1 条）
+
+| 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
+|---|---|---|---|---|
+| P-21 | `packages/client/ui-sidebar/src/client/SidebarRoot.tsx`；`tests/lawbench-top-panels.client.spec.tsx`（新）（补丁 `P-21-home-above-new-session.patch`，排在 P-20 之后） | 全局面板按 order 分两段：order <= -1000 的（我方"首页"）画在"新会话"按钮上方，其余照旧在下方 | 用户 10-04："首页需要入口，不然太难找到了，可以放在新会话上面"。DSH 侧栏的面板列表固定在新会话下方，没有新会话上方的插槽 | 新例：首页在新会话之前、"案件：xxx"在之后；去掉分段即红。补丁链 139 个路径与工作区逐字节一致 |

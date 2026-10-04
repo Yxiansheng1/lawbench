@@ -48,9 +48,9 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
 }
 
 export async function loadRecent(): Promise<CaseRef[] | { code: string; message: string }> {
-  const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean }> }>('caseRecent', {})
+  const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean; last_opened?: string }> }>('caseRecent', {})
   if (!r.ok) return r.error
-  const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: c.name, root: c.root, exists: c.exists }))
+  const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: c.name, root: c.root, exists: c.exists, last_opened: c.last_opened }))
   app.set((s) => {
     const known = new Map(s.cases.map((c) => [c.case_id, c]))
     for (const c of cases) known.set(c.case_id, c)

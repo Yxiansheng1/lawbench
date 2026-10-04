@@ -1,0 +1,86 @@
+diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
+index fed580320c..d41f0df29f 100644
+--- a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
++++ b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
+@@ -98,6 +98,9 @@ export function SidebarRoot({
+   renderSlot,
+ }: SidebarRootComponentProps) {
+   const panels = usePanels(snapshot => snapshot)
++  // lawbench P-21: the Home entry (order <= -1000) renders above New Session; the rest keep their place below it
++  const topPanels = panels.filter(panel => panel.order <= -1000)
++  const restPanels = panels.filter(panel => panel.order > -1000)
+   const shortcut = useShortcuts(rows => rows.find(row => row.id === 'sidebar.left.toggle'))
+   const newShortcut = useShortcuts(rows => rows.find(row => row.id === 'session.new'))
+   const toggleLabel = collapsed ? t('toggle.open') : t('toggle.collapse')
+@@ -257,6 +260,15 @@ export function SidebarRoot({
+         {!darwinDesktop && toggle}
+       </div>
+ 
++      {/* lawbench P-21: panels registered at order <= -1000 (the workbench Home) sit above New Session. */}
++      {topPanels.length > 0 && (
++        <nav className={css.panelList} aria-label={t('panels.label')}>
++          {topPanels.map(({ id, label }) => (
++            <PanelRow key={id} id={id} label={label} wide={wide} usePanelInfo={usePanelInfo} selectPanel={selectPanel} renderSlot={renderSlot} />
++          ))}
++        </nav>
++      )}
++
+       {/* The label fades before the hover/focus shortcut, including on translucent backgrounds. */}
+       <Tooltip label={t('session.new.label')} shortcutKeys={newShortcut?.keys} delayMs={500} side={captionTooltipSide} disabled={wide}>
+         <button
+@@ -278,9 +290,9 @@ export function SidebarRoot({
+         </button>
+       </Tooltip>
+ 
+-      {panels.length > 0 && (
++      {restPanels.length > 0 && (
+         <nav className={css.panelList} aria-label={t('panels.label')}>
+-          {panels.map(({ id, label }) => (
++          {restPanels.map(({ id, label }) => (
+             <PanelRow
+               key={id}
+               id={id}
+diff --git a/packages/client/ui-sidebar/tests/lawbench-top-panels.client.spec.tsx b/packages/client/ui-sidebar/tests/lawbench-top-panels.client.spec.tsx
+new file mode 100644
+index 0000000000..761edcd736
+--- /dev/null
++++ b/packages/client/ui-sidebar/tests/lawbench-top-panels.client.spec.tsx
+@@ -0,0 +1,38 @@
++// @vitest-environment jsdom
++// lawbench P-21：order <= -1000 的全局面板（律师工作台"首页"）排在"新会话"上方，其余照旧在下方。
++import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
++import { describe, expect, it } from 'vitest'
++import { render, screen } from '@testing-library/react'
++import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
++import type { SidebarRootComponentProps } from '../src/client/contract/slots.ts'
++import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
++import { en } from '../src/client/locales.ts'
++import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
++
++const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
++const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
++const t: SidebarRootComponentProps['t'] = makeTranslate({ ...commonEn, ...en })
++const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
++type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionStatus']>[0]>[0]
++const noAttention: AttentionSnapshot = new Map()
++
++describe('lawbench P-21 top panels', () => {
++  it('renders the Home panel above New Session and the rest below it', () => {
++    const panels = [{ id: 'lawbench-home', order: -1000, label: '首页' }, { id: 'lawbench-cases', order: -100, label: '案件：日常事务' }]
++    render(
++      <SidebarRoot
++        collapsed={false} width={300}
++        useSessions={neverHook} useSessionStatus={selector => selector(noAttention)} useSessionRetainInfo={neverHook}
++        usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector(panels as never)} useShortcuts={selector => selector([])}
++        useResource={useResource} useWorkspaces={neverHook}
++        startSession={() => {}} toggleSidebar={() => {}} t={t}
++        renderSlot={(() => null) as never}
++      />,
++    )
++    const home = screen.getByRole('button', { name: '首页' })
++    const fresh = screen.getAllByRole('button', { name: /new session/i }).at(-1)!
++    const cases = screen.getByRole('button', { name: '案件：日常事务' })
++    expect(home.compareDocumentPosition(fresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
++    expect(fresh.compareDocumentPosition(cases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
++  })
++})

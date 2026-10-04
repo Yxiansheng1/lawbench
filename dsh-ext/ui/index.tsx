@@ -23,6 +23,10 @@ import { citationDeps } from './citation-deps.ts'
 export const inject = ['slots', 'remote']
 
 const HOME = 'lawbench-home'
+/** 侧栏"案件：xxx"一块（点开同是首页，用来看当前案件、切换案件）。 */
+const CASES = 'lawbench-cases'
+/** 首页入口排在"新会话"上方：DSH 补丁 P-21 把 order <= -1000 的面板画在新会话上面。 */
+export const HOME_ORDER = -1000
 
 type Disposer = () => void
 type Observable<T> = { getSnapshot(): T; subscribe(fn: () => void): Disposer }
@@ -74,6 +78,15 @@ const nav: Nav = {
 /** 输入框上权限模式开关的空占位（令 1347 第 4 条）。 */
 const NoPermissionPicker = (): null => null
 
+/** 侧栏"首页"的图标。 */
+function HomeIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth={1.3}>
+      <path d="M2.5 7.2 8 2.8l5.5 4.4V13a.7.7 0 0 1-.7.7H10V10H6v3.7H3.2a.7.7 0 0 1-.7-.7V7.2Z" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /** 侧栏"案件"一块的图标（文件夹）。 */
 function CaseIcon({ size = 16 }: { size?: number }) {
   return (
@@ -111,9 +124,16 @@ function registerCore(ctx: Ctx): void {
  * 启动时不再转到这一页，直接是对话区。DSH 的侧栏只在登记变化时重读名字，所以当前案件变了就换一份登记。
  */
 function registerHome(ctx: Ctx): void {
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: HOME }, HomePage))
+  // 令 1426：侧栏最顶部（新会话上方）常显"首页"，启动默认落首页；"案件：xxx"一块保留在原处，点开同是首页
+  let shown = false
+  ctx.slots.inject('main', function* () {
+    yield ctx.slots.register({ name: 'main', key: HOME }, HomePage)
+    yield ctx.slots.register({ name: 'main', key: CASES }, HomePage)
+    if (!shown) { shown = true; setTimeout(() => { try { ctx.layout.selectPanel(HOME) } catch { /* 页面还没登记好 */ } }, 0) }
+  })
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: HOME, order: HOME_ORDER, label: () => '首页' }, HomeIcon))
   ctx.slots.inject('sidebar.panellist', () => {
-    const reg = (label: string) => ctx.slots.register({ name: 'sidebar.panellist', id: HOME, order: -100, label: () => label }, CaseIcon)
+    const reg = (label: string) => ctx.slots.register({ name: 'sidebar.panellist', id: CASES, order: -100, label: () => label }, CaseIcon)
     let label = caseBlockLabel(app.get())
     let dispose = reg(label)
     const off = app.subscribe(() => {
@@ -147,7 +167,8 @@ function registerWorkspace(ctx: Ctx): void {
   ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined }, '律师工作台界面：打开案件')
   // 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条）：当前会话不在案件里时打开它。走"进入"同一条路（再登记一次、
   // 记进界面状态、打开工作区）：只打开工作区时，DSH 新建的空会话在输入区认不出案件（真机核过）
-  void landOnDailyCase((root) => openCase(root, null).then(() => undefined)).catch(() => undefined)
+  // 令 1426：启动落首页——日常事务照样打开（空会话要落在一个案件里），打开后再回首页
+  void landOnDailyCase((root) => openCase(root, null).then(() => { navImpl.goHome?.() })).catch(() => undefined)
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */
