@@ -26,7 +26,14 @@ BANNED_ZH = ["上下文", "提示词"]
 BANNED_BRAND = ["探索未至之境", "预览版", "深度求索", "描述你想要构建的内容", "DSH 本地构建"]
 BANNED_ZH += BANNED_BRAND
 DSH_LOCALES = ["packages/client/ui-conversation/src/client/locales.ts", "packages/client/ui-chat/src/client/locale.ts",
-               "packages/client/locale/src/locales/zh.ts"]
+               "packages/client/locale/src/locales/zh.ts",
+               # 令 1347 第 4 条：律师面前不出现"工作区"（P-20 改的词条表一并查）
+               "packages/client/ui-workspace/src/client/locales.ts", "packages/client/ui-permission-presets/src/client/locales.ts",
+               "packages/client/ui-sidebar-files/src/client/locales.ts", "packages/client/ui-reference/src/client/locales.ts",
+               "packages/client/ui-open-in-app/src/client/locales.ts", "packages/client/ui-settings-general/src/client/locales.ts",
+               "packages/client/ui-directory-picker-browse/src/client/index.ts", "apps/desktop/src/locale.ts"]
+# 令 1347 第 4 条："工作区"禁用；后面紧跟 \ 或 / 的是案件里的目录名（如 工作区\临时\委托材料），放过
+ZH_WORKSPACE = re.compile(r"工作区(?![\\/])")
 
 EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
 SKIP_DIRS = {"node_modules", "lib", "fixtures", "tests", "__tests__"}
@@ -96,14 +103,14 @@ def scan(root: pathlib.Path):
             # 豁免只管"整串恰好等于禁用词"的那个字符串（第二次返修一并做），同一行上的其他文字照查
             if line in ignored and _EN_EXACT.fullmatch(text.strip()):
                 continue
-            words = [m.group(1) for m in _EN.finditer(text)] + [w for w in BANNED_ZH if w in text]
+            words = [m.group(1) for m in _EN.finditer(text)] + [w for w in BANNED_ZH if w in text] + ["工作区" for _ in ZH_WORKSPACE.finditer(text)]
             for w in words:
                 hits.append((path.relative_to(root).as_posix(), line, w, text.strip()[:60]))
     return hits
 
 
 def scan_dsh_locales(dsh: pathlib.Path):
-    """DSH 中文词条表里的原版品牌字样（只查 BANNED_BRAND）；文件不在（dsh 子模块没检出）报一条。"""
+    """DSH 中文词条表里的原版品牌字样（只查 BANNED_BRAND）和"工作区"；文件不在（dsh 子模块没检出）报一条。"""
     hits = []
     for rel in DSH_LOCALES:
         path = dsh / rel
@@ -111,7 +118,7 @@ def scan_dsh_locales(dsh: pathlib.Path):
             hits.append((f"dsh/{rel}", 0, "文件不在", "dsh 子模块没检出或补丁没打"))
             continue
         for line, text in visible_texts(path.read_text(encoding="utf-8", errors="replace"), path.suffix):
-            for w in BANNED_BRAND:
+            for w in BANNED_BRAND + ["工作区"] * bool(ZH_WORKSPACE.search(text)):
                 if w in text:
                     hits.append((f"dsh/{rel}", line, w, text.strip()[:60]))
     return hits

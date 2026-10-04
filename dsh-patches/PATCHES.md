@@ -19,6 +19,7 @@ git -C dsh apply ..\dsh-patches\P-18-no-mention-hint-no-developer-switch.patch
 git -C dsh apply ..\dsh-patches\P-11-retainer-window.patch
 git -C dsh apply ..\dsh-patches\P-4-brand.patch
 git -C dsh apply ..\dsh-patches\P-19-awaiting-user-answer.patch
+git -C dsh apply ..\dsh-patches\P-20-no-workspace-word.patch
 # P-4 的图片不放进补丁（与 packaging\brand\desktop\ 重复，且二进制补丁约 2MB）：由 packaging\brand\make_brand.py 从 logo\ 原件生成，打补丁后拷进去
 Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 ```
@@ -132,3 +133,9 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
 |---|---|---|---|
 | P-3 | `client/WelcomePage.tsx`：加"本机律师 / 律师姓名"一栏，保存时必填（最多 40 字），已设过的带进表单；测试连接每台服务器一行写服务给的 `message` 原文，不再由页面自己拼"已连通…，Key 有效"。`welcome-api.ts`：`FirstRunInput.lawyer_name`（可选，`isLawyerName` 校验）、`FirstRunSetup.lawyerName`。`welcome-backend.ts`：保存时写进设置的 `profile.lawyer_name`（profile 其余字段保留），读设置时带出。`tests/lawbench-first-run.spec.ts` 加 3 例（保存写 profile、带出已设的姓名、校验）；页面本身的静态渲染用例（底部技术支持一行、律师姓名一栏、message 原样）移到新文件 `tests/lawbench-welcome-page.client.spec.tsx`（`.ts` 的测试不开 JSX，桌面端 `build:lib` 的类型检查会报 TS6142）。`FirstRunSetup.lawyerName` 为可选，`welcome-window.spec` 的旧桩不用改 | 首次配置没问姓名，归档方案的"承办律师"为空（T18 实测）；6000D 网关不校验 Key 时页面仍说"Key 有效"，服务已改说明（线 B 10-03） | 新例；去掉写 profile 即红。只有 P-3 碰这四个文件，按工作区对固定提交的差分重写；补丁链 118 个路径一致 |
+
+## P-20：律师面前不出现"工作区"（令 `致A-ORCH-执行令-界面第二轮-对齐与案件感-20261004-1347.md` 第 4 条）
+
+| 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
+|---|---|---|---|---|
+| P-20 | 中文词条：`ui-workspace`、`ui-conversation`、`ui-permission-presets`、`ui-sidebar-files`、`ui-reference`、`ui-open-in-app`、`ui-settings-general`、`ui-sidebar-terminal` 的 `locales.ts`，`locale/src/locales/zh.ts`，`ui-directory-picker-browse/src/client/index.ts`，`ui-agent-preset/src/client/guide-locales.ts`，`apps/desktop/src/locale.ts`；随改的测试 11 个（补丁 `P-20-no-workspace-word.patch`，排在 P-19 之后，对"固定提交 + 前面全部补丁"做差分） | 中文界面里"工作区"一律换成"案件"一类说法："工作区"栏目名→"案件"，"选择工作区"→"选择案件"，"默认工作区"→"未归入案件"，"添加 / 重命名 / 删除工作区"→"添加案件 / 重命名案件 / 从列表移除案件"，侧栏文件、引用、打开方式等提示里的"工作区"→"案件文件夹"，权限档"工作区内修改"→"可改案件文件"（这个开关另由我方界面插件藏掉）。英文不动 | 用户 10-04："工作区和案件是分开的吗"。我方一个案件就是 DSH 的一个工作区（Spec 1.2），律师只该看到"案件" | DSH 受影响的测试按新说法改，`ui-workspace`、`ui-conversation`、`ui-permission-presets`、`ui-directory-picker-browse` 等 37 个测试文件 729 项通过；`scripts\check_ui_words.py` 把这些词条表纳入、"工作区"列为禁词（后跟 `\` 或 `/` 的目录名放过）零命中。补丁链 137 个路径与工作区逐字节一致 |
