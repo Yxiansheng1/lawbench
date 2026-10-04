@@ -70,6 +70,14 @@ describe('Host：日常事务', () => {
       .toEqual({ ok: false, error: { code: 'DAILY_DIR_FAILED', message: '日常事务文件夹建不了（EPERM）' } })
     expect(await ensureDailyCase({ ...d, getSettings: async () => { throw new Error('fetch failed') } }))
       .toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } })
+    // AMEND F1：Node 的超时（name TimeoutError、code 是数字 23）不是"设置被拒"，算服务不可用（界面再试）
+    const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError', code: 23 })
+    expect(await ensureDailyCase({ ...d, getSettings: async () => { throw timeout } }))
+      .toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } })
+    // AMEND F1：服务返回的错误码原样带出（INTERNAL 界面会再试），不归成 INVALID_ARGUMENT
+    const internal = Object.assign(new Error('内部错误，请重试；多次出现请联系技术支持'), { serviceCode: 'INTERNAL' })
+    expect(await ensureDailyCase({ ...d, putSettings: async () => { throw internal } }))
+      .toEqual({ ok: false, error: { code: 'INTERNAL', message: '内部错误，请重试；多次出现请联系技术支持' } })
   })
 
   it('记过、但文件夹已被删或搬走：返回 null，不重建（按 T17 的 CASE_MOVED 处理）', async () => {

@@ -13,6 +13,7 @@ import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorLine } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
+import { createRightbarSeeder, loadSeeded, saveSeeded } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, caseBlockLabel, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
@@ -200,14 +201,6 @@ function registerCitationMarks(ctx: Ctx): void {
   ctx.effect(() => ctx.chatInlineMarks.register(citationMark(citationDeps)), '律师工作台界面：出处按钮')
 }
 
-const SEEDED_KEY = 'lawbench.rightbar.seeded'
-/** 已经给开过右侧栏三个标签的会话（本机记，最多留 500 个）。 */
-const seededRightbar = new Set<string>((() => { try { return JSON.parse(localStorage.getItem(SEEDED_KEY) ?? '[]') as string[] } catch { return [] } })())
-function markSeeded(sid: string): void {
-  seededRightbar.add(sid)
-  try { localStorage.setItem(SEEDED_KEY, JSON.stringify([...seededRightbar].slice(-500))) } catch { /* 记不下就下次再开一次 */ }
-}
-
 /** 右侧栏三个标签：材料、成果、原文查看。 */
 function registerTabs(ctx: Ctx): void {
   const tabs: Array<[string, string, string, number, unknown]> = [
@@ -235,12 +228,8 @@ function registerTabs(ctx: Ctx): void {
   navImpl.openTab = open
   // 令 1347 第 3 条：打开案件（含日常事务）的会话第一次显示时，右侧栏展开并开好材料、成果、原文查看三个标签，停在"材料"；
   // 每个会话只做一次（记在本机），之后折叠、关掉都由 DSH 按会话记住
-  const seed = () => {
-    const sid = ctx.sidebarRight.mounted.getSnapshot()
-    if (!sid || !currentCase(app.get()) || seededRightbar.has(sid)) return
-    markSeeded(sid)
-    for (const kind of [TABS.results, TABS.source, TABS.materials]) open(kind)
-  }
+  const seeder = createRightbarSeeder(loadSeeded(), saveSeeded, open)
+  const seed = () => { seeder(ctx.sidebarRight.mounted.getSnapshot(), !!currentCase(app.get())) }
   ctx.effect(() => ctx.sidebarRight.mounted.subscribe(seed), '律师工作台界面：右侧栏默认展开')
   ctx.effect(() => app.subscribe(seed), '律师工作台界面：右侧栏默认展开（案件列表）')
   if (navImpl.pending) { const p = navImpl.pending; navImpl.pending = undefined; open(p.kind, p.params) }

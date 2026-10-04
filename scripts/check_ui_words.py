@@ -33,7 +33,8 @@ DSH_LOCALES = ["packages/client/ui-conversation/src/client/locales.ts", "package
                "packages/client/ui-open-in-app/src/client/locales.ts", "packages/client/ui-settings-general/src/client/locales.ts",
                "packages/client/ui-directory-picker-browse/src/client/index.ts", "apps/desktop/src/locale.ts"]
 # 令 1347 第 4 条："工作区"禁用；后面紧跟 \ 或 / 的是案件里的目录名（如 工作区\临时\委托材料），放过
-ZH_WORKSPACE = re.compile(r"工作区(?![\\/])")
+#（第二轮复核 AMEND F3：只放过真正的目录分隔——"/"、源码里转义写的"\\"、或"\"后紧跟汉字；"\n""\t""\u"这类转义照查）
+ZH_WORKSPACE = re.compile(r"工作区(?!/|\\\\|\\[一-鿿])")
 
 EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
 SKIP_DIRS = {"node_modules", "lib", "fixtures", "tests", "__tests__"}

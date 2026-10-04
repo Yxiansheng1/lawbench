@@ -76,7 +76,7 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   if (navigate) {
     await nav.openCaseWorkspace(dir)
     // 令 1347 第 3 条：右侧栏三个标签常显，停在"材料"（最后开的为当前）
-    for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind)
+    for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind) // 同 rightbar.ts 的 RIGHTBAR_TABS
   }
   return c
 }

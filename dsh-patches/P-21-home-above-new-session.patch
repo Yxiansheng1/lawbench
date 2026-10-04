@@ -84,3 +84,54 @@ index 0000000000..761edcd736
 +    expect(fresh.compareDocumentPosition(cases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 +  })
 +})
+diff --git a/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx b/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
+index 3c900b2c6b..0307ce30ad 100644
+--- a/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
++++ b/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
+@@ -27,7 +27,7 @@ import type {
+   SessionListState, SessionSearchResultItem,
+ } from '@deepseek-ai/dsh-api-session-controller/client'
+ import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+-import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
++import { DEFAULT_WORKSPACE_DIRECTORY, workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
+ import type { SessionId } from '@deepseek-ai/dsh-session/types'
+ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+ import type { WorkspaceBrowserProps } from '../contract/slots.ts'
+@@ -877,7 +877,9 @@ export function WorkspaceBrowser({
+   // its identity across a language switch.
+   const defaultWorkspaceName = t('workspace.defaultName')
+   const workspaces = useMemo(
+-    () => storedWorkspaces.map(workspace => ({
++    // lawbench P-21: the default workspace ("未归入案件") is hidden while it holds no session — every
++    // lawbench session lands in a case or 日常事务, so an empty default group is only noise next to real cases.
++    () => storedWorkspaces.filter(workspace => !(workspace.title === DEFAULT_WORKSPACE_DIRECTORY && workspace.sessionIds.length === 0)).map(workspace => ({
+       ...workspace,
+       title: workspaceDisplayTitle(workspace.title, defaultWorkspaceName),
+     })),
+diff --git a/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx b/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
+index 53658fda81..1b1cddaf93 100644
+--- a/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
++++ b/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
+@@ -2235,7 +2235,7 @@ describe('WorkspaceBrowser', () => {
+     const renameWorkspace = vi.fn(async () => {})
+     mount({
+       useWorkspaces: hook(workspaceState([
+-        workspace('alpha', [], 'default-workspace'),
++        workspace('alpha', ['alpha-s'], 'default-workspace'),
+         workspace('beta', [], 'default-workspace backup'),
+       ])),
+       renameWorkspace,
+@@ -2255,6 +2255,13 @@ describe('WorkspaceBrowser', () => {
+     expect(renameWorkspace).toHaveBeenCalledWith(wid('alpha'), '未归入案件')
+   })
+ 
++  // lawbench P-21：空的默认工作区（"未归入案件"）不显示；有会话时照常显示
++  it('hides the default Workspace while it holds no session (lawbench P-21)', () => {
++    mount({ useWorkspaces: hook(workspaceState([workspace('alpha', [], 'default-workspace'), workspace('beta', [], 'case-b')])) })
++    expect(screen.queryByRole('button', { name: '案件“未归入案件”的操作' })).toBeNull()
++    expect(screen.getByRole('button', { name: '案件“case-b”的操作' })).toBeTruthy()
++  })
++
+   it('renames a workspace through the row menu dialog', async () => {
+     let resolveRename!: () => void
+     const renameWorkspace = vi.fn(() => new Promise<void>((resolve) => { resolveRename = resolve }))
