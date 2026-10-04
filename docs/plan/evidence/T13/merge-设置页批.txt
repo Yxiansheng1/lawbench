@@ -1,0 +1,3 @@
+merge gate 设置页批 @ 4d029a0 2026-10-04 17:56
+dsh-ext (D:\lawbench-rv\gate-A6 副本): test rc=0（607 passed | 6 skipped）; tsc rc=0; check_ui_words 零命中
+service/prep395/contracts 代码未改，不重跑全量
