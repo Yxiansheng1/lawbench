@@ -20,6 +20,15 @@ export function createRightbarSeeder(seen: Set<string>, persist: (ids: string[])
   }
 }
 
+/**
+ * 侧栏案件列表里该移除的项：不是已登记案件的位置（改名、搬走后旧位置那一项；重启后界面不记得旧位置，按登记核对），
+ * DSH 的默认工作区除外（令 1515 第 3 条）。只在案件列表读到之后用（读不到时 cases 为空，什么都不移除）。
+ */
+export function staleWorkspaces(items: Array<{ workspaceId: string; path: string; title?: string }>, roots: string[], same: (a: string, b: string) => boolean): string[] {
+  if (roots.length === 0) return []
+  return items.filter((w) => w.title !== 'default-workspace' && !roots.some((r) => same(r, w.path))).map((w) => w.workspaceId)
+}
+
 export function loadSeeded(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SEEDED_KEY) ?? '[]') as string[]) } catch { return new Set() }
 }

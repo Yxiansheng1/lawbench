@@ -1,6 +1,6 @@
 // 案件：打开 / 新建（/api/case/open）、最近案件（/api/case/recent）、导入（/api/materials/import）。
 // 打开案件后把案件文件夹当 DSH 工作区打开（Spec 1.2"案件 = DSH 的工作区"），会话的工作目录即案件文件夹。
-import { app, call, caseForRoot, currentCase, notice, pushDialog, rememberCase, type CaseRef } from './state.ts'
+import { app, call, caseForRoot, currentCase, folderName, notice, samePath, pushDialog, rememberCase, type CaseRef } from './state.ts'
 import { getNav } from './kit.tsx'
 import { errorText } from './format.ts'
 
@@ -50,12 +50,18 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
 export async function loadRecent(): Promise<CaseRef[] | { code: string; message: string }> {
   const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean; last_opened?: string }> }>('caseRecent', {})
   if (!r.ok) return r.error
-  const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: c.name, root: c.root, exists: c.exists, last_opened: c.last_opened }))
+  const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: folderName(c.root) || c.name, root: c.root, exists: c.exists, last_opened: c.last_opened }))
+  // 同一案件换了位置（改名或搬走后在新位置重新打开，服务已替换登记）：侧栏里旧位置那一项一并移除（令 1515 第 3 条）
+  const moved = cases.flatMap((c) => {
+    const old = app.get().cases.find((x) => x.case_id === c.case_id)
+    return old && !samePath(old.root, c.root) ? [old.root] : []
+  })
   app.set((s) => {
     const known = new Map(s.cases.map((c) => [c.case_id, c]))
     for (const c of cases) known.set(c.case_id, c)
     return { ...s, cases: [...known.values()] }
   })
+  for (const root of moved) { try { void getNav().forgetCaseWorkspace?.(root).catch(() => undefined) } catch { /* 界面还没准备好：下次再移除 */ } }
   return cases
 }
 
@@ -70,11 +76,15 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   if (!dir) return undefined
   const r = await call<{ case_id: string; name: string; created: boolean; folders_created: string[] }>('caseOpen', { path: dir, template })
   if (!r.ok) { notice('没能打开案件', errorText(r.error)); return undefined }
-  const c: CaseRef = { case_id: r.value.case_id, name: r.value.name, root: dir, exists: true }
+  const c: CaseRef = { case_id: r.value.case_id, name: folderName(dir) || r.value.name, root: dir, exists: true }
+  // 同一案件（case_id 相同）原来登记在别的位置：文件夹改名或搬走后在新位置重新打开（令 1515 第 3 条）。
+  // 服务的登记已替换成新位置；界面这边也只留新的一条，打开后把侧栏里旧位置那一项移除
+  const prev = app.get().cases.find((x) => x.case_id === c.case_id && !samePath(x.root, dir))
   rememberCase(c)
   if (r.value.folders_created.length) notice('已建好标准目录', `在"${c.name}"里新建了 ${r.value.folders_created.length} 个子文件夹。`, r.value.folders_created)
   if (navigate) {
     await nav.openCaseWorkspace(dir)
+    if (prev) await nav.forgetCaseWorkspace?.(prev.root).catch(() => undefined)
     // 令 1347 第 3 条：右侧栏三个标签常显，停在"材料"（最后开的为当前）
     for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind) // 同 rightbar.ts 的 RIGHTBAR_TABS
   }

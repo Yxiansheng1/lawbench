@@ -71,12 +71,8 @@ export function hideTaskAnswer(sessionId: string): void {
 export const currentCase = (s: AppState): CaseRef | undefined =>
   s.currentRoot ? s.cases.find((c) => samePath(c.root, s.currentRoot!)) : undefined
 
-/** 侧栏"案件"一块的名字：常显当前案件名（执行令 1156 第 3 条）。 */
-export const caseBlockLabel = (s: AppState): string => {
-  const c = currentCase(s)
-  if (!c) return '案件：未选择'
-  return isDaily(s, c) ? `案件：${c.name}（非办案）` : `案件：${c.name}`
-}
+/** 案件显示名一律取文件夹名（令 1515 第 3 条：文件夹改名后显示跟着变；登记记录里的名字只作备用）。 */
+export const folderName = (root: string): string => root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
 
 /** 这个案件是不是"日常事务"（令 1347）。 */
 export const isDaily = (s: Pick<AppState, 'dailyRoot'>, c: Pick<CaseRef, 'root'> | undefined): boolean =>

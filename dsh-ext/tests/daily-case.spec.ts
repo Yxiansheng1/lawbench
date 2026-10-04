@@ -74,6 +74,10 @@ describe('Host：日常事务', () => {
     const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError', code: 23 })
     expect(await ensureDailyCase({ ...d, getSettings: async () => { throw timeout } }))
       .toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } })
+    // 复核 P3（令 1515 顺带）：name 是 TimeoutError、消息却是中文的超时，同样算服务不可用（不按中文消息判成"设置被拒"）
+    const zhTimeout = Object.assign(new Error('操作超时'), { name: 'TimeoutError' })
+    expect(await ensureDailyCase({ ...d, getSettings: async () => { throw zhTimeout } }))
+      .toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } })
     // AMEND F1：服务返回的错误码原样带出（INTERNAL 界面会再试），不归成 INVALID_ARGUMENT
     const internal = Object.assign(new Error('内部错误，请重试；多次出现请联系技术支持'), { serviceCode: 'INTERNAL' })
     expect(await ensureDailyCase({ ...d, putSettings: async () => { throw internal } }))
@@ -90,8 +94,8 @@ describe('Host：日常事务', () => {
 })
 
 describe('界面启动：落在日常事务', () => {
-  const DAILY = { case_id: 'd-1', name: '日常事务', root: 'D:\文档\连越律师工作台\日常事务', exists: true }
-  const REAL = { case_id: 'c-1', name: '张某甲诈骗案', root: 'D:\案件\张某甲诈骗案', exists: true }
+  const DAILY = { case_id: 'd-1', name: '日常事务', root: 'D:\\文档\\连越律师工作台\\日常事务', exists: true }
+  const REAL = { case_id: 'c-1', name: '张某甲诈骗案', root: 'D:\\案件\\张某甲诈骗案', exists: true }
   function api(failFirst: number, recentFailFirst = 0) {
     let n = 0
     let m = 0
