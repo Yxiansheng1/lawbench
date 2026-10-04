@@ -1,8 +1,8 @@
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
-index 8fcde7768a..052e8cfc97 100644
+index 8fcde7768a..b5a417ccb6 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
 +++ b/apps/desktop/src/client/WelcomePage.tsx
-@@ -1,221 +1,123 @@
+@@ -1,221 +1,128 @@
 -/** Desktop welcome presentation; account and credential operations stay in the preload. */
 -import { useEffect, useRef, useState } from 'react'
 -import type { FormEvent } from 'react'
@@ -30,7 +30,11 @@ index 8fcde7768a..052e8cfc97 100644
 +  primary: { font: 'inherit', padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2f6bff', color: '#fff', cursor: 'pointer' },
 +  error: { color: '#d33', margin: 0 },
 +  result: { margin: 0, lineHeight: 1.7 },
++  vendor: { display: 'flex', alignItems: 'center', gap: 6, margin: 0, fontSize: 12, opacity: 0.6 },
 +}
++
++/** Vendor line at the page foot (owner order 2026-10-04 11:56 item 2); the logo is P-4's renderer/assets/vendor-logo.png. */
++export const VENDOR_LINE = '技术支持：上海莫来特智能科技有限公司'
 +
 +const toServers = (f: Fields): ServerAddresses => ({
 +  llm_base_url: f.llm.trim(),
@@ -323,6 +327,7 @@ index 8fcde7768a..052e8cfc97 100644
        </div>
 -    </main>
 -  </>
++      <p style={S.vendor}><img src="assets/vendor-logo.png" alt="" style={{ height: 16 }} />{VENDOR_LINE}</p>
 +    </form>
 +  )
  }
@@ -951,14 +956,18 @@ index a32e1f1c56..f92c1f51c1 100644
    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 diff --git a/apps/desktop/tests/lawbench-first-run.spec.ts b/apps/desktop/tests/lawbench-first-run.spec.ts
 new file mode 100644
-index 0000000000..ce30889691
+index 0000000000..584ef23e82
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-first-run.spec.ts
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,95 @@
 +// lawbench P-3：首次配置页的判断条件与输入校验（替代原 DeepSeek 欢迎流程的测试）。
 +import { describe, expect, it } from 'vitest'
 +import { isFirstRunInput, isServerAddresses, needsWelcome } from '../src/welcome-api.ts'
 +import { connectDesktopWelcome } from '../src/welcome-backend.ts'
++import { createElement } from 'react'
++import { renderToStaticMarkup } from 'react-dom/server'
++import { VENDOR_LINE, Welcome } from '../src/client/WelcomePage.tsx'
++import type { WelcomeApi } from '../src/welcome-api.ts'
 +
 +/** 假的 Host：认证地址返回 authStatus；/api/<ns>/<method> 按 reply 回信封。 */
 +function fakeHost(authStatus: number, reply: (method: string) => { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } }) {
@@ -1034,6 +1043,16 @@ index 0000000000..ce30889691
 +    expect(isFirstRunInput({ servers, key: '中文密钥中文密钥中文' })).toBe(false)
 +    expect(isFirstRunInput({ servers, other: 1 })).toBe(false)
 +    expect(isFirstRunInput(null)).toBe(false)
++  })
++})
++
++describe('首次配置页底部（执行令 2026-10-04 11:56 第 2 条）', () => {
++  it('常驻"技术支持：上海莫来特智能科技有限公司"一行和技术公司 logo', () => {
++    const api = { id: 'zh-CN', getSetup: () => new Promise(() => {}) } as unknown as WelcomeApi
++    const html = renderToStaticMarkup(createElement(Welcome, { api }))
++    expect(VENDOR_LINE).toBe('技术支持：上海莫来特智能科技有限公司')
++    expect(html).toContain(VENDOR_LINE)
++    expect(html).toContain('src="assets/vendor-logo.png"')
 +  })
 +})
 diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts

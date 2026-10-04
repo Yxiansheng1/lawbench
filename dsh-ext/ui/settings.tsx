@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, C, ErrorLine, getNav, S } from './kit.tsx'
 import { lawyerMessage } from './format.ts'
+import { BrandMark, VendorLine } from './brand.tsx'
+import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION } from '../shared/product.ts'
 import { app, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
 
 interface Settings {
@@ -127,8 +129,9 @@ export function SettingsSection() {
       </Block>
 
       <Block title="关于">
-        <div style={S.sub}>律师工作台 · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
-        <div style={{ ...S.sub, color: C.faint }}>律所与软件标识（双 logo）在正式版提供。</div>
+        <div style={{ ...S.row, gap: 12 }}><BrandMark size={32} /><span style={{ fontWeight: 600 }}>{PRODUCT_NAME} {PRODUCT_VERSION}</span></div>
+        <div style={S.sub}>{FIRM_NAME} · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
+        <VendorLine />
       </Block>
     </div>
   )
