@@ -1,0 +1,4 @@
+merge gate 第二轮+首页 @ 62757e4 2026-10-04 15:18
+dsh-ext (D:\lawbench-rv\gate-A5 副本): Tests 591 passed | 6 skipped (597); tsc rc=0
+check_examples 过（capsules.default.json 分流提示改词）；build_skills --check 过
+service/prep395/contracts 代码未改，不重跑全量
