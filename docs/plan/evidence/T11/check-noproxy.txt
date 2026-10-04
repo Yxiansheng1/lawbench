@@ -1,0 +1,24 @@
+# 设死端口代理 HTTP_PROXY=HTTPS_PROXY=http://127.0.0.1:9 后运行（2026-10-04，开发机在律所局域网）
+
+## python scripts\check_395_reach.py 192.168.8.124（改后）
+
+/health： {'status': 'ok', 'ocr': 'ok', 'llm9b': 'ok', 'queue': 0, 'version': '1.0.0', 'contract_version': '1.3'}
+
+## 对照：改前的 check_395_reach.py，同样的代理
+/health：暂不可用（URLError）——预处理服务部署后再测
+
+## python scripts\check_6000d.py（改后）
+网关：http://192.168.8.77:8000；Key A 已配置，Key B 已配置
+health           状态 200            0.03s   
+models 无 Key     状态 200            0.01s   
+models 错误 Key    状态 200            0.00s   
+models Key A     状态 200            0.01s   
+chat 无 Key       状态 200            0.08s   排队 0ms 回答：收到
+chat 错误 Key      状态 200            0.09s   排队 0ms 回答：收到
+chat Key A       状态 200            0.10s   排队 0ms 回答：收到
+chat Key B       状态 200            0.09s   排队 0ms 回答：收到
+结论：
+- Key 校验：未开启（无 Key 也能调用），需要甲方在网关打开 require_key
+- /v1/models 是否校验 Key：否（Spec 6.3 的 395 校验方式要改用 max_tokens=1 的请求）
+- chat Key A：可用
+- chat Key B：可用

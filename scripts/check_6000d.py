@@ -5,6 +5,8 @@
 import argparse, json, pathlib, time, urllib.request, urllib.error
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# 不走系统代理：开了代理时"连不上"会变成代理返回的 502（10-03 实测），与 deploy\check_servers.py 同一写法
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def load_env():
@@ -27,7 +29,7 @@ def call(method, url, key=None, body=None, timeout=60):
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     t = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with OPENER.open(req, timeout=timeout) as r:
             return r.status, dict(r.headers), r.read().decode("utf-8", "replace"), time.time() - t
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read().decode("utf-8", "replace"), time.time() - t

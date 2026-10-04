@@ -5,6 +5,7 @@
 import json, pathlib, socket, sys, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # 不走系统代理（同 check_6000d.py）
 
 
 def env():
@@ -38,7 +39,7 @@ def main():
                        (9101, "OCR 后端（应当不通，只监听本机）"), (9102, "9B 后端（应当不通，只监听本机）")]:
         print(f"{port:<6}{what:<30}{tcp(host, port)}")
     try:
-        with urllib.request.urlopen(f"http://{host}:9000/health", timeout=5) as r:
+        with OPENER.open(f"http://{host}:9000/health", timeout=5) as r:
             print("\n/health：", json.loads(r.read().decode("utf-8")))
     except Exception as e:
         print(f"\n/health：暂不可用（{type(e).__name__}）——预处理服务部署后再测")
