@@ -21,12 +21,12 @@ export function createRightbarSeeder(seen: Set<string>, persist: (ids: string[])
 }
 
 /**
- * 侧栏案件列表里该移除的项：不是已登记案件的位置（改名、搬走后旧位置那一项；重启后界面不记得旧位置，按登记核对），
- * DSH 的默认工作区除外（令 1515 第 3 条）。只在案件列表读到之后用（读不到时 cases 为空，什么都不移除）。
+ * 侧栏里旧位置那一项（令 1515 第 3 条；1612 复核 P1）：路径写法对得上、且不是刚打开的那一项。
+ * 律师选的写法（映射盘、subst 盘、经过目录联接）和服务 realpath 后的写法可能不同，字符串比对会认错——所以刚打开的那一项永远排除，
+ * 调用方移除前还要问 Host 这个文件夹是不是确实不在了。
  */
-export function staleWorkspaces(items: Array<{ workspaceId: string; path: string; title?: string }>, roots: string[], same: (a: string, b: string) => boolean): string[] {
-  if (roots.length === 0) return []
-  return items.filter((w) => w.title !== 'default-workspace' && !roots.some((r) => same(r, w.path))).map((w) => w.workspaceId)
+export function forgettableWorkspace(items: Array<{ workspaceId: string; path: string }>, root: string, except: string | undefined, same: (a: string, b: string) => boolean): string | undefined {
+  return items.find((w) => w.workspaceId !== except && same(w.path, root))?.workspaceId
 }
 
 export function loadSeeded(): Set<string> {

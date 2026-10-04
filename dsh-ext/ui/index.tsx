@@ -15,7 +15,7 @@ import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
 import { installUnloadGuard } from './settings-draft.ts'
 import { CaseSwitcher } from './case-switcher.tsx'
-import { createRightbarSeeder, loadSeeded, saveSeeded, staleWorkspaces } from './rightbar.ts'
+import { createRightbarSeeder, forgettableWorkspace, loadSeeded, saveSeeded } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
@@ -78,7 +78,7 @@ const nav: Nav = {
   goHome: () => navImpl.goHome?.(),
   refreshModels: () => navImpl.refreshModels!(),
   openSession: (id) => navImpl.openSession?.(id),
-  forgetCaseWorkspace: (root) => navImpl.forgetCaseWorkspace?.(root) ?? Promise.resolve(),
+  forgetCaseWorkspace: (root, except) => navImpl.forgetCaseWorkspace?.(root, except) ?? Promise.resolve(),
 }
 
 /** 输入框上权限模式开关的空占位（令 1347 第 4 条）。 */
@@ -141,6 +141,9 @@ function registerHome(ctx: Ctx): void {
  * 打开案件 = 把案件文件夹当工作区打开（Spec 1.2）。建好（或取到已有的）工作区后，请 Host 把 cwd 就是这个案件根、
  * 又不在任何工作区里的会话挂回来（T17 第三轮复核 B-F2：案件搬家、复制后旧会话不再落进"未分组"）；挂回失败不影响打开。
  */
+/** 最近一次打开的工作区（读列表时发现换了位置也不撤它）。 */
+let lastOpenedWorkspace: string | undefined
+
 function registerWorkspace(ctx: Ctx): void {
   navImpl.openCaseWorkspace = async (root) => {
     const ws = await ctx.workspaces.create({ path: root })
@@ -148,11 +151,18 @@ function registerWorkspace(ctx: Ctx): void {
     // 打开后会话名单没刷新到这个案件（服务没答、挂住）：旧会话可能还没归到这里，提示稍后再打开一次（第五轮复核 F2）
     if (r?.ok && r.value.listed === false) notice(ROOTS_NOT_REFRESHED[0], ROOTS_NOT_REFRESHED[1])
     await ctx.uiWorkspace.openWorkspace(ws.workspaceId)
+    lastOpenedWorkspace = ws.workspaceId
+    return ws.workspaceId
   }
   navImpl.openSession = (id) => { try { ctx.uiWorkspace.openSession(id) } catch { /* 会话已不在：不转 */ } }
-  navImpl.forgetCaseWorkspace = async (root) => {
-    const old = ctx.workspaces.list?.getSnapshot().items.find((w) => samePath(w.path, root))
-    if (old) await ctx.workspaces.delete(old.workspaceId)
+  // 1612 复核 P1：不撤刚打开的那一项；移除前问 Host 旧位置是不是确实不在了（在就不撤：多半是同一位置换了写法）
+  navImpl.forgetCaseWorkspace = async (root, except) => {
+    const items = ctx.workspaces.list?.getSnapshot().items ?? []
+    const id = forgettableWorkspace(items, root, except ?? lastOpenedWorkspace, samePath)
+    const path = items.find((w) => w.workspaceId === id)?.path
+    if (!id || !path) return
+    const r = await call<{ exists: boolean }>('pathState', { path })
+    if (r.ok && r.value.exists === false) await ctx.workspaces.delete(id)
   }
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
@@ -160,11 +170,8 @@ function registerWorkspace(ctx: Ctx): void {
   // 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条）：当前会话不在案件里时打开它。走"进入"同一条路（再登记一次、
   // 记进界面状态、打开工作区）：只打开工作区时，DSH 新建的空会话在输入区认不出案件（真机核过）
   // 令 1426：启动落首页——日常事务照样打开（空会话要落在一个案件里），打开后再回首页
-  void landOnDailyCase((root) => openCase(root, null).then(() => { navImpl.goHome?.() })).catch(() => undefined).then(() => {
-    // 令 1515 第 3 条：重启后侧栏里还留着改名、搬走前旧位置那一项——按已登记案件核对，不是的移除（默认工作区除外；不删文件和会话）
-    const items = ctx.workspaces.list?.getSnapshot().items ?? []
-    for (const id of staleWorkspaces(items, app.get().cases.map((c) => c.root), samePath)) void ctx.workspaces.delete(id).catch(() => undefined)
-  })
+  void landOnDailyCase((root) => openCase(root, null).then(() => { navImpl.goHome?.() })).catch(() => undefined)
+  // 1612 复核 P3：去掉"重启后不在登记里的一律撤"（服务的登记丢了会把全部案件撤掉）；重启前的旧位置那一项留着，律师可在侧栏菜单"从列表移除案件"
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */

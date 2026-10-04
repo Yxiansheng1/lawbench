@@ -131,14 +131,15 @@ export function Loading<T>({ data, children }: { data: Loaded<T>; children: (v: 
 export interface Nav {
   pickDirectory(): Promise<string | null>
   pathFor(file: File): string
-  openCaseWorkspace(root: string): Promise<void>
+  /** @returns 打开的工作区 id（侧栏移除旧位置时排除它，1612 复核 P1）。 */
+  openCaseWorkspace(root: string): Promise<string | void>
   openTab(kind: string, params?: Record<string, string>): void
   goHome(): void
   refreshModels(): void
   /** 转到某个会话（成果页"在对话区查看"，T14 派修 2）。 */
   openSession(sessionId: string): void
   /** 从侧栏案件列表移除某个旧位置的登记（文件夹改名或搬走后在新位置重新打开，令 1515 第 3 条）；不删文件和会话。 */
-  forgetCaseWorkspace?(root: string): Promise<void>
+  forgetCaseWorkspace?(root: string, except?: string): Promise<void>
 }
 let nav: Nav | undefined
 export const setNav = (n: Nav | undefined): void => { nav = n }

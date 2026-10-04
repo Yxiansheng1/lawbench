@@ -6,7 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { homedir } from 'node:os'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
@@ -183,6 +183,16 @@ export class LawbenchRemote {
   async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null; task_id: string | null } }> {
     const sessionId = (request as { session_id?: unknown } | null)?.session_id
     return { ok: true, value: typeof sessionId === 'string' ? this.notices.takeWithTask(sessionId) : { code: null, task_id: null } }
+  }
+
+  /**
+   * 某个文件夹此刻在不在（1612 复核 P1：侧栏只移除旧位置确实已不在的那一项；界面不能读本机文件，由 Host 看）。
+   * 只回在不在，不读内容；日志不记路径。
+   * @param request - { path }。
+   */
+  async pathState(request: unknown): Promise<{ ok: true; value: { exists: boolean } }> {
+    const p = (request as { path?: unknown } | null)?.path
+    return { ok: true, value: { exists: typeof p === 'string' && p !== '' && isAbsolute(p) && existsSync(p) } }
   }
 
   private dailyQueue: Promise<unknown> = Promise.resolve()

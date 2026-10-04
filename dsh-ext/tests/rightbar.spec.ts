@@ -45,16 +45,25 @@ describe('案件改名后在新位置重新打开（令 1515 第 3 条）', () =
   })
 })
 
-describe('重启后侧栏里的旧位置（令 1515 第 3 条）', () => {
-  it('不是已登记案件位置的项移除，默认工作区不动；案件列表没读到时什么都不移除', async () => {
-    const { staleWorkspaces } = await import('../ui/rightbar.ts')
+describe('侧栏旧位置那一项（1612 复核 P1）', () => {
+  it('同一位置换写法打开（映射盘、联接）：刚打开的那一项永远不撤；只认对得上旧位置、又不是刚打开的', async () => {
+    const { forgettableWorkspace } = await import('../ui/rightbar.ts')
     const { samePath } = await import('../ui/state.ts')
-    const items = [
-      { workspaceId: 'w1', path: 'D:/案件/张某甲诈骗案', title: '张某甲诈骗案' },
-      { workspaceId: 'w2', path: 'D:/案件/张某甲诈骗案（改名）', title: '张某甲诈骗案（改名）' },
-      { workspaceId: 'w3', path: 'C:/Users/x/.dsh/default', title: 'default-workspace' },
-    ]
-    expect(staleWorkspaces(items, ['D:/案件/张某甲诈骗案（改名）'], samePath)).toEqual(['w1'])
-    expect(staleWorkspaces(items, [], samePath)).toEqual([])
+    // 复核员的例子：登记里是规范写法 Z:/案件/甲，律师用另一写法打开，DSH 新建的那一项路径与规范写法相同
+    const items = [{ workspaceId: 'w-just-opened', path: 'Z:/案件/甲' }, { workspaceId: 'w-old', path: 'D:/案件/甲（旧）' }]
+    expect(forgettableWorkspace(items, 'Z:/案件/甲', 'w-just-opened', samePath)).toBeUndefined()
+    expect(forgettableWorkspace(items, 'D:/案件/甲（旧）', 'w-just-opened', samePath)).toBe('w-old')
+    expect(forgettableWorkspace(items, 'D:/别处', 'w-just-opened', samePath)).toBeUndefined()
+  })
+
+  it('openCase 把刚打开的工作区 id 交给移除步骤（让它排除）', async () => {
+    const { app } = await import('../ui/state.ts')
+    const calls: Array<[string, string | undefined]> = []
+    setNav({ pickDirectory: async () => null, openCaseWorkspace: async () => 'w-new', openTab: () => {}, forgetCaseWorkspace: async (r: string, e?: string) => { calls.push([r, e]) } } as unknown as Nav)
+    setApi({ caseOpen: async () => ({ ok: true, value: { case_id: 'c', name: '甲', created: false, folders_created: [] } }) } as unknown as LawbenchApi)
+    app.set((s) => ({ ...s, cases: [{ case_id: 'c', name: '甲', root: 'Z:\\案件\\甲' }] }))
+    await openCase('\\\\fs\\share\\案件\\甲', null)
+    expect(calls).toEqual([['Z:\\案件\\甲', 'w-new']])
+    app.set((s) => ({ ...s, cases: [] }))
   })
 })

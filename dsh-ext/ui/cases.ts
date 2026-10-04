@@ -83,8 +83,8 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   rememberCase(c)
   if (r.value.folders_created.length) notice('已建好标准目录', `在"${c.name}"里新建了 ${r.value.folders_created.length} 个子文件夹。`, r.value.folders_created)
   if (navigate) {
-    await nav.openCaseWorkspace(dir)
-    if (prev) await nav.forgetCaseWorkspace?.(prev.root).catch(() => undefined)
+    const opened = await nav.openCaseWorkspace(dir)
+    if (prev) await nav.forgetCaseWorkspace?.(prev.root, opened || undefined).catch(() => undefined)
     // 令 1347 第 3 条：右侧栏三个标签常显，停在"材料"（最后开的为当前）
     for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind) // 同 rightbar.ts 的 RIGHTBAR_TABS
   }
