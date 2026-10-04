@@ -131,6 +131,14 @@ describe('白名单', () => {
     expect(a.preTool('s-x', 'skill')).toEqual({ kind: 'allow' })
     expect(a.preTool('s-x', 'ask_user_question')).toEqual({ kind: 'allow' })
   })
+  it('ask_user_question：暂停该会话任务的时长计时（等律师回答的时间不计，令 1117 注记 11:28）', async () => {
+    const a = mk()
+    await a.preStep(agentObj('s-ask'), 1, enter())
+    const state = a.tasks.get('s-ask')!
+    expect((state as unknown as { pausedAt?: number }).pausedAt).toBeUndefined()
+    a.preTool('s-ask', 'ask_user_question')
+    expect((state as unknown as { pausedAt?: number }).pausedAt).toBeTypeOf('number')
+  })
   it('没有任务时 case_* 拒绝', () => {
     expect(mk().preTool('no-task', 'case_list_materials').kind).toBe('deny')
   })

@@ -8,6 +8,7 @@ r"""从仓库根 logo\ 的原件生成 packaging\brand\ 下的品牌素材（T20
   app-icon.png       律所标志里左侧的红色图形裁成方形，1024×1024 透明
   app-icon.ico       同上，16/24/32/48/64/128/256 七个尺寸
   installer-sidebar.bmp  NSIS 安装向导左侧图（164×314，白底，律所标志居中）
+  ..\..\dsh-ext\ui\brand-assets.ts  界面插件常驻的律所 logo、技术公司小标志（data: URI，侧栏品牌位与底部"技术支持"一行）
   names.txt          第一行律所全称；第二行软件名称（未定，暂用占位名"连越律师工作台"）
   desktop\          桌面端 P-4 要换的图（尺寸与 DSH 原图一致，补丁 P-4 把它们放进 dsh\apps\desktop）：
                      resources\icon-windows.png、icon-macos.png（1024）、icon.png（1104）、tray-windows.ico（64）；
@@ -123,6 +124,26 @@ def desktop_assets(firm: Image.Image, mark: Image.Image, vendor_mark: Image.Imag
     side.save(a / "uninstaller-sidebar.png", optimize=True)
 
 
+def ui_assets(firm: Image.Image, vendor_mark: Image.Image) -> None:
+    r"""界面插件常驻的两处小图（执行令 2026-10-04 11:56 第 1、2 条）：侧栏品牌位的律所 logo（高 48，界面按 24 显示）、
+    侧栏底部"技术支持"一行的技术公司小标志（高 32，界面按 16 显示）。写成 data: URI 放进 dsh-ext\ui\brand-assets.ts，
+    界面插件不必另带图片文件（界面插件不读本机文件，Spec 14.3）。"""
+    import base64, io
+
+    def uri(im: Image.Image, h: int) -> str:
+        buf = io.BytesIO()
+        im.resize((round(im.width * h / im.height), h), Image.LANCZOS).save(buf, "PNG", optimize=True)
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+    out = ROOT / "dsh-ext" / "ui" / "brand-assets.ts"
+    out.write_text(
+        "// 由 packaging\\brand\\make_brand.py 生成，不要手改（原件在仓库根 logo\\）。\n"
+        f"/** 律所 logo（高 48 px，按 24 px 显示）。 */\nexport const FIRM_LOGO = '{uri(firm, 48)}'\n"
+        f"/** 技术公司标志（高 32 px，按 16 px 显示）。 */\nexport const VENDOR_MARK = '{uri(vendor_mark, 32)}'\n",
+        encoding="utf-8", newline="\n")
+    print(f"{out.relative_to(ROOT)}  {out.stat().st_size} bytes")
+
+
 def main() -> None:
     firm = trim(Image.open(LOGO / "连越律师事务所-logo.png").convert("RGBA"))
     width_to(firm, 1024).save(OUT / "firm-logo.png", optimize=True)
@@ -148,6 +169,7 @@ def main() -> None:
     side.save(OUT / "installer-sidebar.bmp")
 
     desktop_assets(firm, mark, vendor_mark)
+    ui_assets(firm, vendor_mark)
     (OUT / "names.txt").write_text(f"{FIRM_FULL_NAME}\n{PRODUCT_NAME_PLACEHOLDER}\n", encoding="utf-8", newline="\n")
     for p in sorted(OUT.rglob("*")):
         if p.suffix in (".png", ".ico", ".bmp"):

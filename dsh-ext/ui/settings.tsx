@@ -4,6 +4,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, C, ErrorLine, getNav, S } from './kit.tsx'
 import { lawyerMessage } from './format.ts'
+import { BrandMark, VendorLine } from './brand.tsx'
+import { CapsuleSettings } from './home.tsx'
+import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION } from '../shared/product.ts'
 import { app, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
 
 interface Settings {
@@ -73,6 +76,10 @@ export function SettingsSection() {
         <Field label="个人 Key"><Ro>{hasKey === null ? '读取中' : hasKey ? '已设置（保存在 Windows 凭据管理器）' : '未设置'}</Ro><ChangeKey onChanged={() => setHasKey(true)} /></Field>
       </Block>
 
+      <Block title="胶囊" note="输入框上方的两层胶囊：排序、改名、隐藏、新增。只影响这台电脑。">
+        <CapsuleSettings />
+      </Block>
+
       <Block title="个人参数预设" note="新任务的默认参数；也可以给某个 Skill 单独设一套。">
         <ParamsRow label="默认" p={draft.defaults} onChange={(p) => up((d) => { d.defaults = p })} />
         {Object.entries(draft.skill_presets).map(([name, p]) => (
@@ -127,8 +134,9 @@ export function SettingsSection() {
       </Block>
 
       <Block title="关于">
-        <div style={S.sub}>律师工作台 · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
-        <div style={{ ...S.sub, color: C.faint }}>律所与软件标识（双 logo）在正式版提供。</div>
+        <div style={{ ...S.row, gap: 12 }}><BrandMark size={32} /><span style={{ fontWeight: 600 }}>{PRODUCT_NAME} {PRODUCT_VERSION}</span></div>
+        <div style={S.sub}>{FIRM_NAME} · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
+        <VendorLine />
       </Block>
     </div>
   )

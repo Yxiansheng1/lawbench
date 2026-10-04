@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 首页启动时服务还没就绪（T14 第二次实跑派修 1，执行令 1751）：读失败每 2 秒自动重读、最多 30 秒，期间显示"正在连接本机服务…"；
+// 侧栏"案件"页（原首页；执行令 1156 取消单独首页后只剩最近案件）启动时服务还没就绪（T14 第二次实跑派修 1，执行令 1751）：读失败每 2 秒自动重读、最多 30 秒，期间显示"正在连接本机服务…"；
 // 服务就绪后自动显示胶囊和最近案件；30 秒仍不行给"重试"按钮。假服务延迟起。
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,8 +21,7 @@ beforeEach(() => {
   up = false; calls = 0
   app.set((s) => ({ ...s, cases: [] }))
   setApi({
-    getCapsules: async () => { calls++; return up ? fixture('capsules.json') : DOWN },
-    caseRecent: async () => (up ? fixture('case_recent.json') : DOWN),
+    caseRecent: async () => { calls++; return up ? fixture('case_recent.json') : DOWN },
     listSkills: async () => ({ ok: true, value: { skills: [] } }),
     selfCheck: async () => ({ ok: true, value: { items: [] } }),
   } as unknown as LawbenchApi)
@@ -34,7 +33,7 @@ const render = async () => { root = createRoot(box); await act(async () => { roo
 const wait = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
 
 describe('首页启动时服务未就绪', () => {
-  it('先显示"正在连接本机服务…"，服务 5 秒后起来：自动显示胶囊和最近案件，不用点', async () => {
+  it('先显示"正在连接本机服务…"，服务 5 秒后起来：自动显示最近案件，不用点', async () => {
     await render()
     expect(box.textContent).toContain('正在连接本机服务…')
     expect(box.textContent).not.toContain('工作台服务未启动')
@@ -42,7 +41,6 @@ describe('首页启动时服务未就绪', () => {
     up = true
     await wait(2000)
     expect(box.textContent).not.toContain('正在连接本机服务…')
-    expect(box.textContent).toContain('管理胶囊')
     expect(box.textContent).toContain('周某诉青禾贸易借款合同纠纷（虚构）')
   })
 
@@ -58,7 +56,7 @@ describe('首页启动时服务未就绪', () => {
     const retry = [...box.querySelectorAll('button')].find((b) => b.textContent === '重试')!
     await act(async () => { retry.click() })
     await wait(0)
-    expect(box.textContent).toContain('管理胶囊')
+    expect(box.textContent).toContain('周某诉青禾贸易借款合同纠纷（虚构）')
     expect(box.textContent).not.toContain('工作台服务未启动')
   })
 })

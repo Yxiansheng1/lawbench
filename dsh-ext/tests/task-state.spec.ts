@@ -84,3 +84,23 @@ describe('思考档映射', () => {
     expect(['关闭', '低', '中', '高'].map((t) => reasoningEffort(t as '中'))).toEqual(['off', 'low', 'medium', 'high'])
   })
 })
+
+describe('等律师回答必问问题的时间不计入时长（PRD F-RUN-05、Spec 9.2；令 1117 注记 11:28）', () => {
+  const B45 = { model_calls: 50, tool_calls: 50, minutes: 45 }
+  const P = { thinking: '中' as const, window: '64K' as const, max_tokens: 16384 }
+  const MIN = 60_000
+  it('第 10 分钟调 ask_user_question、律师 50 分钟后才答：下一次模型调用照常（只算 10 分钟），暂停期间时长不走', () => {
+    const t = new TaskState('T-1', B45, P, 0)
+    expect(t.beforeModelCall(0).kind).toBe('continue')
+    expect(t.beforeTool('ask_user_question', 10 * MIN)).toEqual({ allow: true })
+    expect(t.elapsedSeconds(40 * MIN)).toBe(600)
+    expect(t.beforeModelCall(60 * MIN)).toEqual({ kind: 'continue', wrapUp: false })
+    expect(t.elapsedSeconds(60 * MIN)).toBe(600)
+    expect(t.elapsedSeconds(70 * MIN)).toBe(1200)
+  })
+  it('没有提问时照旧：第 60 分钟超时拒绝', () => {
+    const t = new TaskState('T-2', B45, P, 0)
+    t.beforeModelCall(0)
+    expect(t.beforeModelCall(60 * MIN)).toEqual({ kind: 'reject', reason: 'time' })
+  })
+})

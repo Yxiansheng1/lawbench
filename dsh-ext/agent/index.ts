@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { TOOL_NAMES, toolDescription, toolId, toolParameters, validate } from '../shared/contracts.ts'
 import { CoreClient, type Endpoint, type Logger } from '../shared/core-client.ts'
 import { defaultAppData, makeLogger } from '../shared/file-log.ts'
-import { ALLOWED_OTHER_TOOLS, TaskState, WRAP_UP_TEXT, reasoningEffort, type Budget, type Params } from './task-state.ts'
+import { ALLOWED_OTHER_TOOLS, ASK_USER_TOOL, TaskState, WRAP_UP_TEXT, reasoningEffort, type Budget, type Params } from './task-state.ts'
 
 export const name = 'lawbench-agent'
 export const inject = ['tools', 'lawbenchCore']
@@ -141,6 +141,8 @@ export class LegalAgent {
       this.log('warn', 'agent.tool_not_allowed', { tool: toolName }) // Spec 3.1：出现这条日志说明有工具漏进来
       return { kind: 'deny', reason: DENY_NOT_ALLOWED }
     }
+    // 等律师回答必问问题：暂停本任务的时长计时，下一次模型调用时恢复（PRD F-RUN-05、Spec 9.2；令 1117 注记 11:28）
+    if (toolName === ASK_USER_TOOL) { if (agentId) this.tasks.get(agentId)?.pause() }
     if (ALLOWED_OTHER_TOOLS.has(toolName)) return { kind: 'allow' }
     const state = agentId ? this.tasks.get(agentId) : undefined
     if (!state) return { kind: 'deny', reason: DENY_NO_TASK }

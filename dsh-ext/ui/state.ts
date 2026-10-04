@@ -1,6 +1,7 @@
 // 界面插件的共享状态：已登记的案件、会话 → 案件的对应、每个会话当前选的胶囊 / Skill / 参数 / 前序成果、
 // 首页和成果区留给案件的"待带入意向"、弹框队列。
 // 案件 = DSH 的工作区（Spec 1.2）：会话的工作目录就是案件文件夹。界面不接受、也不保存案件文件内容。
+import { REMOTE_METHODS } from '../shared/remote-methods.ts'
 import type { ApiResult } from '../host/index.ts'
 import { createStore } from './store.ts'
 import { lawyerMessage } from './format.ts'
@@ -62,6 +63,12 @@ export function hideTaskAnswer(sessionId: string): void {
 /** 当前会话对应的已登记案件。 */
 export const currentCase = (s: AppState): CaseRef | undefined =>
   s.currentRoot ? s.cases.find((c) => samePath(c.root, s.currentRoot!)) : undefined
+
+/** 侧栏"案件"一块的名字：常显当前案件名（执行令 1156 第 3 条）。 */
+export const caseBlockLabel = (s: AppState): string => {
+  const c = currentCase(s)
+  return c ? `案件：${c.name}` : '案件：未选择'
+}
 
 /** 路径比较：不分大小写、正反斜杠一样、去掉末尾斜杠（Windows）。 */
 export const samePath = (a: string, b: string): boolean => norm(a) === norm(b)
@@ -188,7 +195,10 @@ export function lb(): LawbenchApi {
 /** 调 /api 方法；失败返回 { ok: false }，界面按错误码显示（Q6）。Host 不可达也折成同样的形状。 */
 export async function call<T = unknown>(method: string, request?: unknown): Promise<{ ok: true; value: T } | { ok: false; error: { code: string; message: string } }> {
   try {
-    return (await lb()[method]!(request)) as { ok: true; value: T }
+    // DSH 网关的客户端按方法表核对参数个数：没有参数的方法（selfCheck、dailyCase）多传一个 undefined 也会被拒
+    // （"expected 0 argument(s), got 1"），启动检查提示条和日常事务都因此取不到（改版第 4 条真机截图时发现）
+    const noArgs = REMOTE_METHODS.find((m) => m.method === method)?.params.length === 0
+    return (await (noArgs ? lb()[method]!() : lb()[method]!(request))) as { ok: true; value: T }
   } catch (e) {
     return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: lawyerMessage((e as Error)?.message) } }
   }

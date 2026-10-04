@@ -39,6 +39,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'taskAnswer', params: ['request'] },
   // T14 第二次实跑派修 2：写任务单明确失败时记上、写成时去掉；记着的会话 Agent 插件整轮拒绝
   { method: 'sheetHold', params: ['request'] },
+  // 执行令 1156 第 4 条：纯聊天的默认工作区"日常事务"（首次配置后第一次问到时建好并登记）
+  { method: 'dailyCase', params: [] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

@@ -11,10 +11,10 @@ import { SourceTab } from './source.tsx'
 import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
-import { BrandName } from './brand.tsx'
-import { TABS } from './cases.ts'
+import { BrandMark, BrandName, VendorLine } from './brand.tsx'
+import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
-import { app, call, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
+import { app, call, caseBlockLabel, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
 import { citationMark, type CitationMark } from './citation.ts'
 import { citationDeps } from './citation-deps.ts'
@@ -70,13 +70,15 @@ const nav: Nav = {
   openSession: (id) => navImpl.openSession?.(id),
 }
 
-function HomeIcon({ size = 16 }: { size?: number }) {
+/** 侧栏"案件"一块的图标（文件夹）。 */
+function CaseIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth={1.3}>
-      <path d="M2.5 7.2 8 2.8l5.5 4.4V13a.7.7 0 0 1-.7.7H10V10H6v3.7H3.2a.7.7 0 0 1-.7-.7V7.2Z" strokeLinejoin="round" />
+      <path d="M2 4.2c0-.4.3-.7.7-.7h3.4l1.4 1.5h5.8c.4 0 .7.3.7.7v6.9c0 .4-.3.7-.7.7H2.7a.7.7 0 0 1-.7-.7V4.2Z" strokeLinejoin="round" />
     </svg>
   )
 }
+
 
 
 /** 设置页一节、弹框：只要 slots 和 remote.lawbench。 */
@@ -87,20 +89,34 @@ function registerCore(ctx: Ctx): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'lawbench', order: -20, label: () => '律师工作台' }, SettingsSection))
   // 侧栏品牌位：我方产品名和版本（T14 派修 3；原版位置显示"DSH 本地构建 0.1.7-rc.2-…"）
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, BrandName))
+  // 律所 logo 常驻品牌位、技术公司一行常驻侧栏底部（执行令 2026-10-04 11:56 第 1、2 条）
+  ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({ name: 'sidebar.brand.mark' }, BrandMark))
+  ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark' }, BrandMark))
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.vendor', order: 1000 }, VendorLine))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'lawbench', order: -10 }, ComposerDock))
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)
 }
 
-/** 首页：main 页面、侧栏入口，启动时显示首页。 */
+/**
+ * 侧栏顶部"案件"一块（执行令 1156 第 3 条：取消单独首页）：名字常显当前案件，点开是最近案件、新建、打开、切换案件（和发票页）。
+ * 启动时不再转到这一页，直接是对话区。DSH 的侧栏只在登记变化时重读名字，所以当前案件变了就换一份登记。
+ */
 function registerHome(ctx: Ctx): void {
-  let shown = false
-  ctx.slots.inject('main', () => {
-    const dispose = ctx.slots.register({ name: 'main', key: HOME }, HomePage)
-    if (!shown) { shown = true; setTimeout(() => { try { ctx.layout.selectPanel(HOME) } catch { /* 页面还没登记好 */ } }, 0) }
-    return dispose
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: HOME }, HomePage))
+  ctx.slots.inject('sidebar.panellist', () => {
+    const reg = (label: string) => ctx.slots.register({ name: 'sidebar.panellist', id: HOME, order: -100, label: () => label }, CaseIcon)
+    let label = caseBlockLabel(app.get())
+    let dispose = reg(label)
+    const off = app.subscribe(() => {
+      const next = caseBlockLabel(app.get())
+      if (next === label) return
+      label = next
+      dispose()
+      dispose = reg(next)
+    })
+    return () => { off(); dispose() }
   })
-  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: HOME, order: -100, label: () => '首页' }, HomeIcon))
   navImpl.goHome = () => ctx.layout.selectPanel(HOME)
   ctx.effect(() => () => { navImpl.goHome = undefined }, '律师工作台界面：首页导航')
 }
@@ -121,6 +137,9 @@ function registerWorkspace(ctx: Ctx): void {
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
   ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined }, '律师工作台界面：打开案件')
+  // 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条）：当前会话不在案件里时打开它。走"进入"同一条路（再登记一次、
+  // 记进界面状态、打开工作区）：只打开工作区时，DSH 新建的空会话在输入区认不出案件（真机核过）
+  void landOnDailyCase((root) => openCase(root, null).then(() => undefined)).catch(() => undefined)
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */

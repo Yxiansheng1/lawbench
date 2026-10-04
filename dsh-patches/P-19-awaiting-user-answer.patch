@@ -1,0 +1,166 @@
+diff --git a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
+index f2269daf9d..02f787d49c 100644
+--- a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
++++ b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
+@@ -97,9 +97,10 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
+       foldable,
+       hasContent: !interleavedInput && (processPresentation?.hasExternalProcess === true || processSpec.inlineReasoning),
+       open: processOpen,
++      awaitingUser: processPresentation?.awaitingUser === true,
+       setOpen,
+     }, [
+-    foldable, interleavedInput, processOpen, processSpec, processPresentation?.hasExternalProcess, setOpen,
++    foldable, interleavedInput, processOpen, processSpec, processPresentation?.hasExternalProcess, processPresentation?.awaitingUser, setOpen,
+   ])
+   const controllerInactive = routedNode?.kind === 'turn-process'
+     && foldCompleted && !foldable
+diff --git a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx
+index 71dc44693b..f949298434 100644
+--- a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx
++++ b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx
+@@ -16,7 +16,9 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
+     ? node.location.turn
+     : undefined
+   const [now, setNow] = useState(Date.now)
+-  const ticking = turn?.status === 'open' && turn.start !== undefined
++  // lawbench P-19: while the Turn waits for the user's answer the label says so and the clock stops
++  const awaiting = turn?.status === 'open' && turnProcess.awaitingUser === true
++  const ticking = turn?.status === 'open' && turn.start !== undefined && !awaiting
+   useEffect(() => {
+     if (!ticking) return
+     setNow(Date.now())
+@@ -32,13 +34,15 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
+   const duration = elapsedMs === undefined ? undefined
+     : running ? formatLiveRunDuration(elapsedMs, t) : formatRunDuration(elapsedMs, t)
+   // Other end reasons retain elapsed time; only cancellation and failure replace it.
+-  const label = running
++  const label = awaiting ? t('message.turnProcess.awaitingUser')
++    : running
+     ? duration === undefined ? t('chat.deepDiving') : t('message.turnProcess.deepDivingFor', { duration })
+     : reason === 'aborted' ? t('message.stopped')
+       : reason === 'error' ? t('message.turnProcess.failed')
+         : duration === undefined ? t('message.turnProcess.worked')
+           : t('message.turnProcess.took', { duration })
+-  const announcement = running ? t('chat.deepDiving')
++  const announcement = awaiting ? t('message.turnProcess.awaitingUser')
++    : running ? t('chat.deepDiving')
+     : reason === 'aborted' ? t('message.stopped')
+       : reason === 'error' ? t('message.turnProcess.failed')
+         : t('message.turnProcess.worked')
+diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/client/ui-chat/src/client/contract/slots.ts
+index 62b6af30bc..fb695a541f 100644
+--- a/packages/client/ui-chat/src/client/contract/slots.ts
++++ b/packages/client/ui-chat/src/client/contract/slots.ts
+@@ -188,6 +188,8 @@ export interface TurnProcessOwnerProps {
+   readonly spec: TurnProcessSpec
+   readonly foldable: boolean
+   readonly open: boolean
++  /** lawbench P-19: the Turn waits for the user's answer to a question tool. */
++  readonly awaitingUser?: boolean
+   setOpen(open: boolean): void
+ }
+ 
+diff --git a/packages/client/ui-chat/src/client/contract/snapshot.ts b/packages/client/ui-chat/src/client/contract/snapshot.ts
+index 80d19ba50a..0b13fb88c6 100644
+--- a/packages/client/ui-chat/src/client/contract/snapshot.ts
++++ b/packages/client/ui-chat/src/client/contract/snapshot.ts
+@@ -90,6 +90,8 @@ export interface ChatTurnProcessPresentation {
+   /** A visible input after process output prevents one disclosure from hiding its surrounding groups. */
+   readonly hasInterleavedInput: boolean
+   readonly compactAnswer: boolean
++  /** lawbench P-19: a question tool (ask_user_question / request_user_input) of this Turn is still waiting for the user. */
++  readonly awaitingUser?: boolean
+ }
+ 
+ /** Compatibility projection backing StatsPills and the legacy top-level snapshot fields. */
+diff --git a/packages/client/ui-chat/src/client/conversation-nodes/turn-process-presentation.ts b/packages/client/ui-chat/src/client/conversation-nodes/turn-process-presentation.ts
+index 30bea2cb43..4681e6ff7f 100644
+--- a/packages/client/ui-chat/src/client/conversation-nodes/turn-process-presentation.ts
++++ b/packages/client/ui-chat/src/client/conversation-nodes/turn-process-presentation.ts
+@@ -4,6 +4,10 @@ import type {
+   ChatLocationNodeIndex, ChatNodeStore, ChatTurnProcessPresentation,
+ } from '../contract/snapshot.ts'
+ import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
++import { isRunningTool } from '../contract/chat-nodes.ts'
++
++/** lawbench P-19: tools that wait for the user's answer. */
++const QUESTION_TOOLS: ReadonlySet<string> = new Set(['ask_user_question', 'request_user_input'])
+ 
+ function nodeTurn(node: ChatNode | undefined): number | undefined {
+   const location = node?.location
+@@ -21,7 +25,8 @@ function samePresentation(
+     && left.turnClosed === right.turnClosed
+     && left.hasExternalProcess === right.hasExternalProcess
+     && left.hasInterleavedInput === right.hasInterleavedInput
+-    && left.compactAnswer === right.compactAnswer)
++    && left.compactAnswer === right.compactAnswer
++    && left.awaitingUser === right.awaitingUser)
+ }
+ 
+ function derivePresentation(
+@@ -50,8 +55,10 @@ function derivePresentation(
+   let hasExternalProcess = false
+   let hasInterleavedInput = false
+   let compactAnswer = true
++  let awaitingUser = false
+   for (const key of keys) {
+     const node = nodes.get(key) as ChatNode | undefined
++    if (node?.kind === 'tool-call' && isRunningTool(node.data.root) && QUESTION_TOOLS.has(node.data.root.name)) awaitingUser = true
+     if (node === undefined || !isVisibleChatNode(node) || node.kind === 'turn-process') continue
+     if ((node.kind === 'user' || node.kind === 'steering' || node.kind === 'turn-trigger')
+       && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)) {
+@@ -73,6 +80,7 @@ function derivePresentation(
+     hasExternalProcess,
+     hasInterleavedInput,
+     compactAnswer,
++    awaitingUser,
+   }
+ }
+ 
+diff --git a/packages/client/ui-chat/src/client/locale.ts b/packages/client/ui-chat/src/client/locale.ts
+index 570c2074fc..5220c0b4a2 100644
+--- a/packages/client/ui-chat/src/client/locale.ts
++++ b/packages/client/ui-chat/src/client/locale.ts
+@@ -64,6 +64,8 @@ export const zh = {
+   'message.turnProcess.worked': '已完成工作',
+   // lawbench P-4: 深度求索 is the DSH vendor's company name; the workbench says plainly that it is thinking
+   'message.turnProcess.deepDivingFor': '思考中，用时{duration}',
++  // lawbench P-19：模型在等律师回答必问问题（ask_user_question）时不说"思考中"、不走表
++  'message.turnProcess.awaitingUser': '等待您回答…',
+   'message.turnProcess.took': '用时 {duration}',
+   'message.turnProcess.failed': '处理失败',
+   'view.chat': '对话',
+@@ -257,6 +259,7 @@ export const en = {
+   'message.trigger.explanation': 'This notification triggered this response.',
+   'message.turnProcess.worked': 'Worked',
+   'message.turnProcess.deepDivingFor': 'Thinking for {duration}',
++  'message.turnProcess.awaitingUser': 'Waiting for your answer…',
+   'message.turnProcess.took': 'Took {duration}',
+   'message.turnProcess.failed': 'Failed',
+   'view.chat': 'Chat',
+diff --git a/packages/client/ui-chat/tests/chat-view.client.spec.tsx b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
+index 89d81db010..45ce9a7a59 100644
+--- a/packages/client/ui-chat/tests/chat-view.client.spec.tsx
++++ b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
+@@ -3209,6 +3209,21 @@ describe('ChatView', () => {
+     expect(toggle.getAttribute('aria-expanded')).toBe('true')
+   }))
+ 
++  // lawbench P-19：等律师回答必问问题时状态写"等待您回答…"、计时停住
++  it('a running ask_user_question shows waiting for the answer and stops the clock (lawbench P-19)', withClock(2_000, () => {
++    const h = makeHarness({
++      runningCalls: [runningCall('q1', 'ask_user_question')],
++      turnTimings: new Map([[2, { startTime: 0 }]]),
++    }, { running: true })
++    const view = render(<h.ChatView {...h.props} />)
++    expect(view.getByRole('status').textContent).toBe('等待您回答…')
++    const toggle = turnProcessControl(view.container)!
++    expect(toggle.textContent).toBe('等待您回答…')
++    act(() => { vi.advanceTimersByTime(5_000) })
++    expect(toggle.textContent).toBe('等待您回答…')
++    view.unmount()
++  }))
++
+   it('keeps the Tool renderer mounted when a running call settles into log order', () => {
+     const mounted = vi.fn()
+     const unmounted = vi.fn()

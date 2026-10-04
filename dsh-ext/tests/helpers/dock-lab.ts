@@ -1,6 +1,7 @@
 // 输入区实验夹具：取自契约 1.2 第三轮复核员 rv-A19 的 rvh.ts（照 dock-review.spec.ts 的模拟服务），收入仓库供 dock-a19.spec.ts 用（T13 第四轮返修）。
 // 只改了引用路径。
 import { readFileSync } from 'node:fs'
+import { pickCapsule, shownCapsule } from './capsule-pick.ts'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -70,11 +71,10 @@ export async function mount(sessionId: string, remount = false) {
   await flush()
 }
 export async function unmount() { await act(async () => { h.root?.unmount() }); h.root = undefined }
-export const capSel = () => h.container.querySelector('select[aria-label="胶囊"]') as HTMLSelectElement
 export const status = () => h.container.querySelector('[role=status]')?.textContent ?? ''
-export const shown = () => (capSel().value || '自由对话') + (h.container.textContent?.includes('选用：') ? '+X' : '')
+export const shown = () => shownCapsule(h.container) + (h.container.textContent?.includes('选用：') ? '+X' : '')
 const setVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!
-export async function pick(id: string) { await act(async () => { setVal.call(capSel(), id); capSel().dispatchEvent(new Event('change', { bubbles: true })) }) }
+export async function pick(id: string) { await pickCapsule(h.container, id) }
 export const paramSelects = () => [...h.container.querySelectorAll('select')].filter((s) => s.getAttribute('aria-label') === null)
 export const paramsPanel = () => { const [t, w] = paramSelects(); const n = h.container.querySelector('input[type=number]') as HTMLInputElement | null; return t ? { thinking: t.value, window: w!.value, max_tokens: Number(n?.value) } : null }
 export async function setParamSel(idx: number, v: string) { const s = paramSelects()[idx]!; await act(async () => { setVal.call(s, v); s.dispatchEvent(new Event('change', { bubbles: true })) }) }

@@ -7,6 +7,7 @@ import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
 import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
@@ -20,6 +21,7 @@ import { TurnNotices } from '../shared/turn-notices.ts'
 import { requestJson } from './http-json.ts'
 import { readArchivePlan } from './archive-plan.ts'
 import { readTaskAnswer } from './task-answer.ts'
+import { ensureDailyCase, type DailyResult } from './daily-case.ts'
 import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
@@ -181,6 +183,28 @@ export class LawbenchRemote {
   async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null; task_id: string | null } }> {
     const sessionId = (request as { session_id?: unknown } | null)?.session_id
     return { ok: true, value: typeof sessionId === 'string' ? this.notices.takeWithTask(sessionId) : { code: null, task_id: null } }
+  }
+
+  private dailyQueue: Promise<unknown> = Promise.resolve()
+
+  /**
+   * 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条），见 daily-case.ts。几处同时问时排队，只建一次。
+   * 日志只记结果，不记路径。
+   */
+  dailyCase(): Promise<DailyResult> {
+    const run = this.dailyQueue.then(() => ensureDailyCase({
+      marker: join(this.appData, 'daily-case.json'),
+      documents: join(process.env.USERPROFILE ?? homedir(), 'Documents'),
+      configured: async () => (await this.setupState()).configured,
+      getSettings: () => this.getSettings() as never,
+      putSettings: (s) => this.putSettings(s),
+      caseOpen: (req) => (this as unknown as { caseOpen(r: unknown): Promise<never> }).caseOpen(req),
+    })).then((r) => {
+      if (!r.ok || r.value.created) this.log(r.ok ? 'info' : 'warn', 'daily_case.ensure', { ok: r.ok, code: r.ok ? undefined : r.error.code, created: r.ok ? true : undefined })
+      return r
+    })
+    this.dailyQueue = run.catch(() => undefined)
+    return run
   }
 
   /**
