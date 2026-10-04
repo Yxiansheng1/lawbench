@@ -75,7 +75,8 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   if (r.value.folders_created.length) notice('已建好标准目录', `在"${c.name}"里新建了 ${r.value.folders_created.length} 个子文件夹。`, r.value.folders_created)
   if (navigate) {
     await nav.openCaseWorkspace(dir)
-    nav.openTab(TABS.materials)
+    // 令 1347 第 3 条：右侧栏三个标签常显，停在"材料"（最后开的为当前）
+    for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind)
   }
   return c
 }
