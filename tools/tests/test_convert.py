@@ -795,3 +795,21 @@ def test_legacy_word_note_in_gui():
     app._update_note()
     assert "另存为 .docx" in app.note["text"]
     root.destroy()
+
+
+def test_finder_non_default_install(isolated_temp, monkeypatch):
+    """装到非默认目录（如 E:\law\）：打包的 convert.exe 找同一安装 tools\ 下的 LibreOffice、pandoc（令 2033、复核 P3-5）。"""
+    root = isolated_temp / "E-law"
+    exe = root / "tools" / "libreoffice" / "program" / "soffice.exe"
+    pan = root / "tools" / "pandoc" / "pandoc.exe"
+    me = root / "tools" / "convert" / "convert.exe"
+    for f in (exe, pan, me):
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"")
+    monkeypatch.setenv("LOCALAPPDATA", str(isolated_temp / "empty-local"))
+    monkeypatch.delenv("LAWBENCH_SOFFICE", raising=False)
+    monkeypatch.delenv("LAWBENCH_PANDOC", raising=False)
+    monkeypatch.setattr(finder.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(finder.sys, "executable", str(me))
+    assert finder.find_soffice() == exe
+    assert finder.find_pandoc() == pan

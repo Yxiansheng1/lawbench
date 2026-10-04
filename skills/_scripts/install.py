@@ -84,7 +84,8 @@ def main() -> int:
 
     manifest = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "source": str(src),
+        # 只记源目录名，不记构建机上的绝对路径（T20 候选包复核 P3-2：装好的程序里出现构建机路径）
+        "source": src.name,
         "capsules": [{"group": c.group, "id": c.id, "name": c.name, "kind": c.kind, "skills": c.skills,
                       "tool": c.tool} for c in rep.capsules],
         "shared": rep.shared,

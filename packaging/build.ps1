@@ -7,9 +7,11 @@
     .\packaging\build.ps1 -List                # print the steps
     .\packaging\build.ps1 -Package             # also run the final 'package' step (electron-builder, NSIS)
 
-  Status 2026-10-04 (order 1756): first candidate installer. All steps run offline; the only online fetch
-  (DSH runtime cache check, electron-builder NSIS toolsets, PyInstaller wheels) is recorded in
-  docs\plan\evidence\T20\payload-fetch.txt. Step 6 (clean-machine offline install, capture-hosts) is the owner's.
+  Status 2026-10-04 (order 1756): first candidate installer. Network use: a one-time fetch (DSH runtime cache check,
+  electron-builder NSIS toolsets, PyInstaller wheels; docs\plan\evidence\T20\payload-fetch.txt) and, on every
+  'package' run, DSH's prepare:dsh installing the bundled runtime's third-party npm packages from registry.npmjs.org
+  (versions pinned by packaging\runtime-lock\pnpm-lock.yaml once it exists). Everything else runs offline.
+  Step 6 (clean-machine offline install, capture-hosts) is the owner's.
 
   Keep this file ASCII-only: Windows PowerShell 5 reads BOM-less files in the ANSI code page.
   No keys, passwords or real case files are read or written here.
@@ -140,7 +142,10 @@ $Steps = [ordered]@{
     if (-not $pins) { throw 'no [client.pip] pins in packaging\versions.lock (run the lock step)' }
     $pins | Set-Content -Encoding ascii $req
     if (-not (Test-Path $Wheelhouse)) { Pending "offline wheelhouse $Wheelhouse (pip download -r $req on a build machine)" }
-    Run $py @('-I', '-m', 'pip', 'install', '--no-index', '--no-warn-script-location', '--find-links', $Wheelhouse, '-r', $req)
+    # --no-compile: no __pycache__ in the shipped interpreter (T20 review P3-2: 640 of them came from pip's compile step)
+    Run $py @('-I', '-m', 'pip', 'install', '--no-index', '--no-compile', '--no-warn-script-location', '--find-links', $Wheelhouse, '-r', $req)
+    # pip's console launchers (Scripts\*.exe) embed the build machine's interpreter path: broken once installed
+    Get-ChildItem -File (Join-Path $Stage 'python\Scripts') -Filter '*.exe' -ErrorAction SilentlyContinue | Remove-Item -Force
     # python312._pth fixes sys.path for every process using this interpreter, with or without -I (child processes
     # such as the ID-card driver included): no PYTHONPATH, no per-user site-packages; 'import site' keeps .pth
     # processing (pywin32). sitecustomize stays as a second guard.
@@ -158,7 +163,7 @@ $Steps = [ordered]@{
     Reset-Dir (Join-Path $Stage 'contracts')
     Copy-Item -Recurse -Force (Join-Path $Root 'contracts\*') (Join-Path $Stage 'contracts')
     # Bytecode caches left by local test runs are not part of the payload (T20 third review NOTE)
-    foreach ($d in 'service', 'contracts') {
+    foreach ($d in 'service', 'contracts', 'python') {
       Get-ChildItem -Recurse -Force -Directory -Filter '__pycache__' (Join-Path $Stage $d) | Remove-Item -Recurse -Force
       Get-ChildItem -Recurse -Force -File -Include '*.pyc', '*.pyo' (Join-Path $Stage $d) | Remove-Item -Force
     }
@@ -174,6 +179,13 @@ $Steps = [ordered]@{
     if ($PandocExe -and (Test-Path $PandocExe)) {
       New-Item -ItemType Directory -Force (Join-Path $Stage 'tools\pandoc') | Out-Null
       Copy-Item -Force $PandocExe (Join-Path $Stage 'tools\pandoc\pandoc.exe')
+      # GPL: ship pandoc's own license files next to it (T20 review P2-1). Source: the pandoc Windows install the exe
+      # comes from (COPYING.rtf = GPL full text, COPYRIGHT.txt); a pandoc.exe without them stops the build.
+      foreach ($f in 'COPYING.rtf', 'COPYRIGHT.txt') {
+        $src = Join-Path (Split-Path $PandocExe) $f
+        if (-not (Test-Path $src)) { throw "pandoc license file missing next to ${PandocExe}: $f" }
+        Copy-Item -Force $src (Join-Path $Stage "tools\pandoc\$f")
+      }
     } else { $missing += 'pandoc (-PandocExe <pandoc.exe>)' }
     if ($Tokenizer -and (Test-Path $Tokenizer)) {
       New-Item -ItemType Directory -Force (Join-Path $Stage 'service\lawbench\llm') | Out-Null
@@ -230,6 +242,8 @@ $Steps = [ordered]@{
   }
   lock = {
     Run $BuildPython @((Join-Path $Root 'packaging\gen_lock.py'), '--site', (Join-Path $Stage 'python\Lib\site-packages'), '--stage', $Stage)
+    # The license table ships at the install root (T20 review P2-1)
+    Copy-Item -Force (Join-Path $Root 'packaging\THIRD-PARTY-LICENSES.md') (Join-Path $Stage 'THIRD-PARTY-LICENSES.md')
   }
   package = {
     if (-not $Package -and -not $DryRun) { Say 'package skipped (pass -Package, or -DryRun to list the payload)'; return }
@@ -284,6 +298,13 @@ $Steps = [ordered]@{
                  (Join-Path $Dsh 'apps\desktop\node_modules\electron\checksums.json'), $sums)
     $want = (Select-String -Path $sums -SimpleMatch " *$eZip").Line.Split(' ')[0]
     if ((Get-FileHash -Algorithm SHA256 $cached.FullName).Hash.ToLower() -ne $want) { throw "cached $eZip does not match the official checksum" }
+    # Third-party runtime npm versions pinned by packaging\runtime-lock\pnpm-lock.yaml (T20 review P2-2, P-4 prepare-dsh):
+    # given to DSH's prepare:dsh, which seeds its build folder with it and writes the resolved lock back here.
+    $pinnedLock = Join-Path $PSScriptRoot 'runtime-lock\pnpm-lock.yaml'
+    $resolvedLock = Join-Path $Out 'runtime-pnpm-lock.yaml'
+    if (Test-Path $resolvedLock) { Remove-Item -Force $resolvedLock }
+    $env:LAWBENCH_RUNTIME_LOCK = $(if (Test-Path $pinnedLock) { $pinnedLock } else { '' })
+    $env:LAWBENCH_RUNTIME_LOCK_OUT = $resolvedLock
     $port = 18780
     $mirrorLog = Join-Path $Out 'electron-mirror.log'
     New-Item -ItemType Directory -Force $Out | Out-Null
@@ -294,6 +315,14 @@ $Steps = [ordered]@{
       Pop-Location
       Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
       if (Test-Path $mirrorLog) { Get-Content $mirrorLog | ForEach-Object { Say $_ } }
+    }
+    if (-not (Test-Path $resolvedLock)) { throw "DSH prepare:dsh did not write the runtime lock to $resolvedLock" }
+    if (Test-Path $pinnedLock) {
+      Run 'node' @((Join-Path $PSScriptRoot 'runtime-lock-compare.mjs'), $pinnedLock, $resolvedLock)
+    } else {
+      New-Item -ItemType Directory -Force (Split-Path $pinnedLock) | Out-Null
+      Copy-Item -Force $resolvedLock $pinnedLock
+      Say "runtime lock pinned for the first time: $pinnedLock (commit it; later builds keep these third-party versions)"
     }
     $after = @($caches | ForEach-Object { Get-ChildItem -Recurse -File $_ -ErrorAction SilentlyContinue } | ForEach-Object { $_.FullName })
     $added = @($after | Where-Object { $before -notcontains $_ })

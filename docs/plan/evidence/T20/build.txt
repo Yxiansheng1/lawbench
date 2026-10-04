@@ -45,7 +45,7 @@ T20 第一版候选包 · 构建记录（执行令 1756 第 2、3 条）· 2026-
   布局：contracts\VERSION、python\python.exe、service\lawbench\__main__.py、service\lawbench\llm\tokenizer.json、
         tools\libreoffice\program\soffice.exe、tools\pandoc\pandoc.exe、tools\splitter\splitter.exe、tools\convert\convert.exe、
         engines\retainer、engines\invoice-ledger、installer\set-skills-acl.ps1、skills\ 都在；resources\app.asar 里有 lib\welcome\。
-  %ProgramData%\连越律师工作台\skills：没有建（安装器按当前用户装、不提权；由管理员每台机器提权跑一次 installer\set-skills-acl.ps1，T20 步骤 3 定的做法）。
+  %ProgramData%\lawbench\skills（目录名见 install-layout.ts 的 ADMIN_DIR_NAME，复核 P3-3 改正）：没有建（安装器按当前用户装、不提权；由管理员每台机器提权跑一次 installer\set-skills-acl.ps1，T20 步骤 3 定的做法）。
   启动一次：弹"首次配置"（截图 smoke-首次配置.png）；主窗口首页启动检查只报 1 项——"管理员 Skill 目录不存在"（同上，预期）；
         分词文件、LibreOffice 两项已不再报。Key 一栏显示"已保存"，是本机凭据管理器里已有测试 Key（与开发实例共用），未改动。
   发现：主窗口页面标题（document.title）仍是"DeepSeek Harness"，见交付说明遗留。

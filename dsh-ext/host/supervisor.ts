@@ -29,6 +29,14 @@ export interface SupervisorDeps {
 
 export type SupervisorState = 'stopped' | 'starting' | 'running' | 'failed' | 'version_mismatch'
 
+/**
+ * 服务没起来的原因（令 2033：干净机上服务不启动、日志里看不出为什么）。只有类别和退出码，不含路径、不含服务输出。
+ * - launch_error：进程没能拉起（找不到程序、被拦截等，detail 是错误类名或 Host 给的代码）；
+ * - exited：进程退出（还没就绪或运行中）；
+ * - startup_timeout：30 秒内 /health 没通过。
+ */
+export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null }
+
 export const PROBE_INTERVAL_MS = 5_000
 export const MAX_MISSED_PROBES = 3
 export const RESTART_WINDOW_MS = 60_000
@@ -49,6 +57,10 @@ export class Supervisor {
   private stopping = false
   private generation = 0
   private readonly listeners = new Set<(s: SupervisorState) => void>()
+  /** 最近一次没起来的原因；起来了就清掉。 */
+  lastFailure: StartFailure | undefined
+  /** 哪一代是因为 30 秒没就绪被 Host 杀掉的（它退出时原因仍记"没就绪"，不记成"退出"）。 */
+  private timedOutGen = -1
 
   constructor(private readonly deps: SupervisorDeps) {}
 
@@ -61,6 +73,9 @@ export class Supervisor {
     if (this.state === s) return
     this.state = s
     this.deps.log(s === 'failed' || s === 'version_mismatch' ? 'error' : 'info', 'service.state', { state: s })
+    if (s === 'running') this.lastFailure = undefined
+    // 重启也救不回来：留一条带原因的记录（令 2033）
+    if (s === 'failed') this.deps.log('error', 'service.start_failed', { ...(this.lastFailure ?? { reason: 'unknown' }) })
     for (const fn of this.listeners) fn(s)
   }
 
@@ -96,6 +111,7 @@ export class Supervisor {
       await this.launchInner(gen, portRetries)
     } catch (e) {
       this.deps.log('error', 'service.launch_failed', { error: String((e as Error)?.message ?? e) })
+      this.lastFailure = { reason: 'launch_error', detail: launchErrorKind(e) }
       if (!this.stopping && gen === this.generation) this.setState('failed')
     }
   }
@@ -135,6 +151,8 @@ export class Supervisor {
     }
     if (gen === this.generation && !this.stopping) {
       this.deps.log('warn', 'service.startup_timeout', {})
+      this.lastFailure = { reason: 'startup_timeout' }
+      this.timedOutGen = gen
       child.kill()
     }
   }
@@ -167,6 +185,7 @@ export class Supervisor {
     this.child = undefined
     this.deps.log(code === 0 || this.stopping ? 'info' : 'warn', 'service.exit', { code })
     if (this.stopping || this.state === 'version_mismatch') return
+    if (this.timedOutGen !== gen) this.lastFailure = { reason: 'exited', exitCode: code }
     if (code === EXIT_PORT_IN_USE && portRetries < MAX_PORT_RETRIES) {
       this.relaunch(portRetries + 1)
       return
@@ -186,4 +205,22 @@ export class Supervisor {
   private relaunch(portRetries: number): void {
     void this.launch(portRetries)
   }
+}
+
+/** 拉起失败的类别：Host 自己给的代码（如 PYTHON_MISSING）优先，其次系统错误码（ENOENT、EACCES、EPERM…），再次错误类名。 */
+export function launchErrorKind(e: unknown): string {
+  const err = e as { code?: unknown; name?: unknown } | null
+  if (err && typeof err.code === 'string' && /^[A-Z_]{2,40}$/.test(err.code)) return err.code
+  return err && typeof err.name === 'string' && /^[A-Za-z]{1,40}$/.test(err.name) ? err.name : 'Error'
+}
+
+/** 给律师看的原因（首次配置页"测试连接"、首页）。 */
+export function startFailureText(f: StartFailure | undefined): string {
+  if (!f) return '原因不明'
+  if (f.reason === 'startup_timeout') return '30 秒内没有就绪'
+  if (f.reason === 'exited') return `服务启动后退出（代码 ${f.exitCode ?? '无'}）`
+  if (f.detail === 'PYTHON_MISSING') return '找不到内置的 Python'
+  if (f.detail === 'EACCES' || f.detail === 'EPERM') return '程序被拒绝运行（可能被安全软件拦截）'
+  if (f.detail === 'ENOENT') return '找不到要运行的程序'
+  return `程序没能运行（${f.detail ?? '未知错误'}）`
 }

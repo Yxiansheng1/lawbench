@@ -6,11 +6,11 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
+import { basename, isAbsolute, join, relative } from 'node:path'
 import { homedir } from 'node:os'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
-import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
+import { Supervisor, startFailureText, type ChildHandle, type SupervisorState } from './supervisor.ts'
 import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
 // 构建后核对打包出的 Host 方法形参名与方法表一致（scripts/build.mjs）
 export { REMOTE_METHODS }
@@ -210,6 +210,8 @@ export class LawbenchRemote {
       putSettings: (s) => this.putSettings(s),
       caseOpen: (req) => (this as unknown as { caseOpen(r: unknown): Promise<never> }).caseOpen(req),
     })).then((r) => {
+      // 还没做首次配置（NOT_CONFIGURED）是正常状态，界面会隔一会儿再问：不记（令 2033：原来每隔几秒一条 warn 刷满日志）
+      if (!r.ok && r.error.code === 'NOT_CONFIGURED') return r
       if (!r.ok || r.value.created) this.log(r.ok ? 'info' : 'warn', 'daily_case.ensure', { ok: r.ok, code: r.ok ? undefined : r.error.code, created: r.ok ? true : undefined })
       return r
     })
@@ -316,7 +318,7 @@ export class LawbenchRemote {
 
   private async api(method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown): Promise<unknown> {
     const ep = this.supervisor.endpoint()
-    if (!ep) throw new Error('工作台服务未启动，请稍后重试')
+    if (!ep) throw new Error(unavailableText(this.supervisor))
     const r = await fetch(`http://127.0.0.1:${ep.port}${path}`, {
       method, redirect: 'error', signal: AbortSignal.timeout(30_000),
       headers: { authorization: `Bearer ${ep.token}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
@@ -467,6 +469,11 @@ export class LawbenchRemote {
 }
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
+
+/** 服务不可用时给律师的话：重启也救不回来（failed）时说出原因、请联系技术支持；还在启动 / 重启中照旧"请稍后重试"（令 2033）。 */
+export function unavailableText(s: Pick<Supervisor, 'state' | 'lastFailure'>): string {
+  return s.state === 'failed' ? `本机服务未能启动：${startFailureText(s.lastFailure)}，请联系技术支持` : UNAVAILABLE
+}
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 
 /** 粘贴截图的临时目录 <应用数据>\临时\粘贴\。 */
@@ -510,7 +517,7 @@ Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS_KEY, {
 
 export function apply(ctx: Ctx, given: Config): void {
   // 装好的客户端：命令、目录按安装目录写死，不用开发期环境变量给的（T20 步骤 3，install-layout.ts）
-  const { config, packaged, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData', process.env.PATH ?? '')
+  const { config, packaged, installDir, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData', process.env.PATH ?? '')
   // 只记元数据（Spec 4.5）：事件名、状态、端口、退出码、次数
   const log = makeLogger('host', config.appData, ctx.logger?.('lawbench-host'))
   if (packaged) log('info', 'config.packaged_layout')
@@ -521,6 +528,12 @@ export function apply(ctx: Ctx, given: Config): void {
   const baseEnv = { ...passThroughEnv(process.env), ...(config.env ?? {}) }
   const supervisor = new Supervisor({
     spawn(port: number, token: string): ChildHandle {
+      // 程序不在（被删、被安全软件隔离）：先说清楚，不交给 spawn 报一句含糊的错（令 2033）。日志只记相对安装目录的部分
+      const exe = config.command[0] ?? ''
+      if (isAbsolute(exe) && !existsSync(exe)) {
+        log('error', 'service.command_missing', { path: installDir ? relative(installDir, exe) : basename(exe) })
+        throw Object.assign(new Error('service command missing'), { code: 'PYTHON_MISSING' })
+      }
       const handle = ctx.subprocess.spawn({
         argv: config.command,
         cwd: config.cwd,

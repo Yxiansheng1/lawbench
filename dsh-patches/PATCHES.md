@@ -165,3 +165,13 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | P-4 | `electron-builder-config.mjs`：强制更新策略只做配置校验，不写进包（`dshMandatoryUpdatePolicy` 为空） | 包里带了策略，装好的程序启动就去轮询远端策略地址（主进程 `fetch`，不经会话白名单），违反 Spec 14.3 | `lawbench-stage.spec.ts` 加一例（序列化后的 `extraMetadata` 没有这个字段） |
 | P-4 | `scripts/package-target.ts`：打本机包时把 `dsh-ext` 打成 `lawbench-dsh` 包，放进本机包集合 | `apps/cli` 对它的依赖是 `link:../../../dsh-ext`，从运行时临时目录解析成 `C:\Users\<用户名>\AppData\dsh-ext`，装出的运行时缺我方组合包，P-14 拒绝启动。放进集合后与其他本机包一样由覆盖项指到这个 tarball | 真打包：运行时自检通过、`desktop-runtime.json` 旁装上了 `lawbench-dsh`；装好的程序启动到首次配置 |
 | P-12 | `apps/desktop/scripts/smoke-runtime.ts`：DSH 打包时的运行时自检只留前端与插件路由两项，自检插件只注入 `webServer`；Office 转换、Office Skill 两项去掉 | P-12 不挂 DSH 的 Office 组合，自检插件要 `officeToPdf`、`skills` 就起不来，打包必然失败。我方文书转换走工作台服务自己的 LibreOffice | 真打包日志"frontend and plugin route passed (Office checks skipped: lawbench P-12)" |
+
+## 第二版前的补丁增补（令 `致A-ORCH-执行令-T20候选包复核AMEND-打第二版前的修法-20261004-2015.md`、`…干净机实装-非默认目录服务不启动-20261004-2033.md`）
+
+只改 P-4（五个文件节，别的补丁都不碰这些文件；P-4 原有的 `package-target.ts` 一节去掉了误带的退格字符 0x08）。改完从固定提交按本文件顺序打全部补丁，148 个路径与工作区逐字一致。
+
+| 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | `apps/desktop/scripts/prepare-dsh.ts`：有 `LAWBENCH_RUNTIME_LOCK` 时先把它放进运行时构建目录再 `pnpm install --lockfile-only`；解析后的锁拷到 `LAWBENCH_RUNTIME_LOCK_OUT` | 复核 P2-2：运行时的第三方 npm 包每次重挑版本、不可复现。先放锁，第三方版本照锁，只重解析每次重打的本机包；`build.ps1` 第一次打包时存锁入库，之后对账 | 明早重打包时核：第一次存锁，第二次对账一致 |
+| P-4 | `apps/desktop/scripts/installer.nsh`：加 `customInstall`，装完删掉 electron-builder 拷到 `%LOCALAPPDATA%\<更新缓存目录>\installer.exe` 的整包拷贝，目录空了就删 | 令 2033 第 3 条：干净机上出现 `@deepseek-aidsh-desktop-updater`，是安装程序为差分更新拷的 779 MB 整包；我方不带更新源，用不上 | `windows-directory-installer.spec.ts`（编译 installer.nsh）通过；装出效果明早重打包后核 |
+| P-4 | `packages/client/ui-layout/src/client/AppFrame.tsx`：窗口标题一律用本地化的产品名（`brand.localBuild`，中文为"连越律师工作台"），不用 `DSH_CLIENT_TITLE`；`tests/app-frame.client.spec.tsx` 随改 | 复核：DSH 官方构建把 `DSH_CLIENT_TITLE` 设成"DeepSeek Harness"，装好的程序窗口标题是它 | `app-frame.client.spec.tsx` 45 例通过 |
