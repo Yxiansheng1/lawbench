@@ -3,7 +3,7 @@
 // 最近案件大卡片（"日常事务（非办案）"单独一张排第一，其余按上次打开倒序、最多 12 个），每张：案件名、路径、材料 / 待识别 / 成果份数、
 // 上次打开时间，整卡可点进入，可把文件拖到卡片导入；没有案件时居中一段欢迎语和三个按钮；底部"技术支持"一行。
 // 数据走现有的 caseRecent、materialsList、outputsList、getCapsules，不加接口。
-import { useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
 import type { Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport } from './cases.ts'
 import { Badge, Button, C, CONNECTING_TEXT, Empty, ErrorLine, getNav, useLoad, useRetryLoad } from './kit.tsx'
@@ -12,6 +12,7 @@ import { useStore } from './store.ts'
 import { BrandMark, VendorLine } from './brand.tsx'
 import { PRODUCT_NAME } from '../shared/product.ts'
 import { materialCounts, shortTime } from './overview.tsx'
+import { loadSettingsIntoState } from './settings.tsx'
 
 /** 首页最多列这么多个案件（日常事务另算）；其余在"打开案件…"里。 */
 export const HOME_MAX_CASES = 12
@@ -38,7 +39,10 @@ export function HomeLanding({ banner }: { banner?: ReactNode }) {
     const r = await loadRecent()
     return Array.isArray(r) ? { ok: true as const, value: r } : { ok: false as const, error: r }
   }, [])
-  const [caps] = useLoad(() => call<Capsules>('getCapsules'), [])
+  const [caps, reloadCaps] = useLoad(() => call<Capsules>('getCapsules'), [])
+  // 启动时服务往往还没就绪，分流提示和律师姓名第一次读不到：案件列表读到了（服务已就绪）再读一次（真机核过）
+  const ready = recent.state === 'ok'
+  useEffect(() => { if (ready) { void reloadCaps(); void loadSettingsIntoState() } }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
   const cases = useStore(app, (s) => s.cases)
   const dailyRoot = useStore(app, (s) => s.dailyRoot)
   const lawyer = useStore(app, (s) => s.lawyerName)
