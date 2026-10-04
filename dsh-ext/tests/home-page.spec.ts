@@ -49,7 +49,8 @@ describe('首页', () => {
     await render()
     const cards = [...box.querySelectorAll('[data-case-card]')] as HTMLElement[]
     expect(cards.map((c) => c.dataset.caseCard)).toEqual(['daily', 'case'])
-    expect(cards[0]!.textContent).toContain('日常事务（非办案）')
+    expect(cards[0]!.textContent).toContain('日常事务')
+    expect(cards[0]!.textContent).not.toContain('（非办案）')
     expect(cards[1]!.textContent).toContain('材料 3 份 · 待识别 1 份 · 成果 2 份')
     expect(cards[1]!.textContent).toContain('上次打开')
     expect(box.textContent).toContain(`王律师 · ${todayText()}`)

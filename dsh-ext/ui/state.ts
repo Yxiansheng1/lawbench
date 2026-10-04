@@ -49,7 +49,7 @@ export interface AppState {
    * （T14 派修 2，用户选"对话区显示草稿"）；成果页"在对话区查看"也写这里。只在内存，草稿正文每次从案件里读。
    */
   answers: Record<string, string>
-  /** "日常事务"的位置（Host 的 dailyCase 取到后记下；令 1347：侧栏写"（非办案）"、概览卡换成提示）；没有为 null。 */
+  /** "日常事务"的位置（Host 的 dailyCase 取到后记下；令 1347：概览卡换成提示；"（非办案）"后缀已按注记 1653 去掉）；没有为 null。 */
   dailyRoot: string | null
   /** 日常事务建不了、且不会自己好时的说明（令 1347 一并做 P3-1，侧栏显示一行）；没有为 null。 */
   dailyError: { code: string; message: string } | null

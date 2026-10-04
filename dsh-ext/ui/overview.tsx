@@ -39,7 +39,7 @@ export function CaseOverview({ caseRef, daily, sessions }: { caseRef: CaseRef; d
   const open = (id: string) => getNav().openSession(id)
   return (
     <section aria-label="案件概览" style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 14 }}>
-      <div style={{ fontSize: 17, fontWeight: 600 }}>{daily ? `${caseRef.name}（非办案）` : caseRef.name}</div>
+      <div style={{ fontSize: 17, fontWeight: 600 }}>{caseRef.name}</div>
       {daily ? <DailyBody recent={recent.slice(0, 3)} open={open} /> : <CaseBody caseRef={caseRef} last={recent[0]} open={open} />}
     </section>
   )

@@ -1,6 +1,6 @@
 // 首页（令 1426，用户："首页需要入口……首页做大气点，这样看着好小气"）：就是原来侧栏"案件"点开的那一页，升级为首页。
 // 顶部：律所 logo、产品名，右侧"律师姓名 · 今天日期"，下面一行分流提示；三个主按钮（打开案件、新建民商事案件、新建刑事案件）；
-// 最近案件大卡片（"日常事务（非办案）"单独一张排第一，其余按上次打开倒序、最多 12 个），每张：案件名、路径、材料 / 待识别 / 成果份数、
+// 最近案件大卡片（"日常事务"单独一张排第一，其余按上次打开倒序、最多 12 个），每张：案件名、路径、材料 / 待识别 / 成果份数、
 // 上次打开时间，整卡可点进入，可把文件拖到卡片导入；没有案件时居中一段欢迎语和三个按钮（技术支持只在窗口右下角，令 1515）。
 // 数据走现有的 caseRecent、materialsList、outputsList、getCapsules，不加接口。
 import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
@@ -131,7 +131,7 @@ export function CaseCard({ c, daily = false }: { c: CaseRef; daily?: boolean }) 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           {daily ? <DailyIcon /> : <FolderIcon />}
-          <span style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{daily ? `${c.name}（非办案）` : c.name}</span>
+          <span style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
         </span>
         {missing ? <Badge tone="warn">文件夹不在原处</Badge> : null}
       </div>
