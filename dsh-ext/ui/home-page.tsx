@@ -9,7 +9,7 @@ import { loadRecent, openCase, startImport } from './cases.ts'
 import { Badge, Button, C, CONNECTING_TEXT, Empty, ErrorLine, getNav, useLoad, useRetryLoad } from './kit.tsx'
 import { app, call, isDaily, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
-import { BrandMark, VendorLine } from './brand.tsx'
+import { BrandMark } from './brand.tsx'
 import { PRODUCT_NAME } from '../shared/product.ts'
 import { materialCounts, shortTime } from './overview.tsx'
 import { loadSettingsIntoState } from './settings.tsx'
@@ -84,7 +84,6 @@ export function HomeLanding({ banner }: { banner?: ReactNode }) {
             </div>
           </section>
         ) : null}
-        <footer style={{ marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}` }}><VendorLine /></footer>
       </div>
     </div>
   )

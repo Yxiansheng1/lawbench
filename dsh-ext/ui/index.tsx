@@ -11,7 +11,7 @@ import { SourceTab } from './source.tsx'
 import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
-import { BrandMark, BrandName, VendorLine } from './brand.tsx'
+import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
 import { createRightbarSeeder, loadSeeded, saveSeeded } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
@@ -110,9 +110,10 @@ function registerCore(ctx: Ctx): void {
   // 律所 logo 常驻品牌位、技术公司一行常驻侧栏底部（执行令 2026-10-04 11:56 第 1、2 条）
   ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({ name: 'sidebar.brand.mark' }, BrandMark))
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark' }, BrandMark))
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.vendor', order: 1000 }, VendorLine))
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.daily-error', order: 900 }, DailyErrorLine))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
+  // 令 1515 第 1 条：技术支持信息只留主窗口右下角一处
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.vendor' }, VendorCorner))
   // 令 1347 第 4 条：DSH 输入框上的权限模式开关（"工作区内修改"等，编码工具的权限档）律师用不到——
   // 在同一位置登记一个排得更前的空占位，DSH 的那个就不画了（单一位置按 priority 从小到大取第一个）
   ctx.slots.inject('conversation.input.permission', () => ctx.slots.register({ name: 'conversation.input.permission', priority: -10 }, NoPermissionPicker))

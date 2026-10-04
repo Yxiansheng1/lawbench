@@ -43,6 +43,18 @@ function ensureLogoStyle(): void {
   document.head.appendChild(el)
 }
 
+/**
+ * 主窗口右下角常驻的技术支持一行（令 1515 第 1 条，用户："把技术公司的信息固定在右下角"）：固定在窗口一角，所有页面可见，
+ * 不随滚动；不接鼠标（pointer-events: none），不挡下面的按钮。首页底部、侧栏底部那两行去掉；首次配置页（独立窗口）和"关于"保留。
+ */
+export function VendorCorner() {
+  return (
+    <div data-lawbench-vendor-corner="" style={{ position: 'fixed', right: 12, bottom: 6, zIndex: 5, pointerEvents: 'none', opacity: 0.75 }}>
+      <VendorLine />
+    </div>
+  )
+}
+
 /** "技术支持：上海莫来特智能科技有限公司"，带小标志。侧栏收起（wide 为假）时只留标志，全称放在提示里。 */
 export function VendorLine({ wide = true }: { wide?: boolean }) {
   return (

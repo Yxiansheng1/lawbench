@@ -55,7 +55,7 @@ describe('首页', () => {
     expect(box.textContent).toContain(`王律师 · ${todayText()}`)
     expect(box.textContent).toContain('涉及隐私的材料进入本机案件。')
     expect([...box.querySelectorAll('[aria-label="案件操作"] button')].map((b) => b.textContent)).toEqual(['打开案件…', '新建民商事案件…', '新建刑事案件…'])
-    expect(box.textContent).toContain('技术支持：上海莫来特智能科技有限公司')
+    expect(box.textContent).not.toContain('技术支持') // 令 1515：首页不放技术支持，只在窗口右下角
   })
 
   it('空状态（只有日常事务或什么都没有）：居中欢迎语和三个按钮', async () => {
