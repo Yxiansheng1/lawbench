@@ -16,6 +16,8 @@ export const DEFAULT_TARGET = '02案件材料'
 export const DAILY_FAST_TRIES = 15
 export const DAILY_EVERY_MS = 2000
 export const DAILY_SLOW_MS = 10_000
+/** 会自己好的错误（服务还没就绪、首次配置没做完、超时）：接着取；别的（如在云同步文件夹里）停下并在侧栏说明（令 1347 P3-1）。 */
+export const DAILY_RETRY_CODES: ReadonlySet<string> = new Set(['SERVICE_UNAVAILABLE', 'NOT_CONFIGURED', 'TIMEOUT', 'INTERNAL'])
 
 /**
  * 纯聊天的默认工作区（执行令 1156 第 4 条，N70）：启动时向 Host 取"日常事务"（首次配置后第一次取时建好并登记），
@@ -25,8 +27,14 @@ export const DAILY_SLOW_MS = 10_000
 export async function landOnDailyCase(open: (root: string) => Promise<void>, wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms))): Promise<boolean> {
   for (let i = 0; ; i++) {
     const r = await call<{ root: string | null; created: boolean }>('dailyCase')
+    if (!r.ok && !DAILY_RETRY_CODES.has(r.error.code)) {
+      app.set((s) => ({ ...s, dailyError: r.error }))
+      return false
+    }
     if (r.ok) {
       if (!r.value.root) return false
+      const root = r.value.root
+      app.set((s) => ({ ...s, dailyRoot: root, dailyError: null }))
       // 记过位置时 Host 不问服务就返回；服务还没就绪时读不到案件列表，打开也会失败——读到了再往下（真机核过）
       const recent = await loadRecent()
       if (Array.isArray(recent)) {
@@ -40,9 +48,9 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
 }
 
 export async function loadRecent(): Promise<CaseRef[] | { code: string; message: string }> {
-  const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean }> }>('caseRecent', {})
+  const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean; last_opened?: string }> }>('caseRecent', {})
   if (!r.ok) return r.error
-  const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: c.name, root: c.root, exists: c.exists }))
+  const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: c.name, root: c.root, exists: c.exists, last_opened: c.last_opened }))
   app.set((s) => {
     const known = new Map(s.cases.map((c) => [c.case_id, c]))
     for (const c of cases) known.set(c.case_id, c)
@@ -67,7 +75,8 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   if (r.value.folders_created.length) notice('已建好标准目录', `在"${c.name}"里新建了 ${r.value.folders_created.length} 个子文件夹。`, r.value.folders_created)
   if (navigate) {
     await nav.openCaseWorkspace(dir)
-    nav.openTab(TABS.materials)
+    // 令 1347 第 3 条：右侧栏三个标签常显，停在"材料"（最后开的为当前）
+    for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind) // 同 rightbar.ts 的 RIGHTBAR_TABS
   }
   return c
 }

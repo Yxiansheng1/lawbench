@@ -29,7 +29,7 @@ const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 export async function loadSettingsIntoState(): Promise<Settings | undefined> {
   try {
     const s = (await lb().getSettings()) as unknown as Settings
-    app.set((st) => ({ ...st, defaults: s.defaults, presets: s.skill_presets }))
+    app.set((st) => ({ ...st, defaults: s.defaults, presets: s.skill_presets, lawyerName: s.profile?.lawyer_name ?? null }))
     return s
   } catch { return undefined }
 }
@@ -56,7 +56,7 @@ export function SettingsSection() {
     try {
       await lb().putSettings({ ...draft, servers: loaded.servers, ocr_fallback_llm: loaded.ocr_fallback_llm })
       setLoaded(structuredClone(draft)); setErr(null); setSaved(true)
-      app.set((st) => ({ ...st, defaults: draft.defaults, presets: draft.skill_presets }))
+      app.set((st) => ({ ...st, defaults: draft.defaults, presets: draft.skill_presets, lawyerName: draft.profile.lawyer_name }))
     } catch (e) { setErr({ code: 'INVALID_ARGUMENT', message: lawyerMessage((e as Error).message) }) }
   }
   const skillTitle = (n: string) => skills.find((s) => s.name === n)?.title ?? n

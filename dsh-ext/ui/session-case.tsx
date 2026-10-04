@@ -8,7 +8,7 @@ import { useStore } from './store.ts'
 
 export type SessionProps = {
   sessionId: string
-  useSessions?: <T>(select: (s: { byId: Record<string, { cwd?: string } | undefined> }) => T) => T
+  useSessions?: <T>(select: (s: { byId: Record<string, { cwd?: string; blank?: boolean; parentId?: string; displayTitle?: string; title?: string; updatedAt?: number } | undefined> }) => T) => T
 }
 
 let recentLoaded = false

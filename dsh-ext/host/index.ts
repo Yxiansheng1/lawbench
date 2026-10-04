@@ -312,8 +312,9 @@ export class LawbenchRemote {
       headers: { authorization: `Bearer ${ep.token}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
-    const j = (await r.json()) as { ok: boolean; value?: unknown; error?: { message: string } }
-    if (!j.ok) throw new Error(j.error?.message ?? '内部错误，请重试；多次出现请联系技术支持')
+    const j = (await r.json()) as { ok: boolean; value?: unknown; error?: { code?: string; message: string } }
+    // 服务的错误码随错误带出（第二轮复核 AMEND F1：日常事务按它判断该不该再试）
+    if (!j.ok) throw Object.assign(new Error(j.error?.message ?? '内部错误，请重试；多次出现请联系技术支持'), { serviceCode: j.error?.code })
     return j.value
   }
 
