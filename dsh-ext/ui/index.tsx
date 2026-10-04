@@ -11,12 +11,13 @@ import { SourceTab } from './source.tsx'
 import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
-import { BrandMark, BrandName, VendorLine } from './brand.tsx'
+import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
-import { createRightbarSeeder, loadSeeded, saveSeeded } from './rightbar.ts'
+import { CaseSwitcher } from './case-switcher.tsx'
+import { createRightbarSeeder, forgetIfGone, loadSeeded, saveSeeded } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
-import { getNav, setNav, type Nav } from './kit.tsx'
-import { app, call, caseBlockLabel, currentCase, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
+import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
+import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
 import { citationMark, type CitationMark } from './citation.ts'
 import { citationDeps } from './citation-deps.ts'
@@ -24,8 +25,6 @@ import { citationDeps } from './citation-deps.ts'
 export const inject = ['slots', 'remote']
 
 const HOME = 'lawbench-home'
-/** 侧栏"案件：xxx"一块（点开同是首页，用来看当前案件、切换案件）。 */
-const CASES = 'lawbench-cases'
 /** 首页入口排在"新会话"上方：DSH 补丁 P-21 把 order <= -1000 的面板画在新会话上面。 */
 export const HOME_ORDER = -1000
 
@@ -43,7 +42,11 @@ type Ctx = {
   sessions: { list: Observable<{ byId: Record<string, { cwd?: string; running?: boolean } | undefined> }> }
   uiSession: { adapter: { current: Observable<{ key?: string } | undefined> } }
   uiWorkspace: { openWorkspace(id: string): Promise<unknown>; openSession(id: string): void; pickDirectory?(): Promise<string | null | undefined> }
-  workspaces: { create(req: { path: string }): Promise<{ workspaceId: string }> }
+  workspaces: {
+    create(req: { path: string }): Promise<{ workspaceId: string }>
+    delete(workspaceId: string): Promise<void>
+    list?: Observable<{ items: Array<{ workspaceId: string; path: string; title?: string }> }>
+  }
   sidebarRight: { openTab(kind: string, opts?: { params?: Record<string, string> }): unknown; mounted: Observable<string | undefined> }
   sidebarRightTabs: { register(def: Record<string, unknown>): Disposer }
   /** P-5 源码补丁提供；没打补丁时不存在。 */
@@ -74,6 +77,7 @@ const nav: Nav = {
   goHome: () => navImpl.goHome?.(),
   refreshModels: () => navImpl.refreshModels!(),
   openSession: (id) => navImpl.openSession?.(id),
+  forgetCaseWorkspace: (root, except) => navImpl.forgetCaseWorkspace?.(root, except) ?? Promise.resolve(),
 }
 
 /** 输入框上权限模式开关的空占位（令 1347 第 4 条）。 */
@@ -88,14 +92,6 @@ function HomeIcon({ size = 16 }: { size?: number }) {
   )
 }
 
-/** 侧栏"案件"一块的图标（文件夹）。 */
-function CaseIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth={1.3}>
-      <path d="M2 4.2c0-.4.3-.7.7-.7h3.4l1.4 1.5h5.8c.4 0 .7.3.7.7v6.9c0 .4-.3.7-.7.7H2.7a.7.7 0 0 1-.7-.7V4.2Z" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 
 
@@ -104,15 +100,18 @@ function registerCore(ctx: Ctx): void {
   setApi(unwrapRemote(ctx.remote.lawbench as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>))
   ctx.effect(() => () => setApi(undefined), '律师工作台界面：接口')
   void loadSettingsIntoState()
+  // 令 1609：深色下原生下拉框的选项看得清（关窗口不拦，见 settings-draft.ts 开头）
+  ensureFieldStyle()
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'lawbench', order: -20, label: () => '律师工作台' }, SettingsSection))
   // 侧栏品牌位：我方产品名和版本（T14 派修 3；原版位置显示"DSH 本地构建 0.1.7-rc.2-…"）
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, BrandName))
   // 律所 logo 常驻品牌位、技术公司一行常驻侧栏底部（执行令 2026-10-04 11:56 第 1、2 条）
   ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({ name: 'sidebar.brand.mark' }, BrandMark))
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark' }, BrandMark))
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.vendor', order: 1000 }, VendorLine))
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.daily-error', order: 900 }, DailyErrorLine))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
+  // 令 1515 第 1 条：技术支持信息只留主窗口右下角一处
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.vendor' }, VendorCorner))
   // 令 1347 第 4 条：DSH 输入框上的权限模式开关（"工作区内修改"等，编码工具的权限档）律师用不到——
   // 在同一位置登记一个排得更前的空占位，DSH 的那个就不画了（单一位置按 priority 从小到大取第一个）
   ctx.slots.inject('conversation.input.permission', () => ctx.slots.register({ name: 'conversation.input.permission', priority: -10 }, NoPermissionPicker))
@@ -120,32 +119,18 @@ function registerCore(ctx: Ctx): void {
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)
 }
 
-/**
- * 侧栏顶部"案件"一块（执行令 1156 第 3 条：取消单独首页）：名字常显当前案件，点开是最近案件、新建、打开、切换案件（和发票页）。
- * 启动时不再转到这一页，直接是对话区。DSH 的侧栏只在登记变化时重读名字，所以当前案件变了就换一份登记。
- */
+/** 首页（令 1426）：侧栏最顶部的入口、启动落首页；对话区顶部的当前案件与切换（令 1515）。 */
 function registerHome(ctx: Ctx): void {
-  // 令 1426：侧栏最顶部（新会话上方）常显"首页"，启动默认落首页；"案件：xxx"一块保留在原处，点开同是首页
+  // 令 1426：侧栏最顶部（新会话上方）常显"首页"，启动默认落首页。令 1515：侧栏"案件：xxx"一块删掉（与首页重复），
+  // 当前案件改在对话区顶部（CaseSwitcher）；侧栏只留首页、新会话、会话列表
   let shown = false
-  ctx.slots.inject('main', function* () {
-    yield ctx.slots.register({ name: 'main', key: HOME }, HomePage)
-    yield ctx.slots.register({ name: 'main', key: CASES }, HomePage)
+  ctx.slots.inject('main', () => {
+    const dispose = ctx.slots.register({ name: 'main', key: HOME }, HomePage)
     if (!shown) { shown = true; setTimeout(() => { try { ctx.layout.selectPanel(HOME) } catch { /* 页面还没登记好 */ } }, 0) }
+    return dispose
   })
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: HOME, order: HOME_ORDER, label: () => '首页' }, HomeIcon))
-  ctx.slots.inject('sidebar.panellist', () => {
-    const reg = (label: string) => ctx.slots.register({ name: 'sidebar.panellist', id: CASES, order: -100, label: () => label }, CaseIcon)
-    let label = caseBlockLabel(app.get())
-    let dispose = reg(label)
-    const off = app.subscribe(() => {
-      const next = caseBlockLabel(app.get())
-      if (next === label) return
-      label = next
-      dispose()
-      dispose = reg(next)
-    })
-    return () => { off(); dispose() }
-  })
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({ name: 'conversation.session.header.actions', id: 'lawbench.case', order: -100 }, CaseSwitcher))
   navImpl.goHome = () => ctx.layout.selectPanel(HOME)
   ctx.effect(() => () => { navImpl.goHome = undefined }, '律师工作台界面：首页导航')
 }
@@ -154,6 +139,9 @@ function registerHome(ctx: Ctx): void {
  * 打开案件 = 把案件文件夹当工作区打开（Spec 1.2）。建好（或取到已有的）工作区后，请 Host 把 cwd 就是这个案件根、
  * 又不在任何工作区里的会话挂回来（T17 第三轮复核 B-F2：案件搬家、复制后旧会话不再落进"未分组"）；挂回失败不影响打开。
  */
+/** 最近一次打开的工作区（读列表时发现换了位置也不撤它）。 */
+let lastOpenedWorkspace: string | undefined
+
 function registerWorkspace(ctx: Ctx): void {
   navImpl.openCaseWorkspace = async (root) => {
     const ws = await ctx.workspaces.create({ path: root })
@@ -161,15 +149,23 @@ function registerWorkspace(ctx: Ctx): void {
     // 打开后会话名单没刷新到这个案件（服务没答、挂住）：旧会话可能还没归到这里，提示稍后再打开一次（第五轮复核 F2）
     if (r?.ok && r.value.listed === false) notice(ROOTS_NOT_REFRESHED[0], ROOTS_NOT_REFRESHED[1])
     await ctx.uiWorkspace.openWorkspace(ws.workspaceId)
+    lastOpenedWorkspace = ws.workspaceId
+    return ws.workspaceId
   }
   navImpl.openSession = (id) => { try { ctx.uiWorkspace.openSession(id) } catch { /* 会话已不在：不转 */ } }
+  // 1612 复核 P1：不撤刚打开的那一项；移除前问 Host 旧位置是不是确实不在了（在就不撤：多半是同一位置换了写法）
+  navImpl.forgetCaseWorkspace = async (root, except) => {
+    const items = ctx.workspaces.list?.getSnapshot().items ?? []
+    await forgetIfGone(items, root, except ?? lastOpenedWorkspace, samePath, (path) => call<{ exists: boolean }>('pathState', { path }), (id) => ctx.workspaces.delete(id))
+  }
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
-  ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined }, '律师工作台界面：打开案件')
+  ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined; navImpl.forgetCaseWorkspace = undefined }, '律师工作台界面：打开案件')
   // 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条）：当前会话不在案件里时打开它。走"进入"同一条路（再登记一次、
   // 记进界面状态、打开工作区）：只打开工作区时，DSH 新建的空会话在输入区认不出案件（真机核过）
   // 令 1426：启动落首页——日常事务照样打开（空会话要落在一个案件里），打开后再回首页
   void landOnDailyCase((root) => openCase(root, null).then(() => { navImpl.goHome?.() })).catch(() => undefined)
+  // 1612 复核 P3：去掉"重启后不在登记里的一律撤"（服务的登记丢了会把全部案件撤掉）；重启前的旧位置那一项留着，律师可在侧栏菜单"从列表移除案件"
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */

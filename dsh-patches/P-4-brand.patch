@@ -1262,3 +1262,56 @@ index f2407246f8..225a595f34 100644
    })
  
    it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
+diff --git a/packages/client/ui-settings-general/src/client/CurrentVersionRow.tsx b/packages/client/ui-settings-general/src/client/CurrentVersionRow.tsx
+index e3c8cb702f..4aaf7c246d 100644
+--- a/packages/client/ui-settings-general/src/client/CurrentVersionRow.tsx
++++ b/packages/client/ui-settings-general/src/client/CurrentVersionRow.tsx
+@@ -2,13 +2,14 @@
+ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+ import css from './CurrentVersionRow.module.css'
+ 
++/** lawbench（P-4，注记 1706）：律师看到的是工作台的版本，不是 DSH 的；与 dsh-ext/shared/product.ts 的 PRODUCT_VERSION 一致（dsh-ext 测试核对）。 */
++export const LAWBENCH_VERSION = '0.1.0'
++
+ /**
+- * Render the version embedded by the client build; partial builds without metadata omit the row.
++ * Render the lawbench product version (DSH_CLIENT_VERSION stays for update checks and is not shown).
+  * @param props - runtime share and localized copy.
+- * @returns the current release label, or nothing when build metadata is absent.
++ * @returns the current release label.
+  */
+ export function CurrentVersionRow({ t }: PropsRuntime<'settings.general.item'> & PropsLocale<'settings'>) {
+-  const version = process.env.DSH_CLIENT_VERSION
+-  if (version === undefined) return null
+-  return <div className={css.row}>{t('general.currentVersion', { version })}</div>
++  return <div className={css.row}>{t('general.currentVersion', { version: LAWBENCH_VERSION })}</div>
+ }
+diff --git a/packages/client/ui-settings-general/tests/components.client.spec.tsx b/packages/client/ui-settings-general/tests/components.client.spec.tsx
+index 4f7ef6481b..c9447d8da1 100644
+--- a/packages/client/ui-settings-general/tests/components.client.spec.tsx
++++ b/packages/client/ui-settings-general/tests/components.client.spec.tsx
+@@ -226,8 +226,8 @@ it('reports a failed developer-tool write and allows retry', async () => {
+ 
+ describe('current version', () => {
+   it.each([
+-    ['Current version: 1.2.3-rc.4', en],
+-    ['当前版本：1.2.3-rc.4', zh],
++    ['Current version: 0.1.0', en],
++    ['当前版本：0.1.0', zh],
+   ])('renders the localized release label %s', (expected, dictionary) => {
+     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+     const translate: TriggerContentProps['t'] = (key, params) => {
+@@ -240,9 +240,10 @@ describe('current version', () => {
+     expect(screen.queryByRole('button')).toBeNull()
+   })
+ 
+-  it('omits the row when a partial build has no version metadata', () => {
++  it('shows the lawbench version even without DSH build metadata (lawbench P-4)', () => {
+     vi.stubEnv('DSH_CLIENT_VERSION', undefined)
+-    const view = render(<CurrentVersionRow {...kit} t={t} />)
+-    expect(view.container.textContent).toBe('')
++    const version: TriggerContentProps['t'] = (_key, params) => String(params?.version)
++    const view = render(<CurrentVersionRow {...kit} t={version} />)
++    expect(view.container.textContent).toBe('0.1.0')
+   })
+ })

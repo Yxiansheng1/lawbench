@@ -22,6 +22,7 @@ import { requestJson } from './http-json.ts'
 import { readArchivePlan } from './archive-plan.ts'
 import { readTaskAnswer } from './task-answer.ts'
 import { ensureDailyCase, type DailyResult } from './daily-case.ts'
+import { pathState, type PathStateResult } from './path-state.ts'
 import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
@@ -183,6 +184,15 @@ export class LawbenchRemote {
   async turnNotice(request: unknown): Promise<{ ok: true; value: { code: string | null; task_id: string | null } }> {
     const sessionId = (request as { session_id?: unknown } | null)?.session_id
     return { ok: true, value: typeof sessionId === 'string' ? this.notices.takeWithTask(sessionId) : { code: null, task_id: null } }
+  }
+
+  /**
+   * 某个文件夹此刻在不在（1612 复核 P1：侧栏只移除旧位置确实已不在的那一项；界面不能读本机文件，由 Host 看）。
+   * 只回在不在，不读内容；日志不记路径。
+   * @param request - { path }。
+   */
+  pathState(request: unknown): Promise<PathStateResult> {
+    return pathState(request)
   }
 
   private dailyQueue: Promise<unknown> = Promise.resolve()

@@ -8,6 +8,8 @@ import { BrandMark, VendorLine } from './brand.tsx'
 import { CapsuleSettings } from './home.tsx'
 import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION } from '../shared/product.ts'
 import { app, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
+import { useStore } from './store.ts'
+import { discardDraft, isDirty, onLeaveSettings, saveDraft, settingsDraft } from './settings-draft.ts'
 
 interface Settings {
   v: 1
@@ -35,39 +37,40 @@ export async function loadSettingsIntoState(): Promise<Settings | undefined> {
 }
 
 export function SettingsSection() {
-  const [loaded, setLoaded] = useState<Settings | null>(null)
-  const [draft, setDraft] = useState<Settings | null>(null)
+  // 草稿在 settings-draft.ts 的界面状态里（令 1609 第 2 条）：这一节卸下（切到别的页面、关掉设置）时草稿不丢，有修改就问
+  const { loaded: loadedRaw, draft: draftRaw } = useStore(settingsDraft, (x) => x)
+  const loaded = loadedRaw as Settings | null
+  const draft = draftRaw as Settings | null
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [err, setErr] = useState<{ code: string; message: string } | null>(null)
-  const [saved, setSaved] = useState(false)
   const templateInput = useRef<HTMLInputElement>(null)
   const [templateFor, setTemplateFor] = useState<'文书' | '合同'>('文书')
   useEffect(() => {
-    void loadSettingsIntoState().then((s) => { if (s) { setLoaded(s); setDraft(structuredClone(s)) } else setErr({ code: 'SERVICE_UNAVAILABLE', message: '没能读取设置，请稍后重试' }) })
+    // 带着上次没保存的修改回来：不重读，接着改（保存条还在）
+    if (!isDirty()) {
+      void loadSettingsIntoState().then((s) => {
+        if (s) settingsDraft.set({ loaded: s as never, draft: structuredClone(s) as never, savedAt: null })
+        else setErr({ code: 'SERVICE_UNAVAILABLE', message: '没能读取设置，请稍后重试' })
+      })
+    }
     void lb().setupState().then((s) => setHasKey(s.hasKey)).catch(() => setHasKey(null))
     void lb().listSkills().then((r) => setSkills(r.value.skills.filter((x) => x.mode === MODE_AGENT))).catch(() => undefined)
+    return () => { void onLeaveSettings() }
   }, [])
   if (!draft || !loaded) return <div style={{ padding: 16 }}><h2 style={S.h2}>律师工作台</h2><ErrorLine error={err} />{err ? null : <div style={S.sub}>读取中…</div>}</div>
 
-  const up = (f: (d: Settings) => void) => { const d = structuredClone(draft); f(d); setDraft(d); setSaved(false) }
-  const dirty = JSON.stringify(draft) !== JSON.stringify(loaded)
+  const up = (f: (d: Settings) => void) => { const d = structuredClone(draft); f(d); settingsDraft.set((x) => ({ ...x, draft: d as never })) }
   const save = async () => {
-    try {
-      await lb().putSettings({ ...draft, servers: loaded.servers, ocr_fallback_llm: loaded.ocr_fallback_llm })
-      setLoaded(structuredClone(draft)); setErr(null); setSaved(true)
-      app.set((st) => ({ ...st, defaults: draft.defaults, presets: draft.skill_presets, lawyerName: draft.profile.lawyer_name }))
-    } catch (e) { setErr({ code: 'INVALID_ARGUMENT', message: lawyerMessage((e as Error).message) }) }
+    const e = await saveDraft()
+    setErr(e ? { code: 'INVALID_ARGUMENT', message: e } : null)
   }
   const skillTitle = (n: string) => skills.find((s) => s.name === n)?.title ?? n
   const unset = skills.filter((s) => !draft.skill_presets[s.name])
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 18, color: C.text, fontSize: 13 }}>
-      <div style={S.between}>
-        <h2 style={S.h2}>律师工作台</h2>
-        <div style={S.row}>{saved ? <span style={{ color: C.ok, fontSize: 12 }}>已保存</span> : null}<Button variant="primary" size="sm" disabled={!dirty} onClick={() => void save()}>保存</Button></div>
-      </div>
+      <h2 style={S.h2}>律师工作台</h2>
       <ErrorLine error={err} />
 
       <Block title="服务器和 Key" note="服务器地址本版只显示；Key 可以更换。">
@@ -138,6 +141,41 @@ export function SettingsSection() {
         <div style={S.sub}>{FIRM_NAME} · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
         <VendorLine />
       </Block>
+      <SaveBar onSave={() => void save()} />
+    </div>
+  )
+}
+
+/**
+ * 设置页底部固定的保存条（令 1609 第 2 条）：贴在设置内容的底边、不随内容滚动。有未保存的修改时显示"有未保存的修改"＋"保存"＋"放弃修改"；
+ * 保存成功后两秒内显示"已保存 HH:mm"；其余时候不显示。
+ */
+export function SaveBar({ onSave, now = () => Date.now() }: { onSave: () => void; now?: () => number }) {
+  const state = useStore(settingsDraft, (x) => x)
+  const dirty = isDirty(state)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!state.savedAt) return
+    const t = setTimeout(() => tick((n) => n + 1), Math.max(0, state.savedAt + 2000 - now()))
+    return () => clearTimeout(t)
+  }, [state.savedAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  const justSaved = !dirty && state.savedAt !== null && now() - state.savedAt < 2000
+  if (!dirty && !justSaved) return null
+  const hm = (t: number) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+  return (
+    <div role="region" aria-label="保存" data-lawbench-savebar="" style={{
+      position: 'sticky', bottom: 0, zIndex: 2, margin: '0 -16px -16px', padding: '10px 16px',
+      background: C.layer, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    }}>
+      {dirty ? (
+        <>
+          <span style={{ color: C.warn, fontWeight: 600 }}>有未保存的修改</span>
+          <span style={S.row}>
+            <Button variant="outline" size="sm" onClick={() => discardDraft()}>放弃修改</Button>
+            <Button variant="primary" size="sm" onClick={onSave}>保存</Button>
+          </span>
+        </>
+      ) : <span style={{ color: C.ok }}>已保存 {hm(state.savedAt!)}</span>}
     </div>
   )
 }

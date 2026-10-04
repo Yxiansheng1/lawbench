@@ -20,6 +20,19 @@ export const C = {
   rLg: 'var(--dsw-radius-lg, 14px)',
 }
 
+/**
+ * 原生下拉框展开后的选项列表（令 1609 第 1 条，用户："深色我点开设置选择思考等级就看不清楚"）：选项默认白底、却跟着下拉框用深色主题的浅色字，
+ * 几乎看不见。给选项明确的底色和字色，跟 DSH 主题变量走（深浅两套都对）。行内样式管不到 <option>，只能加一条全局样式；只加一次。
+ */
+export const FIELD_STYLE = 'select option,select optgroup{background-color:var(--dsw-alias-bg-layer-1,Canvas);color:var(--dsw-alias-label-primary,CanvasText)}'
+export function ensureFieldStyle(doc: Document = document): void {
+  if (doc.getElementById('lb-field-style')) return
+  const el = doc.createElement('style')
+  el.id = 'lb-field-style'
+  el.textContent = FIELD_STYLE
+  doc.head.appendChild(el)
+}
+
 export const S: Record<string, CSSProperties> = {
   page: { height: '100%', overflow: 'auto', color: C.text, boxSizing: 'border-box' },
   pane: { padding: 12, color: C.text, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'auto', boxSizing: 'border-box' },
@@ -118,12 +131,15 @@ export function Loading<T>({ data, children }: { data: Loaded<T>; children: (v: 
 export interface Nav {
   pickDirectory(): Promise<string | null>
   pathFor(file: File): string
-  openCaseWorkspace(root: string): Promise<void>
+  /** @returns 打开的工作区 id（侧栏移除旧位置时排除它，1612 复核 P1）。 */
+  openCaseWorkspace(root: string): Promise<string | void>
   openTab(kind: string, params?: Record<string, string>): void
   goHome(): void
   refreshModels(): void
   /** 转到某个会话（成果页"在对话区查看"，T14 派修 2）。 */
   openSession(sessionId: string): void
+  /** 从侧栏案件列表移除某个旧位置的登记（文件夹改名或搬走后在新位置重新打开，令 1515 第 3 条）；不删文件和会话。 */
+  forgetCaseWorkspace?(root: string, except?: string): Promise<void>
 }
 let nav: Nav | undefined
 export const setNav = (n: Nav | undefined): void => { nav = n }

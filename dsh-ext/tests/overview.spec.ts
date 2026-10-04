@@ -4,7 +4,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { CaseOverview, DAILY_HINT, materialCounts, recentOutputs, shortTime } from '../ui/overview.tsx'
 import { setNav, type Nav } from '../ui/kit.tsx'
-import { app, caseBlockLabel, setApi, type LawbenchApi } from '../ui/state.ts'
+import { app, setApi, type LawbenchApi } from '../ui/state.ts'
 import { landOnDailyCase } from '../ui/cases.ts'
 import { dailyErrorText } from '../ui/daily-error.tsx'
 
@@ -44,7 +44,8 @@ describe('案件概览卡', () => {
     setApi({ materialsList: async () => { reads++; return { ok: true, value: { materials: [] } } }, outputsList: async () => { reads++; return { ok: true, value: { outputs: [] } } } } as unknown as LawbenchApi)
     const ss = [1, 2, 3, 4].map((n) => ({ id: `s${n}`, title: `对话${n}`, updatedAt: n }))
     await render(createElement(CaseOverview, { caseRef: DAILY, daily: true, sessions: ss }))
-    expect(box.textContent).toContain('日常事务（非办案）')
+    expect(box.textContent).toContain('日常事务')
+    expect(box.textContent).not.toContain('（非办案）')
     expect(box.textContent).toContain(DAILY_HINT)
     expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['对话4', '对话3', '对话2'])
     expect(reads).toBe(0)
@@ -59,13 +60,7 @@ describe('案件概览卡', () => {
   })
 })
 
-describe('侧栏案件名与日常事务', () => {
-  it('日常事务显示"（非办案）"，别的案件照常', () => {
-    const s = { ...app.get(), cases: [CASE, DAILY], dailyRoot: DAILY.root }
-    expect(caseBlockLabel({ ...s, currentRoot: DAILY.root })).toBe('案件：日常事务（非办案）')
-    expect(caseBlockLabel({ ...s, currentRoot: CASE.root })).toBe('案件：张某甲诈骗案')
-  })
-
+describe('日常事务', () => {
   it('P3-1：建不了且不会自己好（CASE_IN_SYNC_FOLDER）：不再重试，错误码照实记下，侧栏一行说明', async () => {
     let n = 0
     setApi({ dailyCase: async () => { n++; return { ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '不能选云同步文件夹' } } } } as unknown as LawbenchApi)

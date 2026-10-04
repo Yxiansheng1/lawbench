@@ -22,6 +22,8 @@ export type Dialog =
   | { kind: 'notice'; title: string; text: string; lines?: string[] }
   | { kind: 'import'; caseRef: CaseRef; paths: string[]; from: string }
   | { kind: 'casePick'; then?: (c: CaseRef) => void }
+  /** 设置有未保存的修改时离开：保存 / 不保存 / 取消（令 1609 第 2 条）。 */
+  | { kind: 'unsaved'; title: string; text: string; resolve: (choice: 'save' | 'discard' | 'cancel') => void }
 
 export interface AppState {
   cases: CaseRef[]
@@ -47,7 +49,7 @@ export interface AppState {
    * （T14 派修 2，用户选"对话区显示草稿"）；成果页"在对话区查看"也写这里。只在内存，草稿正文每次从案件里读。
    */
   answers: Record<string, string>
-  /** "日常事务"的位置（Host 的 dailyCase 取到后记下；令 1347：侧栏写"（非办案）"、概览卡换成提示）；没有为 null。 */
+  /** "日常事务"的位置（Host 的 dailyCase 取到后记下；令 1347：概览卡换成提示；"（非办案）"后缀已按注记 1653 去掉）；没有为 null。 */
   dailyRoot: string | null
   /** 日常事务建不了、且不会自己好时的说明（令 1347 一并做 P3-1，侧栏显示一行）；没有为 null。 */
   dailyError: { code: string; message: string } | null
@@ -71,12 +73,8 @@ export function hideTaskAnswer(sessionId: string): void {
 export const currentCase = (s: AppState): CaseRef | undefined =>
   s.currentRoot ? s.cases.find((c) => samePath(c.root, s.currentRoot!)) : undefined
 
-/** 侧栏"案件"一块的名字：常显当前案件名（执行令 1156 第 3 条）。 */
-export const caseBlockLabel = (s: AppState): string => {
-  const c = currentCase(s)
-  if (!c) return '案件：未选择'
-  return isDaily(s, c) ? `案件：${c.name}（非办案）` : `案件：${c.name}`
-}
+/** 案件显示名一律取文件夹名（令 1515 第 3 条：文件夹改名后显示跟着变；登记记录里的名字只作备用）。 */
+export const folderName = (root: string): string => root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
 
 /** 这个案件是不是"日常事务"（令 1347）。 */
 export const isDaily = (s: Pick<AppState, 'dailyRoot'>, c: Pick<CaseRef, 'root'> | undefined): boolean =>
