@@ -12,7 +12,7 @@ import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorLine } from './brand.tsx'
-import { TABS } from './cases.ts'
+import { landOnDailyCase, TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, caseBlockLabel, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
@@ -136,6 +136,8 @@ function registerWorkspace(ctx: Ctx): void {
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
   ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined }, '律师工作台界面：打开案件')
+  // 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条）：当前会话不在案件里时打开它
+  void landOnDailyCase((root) => navImpl.openCaseWorkspace?.(root) ?? Promise.resolve()).catch(() => undefined)
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */

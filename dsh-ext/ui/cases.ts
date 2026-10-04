@@ -1,6 +1,6 @@
 // 案件：打开 / 新建（/api/case/open）、最近案件（/api/case/recent）、导入（/api/materials/import）。
 // 打开案件后把案件文件夹当 DSH 工作区打开（Spec 1.2"案件 = DSH 的工作区"），会话的工作目录即案件文件夹。
-import { app, call, caseForRoot, notice, pushDialog, rememberCase, type CaseRef } from './state.ts'
+import { app, call, caseForRoot, currentCase, notice, pushDialog, rememberCase, type CaseRef } from './state.ts'
 import { getNav } from './kit.tsx'
 import { errorText } from './format.ts'
 
@@ -8,6 +8,30 @@ export const TABS = { materials: 'lawbench-materials', results: 'lawbench-result
 
 /** 默认导入位置（U-12、F-MAT-02a）。 */
 export const DEFAULT_TARGET = '02案件材料'
+
+/** 启动时取"日常事务"最多试这么多次（每 2 秒一次）：服务就绪前取不到。 */
+export const DAILY_TRIES = 30
+export const DAILY_EVERY_MS = 2000
+
+/**
+ * 纯聊天的默认工作区（执行令 1156 第 4 条，N70）：启动时向 Host 取"日常事务"（首次配置后第一次取时建好并登记），
+ * 当前会话不在任何已登记案件里时打开它，空会话就落在这里；律师正在某个案件的会话里时不动。
+ * @returns 打开了"日常事务"为 true。
+ */
+export async function landOnDailyCase(open: (root: string) => Promise<void>, wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms))): Promise<boolean> {
+  for (let i = 0; i < DAILY_TRIES; i++) {
+    const r = await call<{ root: string | null; created: boolean }>('dailyCase')
+    if (r.ok) {
+      if (!r.value.root) return false
+      await loadRecent()
+      if (currentCase(app.get())) return false
+      await open(r.value.root)
+      return true
+    }
+    await wait(DAILY_EVERY_MS)
+  }
+  return false
+}
 
 export async function loadRecent(): Promise<CaseRef[] | { code: string; message: string }> {
   const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean }> }>('caseRecent', {})
