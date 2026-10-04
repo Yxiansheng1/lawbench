@@ -4,7 +4,10 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ensureFieldStyle, FIELD_STYLE } from '../ui/kit.tsx'
 import { SaveBar } from '../ui/settings.tsx'
-import { installUnloadGuard, isDirty, onLeaveSettings, settingsDraft, UNSAVED_TEXT } from '../ui/settings-draft.ts'
+import * as draftModule from '../ui/settings-draft.ts'
+import { isDirty, onLeaveSettings, settingsDraft, UNSAVED_TEXT } from '../ui/settings-draft.ts'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { app, setApi, type LawbenchApi } from '../ui/state.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -75,16 +78,22 @@ describe('带着未保存的修改离开', () => {
     expect(isDirty()).toBe(false)
   })
 
-  it('关窗口：有修改时拦下（不关）并问；取消就留着修改', async () => {
-    const off = installUnloadGuard(window)
+  it('留着修改：草稿原样留着，不保存也不丢', async () => {
     dirtyDraft()
-    const e = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
-    window.dispatchEvent(e)
-    expect(e.defaultPrevented).toBe(true)
-    expect(lastDialog()!.kind).toBe('unsaved')
+    const p = onLeaveSettings()
     lastDialog()!.resolve!('cancel')
-    await act(async () => { await Promise.resolve() })
+    expect(await p).toBe('cancel')
     expect(isDirty()).toBe(true)
-    off()
+  })
+
+  it('有修改时关窗口（beforeunload）不阻止：界面代码里没有 beforeunload 拦截（复核 AMEND 令 1726：拦了会让 DSH 退出卡在后台）', () => {
+    expect('installUnloadGuard' in draftModule).toBe(false)
+    const ui = join(__dirname, '..', 'ui')
+    const hits = readdirSync(ui).filter((f) => /\.tsx?$/.test(f) && /addEventListener\(\s*['"]beforeunload/.test(readFileSync(join(ui, f), 'utf8')))
+    expect(hits).toEqual([])
+    dirtyDraft()
+    const e = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(e)
+    expect(e.defaultPrevented).toBe(false)
   })
 })

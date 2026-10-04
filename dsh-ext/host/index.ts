@@ -6,7 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
@@ -22,6 +22,7 @@ import { requestJson } from './http-json.ts'
 import { readArchivePlan } from './archive-plan.ts'
 import { readTaskAnswer } from './task-answer.ts'
 import { ensureDailyCase, type DailyResult } from './daily-case.ts'
+import { pathState, type PathStateResult } from './path-state.ts'
 import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
@@ -190,9 +191,8 @@ export class LawbenchRemote {
    * 只回在不在，不读内容；日志不记路径。
    * @param request - { path }。
    */
-  async pathState(request: unknown): Promise<{ ok: true; value: { exists: boolean } }> {
-    const p = (request as { path?: unknown } | null)?.path
-    return { ok: true, value: { exists: typeof p === 'string' && p !== '' && isAbsolute(p) && existsSync(p) } }
+  pathState(request: unknown): Promise<PathStateResult> {
+    return pathState(request)
   }
 
   private dailyQueue: Promise<unknown> = Promise.resolve()

@@ -5,6 +5,7 @@ import { app, popDialog, type CaseRef, type Dialog } from './state.ts'
 import { useStore } from './store.ts'
 import { Button, C, Empty, S } from './kit.tsx'
 import { DEFAULT_TARGET, loadRecent, openCase, runImport } from './cases.ts'
+import { KEEP_LABEL } from './settings-draft.ts'
 
 export function DialogHost() {
   const top = useStore(app, (s) => s.dialogs[0])
@@ -32,7 +33,7 @@ function OneDialog({ d }: { d: Dialog }) {
       const answer = (c: 'save' | 'discard' | 'cancel') => { popDialog(d); d.resolve(c) }
       return (
         <Modal open onClose={() => answer('cancel')} title={d.title} closeLabel="关闭"
-          footer={<><Button variant="outline" onClick={() => answer('cancel')}>取消</Button><Button variant="outline" onClick={() => answer('discard')}>不保存</Button><Button variant="primary" data-modal-autofocus onClick={() => answer('save')}>保存</Button></>}>
+          footer={<><Button variant="outline" onClick={() => answer('cancel')}>{KEEP_LABEL}</Button><Button variant="outline" onClick={() => answer('discard')}>不保存</Button><Button variant="primary" data-modal-autofocus onClick={() => answer('save')}>保存</Button></>}>
           <p style={{ margin: 0, lineHeight: 1.7 }}>{d.text}</p>
         </Modal>
       )

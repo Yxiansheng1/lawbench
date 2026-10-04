@@ -67,3 +67,23 @@ describe('侧栏旧位置那一项（1612 复核 P1）', () => {
     app.set((s) => ({ ...s, cases: [] }))
   })
 })
+
+describe('先问 pathState 再撤（令 1726 补：复核员变异 M2）', () => {
+  const items = [{ workspaceId: 'w-old', path: 'D:/案件/甲（旧）' }, { workspaceId: 'w-now', path: 'D:/案件/甲' }]
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+  it('旧位置确实不在才撤；还在、问不到都不撤', async () => {
+    const { forgetIfGone } = await import('../ui/rightbar.ts')
+    for (const [answer, want] of [
+      [{ ok: true, value: { exists: false } }, 'w-old'],
+      [{ ok: true, value: { exists: true } }, undefined],
+      [{ ok: false }, undefined],
+    ] as const) {
+      const removed: string[] = []
+      const asked: string[] = []
+      const r = await forgetIfGone(items, 'D:/案件/甲（旧）', 'w-now', same, async (p) => { asked.push(p); return answer }, async (id) => { removed.push(id) })
+      expect(asked).toEqual(['D:/案件/甲（旧）'])
+      expect(r).toBe(want)
+      expect(removed).toEqual(want ? [want] : [])
+    }
+  })
+})

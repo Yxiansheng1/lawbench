@@ -13,9 +13,8 @@ import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
-import { installUnloadGuard } from './settings-draft.ts'
 import { CaseSwitcher } from './case-switcher.tsx'
-import { createRightbarSeeder, forgettableWorkspace, loadSeeded, saveSeeded } from './rightbar.ts'
+import { createRightbarSeeder, forgetIfGone, loadSeeded, saveSeeded } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
@@ -101,9 +100,8 @@ function registerCore(ctx: Ctx): void {
   setApi(unwrapRemote(ctx.remote.lawbench as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>))
   ctx.effect(() => () => setApi(undefined), '律师工作台界面：接口')
   void loadSettingsIntoState()
-  // 令 1609：深色下原生下拉框的选项看得清；设置有未保存的修改时关窗口先问
+  // 令 1609：深色下原生下拉框的选项看得清（关窗口不拦，见 settings-draft.ts 开头）
   ensureFieldStyle()
-  ctx.effect(() => installUnloadGuard(), '律师工作台界面：未保存的设置')
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'lawbench', order: -20, label: () => '律师工作台' }, SettingsSection))
   // 侧栏品牌位：我方产品名和版本（T14 派修 3；原版位置显示"DSH 本地构建 0.1.7-rc.2-…"）
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, BrandName))
@@ -158,11 +156,7 @@ function registerWorkspace(ctx: Ctx): void {
   // 1612 复核 P1：不撤刚打开的那一项；移除前问 Host 旧位置是不是确实不在了（在就不撤：多半是同一位置换了写法）
   navImpl.forgetCaseWorkspace = async (root, except) => {
     const items = ctx.workspaces.list?.getSnapshot().items ?? []
-    const id = forgettableWorkspace(items, root, except ?? lastOpenedWorkspace, samePath)
-    const path = items.find((w) => w.workspaceId === id)?.path
-    if (!id || !path) return
-    const r = await call<{ exists: boolean }>('pathState', { path })
-    if (r.ok && r.value.exists === false) await ctx.workspaces.delete(id)
+    await forgetIfGone(items, root, except ?? lastOpenedWorkspace, samePath, (path) => call<{ exists: boolean }>('pathState', { path }), (id) => ctx.workspaces.delete(id))
   }
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null

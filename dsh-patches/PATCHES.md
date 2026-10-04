@@ -146,3 +146,11 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
 |---|---|---|---|---|
 | P-21 | `packages/client/ui-sidebar/src/client/SidebarRoot.tsx`；`tests/lawbench-top-panels.client.spec.tsx`（新）；`packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx`、`tests/workspace-browser.client.spec.tsx`（第二轮复核 AMEND F7）（补丁 `P-21-home-above-new-session.patch`，排在 P-20 之后） | 全局面板按 order 分两段：order <= -1000 的（我方"首页"）画在"新会话"按钮上方，其余照旧在下方。侧栏案件列表里没有会话的默认工作区（"未归入案件"）不显示，有会话时照常（DSH 的"默认工作区命名"一例改为带一个会话，另加"空时不显示"一例）。案件行的菜单去掉"重命名"（`rows/Rows.tsx`，令 1609 第 3 条：案件名就是文件夹名，改侧栏标题不改文件夹，会误导），只留"从列表移除案件"；`rows.client.spec` 一例改为断言没有重命名，`workspace-browser.client.spec` 三个走菜单重命名的例子标 skip 并注明 | 用户 10-04："首页需要入口，不然太难找到了，可以放在新会话上面"。DSH 侧栏的面板列表固定在新会话下方，没有新会话上方的插槽 | 新例：首页在新会话之前、"案件：xxx"在之后；去掉分段即红；空的默认工作区不显示一例；案件行菜单没有重命名两例。`ui-workspace` 382 项通过、3 项跳过。补丁链 141 个路径与工作区逐字节一致 |
+
+## P-4：设置"通用"里的当前版本（注记 `致A-ORCH-注记-版本号与说明句已定-20261004-1706.md`）
+
+只改 P-4，加两个文件节（这两个文件别的补丁不碰）。改完从固定提交按本文件顺序打全部补丁，143 个路径与工作区逐字一致。
+
+| 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | `packages/client/ui-settings-general/src/client/CurrentVersionRow.tsx`：显示常量 `LAWBENCH_VERSION = '0.1.0'`（工作台版本），不再显示构建时的 `DSH_CLIENT_VERSION`（"0.1.7-rc.2"）；`DSH_CLIENT_VERSION` 本身不动（DSH 的更新检查等仍用它）。`tests/components.client.spec.tsx` 两例改为期望 0.1.0、没有构建元数据时也显示 | 律师在设置里看到的应是工作台版本 | `components.client.spec.tsx` 13 例通过；dsh-ext `brand.spec` 一例核对它与 `dsh-ext/shared/product.ts` 的 `PRODUCT_VERSION` 一致。同目录 `apply`、`shell` 两个测试文件在本机单独跑时加载不了（`cannot resolve plugin package @deepseek-ai/dsh-web-app`，测试环境问题，与本改动无关） |

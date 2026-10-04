@@ -40,11 +40,10 @@ export function CaseSwitcher() {
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
-    const shut = () => setOpen(false) // 固定定位不跟着走：窗口变大小、页面滚动时先收起
+    const shut = () => setOpen(false) // 固定定位不跟着走：窗口变大小时先收起（不听整页滚动：流式输出时会一开就收，复核 NOTE）
     document.addEventListener('mousedown', close)
     window.addEventListener('resize', shut)
-    window.addEventListener('scroll', shut, true)
-    return () => { document.removeEventListener('mousedown', close); window.removeEventListener('resize', shut); window.removeEventListener('scroll', shut, true) }
+    return () => { document.removeEventListener('mousedown', close); window.removeEventListener('resize', shut) }
   }, [open])
   if (!current) return null
   const go = (c: CaseRef) => { setOpen(false); void openCase(c.root, null) }

@@ -29,6 +29,24 @@ export function forgettableWorkspace(items: Array<{ workspaceId: string; path: s
   return items.find((w) => w.workspaceId !== except && same(w.path, root))?.workspaceId
 }
 
+/**
+ * 撤侧栏旧位置那一项（1612 复核 P1，令 1726 补用例）：选出可撤的一项后先问 Host 旧位置在不在，确实不在才撤；
+ * 问不到（出错、网络路径、超时）一律不撤。
+ * @returns 撤掉的工作区 id，没撤为 undefined。
+ */
+export async function forgetIfGone(
+  items: Array<{ workspaceId: string; path: string }>, root: string, except: string | undefined, same: (a: string, b: string) => boolean,
+  pathState: (path: string) => Promise<{ ok: boolean; value?: { exists: boolean } }>, remove: (id: string) => Promise<unknown>,
+): Promise<string | undefined> {
+  const id = forgettableWorkspace(items, root, except, same)
+  const path = items.find((w) => w.workspaceId === id)?.path
+  if (!id || !path) return undefined
+  const r = await pathState(path)
+  if (!r.ok || r.value?.exists !== false) return undefined
+  await remove(id)
+  return id
+}
+
 export function loadSeeded(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SEEDED_KEY) ?? '[]') as string[]) } catch { return new Set() }
 }

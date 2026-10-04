@@ -41,3 +41,13 @@ describe('品牌位与技术支持一行', () => {
     expect(el.textContent).toBe('技术支持：上海莫来特智能科技有限公司')
   })
 })
+
+describe('设置"通用"里的当前版本（注记 1706，P-4）', () => {
+  it('DSH 那一行写的是工作台版本，与 PRODUCT_VERSION 一致', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { PRODUCT_VERSION } = await import('../shared/product.ts')
+    const src = readFileSync(join(__dirname, '..', '..', 'dsh', 'packages', 'client', 'ui-settings-general', 'src', 'client', 'CurrentVersionRow.tsx'), 'utf8')
+    expect(src).toContain(`LAWBENCH_VERSION = '${PRODUCT_VERSION}'`)
+  })
+})
