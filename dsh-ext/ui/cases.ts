@@ -27,10 +27,13 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
     const r = await call<{ root: string | null; created: boolean }>('dailyCase')
     if (r.ok) {
       if (!r.value.root) return false
-      await loadRecent()
-      if (currentCase(app.get())) return false
-      await open(r.value.root)
-      return true
+      // 记过位置时 Host 不问服务就返回；服务还没就绪时读不到案件列表，打开也会失败——读到了再往下（真机核过）
+      const recent = await loadRecent()
+      if (Array.isArray(recent)) {
+        if (currentCase(app.get())) return false
+        await open(r.value.root)
+        return true
+      }
     }
     await wait(i < DAILY_FAST_TRIES ? DAILY_EVERY_MS : DAILY_SLOW_MS)
   }

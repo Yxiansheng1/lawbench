@@ -74,13 +74,25 @@ describe('Host：日常事务', () => {
 describe('界面启动：落在日常事务', () => {
   const DAILY = { case_id: 'd-1', name: '日常事务', root: 'D:\文档\连越律师工作台\日常事务', exists: true }
   const REAL = { case_id: 'c-1', name: '张某甲诈骗案', root: 'D:\案件\张某甲诈骗案', exists: true }
-  function api(failFirst: number) {
+  function api(failFirst: number, recentFailFirst = 0) {
     let n = 0
+    let m = 0
+    const down = { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } }
     setApi({
-      dailyCase: async () => (++n <= failFirst ? { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } } : { ok: true, value: { root: DAILY.root, created: n === failFirst + 1 } }),
-      caseRecent: async () => ({ ok: true, value: { cases: [DAILY, REAL] } }),
+      dailyCase: async () => (++n <= failFirst ? down : { ok: true, value: { root: DAILY.root, created: n === failFirst + 1 } }),
+      caseRecent: async () => (++m <= recentFailFirst ? down : { ok: true, value: { cases: [DAILY, REAL] } }),
     } as unknown as LawbenchApi)
   }
+
+  it('记过位置、服务还没就绪（Host 直接返回位置，案件列表读不到）：等读到列表再打开，不报"没能打开案件"', async () => {
+    api(0, 3)
+    app.set((s) => ({ ...s, cases: [], currentRoot: null }))
+    const opened: string[] = []
+    let waits = 0
+    expect(await landOnDailyCase(async (r) => { opened.push(r) }, async () => { waits++ })).toBe(true)
+    expect(waits).toBe(3)
+    expect(opened).toEqual([DAILY.root])
+  })
 
   it('首次配置页停留很久（取不到 40 次）：不放弃，做完后照样落到日常事务', async () => {
     api(40)
