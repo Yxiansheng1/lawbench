@@ -15,9 +15,12 @@ export function BrandName() {
   )
 }
 
-/** 律所 logo（DSH 给 size：品牌位的高度）。 */
+/**
+ * 律所 logo（DSH 给 size：品牌位的高度）。侧栏品牌位一行高 24、Windows 下整体下移 1 px，满高时底下"LIANYUE"一行被切，
+ * 所以比给的高度小 2 px（真机截图核过）；空白会话大标题旁（conversation.hero.brand.mark，size 34）同样用它，替换 DSH 的鲸鱼标。
+ */
 export function BrandMark({ size = 24 }: { size?: number }) {
-  return <img src={FIRM_LOGO} alt={FIRM_NAME} style={{ height: size, width: 'auto', display: 'block' }} />
+  return <img src={FIRM_LOGO} alt={FIRM_NAME} style={{ height: Math.max(12, size - 2), width: 'auto', display: 'block' }} />
 }
 
 /** "技术支持：上海莫来特智能科技有限公司"，带小标志。侧栏收起（wide 为假）时只留标志，全称放在提示里。 */

@@ -18,7 +18,7 @@ describe('品牌位与技术支持一行', () => {
     await render(createElement(BrandMark, { size: 24 }))
     const img = box.querySelector('img')!
     expect(img.getAttribute('src')).toBe(FIRM_LOGO)
-    expect(img.style.height).toBe('24px')
+    expect(img.style.height).toBe('22px') // 比品牌位小 2 px，免得底下一行被切
   })
   it('侧栏底部：小标志＋"技术支持：上海莫来特智能科技有限公司"；收起时只留标志，全称在提示里', async () => {
     await render(createElement(VendorLine, { wide: true }))
