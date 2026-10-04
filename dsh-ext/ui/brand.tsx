@@ -1,7 +1,7 @@
 // 侧栏品牌位（T14 派修 3）：产品名 + 我方版本号，替换原版的"DSH 本地构建 <DSH 构建号>"。
 // 律所 logo 常驻在产品名左侧（DSH 的 sidebar.brand.mark 位，高 24）；侧栏底部常驻"技术支持"一行（执行令 2026-10-04 11:56 第 1、2 条）。
 import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION, VENDOR_NAME } from '../shared/product.ts'
-import { FIRM_LOGO, VENDOR_MARK } from './brand-assets.ts'
+import { FIRM_LOGO, FIRM_LOGO_DARK, VENDOR_MARK } from './brand-assets.ts'
 import { C } from './kit.tsx'
 
 export const VENDOR_LINE = `技术支持：${VENDOR_NAME}`
@@ -20,7 +20,27 @@ export function BrandName() {
  * 所以比给的高度小 2 px（真机截图核过）；空白会话大标题旁（conversation.hero.brand.mark，size 34）同样用它，替换 DSH 的鲸鱼标。
  */
 export function BrandMark({ size = 24 }: { size?: number }) {
-  return <img src={FIRM_LOGO} alt={FIRM_NAME} style={{ height: Math.max(12, size - 2), width: 'auto', display: 'block' }} />
+  ensureLogoStyle()
+  const style = { height: Math.max(12, size - 2), width: 'auto' }
+  return (
+    <span style={{ display: 'inline-flex' }}>
+      <img className="lb-logo-light" src={FIRM_LOGO} alt={FIRM_NAME} style={style} />
+      <img className="lb-logo-dark" src={FIRM_LOGO_DARK} alt={FIRM_NAME} style={style} />
+    </span>
+  )
+}
+
+/**
+ * 深色界面换白字版律所 logo（令 1426 真机截图时发现深色下"连越 LIANYUE"看不见）。DSH 把当前明暗写在根元素的
+ * color-scheme 上（跟系统或律师在设置里选的），按它切换；只加一次样式。
+ */
+export const LOGO_STYLE = '.lb-logo-dark{display:none}:root[style*="color-scheme: dark"] .lb-logo-light{display:none}:root[style*="color-scheme: dark"] .lb-logo-dark{display:block}.lb-logo-light{display:block}'
+function ensureLogoStyle(): void {
+  if (typeof document === 'undefined' || document.getElementById('lb-logo-style')) return
+  const el = document.createElement('style')
+  el.id = 'lb-logo-style'
+  el.textContent = LOGO_STYLE
+  document.head.appendChild(el)
 }
 
 /** "技术支持：上海莫来特智能科技有限公司"，带小标志。侧栏收起（wide 为假）时只留标志，全称放在提示里。 */

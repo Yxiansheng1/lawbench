@@ -66,19 +66,24 @@ def square(im: Image.Image, size: int, pad: float = 0.08) -> Image.Image:
     return out
 
 
+def whiten(firm: Image.Image) -> Image.Image:
+    """深色版律所 logo：红色图形不动，其余（黑字及其抗锯齿边）换白。"""
+    logo = firm.copy()
+    px = logo.load()
+    for y in range(logo.height):
+        for x in range(logo.width):
+            r, g, b, a = px[x, y]
+            if a and not (r > g + 60):
+                px[x, y] = (255, 255, 255, a)
+            elif not a:
+                px[x, y] = (255, 255, 255, 0)  # 透明处也取白色，缩放时不把黑边混进白字
+    return logo
+
+
 def banner(firm: Image.Image, size: tuple[int, int], dark: bool, vendor: Image.Image | None = None) -> Image.Image:
     """安装界面顶部的品牌图：透明底，律所 logo 居中，高度占 60%；深色版把黑字换成白字。
     给了 vendor 时在右下角放技术公司角标（高度为图高的 16%，留边 3%；用户 N58：安装程序欢迎页、完成页角标）。"""
-    logo = firm.copy()
-    if dark:
-        px = logo.load()
-        for y in range(logo.height):
-            for x in range(logo.width):
-                r, g, b, a = px[x, y]
-                if a and not (r > g + 60):  # 红色图形不动，其余（黑字及其抗锯齿边）换白
-                    px[x, y] = (255, 255, 255, a)
-                elif not a:
-                    px[x, y] = (255, 255, 255, 0)  # 透明处也取白色，缩放时不把黑边混进白字
+    logo = whiten(firm) if dark else firm.copy()
     h = round(size[1] * 0.6)
     logo = logo.resize((round(logo.width * h / logo.height), h), Image.LANCZOS)
     if logo.width > size[0] * 0.9:
@@ -138,7 +143,8 @@ def ui_assets(firm: Image.Image, vendor_mark: Image.Image) -> None:
     out = ROOT / "dsh-ext" / "ui" / "brand-assets.ts"
     out.write_text(
         "// 由 packaging\\brand\\make_brand.py 生成，不要手改（原件在仓库根 logo\\）。\n"
-        f"/** 律所 logo（高 48 px，按 24 px 显示）。 */\nexport const FIRM_LOGO = '{uri(firm, 48)}'\n"
+        f"/** 律所 logo（高 96 px：侧栏按 22 px、首页按 44 px 显示，高分屏也清楚）。 */\nexport const FIRM_LOGO = '{uri(firm, 96)}'\n"
+        f"/** 深色界面用的律所 logo（黑字换白；令 1426 真机截图时发现深色下字看不见）。 */\nexport const FIRM_LOGO_DARK = '{uri(whiten(firm), 96)}'\n"
         f"/** 技术公司标志（高 32 px，按 16 px 显示）。 */\nexport const VENDOR_MARK = '{uri(vendor_mark, 32)}'\n",
         encoding="utf-8", newline="\n")
     print(f"{out.relative_to(ROOT)}  {out.stat().st_size} bytes")

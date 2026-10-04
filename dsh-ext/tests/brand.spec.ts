@@ -3,7 +3,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { BrandMark, VendorLine } from '../ui/brand.tsx'
-import { FIRM_LOGO, VENDOR_MARK } from '../ui/brand-assets.ts'
+import { FIRM_LOGO, FIRM_LOGO_DARK, VENDOR_MARK } from '../ui/brand-assets.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let root: Root | undefined
@@ -19,6 +19,9 @@ describe('品牌位与技术支持一行', () => {
     const img = box.querySelector('img')!
     expect(img.getAttribute('src')).toBe(FIRM_LOGO)
     expect(img.style.height).toBe('22px') // 比品牌位小 2 px，免得底下一行被切
+    // 深色界面换白字版（令 1426）：两张都在，按根元素的 color-scheme 显示其一
+    expect(box.querySelector('img.lb-logo-dark')!.getAttribute('src')).toBe(FIRM_LOGO_DARK)
+    expect(document.getElementById('lb-logo-style')!.textContent).toContain('color-scheme: dark')
   })
   it('侧栏底部：小标志＋"技术支持：上海莫来特智能科技有限公司"；收起时只留标志，全称在提示里', async () => {
     await render(createElement(VendorLine, { wide: true }))
