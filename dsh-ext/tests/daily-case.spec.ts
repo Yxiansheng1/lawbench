@@ -8,7 +8,8 @@ import { landOnDailyCase } from '../ui/cases.ts'
 import { app, setApi, type LawbenchApi } from '../ui/state.ts'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'lb-daily-')) })
+let configured = true
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'lb-daily-')); configured = true })
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); setApi(undefined) })
 
 function deps(office: string | null, open: (p: string) => { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } } = () => ({ ok: true, value: {} })) {
@@ -16,6 +17,7 @@ function deps(office: string | null, open: (p: string) => { ok: true; value: unk
   const d: DailyDeps = {
     marker: join(dir, 'appdata-daily-case.json'),
     documents: join(dir, 'Documents'),
+    configured: async () => configured,
     getSettings: async () => ({ v: 1, office: { dir: office, invoice_buyer: null } }),
     putSettings: async (s) => { calls.put.push(s) },
     caseOpen: async (r) => { calls.open.push(r.path); return open(r.path) },
@@ -45,6 +47,15 @@ describe('Host：日常事务', () => {
     expect(calls.put).toEqual([])
   })
 
+  it('首次配置还没做完：不建、不写设置（免得设置文件先出现、首次配置页被跳过），返回 NOT_CONFIGURED 下次再试', async () => {
+    configured = false
+    const { d, calls } = deps(null)
+    expect(await ensureDailyCase(d)).toEqual({ ok: false, error: { code: 'NOT_CONFIGURED', message: '还没完成首次配置' } })
+    expect(calls.put).toEqual([])
+    expect(calls.open).toEqual([])
+    expect(existsSync(join(dir, 'Documents'))).toBe(false)
+  })
+
   it('登记被拒（如在云同步文件夹里）：返回错误、不记位置，下次再试', async () => {
     const { d } = deps(null, () => ({ ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '不能选云同步文件夹' } }))
     expect(await ensureDailyCase(d)).toEqual({ ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '不能选云同步文件夹' } })
@@ -70,6 +81,17 @@ describe('界面启动：落在日常事务', () => {
       caseRecent: async () => ({ ok: true, value: { cases: [DAILY, REAL] } }),
     } as unknown as LawbenchApi)
   }
+
+  it('首次配置页停留很久（取不到 40 次）：不放弃，做完后照样落到日常事务', async () => {
+    api(40)
+    app.set((s) => ({ ...s, cases: [], currentRoot: null }))
+    const opened: string[] = []
+    const waits: number[] = []
+    expect(await landOnDailyCase(async (r) => { opened.push(r) }, async (ms) => { waits.push(ms) })).toBe(true)
+    expect(opened).toEqual([DAILY.root])
+    expect(waits.slice(0, 15).every((ms) => ms === 2000)).toBe(true)
+    expect(waits.slice(15).every((ms) => ms === 10_000)).toBe(true)
+  })
 
   it('服务前两次没就绪：接着取，当前会话不在案件里就打开日常事务（空会话可直接发送）', async () => {
     api(2)

@@ -195,6 +195,7 @@ export class LawbenchRemote {
     const run = this.dailyQueue.then(() => ensureDailyCase({
       marker: join(this.appData, 'daily-case.json'),
       documents: join(process.env.USERPROFILE ?? homedir(), 'Documents'),
+      configured: async () => (await this.setupState()).configured,
       getSettings: () => this.getSettings() as never,
       putSettings: (s) => this.putSettings(s),
       caseOpen: (req) => (this as unknown as { caseOpen(r: unknown): Promise<never> }).caseOpen(req),

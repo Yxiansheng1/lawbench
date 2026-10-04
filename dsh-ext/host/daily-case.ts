@@ -18,6 +18,8 @@ export interface DailyDeps {
   marker: string
   /** 本机"文档"文件夹。 */
   documents: string
+  /** 首次配置做完没有（设置文件和 Key 都在）：没做完不建，免得先写出设置文件、首次配置页被跳过。 */
+  configured(): Promise<boolean>
   getSettings(): Promise<{ office: { dir: string | null } } & Record<string, unknown>>
   putSettings(settings: unknown): Promise<unknown>
   caseOpen(request: { path: string; template: null }): Promise<{ ok: true; value: unknown } | { ok: false; error: ApiError }>
@@ -38,6 +40,7 @@ export async function ensureDailyCase(d: DailyDeps): Promise<DailyResult> {
   const known = readMarker(d.marker)
   if (known !== undefined) return { ok: true, value: { root: existsSync(known) ? known : null, created: false } }
   try {
+    if (!await d.configured()) return { ok: false, error: { code: 'NOT_CONFIGURED', message: '还没完成首次配置' } }
     const settings = await d.getSettings()
     let dir = settings.office?.dir ?? null
     if (!dir) {

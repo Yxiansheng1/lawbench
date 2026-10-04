@@ -9,9 +9,13 @@ export const TABS = { materials: 'lawbench-materials', results: 'lawbench-result
 /** 默认导入位置（U-12、F-MAT-02a）。 */
 export const DEFAULT_TARGET = '02案件材料'
 
-/** 启动时取"日常事务"最多试这么多次（每 2 秒一次）：服务就绪前取不到。 */
-export const DAILY_TRIES = 30
+/**
+ * 启动时取"日常事务"：服务就绪前、首次配置做完前都取不到（主窗口在首次配置页之后才显示，但界面插件那时已经在跑）。
+ * 前 30 秒每 2 秒一次，之后每 10 秒一次，取到为止。
+ */
+export const DAILY_FAST_TRIES = 15
 export const DAILY_EVERY_MS = 2000
+export const DAILY_SLOW_MS = 10_000
 
 /**
  * 纯聊天的默认工作区（执行令 1156 第 4 条，N70）：启动时向 Host 取"日常事务"（首次配置后第一次取时建好并登记），
@@ -19,7 +23,7 @@ export const DAILY_EVERY_MS = 2000
  * @returns 打开了"日常事务"为 true。
  */
 export async function landOnDailyCase(open: (root: string) => Promise<void>, wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms))): Promise<boolean> {
-  for (let i = 0; i < DAILY_TRIES; i++) {
+  for (let i = 0; ; i++) {
     const r = await call<{ root: string | null; created: boolean }>('dailyCase')
     if (r.ok) {
       if (!r.value.root) return false
@@ -28,9 +32,8 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
       await open(r.value.root)
       return true
     }
-    await wait(DAILY_EVERY_MS)
+    await wait(i < DAILY_FAST_TRIES ? DAILY_EVERY_MS : DAILY_SLOW_MS)
   }
-  return false
 }
 
 export async function loadRecent(): Promise<CaseRef[] | { code: string; message: string }> {
