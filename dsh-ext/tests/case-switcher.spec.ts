@@ -29,6 +29,7 @@ describe('对话区顶部的当前案件与切换', () => {
     expect(box.textContent).toContain('张某甲诈骗案')
     await click([...box.querySelectorAll('button')].find((b) => b.textContent === '切换案件 ▾')!)
     expect([...box.querySelectorAll('[role=menuitem]')].map((b) => b.textContent)).toEqual(['李某合同纠纷', '日常事务（非办案）', '首页…'])
+    expect(box.querySelector('[role=menu]')!.textContent).toContain('案件名即文件夹名，在资源管理器里改')
     await click([...box.querySelectorAll('[role=menuitem]')][0]!)
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     expect(opened).toEqual([B.root])

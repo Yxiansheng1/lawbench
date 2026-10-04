@@ -7,6 +7,9 @@ import { C, getNav } from './kit.tsx'
 import { app, currentCase, isDaily, samePath, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
 
+/** 侧栏案件的"重命名"已藏掉（令 1609 第 3 条）：案件名就是文件夹名。 */
+export const RENAME_HINT = '案件名即文件夹名，在资源管理器里改'
+
 /** 切换菜单里列的最近案件个数。 */
 export const SWITCH_MAX = 10
 
@@ -39,14 +42,16 @@ export function CaseSwitcher() {
       <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
         style={{ font: 'inherit', fontSize: 12, color: C.sub, background: 'none', border: `1px solid ${C.border}`, borderRadius: 999, padding: '1px 10px', cursor: 'pointer' }}>切换案件 ▾</button>
       {open ? (
-        <div role="menu" aria-label="切换案件" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 220, maxWidth: 320, zIndex: 20, background: 'var(--dsh-color-bg-elevated, Canvas)', border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: '4px 0' }}>
+        <div role="menu" aria-label="切换案件" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 220, maxWidth: 320, zIndex: 20, background: 'var(--dsw-alias-bg-layer-1, Canvas)', border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: '4px 0' }}>
           {switchTargets(cases, current).map((c) => (
             <button key={c.case_id} type="button" role="menuitem" style={item} onClick={() => go(c)} title={c.root}>
               {dailyRoot && samePath(c.root, dailyRoot) ? `${c.name}（非办案）` : c.name}
+              {c.exists === false ? <span style={{ color: C.faint }}>（不在）</span> : null}
             </button>
           ))}
           <div style={{ borderTop: `1px solid ${C.border}`, margin: '4px 0' }} />
           <button type="button" role="menuitem" style={item} onClick={() => { setOpen(false); getNav().goHome() }}>首页…</button>
+          <div style={{ padding: '6px 12px 4px', fontSize: 11, color: C.faint }}>{RENAME_HINT}</div>
         </div>
       ) : null}
     </span>

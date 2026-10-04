@@ -84,6 +84,30 @@ index 0000000000..761edcd736
 +    expect(fresh.compareDocumentPosition(cases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 +  })
 +})
+diff --git a/packages/client/ui-workspace/src/client/rows/Rows.tsx b/packages/client/ui-workspace/src/client/rows/Rows.tsx
+index 635770fd47..8dc1af1404 100644
+--- a/packages/client/ui-workspace/src/client/rows/Rows.tsx
++++ b/packages/client/ui-workspace/src/client/rows/Rows.tsx
+@@ -15,7 +15,7 @@ import type { RefObject } from 'react'
+ import clsx from 'clsx'
+ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+ import {
+-  HoverCard, IconArchiveOutlineRegular, IconEditOutlineRegular,
++  HoverCard, IconArchiveOutlineRegular,
+   IconEllipsisOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
+   IconNewChatOutlineRegular, IconPinFillRegular, IconTrashOutlineRegular,
+   IconTriangleRightFillRegular, IconUnarchiveOutlineRegular, Menu, relativeTime, StateDot, Tooltip,
+@@ -235,8 +235,9 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
+   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
+   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
+   const [menuOpen, setMenuOpen] = useState(false)
++  // lawbench P-21: no "rename" for a case row — the case name is the folder name, and renaming the list entry
++  // would not rename the folder (owner order 2026-10-04 16:09). Remove-from-list stays.
+   const workspaceMenuItems = [
+-    { id: 'rename', label: t('rename'), icon: <IconEditOutlineRegular /> },
+     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutlineRegular />, danger: true },
+   ]
+   const ownRow = (
 diff --git a/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx b/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
 index 3c900b2c6b..0307ce30ad 100644
 --- a/packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
@@ -108,11 +132,40 @@ index 3c900b2c6b..0307ce30ad 100644
        ...workspace,
        title: workspaceDisplayTitle(workspace.title, defaultWorkspaceName),
      })),
+diff --git a/packages/client/ui-workspace/tests/rows.client.spec.tsx b/packages/client/ui-workspace/tests/rows.client.spec.tsx
+index 2cdb626001..3eaaf4fd0d 100644
+--- a/packages/client/ui-workspace/tests/rows.client.spec.tsx
++++ b/packages/client/ui-workspace/tests/rows.client.spec.tsx
+@@ -427,7 +427,7 @@ describe('workspace browser rows', () => {
+     expect(screen.getByRole('treeitem').querySelector('[data-state="done"]')).not.toBeNull()
+   })
+ 
+-  it('workspace row menu opens on the ellipsis, renames, and shows the danger delete row', () => {
++  it('workspace row menu opens on the ellipsis and shows the danger delete row, without rename (lawbench P-21)', () => {
+     const onRename = vi.fn()
+     const onDelete = vi.fn()
+     const onToggle = vi.fn()
+@@ -443,13 +443,10 @@ describe('workspace browser rows', () => {
+     // Opening the menu neither toggles the group nor renames yet.
+     expect(onToggle).not.toHaveBeenCalled()
+     expect(screen.getByRole('menuitem', { name: '从列表移除案件' }).className).toMatch(/danger/)
+-    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+-    expect(onRename).toHaveBeenCalledOnce()
+-    expect(screen.queryByRole('menu')).toBeNull()
+-    fireEvent.click(screen.getByRole('button', { name: '案件“Project”的操作' }))
++    expect(screen.queryByRole('menuitem', { name: '重命名' })).toBeNull()
+     fireEvent.click(screen.getByRole('menuitem', { name: '从列表移除案件' }))
+     expect(screen.queryByRole('menu')).toBeNull()
+-    expect(onRename).toHaveBeenCalledOnce()
++    expect(onRename).not.toHaveBeenCalled()
+     expect(onDelete).toHaveBeenCalledOnce()
+     // Escape closes without selecting (Menu onClose path).
+     fireEvent.click(screen.getByRole('button', { name: '案件“Project”的操作' }))
 diff --git a/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx b/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
-index 53658fda81..1b1cddaf93 100644
+index 53658fda81..e45e022cc7 100644
 --- a/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
 +++ b/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
-@@ -2235,7 +2235,7 @@ describe('WorkspaceBrowser', () => {
+@@ -2235,27 +2235,28 @@ describe('WorkspaceBrowser', () => {
      const renameWorkspace = vi.fn(async () => {})
      mount({
        useWorkspaces: hook(workspaceState([
@@ -121,17 +174,55 @@ index 53658fda81..1b1cddaf93 100644
          workspace('beta', [], 'default-workspace backup'),
        ])),
        renameWorkspace,
-@@ -2255,6 +2255,13 @@ describe('WorkspaceBrowser', () => {
-     expect(renameWorkspace).toHaveBeenCalledWith(wid('alpha'), '未归入案件')
-   })
- 
+     })
+     expect(screen.getByRole('button', { name: '案件“未归入案件”的操作' })).toBeTruthy()
+     expect(screen.getByRole('button', { name: '案件“default-workspace backup”的操作' })).toBeTruthy()
+-    // The dialog edits the text on screen, and the stored title — not that
+-    // text — decides whether confirming saves. So confirming the untouched
+-    // prefill pins the localized name and the row stops following the language.
++    // lawbench P-21: the case row menu has no rename (the case name is the folder name)
+     fireEvent.click(screen.getByRole('button', { name: '案件“未归入案件”的操作' }))
+-    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+-    expect(screen.getByLabelText<HTMLInputElement>('案件名称').value).toBe('未归入案件')
+-    expect(screen.queryByRole('alert')).toBeNull()
+-    const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '重命名' })
+-    expect(confirm.disabled).toBe(false)
+-    fireEvent.click(confirm)
+-    expect(renameWorkspace).toHaveBeenCalledWith(wid('alpha'), '未归入案件')
++    expect(screen.queryByRole('menuitem', { name: '重命名' })).toBeNull()
++    expect(renameWorkspace).not.toHaveBeenCalled()
++  })
++
 +  // lawbench P-21：空的默认工作区（"未归入案件"）不显示；有会话时照常显示
 +  it('hides the default Workspace while it holds no session (lawbench P-21)', () => {
 +    mount({ useWorkspaces: hook(workspaceState([workspace('alpha', [], 'default-workspace'), workspace('beta', [], 'case-b')])) })
 +    expect(screen.queryByRole('button', { name: '案件“未归入案件”的操作' })).toBeNull()
 +    expect(screen.getByRole('button', { name: '案件“case-b”的操作' })).toBeTruthy()
-+  })
-+
-   it('renames a workspace through the row menu dialog', async () => {
+   })
+ 
+-  it('renames a workspace through the row menu dialog', async () => {
++  // lawbench P-21: the case row menu has no rename (the case name is the folder name)
++  it.skip('renames a workspace through the row menu dialog', async () => {
      let resolveRename!: () => void
      const renameWorkspace = vi.fn(() => new Promise<void>((resolve) => { resolveRename = resolve }))
+     mount({
+@@ -2285,7 +2286,8 @@ describe('WorkspaceBrowser', () => {
+     expect(screen.queryByRole('dialog')).toBeNull()
+   })
+ 
+-  it('rename via Enter, failure surfaces the error, Cancel closes', async () => {
++  // lawbench P-21: the case row menu has no rename (the case name is the folder name)
++  it.skip('rename via Enter, failure surfaces the error, Cancel closes', async () => {
+     const renameWorkspace = vi.fn(async () => { throw new Error('rename conflict') })
+     mount({
+       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
+@@ -2309,7 +2311,8 @@ describe('WorkspaceBrowser', () => {
+     expect(screen.queryByRole('dialog')).toBeNull()
+   })
+ 
+-  it('reports non-Error rename failures as text', async () => {
++  // lawbench P-21: the case row menu has no rename (the case name is the folder name)
++  it.skip('reports non-Error rename failures as text', async () => {
+     const renameWorkspace = vi.fn(async () => { throw 'denied' })
+     mount({
+       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),

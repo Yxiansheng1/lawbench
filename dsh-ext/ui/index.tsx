@@ -13,10 +13,11 @@ import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
+import { installUnloadGuard } from './settings-draft.ts'
 import { CaseSwitcher } from './case-switcher.tsx'
 import { createRightbarSeeder, loadSeeded, saveSeeded, staleWorkspaces } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
-import { getNav, setNav, type Nav } from './kit.tsx'
+import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
 import { citationMark, type CitationMark } from './citation.ts'
@@ -100,6 +101,9 @@ function registerCore(ctx: Ctx): void {
   setApi(unwrapRemote(ctx.remote.lawbench as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>))
   ctx.effect(() => () => setApi(undefined), '律师工作台界面：接口')
   void loadSettingsIntoState()
+  // 令 1609：深色下原生下拉框的选项看得清；设置有未保存的修改时关窗口先问
+  ensureFieldStyle()
+  ctx.effect(() => installUnloadGuard(), '律师工作台界面：未保存的设置')
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'lawbench', order: -20, label: () => '律师工作台' }, SettingsSection))
   // 侧栏品牌位：我方产品名和版本（T14 派修 3；原版位置显示"DSH 本地构建 0.1.7-rc.2-…"）
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, BrandName))

@@ -22,6 +22,8 @@ export type Dialog =
   | { kind: 'notice'; title: string; text: string; lines?: string[] }
   | { kind: 'import'; caseRef: CaseRef; paths: string[]; from: string }
   | { kind: 'casePick'; then?: (c: CaseRef) => void }
+  /** 设置有未保存的修改时离开：保存 / 不保存 / 取消（令 1609 第 2 条）。 */
+  | { kind: 'unsaved'; title: string; text: string; resolve: (choice: 'save' | 'discard' | 'cancel') => void }
 
 export interface AppState {
   cases: CaseRef[]

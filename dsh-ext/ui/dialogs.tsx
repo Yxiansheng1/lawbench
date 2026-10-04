@@ -28,6 +28,15 @@ function OneDialog({ d }: { d: Dialog }) {
         </Modal>
       )
     }
+    case 'unsaved': {
+      const answer = (c: 'save' | 'discard' | 'cancel') => { popDialog(d); d.resolve(c) }
+      return (
+        <Modal open onClose={() => answer('cancel')} title={d.title} closeLabel="关闭"
+          footer={<><Button variant="outline" onClick={() => answer('cancel')}>取消</Button><Button variant="outline" onClick={() => answer('discard')}>不保存</Button><Button variant="primary" data-modal-autofocus onClick={() => answer('save')}>保存</Button></>}>
+          <p style={{ margin: 0, lineHeight: 1.7 }}>{d.text}</p>
+        </Modal>
+      )
+    }
     case 'notice':
       return (
         <Modal open onClose={close} title={d.title} closeLabel="关闭" footer={<Button variant="primary" data-modal-autofocus onClick={close}>知道了</Button>}>
