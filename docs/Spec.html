@@ -96,7 +96,7 @@ li{margin:3px 0}
 <tr>
 <td>D6</td>
 <td><strong>两种执行方式</strong>：<strong>流水线</strong>——程序控制流程，模型只写每一步的内容，每步写完程序核对出处；<strong>Agent</strong>——由 DSH 的 Agent 循环调用 <code>case_*</code> 工具。每个 Skill 在头部用 <code>mode</code> 声明走哪种。本次<strong>只有案件 wiki 走流水线</strong>，其余 17 个业务 Skill 都是 Agent；流水线框架是通用的，以后阅卷类 Skill 实测预算不够时可改为流水线。</td>
-<td>wiki 测试证明流水线可行：大卷宗 21 份材料、74 页，36 次调用、290 秒，单次最大输入 15K token，无截断，核对修正后只剩 1 处页码疑点。wiki 若走 Agent，一份材料至少一次模型调用，会超出 8 次的预算。</td>
+<td>wiki 测试证明流水线可行：大卷宗 21 份材料、74 页，36 次调用、290 秒，单次最大输入 15K token，无截断，核对修正后只剩 1 处页码疑点。wiki 若走 Agent，一份材料至少一次模型调用，会超出 Agent 的模型调用预算（原 8 次，2026-10-04 N68 调为 16 次）。</td>
 </tr>
 <tr>
 <td>D7</td>
@@ -1766,7 +1766,7 @@ li{margin:3px 0}
 <li>调用次数上限 = 段数 × 3 + 篇数 × 3 + 10；</li>
 <li>时间上限 45 分钟（不含排队）。</li>
 <li>到达上限时，保存已完成的部分为草稿，询问律师是否继续。</li>
-<li>PRD F-RUN-05 的&quot;8 次模型调用&quot;只适用于 Agent（PRD 第三版已注明）。大卷宗 wiki 实测用了 36 次调用。</li>
+<li>PRD F-RUN-05 的&quot;16 次模型调用&quot;（2026-10-04 N68 由 8 调为 16）只适用于 Agent（PRD 第三版已注明）。大卷宗 wiki 实测用了 36 次调用。</li>
 </ul>
 <p><strong>wiki 更新</strong>（F-WIKI-03）：只重跑新增或变化材料的摘要页，再重写四篇总览；<code>&lt;!-- 律师修改 --&gt;</code> 与 <code>&lt;!-- /律师修改 --&gt;</code> 之间的内容由程序先取出，模型输出后再原样放回原位置。原位置已经不存在时，放到文末并加 <code>&gt; **Status: 待律师核对**</code>。不做自动增量合并（PRD 第 10 节）。</p>
 <h3 id="9-2-Agent">9.2 Agent</h3>
@@ -1786,7 +1786,7 @@ li{margin:3px 0}
 </ul>
 </li>
 <li><strong>后续</strong>：AI 按&quot;看 L0 / wiki → <code>case_search</code> 定位 → <code>case_read_material</code> 回读原文&quot;的顺序调用工具（F-SRCH-02），写在通用规则里。</li>
-<li><strong>预算</strong>（F-RUN-05）：模型调用 8 次、工具调用 24 次、45 分钟，按任务计算（一个任务 = 律师发起的一次请求）。由 Agent 插件实现：<code>agent/pre-step</code> 超限时拒绝，最后一次调用前注入&quot;立即收尾&quot;；<code>tools/pre-execute</code> 超限时拒绝工具调用，<strong>但 <code>case_save_draft</code> 不计入、也不受工具预算限制</strong>，保证模型总有机会保存。</li>
+<li><strong>预算</strong>（F-RUN-05）：模型调用 16 次（2026-10-04 N68 用户定，依据 T18 实测：原为 8 次，17 个 Agent Skill 中 14 个用满 8 次停下）、工具调用 24 次、45 分钟（等律师回答必问问题的时间不计），按任务计算（一个任务 = 律师发起的一次请求）。由 Agent 插件实现：<code>agent/pre-step</code> 超限时拒绝，最后一次调用前注入&quot;立即收尾&quot;（T18 实测这一条保不住存稿，3/18 到上限时没有草稿；Skill 共用规则另要求剩 2 次模型调用时先存一版稿）；<code>tools/pre-execute</code> 超限时拒绝工具调用，<strong>但 <code>case_save_draft</code> 不计入、也不受工具预算限制</strong>，保证模型总有机会保存。</li>
 </ul>
 <p><strong>2026-09-30 T7 合并时回写</strong>：工具预算只数 <code>case_*</code>（<code>case_save_draft</code> 除外），被拒绝的不计；碰到过上限的任务结束原因报 <code>budget</code>。进度保存传的是本任务到目前为止全部回复的拼接，空文本不传。<code>task/begin</code> 或 <code>context</code> 失败时插件拒绝整轮（DSH 的拒绝不能附带消息，界面提示归 T13）；工具在没有任务时返回&quot;工作台服务未启动&quot;。</p>
 <ul>

@@ -20,7 +20,7 @@ from . import gate, texts
 from .registry import CaseRegistry
 
 TASK_DIR = "工作区/任务"
-DEFAULT_BUDGET = {"model_calls": 8, "tool_calls": 24, "minutes": 45}  # Spec 9.2（F-RUN-05）
+DEFAULT_BUDGET = {"model_calls": 16, "tool_calls": 24, "minutes": 45}  # Spec 9.2（F-RUN-05；2026-10-04 N68 由 8 调为 16）
 END_STATUS = {  # core/task_end 的 reason → result.json 的 status
     "completed": "completed", "aborted": "cancelled", "interrupted": "interrupted",
     "max-tokens": "output_limit", "budget": "budget_stopped", "error": "failed", "blocked": "failed",
