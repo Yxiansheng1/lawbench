@@ -62,6 +62,16 @@ describe('Host：日常事务', () => {
     expect(existsSync(d.marker)).toBe(false)
   })
 
+  it('错误码照实传（令 1347 P3-1）：设置被拒报 INVALID_ARGUMENT、建文件夹失败报 DAILY_DIR_FAILED，服务不可用才报 SERVICE_UNAVAILABLE', async () => {
+    const { d } = deps(null)
+    expect(await ensureDailyCase({ ...d, putSettings: async () => { throw new Error('日常办公文件夹不能放在云同步文件夹里') } }))
+      .toEqual({ ok: false, error: { code: 'INVALID_ARGUMENT', message: '日常办公文件夹不能放在云同步文件夹里' } })
+    expect(await ensureDailyCase({ ...d, putSettings: async () => { throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }) } }))
+      .toEqual({ ok: false, error: { code: 'DAILY_DIR_FAILED', message: '日常事务文件夹建不了（EPERM）' } })
+    expect(await ensureDailyCase({ ...d, getSettings: async () => { throw new Error('fetch failed') } }))
+      .toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } })
+  })
+
   it('记过、但文件夹已被删或搬走：返回 null，不重建（按 T17 的 CASE_MOVED 处理）', async () => {
     const { d, calls } = deps(null)
     const first = await ensureDailyCase(d)

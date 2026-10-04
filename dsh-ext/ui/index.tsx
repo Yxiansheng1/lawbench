@@ -12,6 +12,7 @@ import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorLine } from './brand.tsx'
+import { DailyErrorLine } from './daily-error.tsx'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, caseBlockLabel, notice, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
@@ -93,6 +94,7 @@ function registerCore(ctx: Ctx): void {
   ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({ name: 'sidebar.brand.mark' }, BrandMark))
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark' }, BrandMark))
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.vendor', order: 1000 }, VendorLine))
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'lawbench.daily-error', order: 900 }, DailyErrorLine))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'lawbench.dialogs' }, DialogHost))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'lawbench', order: -10 }, ComposerDock))
   navImpl.pickDirectory = async () => (win.__DSH_DIRECTORY_PICKER__ ? await win.__DSH_DIRECTORY_PICKER__.pick() : null)

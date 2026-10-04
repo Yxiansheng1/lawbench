@@ -46,9 +46,13 @@ export interface AppState {
    * （T14 派修 2，用户选"对话区显示草稿"）；成果页"在对话区查看"也写这里。只在内存，草稿正文每次从案件里读。
    */
   answers: Record<string, string>
+  /** "日常事务"的位置（Host 的 dailyCase 取到后记下；令 1347：侧栏写"（非办案）"、概览卡换成提示）；没有为 null。 */
+  dailyRoot: string | null
+  /** 日常事务建不了、且不会自己好时的说明（令 1347 一并做 P3-1，侧栏显示一行）；没有为 null。 */
+  dailyError: { code: string; message: string } | null
 }
 
-export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {} })
+export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null })
 
 /** 在某会话的输入区上方显示某任务的结果（T14 派修 2）。 */
 export function showTaskAnswer(sessionId: string, taskId: string): void {
@@ -67,8 +71,13 @@ export const currentCase = (s: AppState): CaseRef | undefined =>
 /** 侧栏"案件"一块的名字：常显当前案件名（执行令 1156 第 3 条）。 */
 export const caseBlockLabel = (s: AppState): string => {
   const c = currentCase(s)
-  return c ? `案件：${c.name}` : '案件：未选择'
+  if (!c) return '案件：未选择'
+  return isDaily(s, c) ? `案件：${c.name}（非办案）` : `案件：${c.name}`
 }
+
+/** 这个案件是不是"日常事务"（令 1347）。 */
+export const isDaily = (s: Pick<AppState, 'dailyRoot'>, c: Pick<CaseRef, 'root'> | undefined): boolean =>
+  !!c && !!s.dailyRoot && samePath(c.root, s.dailyRoot)
 
 /** 路径比较：不分大小写、正反斜杠一样、去掉末尾斜杠（Windows）。 */
 export const samePath = (a: string, b: string): boolean => norm(a) === norm(b)

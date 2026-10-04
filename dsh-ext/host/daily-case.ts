@@ -8,6 +8,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const DAILY_NAME = '日常事务'
+const UNAVAILABLE = '工作台服务未启动，请稍后重试'
 export const DEFAULT_OFFICE_DIR_NAME = '连越律师工作台'
 
 type ApiError = { code: string; message: string }
@@ -54,7 +55,11 @@ export async function ensureDailyCase(d: DailyDeps): Promise<DailyResult> {
     writeFileSync(d.marker, JSON.stringify({ root }), 'utf8')
     return { ok: true, value: { root, created: true } }
   } catch (e) {
-    const message = e instanceof Error && /[一-鿿]/.test(e.message) ? e.message : '工作台服务未启动，请稍后重试'
-    return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message } }
+    // 错误码照实传（令 1347 一并做 P3-1）：服务不可用才报 SERVICE_UNAVAILABLE（界面会再试）；建文件夹失败、设置被拒等不会自己好的照实报
+    const msg = e instanceof Error ? e.message : ''
+    if (msg === UNAVAILABLE || !/[一-鿿]/.test(msg) && !(e as { code?: unknown })?.code) return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: UNAVAILABLE } }
+    const fsCode = (e as { code?: unknown })?.code
+    if (typeof fsCode === 'string' && /^E[A-Z]+$/.test(fsCode)) return { ok: false, error: { code: 'DAILY_DIR_FAILED', message: `日常事务文件夹建不了（${fsCode}）` } }
+    return { ok: false, error: { code: 'INVALID_ARGUMENT', message: msg } }
   }
 }

@@ -11,9 +11,10 @@ import { TOOL_WORD, visible, type Capsule, type Capsules, type SkillCapsule } fr
 import { statusErrorText } from './format.ts'
 import { Badge, Button, C, getNav, S } from './kit.tsx'
 import { TaskAnswerSlot } from './answer.tsx'
-import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, notice as showNotice, setSelection, showTaskAnswer, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
+import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, isDaily, lb, markInputChanged, samePath, markSelectionSaved, MODE_AGENT, notice as showNotice, setSelection, showTaskAnswer, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
+import { CaseOverview, type SessionBrief } from './overview.tsx'
 import { homeView } from './invoice-logic.ts'
 import { openRetainer } from './retainer.ts'
 import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
@@ -40,8 +41,13 @@ export const TURN_ENDED = 'lawbench:turn-ended'
 
 let capsCache: Promise<Capsules | undefined> | undefined
 let skillsCache: Promise<SkillInfo[]> | undefined
-const loadCaps = () => (capsCache ??= call<Capsules>('getCapsules').then((r) => (r.ok ? r.value : undefined)))
-const loadSkills = () => (skillsCache ??= lb().listSkills().then((r) => r.value.skills, () => []))
+// 读失败不缓存（令 1347 一并做 P3-4）：下次挂上输入区再读
+const loadCaps = () => (capsCache ??= call<Capsules>('getCapsules').then((r) => {
+  if (r.ok) return r.value
+  capsCache = undefined
+  return undefined
+}))
+const loadSkills = () => (skillsCache ??= lb().listSkills().then((r) => r.value.skills, () => { skillsCache = undefined; return [] }))
 /** 胶囊改动后首页调用，让输入区重新读。 */
 export const forgetDockCache = (): void => { capsCache = undefined }
 
@@ -64,19 +70,44 @@ function syncFor(sessionId: string, caseId: string): SelectionSync {
 /** 会话不在已登记案件里时输入区上方的提示（N46 用户定 ②：没有打开案件就不能发消息；发了也会被会话存储拒绝）。 */
 export const NO_CASE_TEXT = '先打开或新建一个案件，再在这里发消息。'
 
+/**
+ * 输入区上方各行共用的外框（令 1347 第 1 条"没有对齐，看着挺难受"）：与 DSH 的输入框同一左右边缘、同一宽度——
+ * 输入框宽 = 容器宽减两侧留白（--dsh-composer-side-clearance），最多 --dsh-composer-card-max-width，居中。
+ */
+export const DOCK_BOX = {
+  boxSizing: 'border-box' as const, width: 'calc(100% - 2 * var(--dsh-composer-side-clearance, 16px))', maxWidth: 'var(--dsh-composer-card-max-width, 952px)',
+  margin: '0 auto 4px', display: 'flex', flexDirection: 'column' as const, gap: 10,
+}
+
+type SessionRow = { cwd?: string; blank?: boolean; parentId?: string; displayTitle?: string; title?: string; updatedAt?: number }
+
 export function ComposerDock(p: SessionProps) {
-  const { caseRef } = useSessionCase(p)
-  // 空会话（DSH 的会话摘要 blank）显示两层胶囊；有内容后收起
-  const hero = p.useSessions?.((s) => (s.byId[p.sessionId] as { blank?: boolean } | undefined)?.blank === true) ?? false
+  const { root, caseRef } = useSessionCase(p)
+  // 空会话（DSH 的会话摘要 blank）显示概览卡和两层胶囊；有内容后收起
+  const hero = p.useSessions?.((s) => (s.byId[p.sessionId] as SessionRow | undefined)?.blank === true) ?? false
+  const daily = useStore(app, (s) => isDaily(s, caseRef))
+  // 同一案件里别的、有内容的会话（概览卡"最近对话"）；选成字符串，免得每次都是新数组
+  const briefsKey = p.useSessions?.((s) => JSON.stringify(Object.entries(s.byId)
+    .filter(([id, x]) => id !== p.sessionId && x && !(x as SessionRow).blank && !(x as SessionRow).parentId && root && x.cwd && samePath(x.cwd, root))
+    .map(([id, x]) => ({ id, title: (x as SessionRow).displayTitle ?? (x as SessionRow).title ?? '未命名对话', updatedAt: (x as SessionRow).updatedAt ?? 0 })))) ?? '[]'
+  const briefs = useMemo(() => JSON.parse(briefsKey) as SessionBrief[], [briefsKey])
   if (!caseRef) {
     return (
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', margin: '0 0 6px', fontSize: 13, color: C.err, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span role="status">{NO_CASE_TEXT}</span>
-        <Button size="sm" variant="ghost" onClick={() => getNav().goHome()}>选择案件</Button>
+      <div style={DOCK_BOX}>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', fontSize: 14, color: C.err, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span role="status">{NO_CASE_TEXT}</span>
+          <Button size="sm" variant="ghost" onClick={() => getNav().goHome()}>选择案件</Button>
+        </div>
       </div>
     )
   }
-  return <><TaskAnswerSlot caseRef={caseRef} sessionId={p.sessionId} /><Dock caseRef={caseRef} sessionId={p.sessionId} hero={hero} /></>
+  return (
+    <div style={DOCK_BOX}>
+      {hero ? <CaseOverview caseRef={caseRef} daily={daily} sessions={briefs} /> : null}
+      <TaskAnswerSlot caseRef={caseRef} sessionId={p.sessionId} />
+      <Dock caseRef={caseRef} sessionId={p.sessionId} hero={hero} />
+    </div>
+  )
 }
 
 /** 胶囊按钮（两层共用的样子）。 */
@@ -239,11 +270,11 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
   }
 
   return (
-    <div data-lawbench-dock="" data-capsule={sel.capsuleId ?? ''} style={{ margin: '0 0 6px', fontSize: 13, color: C.text, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {hero && caps?.hint ? <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.6 }}>{caps.hint}</div> : null}
+    <div data-lawbench-dock="" data-capsule={sel.capsuleId ?? ''} style={{ fontSize: 14, color: C.text, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {hero && caps?.hint ? <div style={{ fontSize: 13, color: C.faint, lineHeight: 1.6 }}>{caps.hint}</div> : null}
       {showRows && group ? (
         <div role="toolbar" aria-label="选要做什么" style={{ ...S.row, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: C.sub }}>{group.name} · 选要做什么</span>
+          <span style={{ fontSize: 13, color: C.sub, minWidth: 76 }}>{group.name} · 选要做什么</span>
           {group.items.map((item) => (
             <button key={item.id} type="button" data-capsule-id={item.id} aria-pressed={item.id === sel.capsuleId} title={item.kind === 'tool' ? `内置工具：${TOOL_WORD[item.tool]}` : undefined}
               onClick={() => openItem(item)} style={pill(item.id === sel.capsuleId, true)}>{item.name}</button>
@@ -251,9 +282,9 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
           {group.items.length === 0 ? <span style={{ fontSize: 12, color: C.faint }}>这一类的胶囊都隐藏了，可在设置里"管理胶囊"显示。</span> : null}
         </div>
       ) : null}
-      {showRows ? (
+      {showRows && groups.length ? (
         <div role="tablist" aria-label="能力入口" style={{ ...S.row, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: C.sub }}>能力入口</span>
+          <span style={{ fontSize: 13, color: C.sub, minWidth: 76 }}>能力入口</span>
           {groups.map((g) => (
             <button key={g.id} type="button" role="tab" aria-selected={g.id === group?.id} onClick={() => setGroupId(g.id)} style={pill(g.id === group?.id, false)}>{g.name} ▾</button>
           ))}
@@ -282,7 +313,7 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
               style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', padding: 0 }}>×</button>
           </span>
         ))}
-        <span role="status" style={{ fontSize: 12, color: statusColor }}>{statusText(status)}</span>
+        <span role="status" style={{ fontSize: 13, color: statusColor }}>{statusText(status)}</span>
         {status.kind === 'error' ? <Button size="sm" variant="ghost" onClick={() => (error?.op === 'write' ? setSelection(sessionId, {}) : setReload((n) => n + 1))}>重试</Button> : null}
       </div>
       {open ? (
@@ -302,7 +333,7 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
       ) : null}
       {skill && skill.questions.length ? (
         <details>
-          <summary style={{ cursor: 'pointer', color: C.sub, fontSize: 12 }}>开始前会先问你 {skill.questions.length} 个问题（必问问题）</summary>
+          <summary style={{ cursor: 'pointer', color: C.sub, fontSize: 13 }}>开始前会先问你 {skill.questions.length} 个问题（必问问题）</summary>
           <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12, color: C.sub }}>
             {skill.questions.map((q) => <li key={q.key}>{q.question}{q.fromMaterials ? <> <Badge tone="faint">能从材料里找的会先填好请你确认</Badge></> : null}</li>)}
           </ul>

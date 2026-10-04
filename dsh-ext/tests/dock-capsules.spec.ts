@@ -3,10 +3,11 @@
 // 第一层"能力入口"；点第二层把能力填成小标签并写任务单（/api/task，口径不变），× 取消；会话有内容后两层收起，"选能力"展开；
 // 工具胶囊打开 T26 的页面。夹具同 dock-a19（helpers/dock-lab.ts）。
 import { act, createElement } from 'react'
-import { ComposerDock } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockCache } from '../ui/dock.tsx'
+import { setApi, type LawbenchApi } from '../ui/state.ts'
 import { homeView } from '../ui/invoice-logic.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
-import { CAPSULES, CASE, flush, h, setup, teardown } from './helpers/dock-lab.ts'
+import { api, CAPSULES, CASE, flush, h, setup, teardown } from './helpers/dock-lab.ts'
 import { createRoot } from 'react-dom/client'
 
 beforeEach(setup)
@@ -64,6 +65,19 @@ describe('输入框上方的两层胶囊', () => {
     await click(q('[data-capsule-id="contract-review"]'))
     expect(q('[aria-label="能力入口"]')).toBeNull()
     expect(q('[data-capsule-tag]')!.textContent).toContain('【合同审查】')
+  })
+
+  it('P3-4：胶囊读失败不缓存，下次挂上输入区重读到', async () => {
+    forgetDockCache()
+    let fail = true
+    const base = api()
+    setApi({ ...base, getCapsules: async () => (fail ? { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' } } : base.getCapsules()) } as unknown as LawbenchApi)
+    await mountBlank(true)
+    expect(q('[aria-label="能力入口"]')).toBeNull()
+    await act(async () => { h.root!.unmount() })
+    fail = false
+    await mountBlank(true)
+    expect(q('[aria-label="能力入口"]')).not.toBeNull()
   })
 
   it('工具胶囊"发票整理"：打开发票页（T26），不写任务单', async () => {
