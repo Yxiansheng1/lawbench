@@ -118,7 +118,7 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 
 | 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
 |---|---|---|---|
-| P-3 | `client/WelcomePage.tsx` 首次配置页底部常驻一行"技术支持：上海莫来特智能科技有限公司"＋技术公司 logo（`assets/vendor-logo.png`，即 P-4 放进 `renderer\assets\` 的那张，按 16 px 高显示）；`tests/lawbench-first-run.spec.ts` 新增 1 例（静态渲染核这一行和图片地址） | 用户 10-04 定：技术公司全名常驻三处，首次配置页是其一 | 新例；去掉这一行即红 |
+| P-3 | `client/WelcomePage.tsx` 首次配置页底部常驻一行"技术支持：上海莫来特智能科技有限公司"＋技术公司 logo（`assets/vendor-logo.png`，即 P-4 放进 `renderer\assets\` 的那张，按 16 px 高显示）；`tests/lawbench-first-run.spec.ts` 新增 1 例（静态渲染核这一行和图片地址；令 1117 那次改动时移到 `tests/lawbench-welcome-page.client.spec.tsx`） | 用户 10-04 定：技术公司全名常驻三处，首次配置页是其一 | 新例；去掉这一行即红 |
 | P-4 | `src/locale.ts` 的 `LAWBENCH_VENDOR.zh`、`tests/main-startup.spec.ts` 关于面板一例："上海莫莱特"改为"上海莫来特"（用户 10-04 给的全名）。英文名 `Shanghai Morelite …` 未改（无依据，候用户） | 全名以用户 10-04 原话为准 | `main-startup.spec` 关于面板一例 |
 
 ## P-19：等律师回答必问问题时的状态文字（令 `致A-ORCH-执行令-T18实测界面三小项-20261004-1117.md` 第 3 项）
@@ -126,3 +126,9 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
 |---|---|---|---|---|
 | P-19 | `packages/client/ui-chat/src/client/` 的 `conversation-nodes/turn-process-presentation.ts`、`contract/snapshot.ts`、`contract/slots.ts`、`chat/ChatNodeSeat.tsx`、`chat/TurnProcessNodeView.tsx`、`locale.ts`；`tests/chat-view.client.spec.tsx`（补丁 `P-19-awaiting-user-answer.patch`，排在 P-4 之后，对"固定提交 + P-10…P-4"做差分） | 一轮里有还在等回答的 `ask_user_question` / `request_user_input` 调用时，轮次进度的名称和读屏播报都写"等待您回答…"（英文 Waiting for your answer…），不显示"思考中，用时 N 分"，计时停住；答完（调用结束）照旧 | T18 实测：模型等律师回答期间一直显示"思考中，用时 N 分"，律师以为卡住。预算计时的暂停另在我方 Agent 插件里做（`dsh-ext\agent\task-state.ts`），这里只管显示 | `chat-view.client.spec` 新增 1 例：正在等的 ask_user_question → 两处都写"等待您回答…"，过 5 秒仍不变；把问答工具名单清空即红。补丁链 118 个路径与工作区逐字节一致 |
+
+## P-3 再改：首次配置页问"本机律师姓名"，测试连接原样显示服务的说明（令 `致A-ORCH-执行令-T18实测界面三小项-20261004-1117.md` 第 1、2 项）
+
+| 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-3 | `client/WelcomePage.tsx`：加"本机律师 / 律师姓名"一栏，保存时必填（最多 40 字），已设过的带进表单；测试连接每台服务器一行写服务给的 `message` 原文，不再由页面自己拼"已连通…，Key 有效"。`welcome-api.ts`：`FirstRunInput.lawyer_name`（可选，`isLawyerName` 校验）、`FirstRunSetup.lawyerName`。`welcome-backend.ts`：保存时写进设置的 `profile.lawyer_name`（profile 其余字段保留），读设置时带出。`tests/lawbench-first-run.spec.ts` 加 3 例（保存写 profile、带出已设的姓名、校验）；页面本身的静态渲染用例（底部技术支持一行、律师姓名一栏、message 原样）移到新文件 `tests/lawbench-welcome-page.client.spec.tsx`（`.ts` 的测试不开 JSX，桌面端 `build:lib` 的类型检查会报 TS6142）。`FirstRunSetup.lawyerName` 为可选，`welcome-window.spec` 的旧桩不用改 | 首次配置没问姓名，归档方案的"承办律师"为空（T18 实测）；6000D 网关不校验 Key 时页面仍说"Key 有效"，服务已改说明（线 B 10-03） | 新例；去掉写 profile 即红。只有 P-3 碰这四个文件，按工作区对固定提交的差分重写；补丁链 118 个路径一致 |

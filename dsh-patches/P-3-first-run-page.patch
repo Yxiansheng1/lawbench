@@ -1,8 +1,8 @@
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
-index 8fcde7768a..b5a417ccb6 100644
+index 8fcde7768a..55cf6fbb56 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
 +++ b/apps/desktop/src/client/WelcomePage.tsx
-@@ -1,221 +1,128 @@
+@@ -1,221 +1,134 @@
 -/** Desktop welcome presentation; account and credential operations stay in the preload. */
 -import { useEffect, useRef, useState } from 'react'
 -import type { FormEvent } from 'react'
@@ -16,7 +16,7 @@ index 8fcde7768a..b5a417ccb6 100644
 +import type { ConnectionResult, FirstRunInput, ServerAddresses, WelcomeApi } from '../welcome-api.ts'
  
 -type Page = 'entry' | 'key' | 'account'
-+type Fields = { llm: string; llmAlt: string; prep: string; prepAlt: string; key: string }
++type Fields = { llm: string; llmAlt: string; prep: string; prepAlt: string; key: string; lawyer: string }
 +
 +const S: Record<string, CSSProperties> = {
 +  page: { boxSizing: 'border-box', height: '100vh', padding: '48px 40px 28px', display: 'flex', flexDirection: 'column', gap: 14, fontSize: 14, overflowY: 'auto' },
@@ -42,19 +42,18 @@ index 8fcde7768a..b5a417ccb6 100644
 +  prep_base_url: f.prep.trim(),
 +  prep_alt_base_url: f.prepAlt.trim() === '' ? null : f.prepAlt.trim(),
 +})
-+
-+const describe = (name: string, r: ConnectionResult): string => {
-+  if (!r.reachable) return `${name}：连不上（${r.message}）`
-+  const route = r.route === 'alternate' ? '所外地址' : r.route === 'primary' ? '所内地址' : ''
-+  const key = r.key_valid === false ? '，Key 无效或已停用' : r.key_valid === true ? '，Key 有效' : ''
-+  return `${name}：已连通${route ? `（${route}` + (r.latency_ms !== null ? `，${r.latency_ms} 毫秒）` : '）') : ''}${key}`
-+}
  
  /**
 - * Render the standalone welcome flow using shell-owned operations and localized copy.
 - * Clearing the account attempt returns the sign-in status page to the initial choices.
 - * @param props.api - isolated preload API; no account credentials reach the renderer.
 - * @returns welcome pages with fixed bottom actions.
++ * One probe line: the service's own `message`, verbatim (order 1117 item 2). The page does not compose "Key 有效" itself:
++ * the gateway may not check Keys, and only the service knows what it could confirm.
++ */
++export const describe = (name: string, r: ConnectionResult): string => `${name}：${r.message}`
++
++/**
 + * Render the first-run form. The Key never comes back from the Host: the form only knows whether one is stored.
 + * @param props.api - isolated preload API.
 + * @returns the configuration form.
@@ -71,7 +70,7 @@ index 8fcde7768a..b5a417ccb6 100644
 -  const [copyFeedback, setCopyFeedback] = useState<{ status: 'idle' | 'busy' | 'copied' | 'failed' }>({ status: 'idle' })
 -  const copyState = copyFeedback.status
 -  const [draft, setDraft] = useState('')
-+  const [fields, setFields] = useState<Fields>({ llm: '', llmAlt: '', prep: '', prepAlt: '', key: '' })
++  const [fields, setFields] = useState<Fields>({ llm: '', llmAlt: '', prep: '', prepAlt: '', key: '', lawyer: '' })
 +  const [hasKey, setHasKey] = useState(false)
 +  const [loading, setLoading] = useState(true)
 +  const [busy, setBusy] = useState<'' | 'test' | 'save'>('')
@@ -119,7 +118,7 @@ index 8fcde7768a..b5a417ccb6 100644
 +      setLoading(false)
 +      if (!r.ok || r.value === undefined) { setError(r.ok ? '工作台服务未启动，请稍后重试' : r.message); return }
 +      const s = r.value.servers
-+      setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '' }))
++      setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '', lawyer: r.value?.lawyerName ?? '' }))
 +      setHasKey(r.value.hasKey)
      })
 -    return () => { mounted.current = false; stop() }
@@ -241,8 +240,12 @@ index 8fcde7768a..b5a417ccb6 100644
 -      if (mounted.current && attemptRef.current === current) setCopyFeedback({ status: 'failed' })
 -    }
 +    const payload = input(); if (payload === undefined) return
++    // 本机律师姓名必填（令 1117 第 1 项）：结案报告、立卷申请书、归档方案的承办律师默认用它
++    const lawyer = fields.lawyer.trim()
++    if (lawyer === '') { setError('请填写本机律师姓名'); return }
++    if (lawyer.length > 40) { setError('律师姓名最多 40 个字'); return }
 +    setBusy('save')
-+    const r = await api.save(payload)
++    const r = await api.save({ ...payload, lawyer_name: lawyer })
 +    setBusy('')
 +    if (!r.ok) setError(r.message)
    }
@@ -307,6 +310,9 @@ index 8fcde7768a..b5a417ccb6 100644
 +        <span style={S.legend}>识别服务器（395）</span>
 +        <label htmlFor="prep">所内地址</label><input id="prep" style={S.input} disabled={loading} {...bind('prep')} />
 +        <label htmlFor="prepAlt">所外地址</label><input id="prepAlt" style={S.input} disabled={loading} placeholder="可不填" {...bind('prepAlt')} />
++        <span style={S.legend}>本机律师</span>
++        <label htmlFor="lawyer">律师姓名</label>
++        <input id="lawyer" style={S.input} disabled={loading} maxLength={40} placeholder="结案报告、归档方案里的承办律师" {...bind('lawyer')} />
 +        <span style={S.legend}>个人 Key</span>
 +        <label htmlFor="key">Key</label>
 +        <input id="key" type="password" autoComplete="off" spellCheck={false} style={S.input} disabled={loading}
@@ -536,10 +542,10 @@ index e9ec1aa910..ff4c0d2f8f 100644
  }
  contextBridge.exposeInMainWorld('dshWelcome', api)
 diff --git a/apps/desktop/src/welcome-api.ts b/apps/desktop/src/welcome-api.ts
-index 015296776a..1104a5856e 100644
+index 015296776a..6c673926c8 100644
 --- a/apps/desktop/src/welcome-api.ts
 +++ b/apps/desktop/src/welcome-api.ts
-@@ -1,66 +1,100 @@
+@@ -1,66 +1,109 @@
 -/** Operations available to the isolated native welcome renderer. */
 +/** Operations available to the isolated native first-run renderer (lawbench P-3). */
  
@@ -577,6 +583,8 @@ index 015296776a..1104a5856e 100644
 +export interface FirstRunSetup {
 +  readonly servers: ServerAddresses
 +  readonly hasKey: boolean
++  /** settings.json `profile.lawyer_name` (lawbench order 1117 item 1): prefilled when already set. */
++  readonly lawyerName?: string | null
 +}
  
 -/** Host-owned operations used by the welcome window. */
@@ -609,7 +617,13 @@ index 015296776a..1104a5856e 100644
 +export interface FirstRunInput {
 +  readonly servers: ServerAddresses
 +  readonly key?: string
++  /** 本机律师姓名 (order 1117 item 1): required by the form on save; written to settings `profile.lawyer_name`. */
++  readonly lawyer_name?: string
 +}
++
++/** 本机律师姓名: 1–40 characters after trimming, no control characters. */
++export const isLawyerName = (x: unknown): x is string =>
++  typeof x === 'string' && x.trim().length >= 1 && x.trim().length <= 40 && !/[\u0000-\u001f\u007f]/.test(x)
 +
 +/** Writes and probes return a safe outcome; `message` is lawyer-facing Chinese without diagnostics. */
 +export type FirstRunResult<T = undefined> = { readonly ok: true; readonly value?: T } | { readonly ok: false; readonly message: string }
@@ -683,13 +697,14 @@ index 015296776a..1104a5856e 100644
 +  const v = value as Record<string, unknown>
 +  if (!isServerAddresses(v.servers)) return false
 +  if (v.key !== undefined && (typeof v.key !== 'string' || !/^[\x21-\x7e]{8,512}$/.test(v.key))) return false
-+  return Object.keys(v).every(k => k === 'servers' || k === 'key')
++  if (v.lawyer_name !== undefined && !isLawyerName(v.lawyer_name)) return false
++  return Object.keys(v).every(k => k === 'servers' || k === 'key' || k === 'lawyer_name')
  }
 diff --git a/apps/desktop/src/welcome-backend.ts b/apps/desktop/src/welcome-backend.ts
-index a0bb4e9440..acf451e456 100644
+index a0bb4e9440..36da033556 100644
 --- a/apps/desktop/src/welcome-backend.ts
 +++ b/apps/desktop/src/welcome-backend.ts
-@@ -1,136 +1,112 @@
+@@ -1,136 +1,115 @@
 -/** Native welcome operations using the shared Web authentication and RPC APIs. */
 +/** Native first-run operations over the shared Web authentication and RPC APIs (lawbench P-3). */
  
@@ -846,7 +861,9 @@ index a0bb4e9440..acf451e456 100644
 +  const persist = async (input: FirstRunInput): Promise<void> => {
 +    const current = await invoke('lawbench', 'getSettings', {})
 +    if (!record(current)) throw new Error(UNAVAILABLE)
-+    await invoke('lawbench', 'putSettings', { settings: { ...current, servers: input.servers } })
++    // 本机律师姓名（令 1117 第 1 项）：写进 profile.lawyer_name，归档方案的"承办律师"默认用它
++    const profile = input.lawyer_name === undefined ? {} : { profile: { ...(record(current.profile) ? current.profile : {}), lawyer_name: input.lawyer_name.trim() } }
++    await invoke('lawbench', 'putSettings', { settings: { ...current, servers: input.servers, ...profile } })
 +    if (input.key !== undefined) await invoke('credentials', 'set', { ref: 'LAWFIRM_KEY', value: input.key })
    }
    return {
@@ -876,7 +893,8 @@ index a0bb4e9440..acf451e456 100644
 +    getSetup: () => safe(async () => {
 +      const [settings, state] = await Promise.all([invoke('lawbench', 'getSettings', {}), setupState()])
 +      if (!record(settings) || !record(settings.servers)) throw new Error(UNAVAILABLE)
-+      return { servers: settings.servers as unknown as ServerAddresses, hasKey: state.hasKey }
++      const name = record(settings.profile) && typeof settings.profile.lawyer_name === 'string' ? settings.profile.lawyer_name : null
++      return { servers: settings.servers as unknown as ServerAddresses, hasKey: state.hasKey, lawyerName: name }
 +    }),
 +    // T7 返修 P3-5：Host 先保存再测；没通过就恢复成测试前的地址和 Key（旧 Key 只在 Host 进程内存里过一下）
 +    testConnection: input => safe(async () => {
@@ -956,18 +974,14 @@ index a32e1f1c56..f92c1f51c1 100644
    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 diff --git a/apps/desktop/tests/lawbench-first-run.spec.ts b/apps/desktop/tests/lawbench-first-run.spec.ts
 new file mode 100644
-index 0000000000..584ef23e82
+index 0000000000..153b1d7037
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-first-run.spec.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,118 @@
 +// lawbench P-3：首次配置页的判断条件与输入校验（替代原 DeepSeek 欢迎流程的测试）。
 +import { describe, expect, it } from 'vitest'
 +import { isFirstRunInput, isServerAddresses, needsWelcome } from '../src/welcome-api.ts'
 +import { connectDesktopWelcome } from '../src/welcome-backend.ts'
-+import { createElement } from 'react'
-+import { renderToStaticMarkup } from 'react-dom/server'
-+import { VENDOR_LINE, Welcome } from '../src/client/WelcomePage.tsx'
-+import type { WelcomeApi } from '../src/welcome-api.ts'
 +
 +/** 假的 Host：认证地址返回 authStatus；/api/<ns>/<method> 按 reply 回信封。 */
 +function fakeHost(authStatus: number, reply: (method: string) => { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } }) {
@@ -1046,13 +1060,40 @@ index 0000000000..584ef23e82
 +  })
 +})
 +
-+describe('首次配置页底部（执行令 2026-10-04 11:56 第 2 条）', () => {
-+  it('常驻"技术支持：上海莫来特智能科技有限公司"一行和技术公司 logo', () => {
-+    const api = { id: 'zh-CN', getSetup: () => new Promise(() => {}) } as unknown as WelcomeApi
-+    const html = renderToStaticMarkup(createElement(Welcome, { api }))
-+    expect(VENDOR_LINE).toBe('技术支持：上海莫来特智能科技有限公司')
-+    expect(html).toContain(VENDOR_LINE)
-+    expect(html).toContain('src="assets/vendor-logo.png"')
++describe('本机律师姓名（令 1117 第 1 项）', () => {
++  /** 记下发给 Host 的调用：getSettings 回一份带 profile 的设置。 */
++  function recordingHost(profile: Record<string, unknown>) {
++    const calls: Array<{ method: string; args: Record<string, unknown> }> = []
++    const send = async (input: string, init?: RequestInit): Promise<Response> => {
++      if (!new URL(input).pathname.startsWith('/api/')) return new Response(null, { status: 200 })
++      const body = JSON.parse(String(init?.body)) as { rpcId: string; method: string; payload: { args: Record<string, unknown> } }
++      calls.push({ method: body.method, args: body.payload.args })
++      const value = body.method === 'lawbench/getSettings' ? { v: 1, servers, profile }
++        : body.method === 'lawbench/setupState' ? { configured: true, hasKey: true } : {}
++      return Response.json({ type: 'server-response', rpcId: body.rpcId, result: { ok: true, value } })
++    }
++    return { send, calls }
++  }
++
++  it('保存时写进设置的 profile.lawyer_name（去掉首尾空格，profile 其余字段保留）', async () => {
++    const h = recordingHost({ lawyer_name: null, keep: 1 })
++    const backend = await connectDesktopWelcome(AUTH_URL, h.send)
++    expect(await backend.save({ servers, lawyer_name: ' 王律师 ' })).toEqual({ ok: true, value: undefined })
++    const put = h.calls.find((c) => c.method === 'lawbench/putSettings')!
++    expect((put.args.settings as { profile: unknown }).profile).toEqual({ lawyer_name: '王律师', keep: 1 })
++  })
++
++  it('已设过的姓名带进表单', async () => {
++    const backend = await connectDesktopWelcome(AUTH_URL, recordingHost({ lawyer_name: '王律师' }).send)
++    const r = await backend.getSetup()
++    expect(r.ok && r.value?.lawyerName).toBe('王律师')
++  })
++
++  it('校验：姓名可选字段，空、超过 40 字、含控制字符都不收', () => {
++    expect(isFirstRunInput({ servers, lawyer_name: '王律师' })).toBe(true)
++    expect(isFirstRunInput({ servers, lawyer_name: '  ' })).toBe(false)
++    expect(isFirstRunInput({ servers, lawyer_name: '王'.repeat(41) })).toBe(false)
++    expect(isFirstRunInput({ servers, lawyer_name: 'a' + String.fromCharCode(10) + 'b' })).toBe(false)
 +  })
 +})
 diff --git a/apps/desktop/tests/main-startup.spec.ts b/apps/desktop/tests/main-startup.spec.ts
@@ -2197,3 +2238,38 @@ index 5ab4a1c031..faf4ad3799 100644
 +    expect(needsWelcome({ configured: true })).toBe(false)
    })
  })
+diff --git a/apps/desktop/tests/lawbench-welcome-page.client.spec.tsx b/apps/desktop/tests/lawbench-welcome-page.client.spec.tsx
+new file mode 100644
+index 0000000000..7155984941
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-welcome-page.client.spec.tsx
+@@ -0,0 +1,29 @@
++// lawbench P-3：首次配置页本身（静态渲染）——底部"技术支持"一行、"律师姓名"一栏、测试连接每行原样写服务的 message。
++import { describe, expect, it } from 'vitest'
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe as describeProbe, VENDOR_LINE, Welcome } from '../src/client/WelcomePage.tsx'
++import type { ConnectionResult, WelcomeApi } from '../src/welcome-api.ts'
++
++const page = (): string => renderToStaticMarkup(<Welcome api={{ id: 'zh-CN', getSetup: () => new Promise(() => {}) } as unknown as WelcomeApi} />)
++
++describe('首次配置页底部（执行令 2026-10-04 11:56 第 2 条）', () => {
++  it('常驻"技术支持：上海莫来特智能科技有限公司"一行和技术公司 logo', () => {
++    expect(VENDOR_LINE).toBe('技术支持：上海莫来特智能科技有限公司')
++    expect(page()).toContain(VENDOR_LINE)
++    expect(page()).toContain('src="assets/vendor-logo.png"')
++  })
++})
++
++describe('本机律师姓名一栏（令 1117 第 1 项）', () => {
++  it('页面上有"律师姓名"', () => {
++    expect(page()).toContain('律师姓名')
++  })
++})
++
++describe('测试连接的结果原样显示服务的 message（令 1117 第 2 项）', () => {
++  it('网关不校验 Key 时显示服务的说明，不自己写"Key 有效"', () => {
++    const r: ConnectionResult = { reachable: true, key_valid: true, latency_ms: 0, route: 'primary', message: '网关当前未校验 Key，无法确认 Key 是否正确' }
++    expect(describeProbe('模型服务器（6000D）', r)).toBe('模型服务器（6000D）：网关当前未校验 Key，无法确认 Key 是否正确')
++    expect(describeProbe('识别服务器（395）', { ...r, reachable: false, message: '连不上：所内、所外地址都没有回应' })).toBe('识别服务器（395）：连不上：所内、所外地址都没有回应')
++  })
++})
