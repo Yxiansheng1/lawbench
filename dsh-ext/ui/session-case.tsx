@@ -26,7 +26,7 @@ export function WithCase({ p, children }: { p: SessionProps; children: (c: CaseR
   if (caseRef) return <>{children(caseRef)}</>
   return (
     <div style={S.pane}>
-      <Empty>{root ? '这个会话所在的文件夹还没作为案件打开。' : '这个会话没有对应的案件文件夹。请从首页打开案件。'}</Empty>
+      <Empty>{root ? '这个会话所在的文件夹还没作为案件打开。' : '这个会话没有对应的案件文件夹。请从左侧"案件"打开或新建案件。'}</Empty>
       {root ? <div style={{ ...S.sub, wordBreak: 'break-all' }}>{root}</div> : null}
       {root ? <div><Button variant="outline" size="sm" onClick={() => void openCase(root, null, false)}>作为案件打开</Button></div> : null}
     </div>

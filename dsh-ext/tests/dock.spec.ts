@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
+import { pickCapsule, shownCapsule } from './helpers/capsule-pick.ts'
 import { createRoot, type Root } from 'react-dom/client'
 import { ComposerDock, forgetDockSyncs, NO_CASE_TEXT, SHEET_FAILED_SEND_TEXT, SHEET_FAILED_TEXT, TURN_ENDED } from '../ui/dock.tsx'
 import { toRequest, turnEnds } from '../ui/tasksheet.ts'
@@ -112,12 +113,13 @@ async function restart(sessionId: string): Promise<void> {
   await mount(sessionId)
 }
 
-const capsuleSelect = () => container.querySelector('select[aria-label="胶囊"]') as HTMLSelectElement
 const skillSelect = () => container.querySelector('select[aria-label="Skill"]') as HTMLSelectElement | null
 const status = () => container.querySelector('[role=status]')?.textContent ?? ''
-const shown = () => capsuleSelect().value || '自由对话'
+const shown = () => shownCapsule(container)
 
-async function pick(id: string, el: HTMLSelectElement = capsuleSelect()): Promise<void> {
+/** 选能力（点胶囊按钮，执行令 1156 改版后）；给了 el 时是在 Skill 下拉框里选。 */
+async function pick(id: string, el?: HTMLSelectElement): Promise<void> {
+  if (!el) { await pickCapsule(container, id); return }
   const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!
   await act(async () => { set.call(el, id); el.dispatchEvent(new Event('change', { bubbles: true })) })
 }
@@ -383,8 +385,8 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     await act(async () => { root!.render(createElement(ComposerDock, { sessionId: 'S9', useSessions })) })
     await flush()
     expect(status()).toBe(NO_CASE_TEXT)
-    expect([...container.querySelectorAll('button')].some((b) => b.textContent === '回首页')).toBe(true)
-    expect(container.querySelector('select[aria-label="胶囊"]')).toBeNull()
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent === '选择案件')).toBe(true)
+    expect(container.querySelector('[data-lawbench-dock]')).toBeNull()
   })
 
   it('同一选择连选两次：只写一次', async () => {

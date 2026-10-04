@@ -3,14 +3,19 @@
 // 挂上、切换会话、每轮结束之后从 GET /api/task/current 读，下拉框和状态行都设成服务返回的；律师改动时 POST /api/task，
 // 写成功之前状态行显示"正在保存选择…"，写失败显示"任务单没有写成，请重试"并保留下拉框的值，此时发送被拦下（执行令 1751）。entry 填胶囊 id（T13 执行令 Q5）。
 // 运行状态和停止沿用 DSH 对话区自带的。
+// 用户 10-04 改版（执行令 1156 第 3 条）：两层胶囊放到输入框上方——空会话时从上到下是分流提示一行、第二层"<分类> · 选要做什么"、
+// 第一层"能力入口"，选中的能力显示成输入框上方的小标签【证据整理】（× 取消）；会话里有内容后两层收起，点"选能力"再展开。
+// 只此一套选择器（原先的胶囊下拉框并进来）；工具胶囊（发票、委托材料）点了仍打开 T26 的页面。
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { visible, type Capsules, type SkillCapsule } from './capsules.ts'
+import { TOOL_WORD, visible, type Capsule, type Capsules, type SkillCapsule } from './capsules.ts'
 import { statusErrorText } from './format.ts'
 import { Badge, Button, C, getNav, S } from './kit.tsx'
 import { TaskAnswerSlot } from './answer.tsx'
 import { app, applyServerSelection, call, clearInputChanged, clearStaleServer, lb, markInputChanged, markSelectionSaved, MODE_AGENT, notice as showNotice, setSelection, showTaskAnswer, takeIntent, type CaseRef, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { useSessionCase, type SessionProps } from './session-case.tsx'
+import { homeView } from './invoice-logic.ts'
+import { openRetainer } from './retainer.ts'
 import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
 
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
@@ -61,21 +66,33 @@ export const NO_CASE_TEXT = '先打开或新建一个案件，再在这里发消
 
 export function ComposerDock(p: SessionProps) {
   const { caseRef } = useSessionCase(p)
+  // 空会话（DSH 的会话摘要 blank）显示两层胶囊；有内容后收起
+  const hero = p.useSessions?.((s) => (s.byId[p.sessionId] as { blank?: boolean } | undefined)?.blank === true) ?? false
   if (!caseRef) {
     return (
       <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', margin: '0 0 6px', fontSize: 13, color: C.err, display: 'flex', gap: 8, alignItems: 'center' }}>
         <span role="status">{NO_CASE_TEXT}</span>
-        <Button size="sm" variant="ghost" onClick={() => getNav().goHome()}>回首页</Button>
+        <Button size="sm" variant="ghost" onClick={() => getNav().goHome()}>选择案件</Button>
       </div>
     )
   }
-  return <><TaskAnswerSlot caseRef={caseRef} sessionId={p.sessionId} /><Dock caseRef={caseRef} sessionId={p.sessionId} /></>
+  return <><TaskAnswerSlot caseRef={caseRef} sessionId={p.sessionId} /><Dock caseRef={caseRef} sessionId={p.sessionId} hero={hero} /></>
 }
 
-function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
+/** 胶囊按钮（两层共用的样子）。 */
+const pill = (on: boolean, dashed: boolean) => ({
+  font: 'inherit', fontSize: 13, padding: '3px 12px', borderRadius: 999, cursor: 'pointer', background: on ? 'rgba(47,107,255,0.08)' : 'transparent',
+  border: `1px ${dashed && !on ? 'dashed' : 'solid'} ${on ? C.brand : C.border}`, color: on ? C.brand : C.text, fontWeight: on ? 600 : 400,
+})
+
+function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: string; hero: boolean }) {
   const [caps, setCaps] = useState<Capsules | undefined>()
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [open, setOpen] = useState(false)
+  /** 第一层选中的分类（null：跟随当前能力所在的分类，没有就第一个）。 */
+  const [groupId, setGroupId] = useState<string | null>(null)
+  /** 会话里有内容后，两层胶囊默认收起，点"选能力"展开。 */
+  const [rowsOpen, setRowsOpen] = useState(false)
   /** 最近一次读或写失败（sessionId：哪个会话的；key：写失败时写的那份选择）。 */
   const [error, setError] = useState<{ sessionId: string; key: string; op: 'read' | 'write'; error: ApiError } | null>(null)
   /** 已经读回过（成败都算）的会话：换会话后、读回之前状态行说"正在读取当前选择…"。 */
@@ -99,6 +116,9 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
 
   const capsules = useMemo(() => (caps ? visible(caps).flatMap((g) => g.items.filter((x): x is SkillCapsule => x.kind === 'skill').map((x) => ({ ...x, group: g.name }))) : []), [caps])
   const capsule = capsules.find((c) => c.id === sel.capsuleId)
+  const groups = useMemo(() => (caps ? visible(caps) : []), [caps])
+  const group = groups.find((g) => g.id === groupId) ?? groups.find((g) => g.items.some((x) => x.id === sel.capsuleId)) ?? groups[0]
+  const showRows = hero || rowsOpen
   const agentSkills = skills.filter((s) => s.mode === MODE_AGENT)
   const choices = capsule ? [...new Set([...capsule.skills, ...(caps?.shared ?? [])])].filter((n) => agentSkills.some((s) => s.name === n)) : []
   const skill = agentSkills.find((s) => s.name === sel.skill)
@@ -208,16 +228,44 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
     setSelection(sessionId, { capsuleId: c?.id ?? null, skill: c?.skills[0] ?? null, params: null })
   }
   const setParam = <K extends keyof Params>(k: K, v: Params[K]) => setSelection(sessionId, { params: { ...params, [k]: v } })
+  /** 点第二层：Skill 胶囊写进任务单（同下拉框时的写法）；工具胶囊打开 T26 的页面。 */
+  const openItem = (item: Capsule) => {
+    if (item.kind === 'tool') {
+      if (item.tool === 'invoice') { homeView.set('invoice'); getNav().goHome() } else void openRetainer(caseRef)
+      return
+    }
+    pickCapsule(item.id)
+    setRowsOpen(false)
+  }
 
   return (
-    <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '6px 10px', margin: '0 0 6px', fontSize: 13, color: C.text, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ ...S.row, flexWrap: 'wrap' }}>
-        <label style={S.row}>胶囊
-          <select style={S.input} value={sel.capsuleId ?? ''} onChange={(e) => pickCapsule(e.target.value)} aria-label="胶囊">
-            <option value="">自由对话</option>
-            {capsules.map((c) => <option key={c.id} value={c.id}>{c.group} · {c.name}</option>)}
-          </select>
-        </label>
+    <div data-lawbench-dock="" data-capsule={sel.capsuleId ?? ''} style={{ margin: '0 0 6px', fontSize: 13, color: C.text, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {hero && caps?.hint ? <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.6 }}>{caps.hint}</div> : null}
+      {showRows && group ? (
+        <div role="toolbar" aria-label="选要做什么" style={{ ...S.row, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: C.sub }}>{group.name} · 选要做什么</span>
+          {group.items.map((item) => (
+            <button key={item.id} type="button" data-capsule-id={item.id} aria-pressed={item.id === sel.capsuleId} title={item.kind === 'tool' ? `内置工具：${TOOL_WORD[item.tool]}` : undefined}
+              onClick={() => openItem(item)} style={pill(item.id === sel.capsuleId, true)}>{item.name}</button>
+          ))}
+          {group.items.length === 0 ? <span style={{ fontSize: 12, color: C.faint }}>这一类的胶囊都隐藏了，可在设置里"管理胶囊"显示。</span> : null}
+        </div>
+      ) : null}
+      {showRows ? (
+        <div role="tablist" aria-label="能力入口" style={{ ...S.row, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: C.sub }}>能力入口</span>
+          {groups.map((g) => (
+            <button key={g.id} type="button" role="tab" aria-selected={g.id === group?.id} onClick={() => setGroupId(g.id)} style={pill(g.id === group?.id, false)}>{g.name} ▾</button>
+          ))}
+        </div>
+      ) : null}
+      <div style={{ ...S.row, flexWrap: 'wrap', border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '4px 10px' }}>
+        {capsule ? (
+          <span data-capsule-tag="" style={{ ...S.row, gap: 4, border: `1px solid ${C.brand}`, color: C.brand, borderRadius: C.rMd, padding: '0 6px' }}>
+            【{capsule.name}】
+            <button type="button" aria-label="取消这项能力" onClick={() => pickCapsule('')} style={{ background: 'none', border: 'none', color: C.brand, cursor: 'pointer', padding: 0 }}>×</button>
+          </span>
+        ) : null}
         {capsule ? (
           <label style={S.row}>Skill
             <select style={S.input} value={sel.skill ?? ''} onChange={(e) => setSelection(sessionId, { skill: e.target.value || null, params: null })} aria-label="Skill">
@@ -225,6 +273,7 @@ function Dock({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }) {
             </select>
           </label>
         ) : null}
+        {!hero ? <Button size="sm" variant="ghost" aria-expanded={rowsOpen} onClick={() => setRowsOpen(!rowsOpen)}>{rowsOpen ? '收起能力' : '选能力'}</Button> : null}
         <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? '收起参数' : '参数'}</Button>
         {sel.inputs.map((path) => (
           <span key={path} style={{ ...S.row, gap: 4, border: `1px solid ${C.border}`, borderRadius: 999, padding: '0 6px', fontSize: 12 }}>

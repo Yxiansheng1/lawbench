@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
+import { pickCapsule, shownCapsule } from './helpers/capsule-pick.ts'
 import { createRoot, type Root } from 'react-dom/client'
 import { ComposerDock, forgetDockSyncs, TURN_ENDED } from '../ui/dock.tsx'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
@@ -78,10 +79,9 @@ async function mount(sessionId: string, remount = false) {
 }
 async function unmount() { await act(async () => { root?.unmount() }); root = undefined }
 async function restart(sessionId: string) { await unmount(); forgetDockSyncs(); app.set((s) => ({ ...s, selections: {}, intents: {}, inputChanged: {}, staleServer: {} })); await mount(sessionId) }
-const capSel = () => container.querySelector('select[aria-label="胶囊"]') as HTMLSelectElement
 const status = () => container.querySelector('[role=status]')?.textContent ?? ''
-const shown = () => (capSel().value || '自由对话') + (container.textContent?.includes('选用：') ? '+X' : '')
-async function pick(id: string) { const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!; await act(async () => { set.call(capSel(), id); capSel().dispatchEvent(new Event('change', { bubbles: true })) }) }
+const shown = () => shownCapsule(container) + (container.textContent?.includes('选用：') ? '+X' : '')
+async function pick(id: string) { await pickCapsule(container, id) }
 const button = (text: string) => [...container.querySelectorAll('button')].find((x) => x.textContent === text)
 async function click(text: string) { const b = button(text); if (!b) throw new Error('no button ' + text); await act(async () => { b.click() }) }
 async function turnEnded(s: string) { await act(async () => { window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: s })) }); await flush() }

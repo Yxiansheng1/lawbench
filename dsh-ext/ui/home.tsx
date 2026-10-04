@@ -1,107 +1,64 @@
-// 首页（PRD 6.3、7.9；Spec U-11、U-12）：分流提示、两级胶囊、右上角"管理胶囊"、最近案件、新建 / 打开案件。
-// 工具胶囊（T26）："发票整理"在首页位置换成发票页（U-13）；"文件生成"打开委托材料窗口（U-14）。
+// 侧栏"案件"一块点开的页面（原首页，PRD 6.3、7.9；Spec U-11、U-12）：最近案件、新建 / 打开 / 切换案件；"发票整理"在这里换成发票页（U-13）。
+// 用户 10-04 改版（执行令 1156 第 3 条）：两层胶囊和分流提示挪到输入框上方（dock.tsx），胶囊管理挪到设置页（CapsuleSettings）。
 import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, visible, type Capsule, type Capsules } from './capsules.ts'
-import { loadRecent, openCase, startImport, withCase } from './cases.ts'
-import { Badge, Button, C, CONNECTING_TEXT, Empty, getNav, ErrorLine, S, useRetryLoad } from './kit.tsx'
-import { app, call, confirm, currentCase, lb, MODE_AGENT, notice, setIntent, type CaseRef, type SkillInfo } from './state.ts'
+import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsules, rename, toggleHidden, TOOL_WORD, type Capsules } from './capsules.ts'
+import { loadRecent, openCase, startImport } from './cases.ts'
+import { Badge, Button, C, CONNECTING_TEXT, Empty, getNav, ErrorLine, Loading, S, useLoad, useRetryLoad } from './kit.tsx'
+import { app, call, confirm, lb, MODE_AGENT, notice, type CaseRef, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
-import { errorText } from './format.ts'
+import { errorText, lawyerMessage } from './format.ts'
+import { forgetDockCache } from './dock.tsx'
 import { homeView } from './invoice-logic.ts'
 import { InvoicePage } from './invoice.tsx'
-import { openRetainer } from './retainer.ts'
 
 export function HomePage() {
   const view = useStore(homeView, (v) => v)
-  return view === 'invoice' ? <InvoicePage /> : <CapsulesPage />
+  return view === 'invoice' ? <InvoicePage /> : <CasesPage />
 }
 
-/** 首页要的数据：胶囊、最近案件（写进界面状态）都要服务；Skill 列表是 Host 自己读的，读不到只是不显示中文名。 */
-async function loadHome(): Promise<{ ok: true; value: { caps: Capsules; skills: SkillInfo[] } } | { ok: false; error: { code: string; message: string } }> {
-  const caps = await call<Capsules>('getCapsules')
-  if (!caps.ok) return caps
-  const recent = await loadRecent()
-  if (!Array.isArray(recent)) return { ok: false, error: recent }
-  let skills: SkillInfo[] = []
-  try { skills = (await lb().listSkills()).value.skills } catch { /* 没有中文名时显示 Skill 名 */ }
-  return { ok: true, value: { caps: caps.value, skills } }
-}
-
-function CapsulesPage() {
-  // 启动时首页可能先于服务就绪：失败每 2 秒自动重读、最多 30 秒，之后给"重试"（T14 第二次实跑派修 1）
-  const [home, reload] = useRetryLoad(loadHome, [])
-  const [managing, setManaging] = useState(false)
+/**
+ * 侧栏"案件"一块点开的页面（执行令 1156 第 3 条：取消单独首页，胶囊放到输入框上方、胶囊管理放到设置页）：
+ * 启动检查提示、最近案件、新建 / 打开 / 切换案件。服务还没就绪时每 2 秒自动重读、最多 30 秒，之后给"重试"（T14 第二次实跑派修 1）。
+ */
+function CasesPage() {
+  const [recent, reload] = useRetryLoad(async () => {
+    const r = await loadRecent()
+    return Array.isArray(r) ? { ok: true as const, value: r } : { ok: false as const, error: r }
+  }, [])
   return (
     <div style={S.page}>
       <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 22 }}>
-        {home.state === 'loading' ? <Empty>读取中…</Empty> : null}
-        {home.state === 'connecting' ? <Empty>{CONNECTING_TEXT}</Empty> : null}
-        {home.state === 'fail' ? (
-          <div style={S.row}><ErrorLine error={home.error} /><Button size="sm" variant="outline" onClick={() => void reload()}>重试</Button></div>
+        <SelfCheckBanner />
+        {recent.state === 'loading' ? <Empty>读取中…</Empty> : null}
+        {recent.state === 'connecting' ? <Empty>{CONNECTING_TEXT}</Empty> : null}
+        {recent.state === 'fail' ? (
+          <div style={S.row}><ErrorLine error={recent.error} /><Button size="sm" variant="outline" onClick={() => void reload()}>重试</Button></div>
         ) : null}
-        {home.state === 'ok' ? (managing
-          ? <CapsuleManager initial={home.value.caps} skills={home.value.skills} onDone={() => { setManaging(false); void reload() }} />
-          : <CapsuleHome caps={home.value.caps} skills={home.value.skills} onManage={() => setManaging(true)} />) : null}
-        {!managing ? <SelfCheckBanner /> : null}
-        {!managing && home.state === 'ok' ? <RecentCases /> : null}
+        {recent.state === 'ok' ? <RecentCases /> : null}
       </div>
     </div>
   )
 }
 
-function CapsuleHome({ caps, skills, onManage }: { caps: Capsules; skills: SkillInfo[]; onManage: () => void }) {
-  const groups = visible(caps)
-  const [groupId, setGroupId] = useState(groups[0]?.id)
-  const group = groups.find((g) => g.id === groupId) ?? groups[0]
-  const current = useStore(app, currentCase)
-  const title = (name: string) => skills.find((s) => s.name === name)?.title ?? name
-  const open = (item: Capsule) => {
-    if (item.kind === 'tool') {
-      if (item.tool === 'invoice') homeView.set('invoice')
-      else void openRetainer(current)
-      return
-    }
-    withCase(current, (c) => {
-      // 留给该案件的待带入意向，由案件当前会话的输入区读回服务的选择后取走（T13 返修 P2-2）
-      setIntent(c.case_id, { capsuleId: item.id, skill: item.skills[0] ?? null, params: null, inputs: [] })
-      if (current && c.case_id === current.case_id) void getNav().openCaseWorkspace(c.root)
-    })
+/** 设置页"胶囊"一节（U-11 保留在设置页）：点"管理胶囊"进入排序、改名、隐藏、新增；保存后输入区重读。 */
+export function CapsuleSettings() {
+  const [caps, reload] = useLoad(() => call<Capsules>('getCapsules'), [])
+  const [skills] = useLoad(async () => { try { return await lb().listSkills() } catch (e) { return { ok: false as const, error: { code: 'SERVICE_UNAVAILABLE', message: lawyerMessage((e as Error).message) } } } }, [])
+  const [managing, setManaging] = useState(false)
+  const skillList = skills.state === 'ok' ? skills.value.skills : []
+  if (!managing) {
+    const fresh = caps.state === 'ok' ? newCapsules(caps.value) : []
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {fresh.length ? <div role="note" style={{ color: C.text }}>有新功能，可在管理胶囊中显示：{fresh.map((x) => x.name).join('、')}</div> : null}
+        <div><Button size="sm" variant="outline" disabled={caps.state !== 'ok'} onClick={() => setManaging(true)}>管理胶囊</Button></div>
+        {caps.state === 'fail' ? <ErrorLine error={caps.error} /> : null}
+      </div>
+    )
   }
   return (
-    <>
-      <div style={{ ...S.card, color: C.sub, lineHeight: 1.7 }}>{caps.hint}</div>
-      {newCapsules(caps).length ? (
-        <div role="note" style={{ ...S.card, borderColor: C.brand, color: C.text }}>
-          有新功能，可在管理胶囊中显示：{newCapsules(caps).map((x) => x.name).join('、')}
-        </div>
-      ) : null}
-      <div style={S.between}>
-        <div role="tablist" aria-label="业务分组" style={{ ...S.row, flexWrap: 'wrap' }}>
-          {groups.map((g) => (
-            <button key={g.id} role="tab" aria-selected={g.id === group?.id} type="button" onClick={() => setGroupId(g.id)}
-              style={{ font: 'inherit', fontSize: 15, padding: '8px 18px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${g.id === group?.id ? C.brand : C.border}`, color: g.id === group?.id ? C.brand : C.text, background: 'transparent' }}>
-              {g.name}
-            </button>
-          ))}
-        </div>
-        <Button variant="outline" size="sm" onClick={onManage}>管理胶囊</Button>
-      </div>
-      {group ? (
-        <div role="tabpanel" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-          {group.items.map((item) => (
-            <button key={item.id} type="button" onClick={() => open(item)}
-              style={{ ...S.card, textAlign: 'left', cursor: 'pointer', color: C.text, font: 'inherit', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 84 }}>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>{item.name}</span>
-              <span style={S.sub}>{item.kind === 'skill' ? item.skills.map(title).join(' → ') : `内置工具：${TOOL_WORD[item.tool]}`}</span>
-              {item.kind === 'skill' && item.outputs.length ? <span style={{ ...S.sub, color: C.faint }}>产出：{item.outputs.join('、')}</span> : null}
-            </button>
-          ))}
-          {group.items.length === 0 ? <Empty>这一组的胶囊都隐藏了，可在"管理胶囊"里显示。</Empty> : null}
-        </div>
-      ) : <Empty>胶囊都隐藏了，可在"管理胶囊"里显示。</Empty>}
-    </>
+    <Loading data={caps}>{(c) => <CapsuleManager initial={c} skills={skillList} onDone={() => { setManaging(false); forgetDockCache(); void reload() }} />}</Loading>
   )
 }
 
