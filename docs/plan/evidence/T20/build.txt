@@ -99,3 +99,20 @@ electron / electron-builder 缓存：前后 9 个，未新增。签名：339 个
     %USERPROFILE%\.dsh\profiles\desktop mtime 前后都是 2026-10-05 11:28:19.395
   卸载 /S 退出 0
   未在本机核（候用户新机）：默认安装目录名、开始菜单项、卸载项名、非静默安装的 Skill 目录提问；与原版 DSH 同时开（本机没装原版）
+
+==== 第四版候选包（令 1539、一行令 1548；"只要一版"，装没装过原版 DSH 都用这一版）· 2026-10-05 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小见交回件（744 MB）
+  sha256 5efaf7882f726e593490df52ac5768da42ffb09855c1b21c216b6998eee8c9fe
+  未签名
+基座 c96ae54；命令同第二版。package 1016 s，16:11 完成。运行时 npm 锁对账 323/323 一致；electron 缓存未新增；签名 339 个 210 个无有效签名（同前）。
+冒烟（注记 1037 ＋ 回执 1547 三项）：/S /D=D:\lawbench-smoke4，退出 0
+  布局同第二版清单，全在；装完 %LOCALAPPDATA%\@deepseek-aidsh-desktop-updater 不存在
+  ① 端口占用：先用 node 在 127.0.0.1:19387 开监听（模拟原版 DSH 的 Host），再启动装好的包：
+     首次配置页、主窗口（dsh-app://app/）都出来；Host 监听 127.0.0.1:57551（系统分配）；服务进程 <安装目录>\python\python.exe 在跑
+     （截图 smoke-第四版-首次配置.png）
+  新路径：%APPDATA%\lawbench-desktop、%LOCALAPPDATA%\lawbench\dsh-home\profiles\desktop 生成了数据
+  ② 卸载（/S，退出 0）后：%APPDATA%\lawbench-desktop 不存在；%LOCALAPPDATA%\lawbench\dsh-home 不存在
+  ③ 预置的 %APPDATA%\@deepseek-ai\dsh-desktop\marker.txt（模拟原版目录）卸载后仍在
+  另：~\.dsh mtime 前后不变（2026-10-04 19:54:11.662）；%LOCALAPPDATA%\lawbench 其余（logs、capsules.json）卸载后照旧保留
+  未在本机核（候用户新机）：默认安装目录名、开始菜单与桌面快捷方式、卸载项名、非静默安装的 Skill 目录提问；与真的原版 DSH 同时开
