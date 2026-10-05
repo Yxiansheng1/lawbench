@@ -50,3 +50,15 @@ Electron 44.0.0 本体：%LOCALAPPDATA%\electron\Cache 里早已有 electron-v44
   a. 18:24 起 DSH prepare-runtime（@electron/get）连 GitHub（185.199.109.133/110.133:443）下载 Electron 44.0.0 与 SHASUMS256.txt；
      热点下 0 字节停住约 30 分钟，用户在任务管理器结束，没有得到任何文件。之后改为本机镜像（build.txt "网络"第 3 条），不再连 GitHub。
   b. DSH prepare:dsh 从 registry.npmjs.org 装内置运行时的 234 个第三方 npm 包（每次打包都会，用户当场准许）；清单 runtime-npm-packages.txt。
+
+== 第二版（2026-10-05，用户开热点）
+1. python.org 官方 Python 3.12.10（NuGet 包 python，发布者 Python Software Foundation；3.12 系列最后一个带 Windows 二进制的版本）
+   10:41:32–10:41:41，来源 https://www.nuget.org/api/v2/package/python/3.12.10（跳转到 api.nuget.org 的 flatcontainer）
+   python.3.12.10.nupkg  14515433 B
+     sha256 0eb85c2dfccccf1b17352de4c397f69194035b7d37149eacc16f1147d93de3b8
+     sha512(base64) u9pNz2iKlCEbYtUJaKkbOPMF0LjR7NkCafdKhvigpPzrt8oWKgdTpHaR6z3wyWQAm9PYGUxv0Zr66NX9AeHMDw==
+   nuget.org 注册信息：published 2025-04-08T13:56:44Z、listed。catalog 条目取不到（ResourceNotFound），没能拿到页面公布的包哈希对照；
+   改为核包内二进制的 Authenticode：解释器 31 个文件全部 Valid、签名者 Python Software Foundation（python-signatures.txt）。
+   存放 packaging\build-tools\python-pkg\（git 忽略）。
+2. DSH 运行时第三方 npm 包：prepare:dsh 从 registry.npmjs.org 装（同第一版）；这次解析出的锁存为 packaging\runtime-lock\pnpm-lock.yaml。
+没有取别的东西；Electron 仍走本机镜像（GitHub 未访问）。

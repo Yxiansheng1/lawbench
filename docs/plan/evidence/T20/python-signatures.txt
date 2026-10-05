@@ -1,50 +1,38 @@
-﻿T20 Authenticode signatures of shipped binaries (packaging\build.ps1 signcheck, 2026-10-04 21:05)
-stage: 372 binaries (.exe/.dll/.pyd, LibreOffice excluded: its own release is signed by The Document Foundation), 272 not validly signed
+﻿T20 Authenticode signatures of shipped binaries (packaging\build.ps1 signcheck, 2026-10-05 10:52)
+stage: 339 binaries (.exe/.dll/.pyd, LibreOffice excluded: its own release is signed by The Document Foundation), 210 not validly signed
 
 == Python interpreter (python\*.exe, python\*.dll, python\DLLs\*)
-  NotSigned                                             python\DLLs\_asyncio.pyd
-  NotSigned                                             python\DLLs\_bz2.pyd
-  NotSigned                                             python\DLLs\_ctypes.pyd
-  NotSigned                                             python\DLLs\_ctypes_test.pyd
-  NotSigned                                             python\DLLs\_decimal.pyd
-  NotSigned                                             python\DLLs\_elementtree.pyd
-  NotSigned                                             python\DLLs\_hashlib.pyd
-  NotSigned                                             python\DLLs\_lzma.pyd
-  NotSigned                                             python\DLLs\_msi.pyd
-  NotSigned                                             python\DLLs\_multiprocessing.pyd
-  NotSigned                                             python\DLLs\_overlapped.pyd
-  NotSigned                                             python\DLLs\_queue.pyd
-  NotSigned                                             python\DLLs\_socket.pyd
-  NotSigned                                             python\DLLs\_sqlite3.pyd
-  NotSigned                                             python\DLLs\_ssl.pyd
-  NotSigned                                             python\DLLs\_testbuffer.pyd
-  NotSigned                                             python\DLLs\_testcapi.pyd
-  NotSigned                                             python\DLLs\_testclinic.pyd
-  NotSigned                                             python\DLLs\_testconsole.pyd
-  NotSigned                                             python\DLLs\_testimportmultiple.pyd
-  NotSigned                                             python\DLLs\_testinternalcapi.pyd
-  NotSigned                                             python\DLLs\_testmultiphase.pyd
-  NotSigned                                             python\DLLs\_testsinglephase.pyd
-  NotSigned                                             python\DLLs\_tkinter.pyd
-  NotSigned                                             python\DLLs\_uuid.pyd
-  NotSigned                                             python\DLLs\_wmi.pyd
-  NotSigned                                             python\DLLs\_zoneinfo.pyd
-  NotSigned                                             python\DLLs\libcrypto-3-x64.dll
-  NotSigned                                             python\DLLs\libffi-8.dll
-  NotSigned                                             python\DLLs\libssl-3-x64.dll
-  NotSigned                                             python\DLLs\pyexpat.pyd
-  NotSigned                                             python\DLLs\select.pyd
-  NotSigned                                             python\DLLs\sqlite3.dll
-  Valid        Python Software Foundation               python\DLLs\tcl86t.dll
-  Valid        Python Software Foundation               python\DLLs\tk86t.dll
-  NotSigned                                             python\DLLs\unicodedata.pyd
-  NotSigned                                             python\DLLs\winsound.pyd
-  NotSigned                                             python\python.exe
-  NotSigned                                             python\python3.dll
-  NotSigned                                             python\python312.dll
-  NotSigned                                             python\pythonw.exe
-  Valid        Microsoft Windows                        python\vcruntime140.dll
-  Valid        Microsoft Windows                        python\vcruntime140_1.dll
+  Valid        Python Software Foundation               python\DLLs\_asyncio.pyd
+  Valid        Python Software Foundation               python\DLLs\_bz2.pyd
+  Valid        Python Software Foundation               python\DLLs\_ctypes.pyd
+  Valid        Python Software Foundation               python\DLLs\_decimal.pyd
+  Valid        Python Software Foundation               python\DLLs\_elementtree.pyd
+  Valid        Python Software Foundation               python\DLLs\_hashlib.pyd
+  Valid        Python Software Foundation               python\DLLs\_lzma.pyd
+  Valid        Python Software Foundation               python\DLLs\_msi.pyd
+  Valid        Python Software Foundation               python\DLLs\_multiprocessing.pyd
+  Valid        Python Software Foundation               python\DLLs\_overlapped.pyd
+  Valid        Python Software Foundation               python\DLLs\_queue.pyd
+  Valid        Python Software Foundation               python\DLLs\_socket.pyd
+  Valid        Python Software Foundation               python\DLLs\_sqlite3.pyd
+  Valid        Python Software Foundation               python\DLLs\_ssl.pyd
+  Valid        Python Software Foundation               python\DLLs\_uuid.pyd
+  Valid        Python Software Foundation               python\DLLs\_wmi.pyd
+  Valid        Python Software Foundation               python\DLLs\_zoneinfo.pyd
+  Valid        Python Software Foundation               python\DLLs\libcrypto-3.dll
+  Valid        Python Software Foundation               python\DLLs\libffi-8.dll
+  Valid        Python Software Foundation               python\DLLs\libssl-3.dll
+  Valid        Python Software Foundation               python\DLLs\pyexpat.pyd
+  Valid        Python Software Foundation               python\DLLs\select.pyd
+  Valid        Python Software Foundation               python\DLLs\sqlite3.dll
+  Valid        Python Software Foundation               python\DLLs\unicodedata.pyd
+  Valid        Python Software Foundation               python\DLLs\winsound.pyd
+  Valid        Python Software Foundation               python\python.exe
+  Valid        Python Software Foundation               python\python3.dll
+  Valid        Python Software Foundation               python\python312.dll
+  Valid        Python Software Foundation               python\pythonw.exe
+  Valid        Microsoft Windows Software Compatibility Publisher python\vcruntime140.dll
+  Valid        Microsoft Windows Software Compatibility Publisher python\vcruntime140_1.dll
 
 == Not validly signed, by package (to be signed with our certificate, N73)
   engines\retainer                                    1 files: rapidocr.exe
@@ -70,13 +58,5 @@ stage: 372 binaries (.exe/.dll/.pyd, LibreOffice excluded: its own release is si
   python site-packages\win32                         35 files: mmapfile.pyd, odbc.pyd, perfmon.pyd, perfmondata.dll, pythonservice.exe, servicemanager.pyd, ...
   python site-packages\win32comext                   14 files: adsi.pyd, authorization.pyd, axcontrol.pyd, axdebug.pyd, axscript.pyd, bits.pyd, ...
   python site-packages\yaml                           1 files: _yaml.cp312-win_amd64.pyd
-  python\DLLs                                        35 files: libcrypto-3-x64.dll, libffi-8.dll, libssl-3-x64.dll, pyexpat.pyd, select.pyd, sqlite3.dll, ...
-  python\Lib                                          2 files: python.exe, pythonw.exe
-  python\python.exe                                   1 files: python.exe
-  python\python3.dll                                  1 files: python3.dll
-  python\python312.dll                                1 files: python312.dll
-  python\pythonw.exe                                  1 files: pythonw.exe
-  python\Scripts                                     18 files: f2py.exe, hf.exe, httpx.exe, huggingface-cli.exe, idna.exe, isympy.exe, ...
-  python\tcl                                          3 files: tcldde14.dll, tclreg13.dll, tix84.dll
   tools\convert                                      46 files: _pocketfft_umath.cp312-win_amd64.pyd, _umath_linalg.cp312-win_amd64.pyd, bit_generator.cp312-win_amd64.pyd, mtrand.cp312-win_amd64.pyd, _bounded_integers.cp312-win_amd64.pyd, _common.cp312-win_amd64.pyd, ...
   tools\splitter                                     46 files: _pocketfft_umath.cp312-win_amd64.pyd, _umath_linalg.cp312-win_amd64.pyd, bit_generator.cp312-win_amd64.pyd, mtrand.cp312-win_amd64.pyd, _bounded_integers.cp312-win_amd64.pyd, _common.cp312-win_amd64.pyd, ...

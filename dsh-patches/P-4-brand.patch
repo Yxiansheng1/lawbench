@@ -1364,7 +1364,7 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..365445bc57 100644
+index 0f4d859e78..36bea2b4a3 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
 @@ -3,6 +3,14 @@
@@ -1382,14 +1382,15 @@ index 0f4d859e78..365445bc57 100644
  ManifestDPIAware true
  !ifndef BUILD_UNINSTALLER
    !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
-@@ -91,6 +99,26 @@ ManifestDPIAware true
+@@ -91,6 +99,27 @@ ManifestDPIAware true
    Call un.CleanData
  !macroend
  
 +; lawbench P-4 (order 2033): electron-builder's NSIS copies the whole installer (about 780 MB) into
 +; %LOCALAPPDATA%\<updater cache>\installer.exe for differential updates. lawbench ships without an update feed, so
 +; remove the copy right after installing and drop the folder when it is empty. No network is involved either way.
-+!macro customInstall
++; Called from DSH's customInstall below (only one customInstall macro may exist).
++!macro lawbenchAfterInstall
 +  !ifdef APP_INSTALLER_STORE_FILE
 +    Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
 +    Push $0
@@ -1409,6 +1410,14 @@ index 0f4d859e78..365445bc57 100644
  !macro customPageAfterChangeDir
    !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
    !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
+@@ -209,6 +238,7 @@ ManifestDPIAware true
+   !insertmacro dshFinishDirectories
+   ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
+   WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
++  !insertmacro lawbenchAfterInstall
+   ${If} $0 == 1
+     SetErrors
+   ${Else}
 diff --git a/apps/desktop/scripts/prepare-dsh.ts b/apps/desktop/scripts/prepare-dsh.ts
 index 377c300efb..1d1d9dc7fd 100644
 --- a/apps/desktop/scripts/prepare-dsh.ts
