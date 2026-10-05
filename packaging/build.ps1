@@ -303,6 +303,7 @@ $Steps = [ordered]@{
     if (-not $signtool) { $signtool = Get-ChildItem -Recurse -File "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -Last 1 -ExpandProperty FullName }
     if (-not $signtool) { throw 'signtool.exe not found (Windows SDK)' }
     $todo = @(Get-ChildItem -Recurse -File $Stage -Include '*.exe', '*.dll', '*.pyd' | Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne 'Valid' })
+    if ($todo.Count -eq 0) { Say 'sign: nothing left to sign (all binaries already validly signed)'; return }
     foreach ($chunk in 0..([math]::Ceiling($todo.Count / 50) - 1)) {
       $files = @($todo | Select-Object -Skip ($chunk * 50) -First 50 | ForEach-Object { $_.FullName })
       if ($files) { Run $signtool (@('sign', '/sha1', $SignCert, '/fd', 'sha256', '/tr', $TimestampUrl, '/td', 'sha256') + $files) }

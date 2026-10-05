@@ -34,7 +34,8 @@ export interface SupervisorDeps {
 export type SupervisorState = 'stopped' | 'starting' | 'running' | 'failed' | 'version_mismatch'
 
 /**
- * 服务没起来的原因（令 2033：干净机上服务不启动、日志里看不出为什么）。只有类别和退出码，不含路径、不含服务输出。
+ * 服务没起来的原因（令 2033：干净机上服务不启动、日志里看不出为什么）。类别、退出码；令 2048 起 exited 另带服务标准错误
+ * 末条异常行（error，路径已去掉，见 lastErrorLine），不带整段输出。
  * - launch_error：进程没能拉起（找不到程序、被拦截等，detail 是错误类名或 Host 给的代码）；
  * - exited：进程退出（还没就绪或运行中）；
  * - startup_timeout：30 秒内 /health 没通过。
@@ -49,6 +50,8 @@ export const EXIT_PORT_IN_USE = 2
 export const EXIT_SIGNALLED = 3
 const MAX_PORT_RETRIES = 5
 const STARTUP_TIMEOUT_MS = 30_000
+/** 连续几次 30 秒没就绪就不再重启、记为 failed（复核 P2-1：每轮 ≥30 秒，"1 分钟内超过 3 次"的限额永远攒不满）。 */
+export const MAX_STARTUP_TIMEOUTS = 2
 
 export class Supervisor {
   state: SupervisorState = 'stopped'
@@ -65,6 +68,8 @@ export class Supervisor {
   lastFailure: StartFailure | undefined
   /** 哪一代是因为 30 秒没就绪被 Host 杀掉的（它退出时原因仍记"没就绪"，不记成"退出"）。 */
   private timedOutGen = -1
+  /** 连续没就绪的次数；起来了就清零。 */
+  private startupTimeouts = 0
   private exitingChild: ChildHandle | undefined
 
   constructor(private readonly deps: SupervisorDeps) {}
@@ -78,7 +83,7 @@ export class Supervisor {
     if (this.state === s) return
     this.state = s
     this.deps.log(s === 'failed' || s === 'version_mismatch' ? 'error' : 'info', 'service.state', { state: s })
-    if (s === 'running') this.lastFailure = undefined
+    if (s === 'running') { this.lastFailure = undefined; this.startupTimeouts = 0 }
     // 重启也救不回来：留一条带原因的记录（令 2033）
     if (s === 'failed') this.deps.log('error', 'service.start_failed', { ...(this.lastFailure ?? { reason: 'unknown' }) })
     for (const fn of this.listeners) fn(s)
@@ -92,6 +97,7 @@ export class Supervisor {
   async start(): Promise<void> {
     this.stopping = false
     this.restarts = []
+    this.startupTimeouts = 0
     // 首次启动挑端口就失败时也设为 failed，不停在 starting（T7 第二次返修 F3；异常在 launch 内按代次处理）
     await this.launch(0)
   }
@@ -158,6 +164,15 @@ export class Supervisor {
       this.deps.log('warn', 'service.startup_timeout', {})
       this.lastFailure = { reason: 'startup_timeout' }
       this.timedOutGen = gen
+      this.startupTimeouts += 1
+      if (this.startupTimeouts >= MAX_STARTUP_TIMEOUTS) {
+        // 不再重启：先换代，进程退出时 onExit 不再接手重启
+        this.generation++
+        child.kill()
+        this.child = undefined
+        this.setState('failed')
+        return
+      }
       child.kill()
     }
   }

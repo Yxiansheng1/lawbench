@@ -473,9 +473,20 @@ const UNAVAILABLE = '工作台服务未启动，请稍后重试'
 
 /** 去掉文字里的本机路径：安装目录换成"<安装目录>"，其余绝对路径只留文件名（日志只记元数据，令 2048）。 */
 export function scrubPaths(text: string, installDir: string | undefined): string {
-  let t = text
-  if (installDir) t = t.split(installDir).join('<安装目录>').split(installDir.toLowerCase()).join('<安装目录>')
-  return t.replace(/[A-Za-z]:[\\/][^\s'"<>|:]*/g, (p) => basename(p))
+  // 复核 P2-3：安装目录外的绝对路径（盘符、\\服务器\共享、引号里带空格的）一律换成"<路径>"，不留文件名
+  // （文件名、文件夹名可能就是材料名、案件名）；安装目录下的换成"<安装目录>\…"（只有程序自己的文件）。
+  // Python 的 repr 会把反斜杠写成两个，两种写法都认。
+  const norm = (p: string) => p.replace(/[\\/]+/g, '\\').toLowerCase()
+  const root = installDir ? norm(installDir).replace(/\\$/, '') : undefined
+  const one = (p: string): string => {
+    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) return '<安装目录>' + p.replace(/[\\/]+/g, '\\').slice(root.length)
+    return '<路径>'
+  }
+  const START = String.raw`(?:[A-Za-z]:[\\/]|\\\\|//)`
+  let t = text.replace(new RegExp(String.raw`(["'])(${START}[^"'\r\n]*)\1`, 'g'), (_m, q: string, p: string) => q + one(p) + q)
+  // 不带引号的：中间各段可以有空格（只要后面还跟着分隔符），最后一段到空白为止
+  t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*[^\s\\/"'<>|]*`, 'g'), (p) => one(p))
+  return t
 }
 
 /** 服务不可用时给律师的话：重启也救不回来（failed）时说出原因、请联系技术支持；还在启动 / 重启中照旧"请稍后重试"（令 2033）。 */
