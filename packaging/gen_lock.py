@@ -193,7 +193,7 @@ def write_licenses(rows: list[tuple[str, str, str]], missing: list[str]) -> None
         "| 组件 | 许可证 | 说明 |",
         "|---|---|---|",
         "| LibreOffice | MPL-2.0 | 版本、哈希见 `versions.lock` 的 `[client]` |",
-        "| pandoc | GPL-2.0-or-later | 版本、哈希见 `versions.lock`；**作为独立程序随包分发，按 GPL 要附许可证全文并提供对应源码的获取方式**，候主编排确认分发方式 |",
+        "| pandoc | GPL-2.0-or-later | 版本、哈希见 `versions.lock`；作为独立程序随包分发；GPL 全文随包在 `tools\\pandoc\\COPYING.rtf`（与 `COPYRIGHT.txt` 均取自 pandoc 官方 Windows 安装包）。**pandoc 源码可向技术支持索取**（N58 法务意见候定） |",
         "| 发票整理引擎（invoice-ledger-db 3.9.4.1） | 作者授权 | 律所周海沺律师提供，原样使用；署名保留 |",
         "| 委托材料网页与证件识别驱动（retainer-offline 3.4.1） | 作者授权 | 同上；驱动内附 RapidOCR 及模型，许可证见驱动目录 |",
         "| Qwen3 分词文件 tokenizer.json | Apache-2.0 | |",

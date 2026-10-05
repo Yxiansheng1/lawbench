@@ -1,0 +1,64 @@
+T20 第一版候选包 · 联网载荷（执行令 1756 第 1 条）· 2026-10-04 18:01–18:04 (+08:00)，开发机走手机热点
+本令原意只这一步联网。实际打包时另有两处联网（DSH 装内置运行时的 npm 包；第一次打包时 DSH 自己去 GitHub 取 Electron、卡住被结束），见文末补记与 build.txt"网络"一节。（原稿写的"下载地址指向 127.0.0.1 的空端口兜底"没有实现，复核 P3-3 指出，已删去。）
+
+== 1. DSH 运行时压缩包：corepack pnpm run prepare:primary-runtime（dsh\apps\desktop，18:02:09–18:03:11）
+结果：下载缓存 .desktop-build\downloads 前后都是 15 个文件，本次没有新下载（win-x64 所需 6 项＋通用 9 个轮子早已就位，脚本按 lock.json 的 sha256 核过后直接用）；Office 运行时与文档往返自检通过。
+来源（lock.json 记录，本次未访问）：Node 与 python-build-standalone 压缩包、files.pythonhosted.org 的 13 个轮子。
+文件名 = sha256：
+  158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541  37618919 B  sha256=158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541
+  160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba  472788 B  sha256=160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba
+  1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8  347839 B  sha256=1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8
+  3e9a00d1c2c30936f7add097c41afc5da6556c580909104aafd382cac92a855c  4005999 B  sha256=3e9a00d1c2c30936f7add097c41afc5da6556c580909104aafd382cac92a855c
+  3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7  252987 B  sha256=3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7
+  4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274  11050 B  sha256=4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+  481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8  45571 B  sha256=481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+  5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2  250910 B  sha256=5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2
+  536232a5fe26dd989bd633e7a0c450705fdc86a207fec7254a55e9a22950fe43  9741627 B  sha256=536232a5fe26dd989bd633e7a0c450705fdc86a207fec7254a55e9a22950fe43
+  7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa  18059 B  sha256=7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa
+  7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14  21980728 B  sha256=7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14
+  86945f2ee6d10cdfd67bcb4069c1662dd711f7e2a4343db5cecec06b87cf31aa  12782922 B  sha256=86945f2ee6d10cdfd67bcb4069c1662dd711f7e2a4343db5cecec06b87cf31aa
+  9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3  175315 B  sha256=9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3
+  a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09  7227137 B  sha256=a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09
+  a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427  229892 B  sha256=a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+
+== 2. electron-builder 打 Windows NSIS 包的工具（18:01:34–18:01:53）
+做法：用 electron-builder 自己的下载函数（app-builder-lib 26.15.3 toolsets：rcedit、makensis、NSIS 插件、elevate、7za、icons）预取，它按内置 sha256 校验。
+来源域名：github.com（electron-userland/electron-builder-binaries 的发布附件，跳转到 objects.githubusercontent.com）。存放：%LOCALAPPDATA%\electron-builder\Cache\downloads\<sha256>\
+  nsis-3.0.4.1.7z  1287512 B  sha256=9877df902530f96357d13a7a31ae2b9df67f48b11ffc9a1700a7c961574ec5fa
+  nsis-resources-3.4.1.7z  730800 B  sha256=593a9a92ef958321293ac6a2ee61e64bf1bd543142a5bd6b3d310709cc924103
+  winCodeSign-2.6.0.7z  5635384 B  sha256=cdaec7154dda7cc31f88d886e2489379a0625a737d610b5ae7f62a12f16743a4
+  icons-bundle.tar.gz  3143719 B  sha256=2241c9501aa5ddd19317956449f50a1bc311df2c34058aae9bf8bfe62081eaec
+  7zip-win-x64.tar.gz  491982 B  sha256=be071f15bd6da2f78fe81c6ddef2009b0c4d8a51f36b780cb806c7e6df95e1b3
+Electron 44.0.0 本体：%LOCALAPPDATA%\electron\Cache 里早已有 electron-v44.0.0-win32-x64.zip，本次未下载。
+
+== 3. PyInstaller（小工具打包用，只在构建机用，不进安装包）（18:03:18–18:03:30）
+命令：pip download pyinstaller --only-binary=:all: --platform win_amd64 --python-version 3.12 --implementation cp --index-url https://pypi.org/simple
+来源域名：pypi.org（索引）、files.pythonhosted.org（文件）；packaging、setuptools 两个由 pip 本机缓存给出（原始来源同上）。存放：packaging\build-tools\pyinstaller\（git 忽略）
+  altgraph-0.17.5-py2.py3-none-any.whl  21228 B  sha256=f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597
+  packaging-26.3-py3-none-any.whl  129956 B  sha256=d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+  pefile-2024.8.26-py3-none-any.whl  74766 B  sha256=76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f
+  pyinstaller-6.22.3-py3-none-win_amd64.whl  1454907 B  sha256=500bd58c7bf7e584a8435adccbd763a0b918d5c12b08d74ff50fd79b2915458b
+  pyinstaller_hooks_contrib-2026.8-py3-none-any.whl  462145 B  sha256=6d21d65323ea4467753afc21f52d7d0e69416ae8101dd88269bf273ad48db084
+  pywin32_ctypes-0.2.3-py3-none-any.whl  30756 B  sha256=8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8
+  setuptools-84.0.0-py3-none-any.whl  818216 B  sha256=51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670
+
+== 未联网取的（沿用本机已有，见 payload-inventory.md）
+  Python 依赖 wheelhouse：packaging\wheelhouse\（线 B、C 已装包回装，不是 PyPI 原文件）——偏离：正式构建应在构建机 pip download 原始轮子；本次按令只做上面三项联网。
+  LibreOffice 26.8.0.3：C:\Program Files\LibreOffice（系统安装的完整版）；pandoc 3.11：%LOCALAPPDATA%\Pandoc\pandoc.exe；tokenizer.json：D:\lawbench-B\service\lawbench\llm\。
+
+== 补记：打包过程中的两次联网（第 1 步之外，偏离）
+  a. 18:24 起 DSH prepare-runtime（@electron/get）连 GitHub（185.199.109.133/110.133:443）下载 Electron 44.0.0 与 SHASUMS256.txt；
+     热点下 0 字节停住约 30 分钟，用户在任务管理器结束，没有得到任何文件。之后改为本机镜像（build.txt "网络"第 3 条），不再连 GitHub。
+  b. DSH prepare:dsh 从 registry.npmjs.org 装内置运行时的 234 个第三方 npm 包（每次打包都会，用户当场准许）；清单 runtime-npm-packages.txt。
+
+== 第二版（2026-10-05，用户开热点）
+1. python.org 官方 Python 3.12.10（NuGet 包 python，发布者 Python Software Foundation；3.12 系列最后一个带 Windows 二进制的版本）
+   10:41:32–10:41:41，来源 https://www.nuget.org/api/v2/package/python/3.12.10（跳转到 api.nuget.org 的 flatcontainer）
+   python.3.12.10.nupkg  14515433 B
+     sha256 0eb85c2dfccccf1b17352de4c397f69194035b7d37149eacc16f1147d93de3b8
+     sha512(base64) u9pNz2iKlCEbYtUJaKkbOPMF0LjR7NkCafdKhvigpPzrt8oWKgdTpHaR6z3wyWQAm9PYGUxv0Zr66NX9AeHMDw==
+   nuget.org 注册信息：published 2025-04-08T13:56:44Z、listed。catalog 条目取不到（ResourceNotFound），没能拿到页面公布的包哈希对照；
+   改为核包内二进制的 Authenticode：解释器 31 个文件全部 Valid、签名者 Python Software Foundation（python-signatures.txt）。
+   存放 packaging\build-tools\python-pkg\（git 忽略）。
+2. DSH 运行时第三方 npm 包：prepare:dsh 从 registry.npmjs.org 装（同第一版）；这次解析出的锁存为 packaging\runtime-lock\pnpm-lock.yaml。
+没有取别的东西；Electron 仍走本机镜像（GitHub 未访问）。

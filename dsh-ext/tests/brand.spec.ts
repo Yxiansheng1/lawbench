@@ -50,4 +50,11 @@ describe('设置"通用"里的当前版本（注记 1706，P-4）', () => {
     const src = readFileSync(join(__dirname, '..', '..', 'dsh', 'packages', 'client', 'ui-settings-general', 'src', 'client', 'CurrentVersionRow.tsx'), 'utf8')
     expect(src).toContain(`LAWBENCH_VERSION = '${PRODUCT_VERSION}'`)
   })
+  it('打出的包（安装包名、关于页）的版本也是 PRODUCT_VERSION（令 1756，P-4 lawbench-product.mjs）', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { PRODUCT_VERSION } = await import('../shared/product.ts')
+    const src = readFileSync(join(__dirname, '..', '..', 'dsh', 'apps', 'desktop', 'scripts', 'lawbench-product.mjs'), 'utf8')
+    expect(src).toContain(`LAWBENCH_VERSION = '${PRODUCT_VERSION}'`)
+  })
 })

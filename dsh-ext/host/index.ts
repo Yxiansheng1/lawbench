@@ -6,11 +6,11 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
+import { basename, isAbsolute, join, relative } from 'node:path'
 import { homedir } from 'node:os'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
-import { Supervisor, type ChildHandle, type SupervisorState } from './supervisor.ts'
+import { Supervisor, startFailureText, type ChildHandle, type SupervisorState } from './supervisor.ts'
 import { LAWBENCH_NAMESPACE, LAWBENCH_SERVICE, REMOTE_METHODS } from '../shared/remote-methods.ts'
 // 构建后核对打包出的 Host 方法形参名与方法表一致（scripts/build.mjs）
 export { REMOTE_METHODS }
@@ -23,7 +23,7 @@ import { readArchivePlan } from './archive-plan.ts'
 import { readTaskAnswer } from './task-answer.ts'
 import { ensureDailyCase, type DailyResult } from './daily-case.ts'
 import { pathState, type PathStateResult } from './path-state.ts'
-import { problems, selfCheck, type CheckItem } from './selfcheck.ts'
+import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
 
@@ -51,7 +51,7 @@ export interface Config {
 }
 
 type Ctx = {
-  subprocess: { spawn(spec: unknown): { done: Promise<{ exitCode: number | null }>; terminate(): void } }
+  subprocess: { spawn(spec: unknown): { done: Promise<{ exitCode: number | null }>; terminate(): void; collected?: { stderr?: { readFrom(fromByte: number): { text: string } } } } }
   provide(name: string, value: unknown): () => void
   get(name: string): unknown
   effect(fn: () => () => void, label?: string): void
@@ -210,6 +210,8 @@ export class LawbenchRemote {
       putSettings: (s) => this.putSettings(s),
       caseOpen: (req) => (this as unknown as { caseOpen(r: unknown): Promise<never> }).caseOpen(req),
     })).then((r) => {
+      // 还没做首次配置（NOT_CONFIGURED）是正常状态，界面会隔一会儿再问：不记（令 2033：原来每隔几秒一条 warn 刷满日志）
+      if (!r.ok && r.error.code === 'NOT_CONFIGURED') return r
       if (!r.ok || r.value.created) this.log(r.ok ? 'info' : 'warn', 'daily_case.ensure', { ok: r.ok, code: r.ok ? undefined : r.error.code, created: r.ok ? true : undefined })
       return r
     })
@@ -316,7 +318,7 @@ export class LawbenchRemote {
 
   private async api(method: 'GET' | 'PUT' | 'POST', path: string, body?: unknown): Promise<unknown> {
     const ep = this.supervisor.endpoint()
-    if (!ep) throw new Error('工作台服务未启动，请稍后重试')
+    if (!ep) throw new Error(unavailableText(this.supervisor))
     const r = await fetch(`http://127.0.0.1:${ep.port}${path}`, {
       method, redirect: 'error', signal: AbortSignal.timeout(30_000),
       headers: { authorization: `Bearer ${ep.token}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
@@ -330,13 +332,14 @@ export class LawbenchRemote {
 
   private selfCheckResult: Promise<CheckItem[]> | undefined
 
-  /** 启动自检里有问题的项（界面首页提示；只跑一次，结果缓存到本次运行结束）。 */
-  async selfCheck(): Promise<{ ok: true; value: { items: CheckItem[] } }> {
+  /** 启动自检：items 是有问题的项（首页提示），notes 是只作说明的项（设置"关于"）；只跑一次，结果缓存到本次运行结束。 */
+  async selfCheck(): Promise<{ ok: true; value: { items: CheckItem[]; notes: CheckItem[] } }> {
     this.selfCheckResult ??= this.checker().then((items) => {
       this.log('info', 'selfcheck.done', Object.fromEntries(items.map((i) => [i.id, i.level])))
-      return problems(items)
+      return items
     }, () => [])
-    return { ok: true, value: { items: await this.selfCheckResult } }
+    const all = await this.selfCheckResult
+    return { ok: true, value: { items: problems(all), notes: notes(all) } }
   }
 
   /** 首次配置状态（执行令 Q3：settings.json 不存在，或凭据管理器没有 Key，就算没配置过）。Host 自己看文件，不经服务。 */
@@ -467,6 +470,29 @@ export class LawbenchRemote {
 }
 
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
+
+/** 去掉文字里的本机路径：安装目录换成"<安装目录>"，其余绝对路径只留文件名（日志只记元数据，令 2048）。 */
+export function scrubPaths(text: string, installDir: string | undefined): string {
+  // 复核 P2-3：安装目录外的绝对路径（盘符、\\服务器\共享、引号里带空格的）一律换成"<路径>"，不留文件名
+  // （文件名、文件夹名可能就是材料名、案件名）；安装目录下的换成"<安装目录>\…"（只有程序自己的文件）。
+  // Python 的 repr 会把反斜杠写成两个，两种写法都认。
+  const norm = (p: string) => p.replace(/[\\/]+/g, '\\').toLowerCase()
+  const root = installDir ? norm(installDir).replace(/\\$/, '') : undefined
+  const one = (p: string): string => {
+    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) return '<安装目录>' + p.replace(/[\\/]+/g, '\\').slice(root.length)
+    return '<路径>'
+  }
+  const START = String.raw`(?:[A-Za-z]:[\\/]|\\\\|//)`
+  let t = text.replace(new RegExp(String.raw`(["'])(${START}[^"'\r\n]*)\1`, 'g'), (_m, q: string, p: string) => q + one(p) + q)
+  // 不带引号的：中间各段可以有空格（只要后面还跟着分隔符），最后一段到空白为止
+  t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*[^\s\\/"'<>|]*`, 'g'), (p) => one(p))
+  return t
+}
+
+/** 服务不可用时给律师的话：重启也救不回来（failed）时说出原因、请联系技术支持；还在启动 / 重启中照旧"请稍后重试"（令 2033）。 */
+export function unavailableText(s: Pick<Supervisor, 'state' | 'lastFailure'>): string {
+  return s.state === 'failed' ? `本机服务未能启动：${startFailureText(s.lastFailure).replace(/[。.]+$/, '')}，请联系技术支持` : UNAVAILABLE
+}
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 
 /** 粘贴截图的临时目录 <应用数据>\临时\粘贴\。 */
@@ -510,7 +536,7 @@ Object.defineProperty(LawbenchRemote.prototype, REMOTE_METHODS_KEY, {
 
 export function apply(ctx: Ctx, given: Config): void {
   // 装好的客户端：命令、目录按安装目录写死，不用开发期环境变量给的（T20 步骤 3，install-layout.ts）
-  const { config, packaged, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData', process.env.PATH ?? '')
+  const { config, packaged, installDir, checkPython: python } = effectiveConfig(given, process.execPath, existsSync, process.env.ProgramData ?? 'C:\\ProgramData', process.env.PATH ?? '')
   // 只记元数据（Spec 4.5）：事件名、状态、端口、退出码、次数
   const log = makeLogger('host', config.appData, ctx.logger?.('lawbench-host'))
   if (packaged) log('info', 'config.packaged_layout')
@@ -521,6 +547,12 @@ export function apply(ctx: Ctx, given: Config): void {
   const baseEnv = { ...passThroughEnv(process.env), ...(config.env ?? {}) }
   const supervisor = new Supervisor({
     spawn(port: number, token: string): ChildHandle {
+      // 程序不在（被删、被安全软件隔离）：先说清楚，不交给 spawn 报一句含糊的错（令 2033）。日志只记相对安装目录的部分
+      const exe = config.command[0] ?? ''
+      if (isAbsolute(exe) && !existsSync(exe)) {
+        log('error', 'service.command_missing', { path: installDir ? relative(installDir, exe) : basename(exe) })
+        throw Object.assign(new Error('service command missing'), { code: 'PYTHON_MISSING' })
+      }
       const handle = ctx.subprocess.spawn({
         argv: config.command,
         cwd: config.cwd,
@@ -534,10 +566,15 @@ export function apply(ctx: Ctx, given: Config): void {
           LB_FORWARD_PORT: String(config.forwardPort ?? 18765),
         },
       })
-      return { pid: undefined, exited: handle.done.then((d) => d.exitCode, () => null), kill: () => handle.terminate() }
+      return {
+        pid: undefined, exited: handle.done.then((d) => d.exitCode, () => null), kill: () => handle.terminate(),
+        // 收集到的标准错误尾部：只用来取最后一条异常行（令 2048），不进日志全文
+        errorText: () => { try { return handle.collected?.stderr?.readFrom(0).text ?? '' } catch { return '' } },
+      }
     },
     probe: probeHealth,
     pickPort: () => freePort(config.portRange),
+    scrubPaths: (t) => scrubPaths(t, installDir),
     newToken: () => randomBytes(32).toString('hex'),
     expectedVersion: CONTRACT_VERSION,
     log,

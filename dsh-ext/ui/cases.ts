@@ -43,7 +43,9 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
         return true
       }
     }
-    await wait(i < DAILY_FAST_TRIES ? DAILY_EVERY_MS : DAILY_SLOW_MS)
+    // 还没做首次配置：配置要等律师填完，不必每 3 秒问一次，按慢节奏等（令 2033）
+    const notConfigured = !r.ok && r.error.code === 'NOT_CONFIGURED'
+    await wait(i < DAILY_FAST_TRIES && !notConfigured ? DAILY_EVERY_MS : DAILY_SLOW_MS)
   }
 }
 

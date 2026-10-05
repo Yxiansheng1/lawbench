@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import { Supervisor, type ChildHandle } from '../host/supervisor.ts'
+import { Supervisor, startFailureText, type ChildHandle } from '../host/supervisor.ts'
+import { unavailableText } from '../host/index.ts'
 import { CONTRACT_VERSION } from '../shared/contracts.ts'
 
 const FAKE = join(__dirname, '..', 'dev', 'fake-service.mjs')
@@ -95,6 +96,33 @@ describe('看护：策略（模拟进程）', () => {
     }
     return { deps, spawned, events }
   }
+
+  it('起不来时留原因（令 2033）：反复退出到 failed，记 service.start_failed（退出码），律师看到"本机服务未能启动：…请联系技术支持"', async () => {
+    const { deps, events } = simDeps([1, 1, 1, 1, 1, 1])
+    const logged: Array<Record<string, unknown> | undefined> = []
+    const s = new Supervisor({ ...deps, log: (l: string, e: string, m?: Record<string, unknown>) => { deps.log(l, e); if (e === 'service.start_failed') logged.push(m) } })
+    expect(unavailableText(s)).toBe('工作台服务未启动，请稍后重试')
+    await s.start()
+    await waitFor(() => s.state === 'failed', 5000)
+    expect(events).toContain('service.start_failed')
+    expect(logged).toEqual([{ reason: 'exited', exitCode: 1 }])
+    expect(unavailableText(s)).toBe('本机服务未能启动：服务启动后退出（代码 1），请联系技术支持')
+  })
+
+  it('程序拉不起来（找不到内置 Python、被拦截）：原因按类别说清楚', async () => {
+    const logged: Array<Record<string, unknown> | undefined> = []
+    const s = new Supervisor({
+      spawn(): ChildHandle { throw Object.assign(new Error('service command missing'), { code: 'PYTHON_MISSING' }) },
+      probe: async () => '1.1', pickPort: async () => 18300, newToken: () => 't'.repeat(32), expectedVersion: '1.1',
+      log: (_l: string, e: string, m?: Record<string, unknown>) => { if (e === 'service.start_failed') logged.push(m) },
+    })
+    await s.start()
+    expect(s.state).toBe('failed')
+    expect(logged).toEqual([{ reason: 'launch_error', detail: 'PYTHON_MISSING' }])
+    expect(unavailableText(s)).toBe('本机服务未能启动：找不到内置的 Python，请联系技术支持')
+    expect(startFailureText({ reason: 'launch_error', detail: 'EPERM' })).toBe('程序被拒绝运行（可能被安全软件拦截）')
+    expect(startFailureText({ reason: 'startup_timeout' })).toBe('30 秒内没有就绪')
+  })
 
   it('1 分钟内重启超过 3 次就停止，状态 failed', async () => {
     const { deps, spawned } = simDeps([1, 1, 1, 1, 1, 1])

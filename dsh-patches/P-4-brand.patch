@@ -25,7 +25,7 @@ index c885816c75..db024718b2 100644
      report += L"Result: " + DescribeResult(code) + L"\r\n";
      report += L"Archive: " + archive + L"\r\n";
 diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
-index 174ebfa28b..2795bc053b 100644
+index 174ebfa28b..c1b7d72188 100644
 --- a/apps/desktop/installer/strings.nsh
 +++ b/apps/desktop/installer/strings.nsh
 @@ -19,20 +19,20 @@ LangString INSTALLER_BROWSE ${LANG_ENGLISH} "Browse"
@@ -55,6 +55,13 @@ index 174ebfa28b..2795bc053b 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
+@@ -55,3 +55,6 @@ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_ENGLISH} "The full report could not
+ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_SIMPCHINESE} "无法保存完整错误报告，请使用“复制错误信息”保留。"
+ LangString INSTALLER_EXTRACT_COPIED ${LANG_ENGLISH} "Error details were copied to the clipboard."
+ LangString INSTALLER_EXTRACT_COPIED ${LANG_SIMPCHINESE} "错误信息已复制到剪贴板。"
++; lawbench P-4 (note 2053): optional admin Skill folder after installing (default No; skipped with /S)
++LangString LAWBENCH_SKILLS_DIR_ASK ${LANG_ENGLISH} "Create the firm's shared Skill folder now? This needs administrator rights. If the firm does not hand out shared Skills yet, choose No."
++LangString LAWBENCH_SKILLS_DIR_ASK ${LANG_SIMPCHINESE} "是否创建律所统一 Skill 目录？需要管理员权限。律所还没有统一下发 Skill 时不用创建，选“否”即可。"
 diff --git a/apps/desktop/renderer/update-dialog.css b/apps/desktop/renderer/update-dialog.css
 index 98183989a5..9db70a3695 100644
 --- a/apps/desktop/renderer/update-dialog.css
@@ -120,18 +127,30 @@ index ff09b8b783..bbeb22f823 100644
      for (const [key, value] of Object.entries(values)) {
        execFileSync('/usr/bin/plutil', ['-replace', key, '-json', JSON.stringify(value), plist])
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
-index 2bb56c359f..e2d37def03 100644
+index 2bb56c359f..e8b746ce45 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
 +++ b/apps/desktop/scripts/electron-builder-config.mjs
 @@ -12,6 +12,7 @@ import {
    resolveMacOSSigningEnvironment,
  } from './desktop-release-environment.mjs'
  import { notarizeMacOSDiskImageArtifact } from './notarize-macos-disk-images.mjs'
-+import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
++import { LAWBENCH_PRODUCT_NAME, LAWBENCH_VERSION } from './lawbench-product.mjs'
  import { verifyMacOSSignatureAfterSign } from './verify-macos-signature.mjs'
  import {
    createWindowsTokenSigner,
-@@ -99,16 +100,16 @@ export function createElectronBuilderConfig(
+@@ -51,7 +52,10 @@ export function createElectronBuilderConfig(
+   preparedRuntimeVersion = undefined,
+ ) {
+   const appId = resolveDesktopAppId(env)
+-  const policy = resolveDesktopPolicyEnvironment(env)
++  // lawbench P-4 (order 1756): the packaged app never carries the mandatory-update policy, so it never polls a remote
++  // policy origin (Spec 14.3: no outbound connections). The settings are still validated so DSH's packaging checks hold.
++  resolveDesktopPolicyEnvironment(env)
++  const policy = undefined
+   const targetPlatform = env.DSH_DESKTOP_TARGET_PLATFORM
+   const resolvedPlatform = targetPlatform ?? hostPlatform
+   const resolvedArch = env.DSH_DESKTOP_TARGET_ARCH ?? hostArch
+@@ -99,16 +103,17 @@ export function createElectronBuilderConfig(
    const packaged = resolveDesktopBuildCommit(env)
    return {
      appId,
@@ -140,7 +159,9 @@ index 2bb56c359f..e2d37def03 100644
      extraMetadata: {
        dshDesktopAppId: appId,
        dshMandatoryUpdatePolicy: policy,
-       ...buildVersion === productVersion ? {} : { version: buildVersion },
+-      ...buildVersion === productVersion ? {} : { version: buildVersion },
++      // lawbench P-4: an ordinary build ships as the lawbench version; DSH's test/qualification build versions stay as they are
++      version: buildVersion === productVersion ? LAWBENCH_VERSION : buildVersion,
        ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
      },
 -    productName: 'DeepSeek Harness',
@@ -151,7 +172,7 @@ index 2bb56c359f..e2d37def03 100644
      directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
      asar: true,
      electronDist: buildPaths.electron,
-@@ -148,6 +149,9 @@ export function createElectronBuilderConfig(
+@@ -148,6 +153,9 @@ export function createElectronBuilderConfig(
        // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
        ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
      ],
@@ -161,7 +182,7 @@ index 2bb56c359f..e2d37def03 100644
      mac: {
        icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
        category: 'public.app-category.developer-tools',
-@@ -156,7 +160,7 @@ export function createElectronBuilderConfig(
+@@ -156,7 +164,7 @@ export function createElectronBuilderConfig(
        identity: macOSSigning?.signingIdentity,
        forceCodeSigning: true,
        hardenedRuntime: true,
@@ -172,18 +193,20 @@ index 2bb56c359f..e2d37def03 100644
        notarize: true,
 diff --git a/apps/desktop/scripts/lawbench-product.d.mts b/apps/desktop/scripts/lawbench-product.d.mts
 new file mode 100644
-index 0000000000..5855290d62
+index 0000000000..083a586d0f
 --- /dev/null
 +++ b/apps/desktop/scripts/lawbench-product.d.mts
-@@ -0,0 +1,2 @@
+@@ -0,0 +1,4 @@
 +/** lawbench P-4: product name used by the build, packaging and smoke scripts (see lawbench-product.mjs). */
 +export const LAWBENCH_PRODUCT_NAME: string
++/** lawbench P-4: version of the packaged app (see lawbench-product.mjs). */
++export const LAWBENCH_VERSION: string
 diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
 new file mode 100644
-index 0000000000..3f7c8385d4
+index 0000000000..7e1fe411b0
 --- /dev/null
 +++ b/apps/desktop/scripts/lawbench-product.mjs
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,10 @@
 +/**
 + * lawbench P-4: the product name in one place for the build scripts (electron-builder productName and protocol
 + * name, packaged executable and app bundle paths in the packaging and smoke scripts).
@@ -191,6 +214,9 @@ index 0000000000..3f7c8385d4
 + * Runtime strings (menus, dialogs, About) take it from src/locale.ts LAWBENCH_PRODUCT; change both together.
 + */
 +export const LAWBENCH_PRODUCT_NAME = '连越律师工作台'
++
++/** lawbench P-4 (order 1756): the version of the packaged app (installer name, About, app.getVersion()); equals dsh-ext/shared/product.ts PRODUCT_VERSION. DSH's own package version stays for the bundled runtime checks. */
++export const LAWBENCH_VERSION = '0.1.0'
 diff --git a/apps/desktop/scripts/package-macos.ts b/apps/desktop/scripts/package-macos.ts
 index c1a2cb5c71..a72ac62c2b 100644
 --- a/apps/desktop/scripts/package-macos.ts
@@ -213,7 +239,7 @@ index c1a2cb5c71..a72ac62c2b 100644
    const zipApp = join(root, 'zip', basename(appPath))
    const dmgApp = join(root, 'dmg', basename(appPath))
 diff --git a/apps/desktop/scripts/package-target.ts b/apps/desktop/scripts/package-target.ts
-index 62f4fcbbb2..9a729e01ed 100644
+index 62f4fcbbb2..5de710edea 100644
 --- a/apps/desktop/scripts/package-target.ts
 +++ b/apps/desktop/scripts/package-target.ts
 @@ -24,6 +24,7 @@ import { suggestDesktopBuildVersion } from './desktop-build-version-discovery.ts
@@ -224,7 +250,18 @@ index 62f4fcbbb2..9a729e01ed 100644
  
  const APP_ROOT = resolve(import.meta.dirname, '..')
  const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
-@@ -489,7 +490,7 @@ export async function packageTarget(
+@@ -467,6 +468,10 @@ export async function packageTarget(
+     '--pack-destination',
+     buildPaths.packedLandlock,
+   ], buildEnv, REPOSITORY_ROOT)
++  // lawbench P-4 (order 1756): our bundle lawbench-dsh (dsh-ext, built by packaging\build.ps1) joins the package set.
++  // apps/cli depends on it as link:../../../dsh-ext, which does not resolve from the runtime build folder; packed here,
++  // the package-set overrides point it at this tarball like every other local package.
++  await execute(['--dir', join(REPOSITORY_ROOT, '..', 'dsh-ext'), 'pack', '--pack-destination', buildPaths.packedLandlock], buildEnv, REPOSITORY_ROOT)
+   await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
+   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
+   await execute(['run', 'prepare:packages'], targetEnv)
+@@ -489,7 +494,7 @@ export async function packageTarget(
    } else if (target.platform === 'darwin') {
      await execute([...desktopElectronBuilderArguments(target, true), '--config.mac.notarize=false'], electronBuilderEnv)
      await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
@@ -728,10 +765,10 @@ index 15a4610d98..095c6bb985 100644
    it('packages every preload entry point the shell loads', async () => {
 diff --git a/apps/desktop/tests/lawbench-stage.spec.ts b/apps/desktop/tests/lawbench-stage.spec.ts
 new file mode 100644
-index 0000000000..7b2a28f01b
+index 0000000000..ec87878106
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-stage.spec.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,37 @@
 +import { describe, expect, it } from 'vitest'
 +
 +// lawbench P-4（T20 步骤 3 第 4 条）：packaging\build.ps1 暂存的工作台载荷（python\、service\、skills\、engines\、tools\）
@@ -756,6 +793,17 @@ index 0000000000..7b2a28f01b
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
 +    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraFiles?: unknown }
 +    expect(config.extraFiles).toBeUndefined()
++  })
++  it('打出的包版本是工作台版本 0.1.0（安装包名、关于页；令 1756），不是 DSH 的', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraMetadata: { version?: string } }
++    expect(config.extraMetadata.version).toBe('0.1.0')
++  })
++  it('打出的包不带强制更新策略（不会去轮询远端策略地址，Spec 14.3 产品不外连；令 1756）', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const config = createElectronBuilderConfig(base, 'win32', 'x64') as { extraMetadata: Record<string, unknown> }
++    expect(config.extraMetadata.dshMandatoryUpdatePolicy).toBeUndefined()
++    expect(JSON.parse(JSON.stringify(config.extraMetadata))).not.toHaveProperty('dshMandatoryUpdatePolicy')
 +  })
 +})
 diff --git a/apps/desktop/tests/macos-signature.spec.ts b/apps/desktop/tests/macos-signature.spec.ts
@@ -1315,3 +1363,119 @@ index 4f7ef6481b..c9447d8da1 100644
 +    expect(view.container.textContent).toBe('0.1.0')
    })
  })
+diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
+index 0f4d859e78..36bea2b4a3 100644
+--- a/apps/desktop/scripts/installer.nsh
++++ b/apps/desktop/scripts/installer.nsh
+@@ -3,6 +3,14 @@
+ !define INSTALLER_SOURCE_DIR "${__FILEDIR__}\..\installer"
+ !define /ifndef INSTALLER_BUILD_DIR "${__FILEDIR__}\..\.desktop-build\targets\win-x64\installer-ui"
+ 
++; lawbench P-4 (order 2048): the install folder (%LOCALAPPDATA%\Programs\<name>) is the product name. electron-builder
++; only uses the product name when it is ASCII and otherwise falls back to the package name ("@deepseek-aidsh-desktop").
++; This file is included ahead of multiUser.nsh and the install pages, so redefining it here covers all of them.
++!ifdef APP_FILENAME
++  !undef APP_FILENAME
++!endif
++!define APP_FILENAME "${PRODUCT_NAME}"
++
+ ManifestDPIAware true
+ !ifndef BUILD_UNINSTALLER
+   !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
+@@ -91,6 +99,27 @@ ManifestDPIAware true
+   Call un.CleanData
+ !macroend
+ 
++; lawbench P-4 (order 2033): electron-builder's NSIS copies the whole installer (about 780 MB) into
++; %LOCALAPPDATA%\<updater cache>\installer.exe for differential updates. lawbench ships without an update feed, so
++; remove the copy right after installing and drop the folder when it is empty. No network is involved either way.
++; Called from DSH's customInstall below (only one customInstall macro may exist).
++!macro lawbenchAfterInstall
++  !ifdef APP_INSTALLER_STORE_FILE
++    Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
++    Push $0
++    ${GetParent} "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" $0
++    RMDir "$0"
++    Pop $0
++  !endif
++  ; lawbench P-4 (note 2053): optionally create the firm's shared Skill folder (%ProgramData%\lawbench\skills, ordinary
++  ; users read-only). Default No; silent installs (/S) never ask. The script's default -Dir is that folder.
++  ${IfNot} ${Silent}
++    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "$(LAWBENCH_SKILLS_DIR_ASK)" IDNO lawbench_skills_skip
++    ExecShell "runas" "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" '-NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\set-skills-acl.ps1"' SW_HIDE
++    lawbench_skills_skip:
++  ${EndIf}
++!macroend
++
+ !macro customPageAfterChangeDir
+   !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
+   !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
+@@ -209,6 +238,7 @@ ManifestDPIAware true
+   !insertmacro dshFinishDirectories
+   ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
+   WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
++  !insertmacro lawbenchAfterInstall
+   ${If} $0 == 1
+     SetErrors
+   ${Else}
+diff --git a/apps/desktop/scripts/prepare-dsh.ts b/apps/desktop/scripts/prepare-dsh.ts
+index 377c300efb..1d1d9dc7fd 100644
+--- a/apps/desktop/scripts/prepare-dsh.ts
++++ b/apps/desktop/scripts/prepare-dsh.ts
+@@ -122,7 +122,15 @@ async function main(): Promise<void> {
+       cpSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGES_DIR), join(BUILD_ROOT, DESKTOP_PACKAGES_DIR), { recursive: true })
+       createRuntimeProjectMetadata(BUILD_ROOT, release)
+     })
++    // lawbench P-4 (T20 review P2-2): third-party runtime versions are pinned by a committed lock
++    // (LAWBENCH_RUNTIME_LOCK = packaging\runtime-lock\pnpm-lock.yaml). Seeding the build folder with it keeps every
++    // third-party version; --lockfile-only then only re-resolves the local package-set tarballs (rebuilt each time).
++    // The resolved lock is written back to LAWBENCH_RUNTIME_LOCK_OUT for packaging\build.ps1 to compare and keep.
++    const pinnedLock = process.env.LAWBENCH_RUNTIME_LOCK
++    if (pinnedLock !== undefined && pinnedLock !== '' && existsSync(pinnedLock)) copyFileSync(pinnedLock, join(BUILD_ROOT, 'pnpm-lock.yaml'))
+     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:lockfile', () => runPnpm(['install', '--lockfile-only']))
++    const lockOut = process.env.LAWBENCH_RUNTIME_LOCK_OUT
++    if (lockOut !== undefined && lockOut !== '') copyFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), lockOut)
+     verifyDesktopCoreLockfile(
+       readFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), 'utf8'),
+       readDesktopCorePackageSet(BUILD_ROOT, release.version),
+diff --git a/packages/client/ui-layout/src/client/AppFrame.tsx b/packages/client/ui-layout/src/client/AppFrame.tsx
+index 841f9f72aa..8a70fe7bd0 100644
+--- a/packages/client/ui-layout/src/client/AppFrame.tsx
++++ b/packages/client/ui-layout/src/client/AppFrame.tsx
+@@ -230,7 +230,9 @@ export function AppFrame({
+   const onRightbarDrag = useCallback((dx: number) => {
+     actions.setRightbar(rightbarBase.current - dx)
+   }, [actions])
+-  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
++  // lawbench P-4 (T20 review): the window title is always the product name; DSH's official build sets DSH_CLIENT_TITLE
++  // to "DeepSeek Harness", which must not reach the lawyer's taskbar.
++  const productTitle = t('brand.localBuild')
+   // The rendered template lets the grid solve the squeeze natively: the centre
+   // declares its protected minimum and the right column bids up to the clamped
+   // preference, so a window resize lands in the same layout pass as the frame
+diff --git a/packages/client/ui-layout/tests/app-frame.client.spec.tsx b/packages/client/ui-layout/tests/app-frame.client.spec.tsx
+index 75b906a29d..6409e34160 100644
+--- a/packages/client/ui-layout/tests/app-frame.client.spec.tsx
++++ b/packages/client/ui-layout/tests/app-frame.client.spec.tsx
+@@ -188,17 +188,17 @@ describe('AppFrame', () => {
+     expect(document.title).toBe('DSH Local Build')
+   })
+ 
+-  it('follows the selected durable Session title', () => {
++  it('follows the selected durable Session title; a build title (DSH_CLIENT_TITLE) is ignored (lawbench P-4)', () => {
+     vi.stubEnv('DSH_CLIENT_TITLE', 'Product')
+     selectedSessionTitle = 'First'
+     const { rerenderFrame } = mountFrame()
+-    expect(document.title).toBe('First — Product')
++    expect(document.title).toBe('First — DSH Local Build')
+     selectedSessionTitle = 'Revised'
+     rerenderFrame()
+-    expect(document.title).toBe('Revised — Product')
++    expect(document.title).toBe('Revised — DSH Local Build')
+     selectedSession = undefined
+     rerenderFrame()
+-    expect(document.title).toBe('Product')
++    expect(document.title).toBe('DSH Local Build')
+   })
+ 
+   it('renders owner props for the default sidebar and prospective right panel', () => {

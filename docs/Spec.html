@@ -1873,7 +1873,7 @@ li{margin:3px 0}
 <p>只从以下两处加载，按顺序，同名时后者覆盖前者（F-SKILL-06）：</p>
 <ol>
 <li><code>&lt;安装目录&gt;/skills/</code>：随安装包内置，只读。</li>
-<li><code>%ProgramData%\&lt;产品名&gt;\skills\</code>：管理员下发。普通用户账号不可写（由安装程序设置权限）。</li>
+<li><code>%ProgramData%\lawbench\skills\</code>：管理员统一下发，<strong>可选</strong>。安装程序装完可选创建，或由 IT 运行 <code>installer\set-skills-acl.ps1</code> 创建并设为普通用户只读；未配置时启动自检只作说明（设置&quot;关于&quot;里一行），不报问题。</li>
 </ol>
 <p>实现：<code>dsh-skill-filesystem</code> 设 <code>includeDefaultRoots: false</code>，<code>customSkillDirs</code> 只列这两个目录（第 3.1 节）。注意 DSH 对同名 Skill 是先到先得，所以数组里<strong>管理员下发目录写在前面</strong>，才能实现&quot;管理员下发的覆盖内置的&quot;（2026-09-29 T4 复核核实）。这样<strong>不会</strong>扫描 <code>&lt;案件&gt;/.dsh/skills</code>、<code>&lt;案件&gt;/.agents/skills</code> 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。</p>
 <p>Skill 中的 <code>scripts/</code> 只由工作台服务从以上位置导入执行，AI 不能执行。</p>

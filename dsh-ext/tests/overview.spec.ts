@@ -61,6 +61,14 @@ describe('案件概览卡', () => {
 })
 
 describe('日常事务', () => {
+  it('还没做首次配置（NOT_CONFIGURED）：照样等，但按慢节奏问，不每 2 秒一次（令 2033）', async () => {
+    let n = 0
+    setApi({ dailyCase: async () => { n++; return n < 3 ? { ok: false, error: { code: 'NOT_CONFIGURED', message: '还没完成首次配置' } } : { ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '不能选云同步文件夹' } } } } as unknown as LawbenchApi)
+    const waits: number[] = []
+    expect(await landOnDailyCase(async () => {}, async (ms) => { waits.push(ms) })).toBe(false)
+    expect(waits).toEqual([10_000, 10_000])
+  })
+
   it('P3-1：建不了且不会自己好（CASE_IN_SYNC_FOLDER）：不再重试，错误码照实记下，侧栏一行说明', async () => {
     let n = 0
     setApi({ dailyCase: async () => { n++; return { ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '不能选云同步文件夹' } } } } as unknown as LawbenchApi)

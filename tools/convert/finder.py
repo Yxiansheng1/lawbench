@@ -2,7 +2,8 @@
 
 查找顺序：
 1. 环境变量 LAWBENCH_SOFFICE / LAWBENCH_PANDOC（调试或特殊部署时指定）；
-2. 已安装客户端的内置路径（按当前用户安装：%LOCALAPPDATA%\\Programs\\<客户端目录>\\tools\\libreoffice\\program\\soffice.exe、
+2. 小工具所在的同一安装（打包后 exe 在 <安装目录>\\tools\\<工具>\\，同包的 LibreOffice、pandoc 在上一级 tools\\ 下，
+   装到哪个目录都找得到）；再是默认安装位置的内置路径（按当前用户安装：%LOCALAPPDATA%\\Programs\\<客户端目录>\\tools\\libreoffice\\program\\soffice.exe、
    …\\tools\\pandoc\\pandoc.exe；T20 打包布局，载荷在 exe 旁）；
 3. 小工具自带的一份（打包后程序所在目录下的 libreoffice\\、pandoc\\）；
 4. 系统安装（Program Files、pandoc 默认的 %LOCALAPPDATA%\\Pandoc）和 PATH。
@@ -37,6 +38,14 @@ def _client_roots() -> list[Path]:
     return [Path(local) / "Programs" / n / "tools" for n in CLIENT_DIR_NAMES]
 
 
+def _own_install_tools() -> list[Path]:
+    """打包后小工具在 <安装目录>\\tools\\convert\\convert.exe：同一安装的 tools\\ 就是它上一级（装到非默认目录也找得到，
+    T20 候选包复核 P3-5、令 2033）。开发期不是打包程序，不用这一项。"""
+    if not getattr(sys, "frozen", False):
+        return []
+    return [Path(sys.executable).resolve().parent.parent]
+
+
 def _bundled_root() -> Path:
     # PyInstaller 打包后 sys.executable 是小工具本身；开发时是 python.exe，不会命中
     return Path(sys.executable).resolve().parent
@@ -44,7 +53,7 @@ def _bundled_root() -> Path:
 
 def soffice_candidates() -> list[Path]:
     c: list[Path | None] = [_env("LAWBENCH_SOFFICE")]
-    c += [r / "libreoffice" / "program" / "soffice.exe" for r in _client_roots()]
+    c += [r / "libreoffice" / "program" / "soffice.exe" for r in _own_install_tools() + _client_roots()]
     c.append(_bundled_root() / "libreoffice" / "program" / "soffice.exe")
     for pf in (os.environ.get("ProgramFiles", r"C:\Program Files"),
                os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")):
@@ -54,7 +63,7 @@ def soffice_candidates() -> list[Path]:
 
 def pandoc_candidates() -> list[Path]:
     c: list[Path | None] = [_env("LAWBENCH_PANDOC")]
-    c += [r / "pandoc" / "pandoc.exe" for r in _client_roots()]
+    c += [r / "pandoc" / "pandoc.exe" for r in _own_install_tools() + _client_roots()]
     c.append(_bundled_root() / "pandoc" / "pandoc.exe")
     if os.environ.get("LOCALAPPDATA"):
         c.append(Path(os.environ["LOCALAPPDATA"]) / "Pandoc" / "pandoc.exe")

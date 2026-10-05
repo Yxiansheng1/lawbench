@@ -93,3 +93,18 @@ describe('打包后的固定布局', () => {
     expect(py).toMatchObject({ packaged: false, checkPython: true })
   })
 })
+
+describe('装到非默认目录（令 2033：用户装到 E:\\law\\）', () => {
+  it('安装根取 exe 所在目录：Python、服务、工具、Skill 都在 E:\\law\\ 下，不看默认的 %LOCALAPPDATA%\\Programs', () => {
+    const root = 'E:\\law'
+    const has = (p: string) => p === join(root, 'resources', 'app.asar')
+    const r = effectiveConfig(DEV, join(root, '连越律师工作台.exe'), has, 'C:\ProgramData', '')
+    expect(r.packaged).toBe(true)
+    expect(r.installDir).toBe(root)
+    expect(r.config.command[0]).toBe(join(root, 'python', 'python.exe'))
+    expect(r.config.cwd).toBe(join(root, 'service'))
+    expect(r.config.sofficeCandidates).toEqual([join(root, 'tools', 'libreoffice', 'program', 'soffice.exe')])
+    expect(r.config.skillDirs).toEqual([join('C:\ProgramData', ADMIN_DIR_NAME, 'skills'), join(root, 'skills')])
+    expect(JSON.stringify(r.config)).not.toMatch(/Programs/)
+  })
+})

@@ -7,7 +7,7 @@ import { lawyerMessage } from './format.ts'
 import { BrandMark, VendorLine } from './brand.tsx'
 import { CapsuleSettings } from './home.tsx'
 import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION } from '../shared/product.ts'
-import { app, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
+import { app, call, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { discardDraft, isDirty, onLeaveSettings, saveDraft, settingsDraft } from './settings-draft.ts'
 
@@ -140,6 +140,7 @@ export function SettingsSection() {
         <div style={{ ...S.row, gap: 12 }}><BrandMark size={32} /><span style={{ fontWeight: 600 }}>{PRODUCT_NAME} {PRODUCT_VERSION}</span></div>
         <div style={S.sub}>{FIRM_NAME} · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
         <VendorLine />
+        <SelfCheckNotes />
       </Block>
       <SaveBar onSave={() => void save()} />
     </div>
@@ -253,4 +254,11 @@ function ParamsRow({ label, p, onChange, extra }: { label: string; p: Params; on
       {extra}
     </div>
   )
+}
+
+/** 启动自检里只作说明的项（注记 2053：如"未配置律所统一 Skill 目录"），在"关于"里一行一条，不算问题。 */
+export function SelfCheckNotes() {
+  const [notes, setNotes] = useState<Array<{ id: string; message: string }>>([])
+  useEffect(() => { void call<{ notes?: Array<{ id: string; message: string }> }>('selfCheck').then((r) => { if (r.ok) setNotes(r.value.notes ?? []) }) }, [])
+  return <>{notes.map((n) => <div key={n.id} data-selfcheck-note={n.id} style={S.sub}>{n.message}</div>)}</>
 }

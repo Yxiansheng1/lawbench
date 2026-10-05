@@ -919,7 +919,7 @@ JSON Lines 格式，写到 `C:\prep395\logs\access.log`，按天滚动，保留 
 
 只从以下两处加载，按顺序，同名时后者覆盖前者（F-SKILL-06）：
 1. `<安装目录>/skills/`：随安装包内置，只读。
-2. `%ProgramData%\<产品名>\skills\`：管理员下发。普通用户账号不可写（由安装程序设置权限）。
+2. `%ProgramData%\lawbench\skills\`：管理员统一下发，**可选**。安装程序装完可选创建，或由 IT 运行 `installer\set-skills-acl.ps1` 创建并设为普通用户只读；未配置时启动自检只作说明（设置"关于"里一行），不报问题。
 
 实现：`dsh-skill-filesystem` 设 `includeDefaultRoots: false`，`customSkillDirs` 只列这两个目录（第 3.1 节）。注意 DSH 对同名 Skill 是先到先得，所以数组里**管理员下发目录写在前面**，才能实现"管理员下发的覆盖内置的"（2026-09-29 T4 复核核实）。这样**不会**扫描 `<案件>/.dsh/skills`、`<案件>/.agents/skills` 和用户目录（验收时在案件里放一个恶意 Skill 目录验证）。
 

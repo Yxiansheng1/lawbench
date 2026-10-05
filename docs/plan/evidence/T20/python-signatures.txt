@@ -1,0 +1,62 @@
+﻿T20 Authenticode signatures of shipped binaries (packaging\build.ps1 signcheck, 2026-10-05 10:52)
+stage: 339 binaries (.exe/.dll/.pyd, LibreOffice excluded: its own release is signed by The Document Foundation), 210 not validly signed
+
+== Python interpreter (python\*.exe, python\*.dll, python\DLLs\*)
+  Valid        Python Software Foundation               python\DLLs\_asyncio.pyd
+  Valid        Python Software Foundation               python\DLLs\_bz2.pyd
+  Valid        Python Software Foundation               python\DLLs\_ctypes.pyd
+  Valid        Python Software Foundation               python\DLLs\_decimal.pyd
+  Valid        Python Software Foundation               python\DLLs\_elementtree.pyd
+  Valid        Python Software Foundation               python\DLLs\_hashlib.pyd
+  Valid        Python Software Foundation               python\DLLs\_lzma.pyd
+  Valid        Python Software Foundation               python\DLLs\_msi.pyd
+  Valid        Python Software Foundation               python\DLLs\_multiprocessing.pyd
+  Valid        Python Software Foundation               python\DLLs\_overlapped.pyd
+  Valid        Python Software Foundation               python\DLLs\_queue.pyd
+  Valid        Python Software Foundation               python\DLLs\_socket.pyd
+  Valid        Python Software Foundation               python\DLLs\_sqlite3.pyd
+  Valid        Python Software Foundation               python\DLLs\_ssl.pyd
+  Valid        Python Software Foundation               python\DLLs\_uuid.pyd
+  Valid        Python Software Foundation               python\DLLs\_wmi.pyd
+  Valid        Python Software Foundation               python\DLLs\_zoneinfo.pyd
+  Valid        Python Software Foundation               python\DLLs\libcrypto-3.dll
+  Valid        Python Software Foundation               python\DLLs\libffi-8.dll
+  Valid        Python Software Foundation               python\DLLs\libssl-3.dll
+  Valid        Python Software Foundation               python\DLLs\pyexpat.pyd
+  Valid        Python Software Foundation               python\DLLs\select.pyd
+  Valid        Python Software Foundation               python\DLLs\sqlite3.dll
+  Valid        Python Software Foundation               python\DLLs\unicodedata.pyd
+  Valid        Python Software Foundation               python\DLLs\winsound.pyd
+  Valid        Python Software Foundation               python\python.exe
+  Valid        Python Software Foundation               python\python3.dll
+  Valid        Python Software Foundation               python\python312.dll
+  Valid        Python Software Foundation               python\pythonw.exe
+  Valid        Microsoft Windows Software Compatibility Publisher python\vcruntime140.dll
+  Valid        Microsoft Windows Software Compatibility Publisher python\vcruntime140_1.dll
+
+== Not validly signed, by package (to be signed with our certificate, N73)
+  engines\retainer                                    1 files: rapidocr.exe
+  python site-packages\charset_normalizer             2 files: cd.cp312-win_amd64.pyd, md.cp312-win_amd64.pyd
+  python site-packages\cv2                            2 files: cv2.pyd, opencv_videoio_ffmpeg500_64.dll
+  python site-packages\google                         1 files: _message.pyd
+  python site-packages\hf_xet                         1 files: hf_xet.pyd
+  python site-packages\isapi                          1 files: PyISAPI_loader.dll
+  python site-packages\lxml                           7 files: diff.cp312-win_amd64.pyd, _difflib.cp312-win_amd64.pyd, builder.cp312-win_amd64.pyd, etree.cp312-win_amd64.pyd, objectify.cp312-win_amd64.pyd, sax.cp312-win_amd64.pyd, ...
+  python site-packages\numpy                         19 files: _pocketfft_umath.cp312-win_amd64.pyd, lapack_lite.cp312-win_amd64.pyd, _umath_linalg.cp312-win_amd64.pyd, bit_generator.cp312-win_amd64.pyd, mtrand.cp312-win_amd64.pyd, _bounded_integers.cp312-win_amd64.pyd, ...
+  python site-packages\numpy.libs                     1 files: libscipy_openblas64_-ed4f167a5330424524f45258e7ca2c8d.dll
+  python site-packages\PIL                            8 files: _avif.cp312-win_amd64.pyd, _imaging.cp312-win_amd64.pyd, _imagingcms.cp312-win_amd64.pyd, _imagingft.cp312-win_amd64.pyd, _imagingmath.cp312-win_amd64.pyd, _imagingmorph.cp312-win_amd64.pyd, ...
+  python site-packages\pip                            6 files: t32.exe, t64-arm.exe, t64.exe, w32.exe, w64-arm.exe, w64.exe
+  python site-packages\pyclipper                      1 files: _pyclipper.cp312-win_amd64.pyd
+  python site-packages\pymupdf                        3 files: mupdfcpp64.dll, _extra.pyd, _mupdf.pyd
+  python site-packages\pypdfium2_raw                  1 files: pdfium.dll
+  python site-packages\pythonwin                      5 files: dde.pyd, Pythonwin.exe, scintilla.dll, win32ui.pyd, win32uiole.pyd
+  python site-packages\pywin32_system32               2 files: pythoncom312.dll, pywintypes312.dll
+  python site-packages\rpds                           1 files: rpds.cp312-win_amd64.pyd
+  python site-packages\shapely                        3 files: lib.cp312-win_amd64.pyd, _geometry_helpers.cp312-win_amd64.pyd, _geos.cp312-win_amd64.pyd
+  python site-packages\shapely.libs                   2 files: geos-ae6efa0782962b98e358f10ea539ae5f.dll, geos_c-072b7a9224d16d3e4ab2395bb855b2d3.dll
+  python site-packages\tokenizers                     1 files: tokenizers.pyd
+  python site-packages\win32                         35 files: mmapfile.pyd, odbc.pyd, perfmon.pyd, perfmondata.dll, pythonservice.exe, servicemanager.pyd, ...
+  python site-packages\win32comext                   14 files: adsi.pyd, authorization.pyd, axcontrol.pyd, axdebug.pyd, axscript.pyd, bits.pyd, ...
+  python site-packages\yaml                           1 files: _yaml.cp312-win_amd64.pyd
+  tools\convert                                      46 files: _pocketfft_umath.cp312-win_amd64.pyd, _umath_linalg.cp312-win_amd64.pyd, bit_generator.cp312-win_amd64.pyd, mtrand.cp312-win_amd64.pyd, _bounded_integers.cp312-win_amd64.pyd, _common.cp312-win_amd64.pyd, ...
+  tools\splitter                                     46 files: _pocketfft_umath.cp312-win_amd64.pyd, _umath_linalg.cp312-win_amd64.pyd, bit_generator.cp312-win_amd64.pyd, mtrand.cp312-win_amd64.pyd, _bounded_integers.cp312-win_amd64.pyd, _common.cp312-win_amd64.pyd, ...
