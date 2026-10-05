@@ -78,3 +78,24 @@ electron / electron-builder 缓存：前后都是 9 个文件，未新增
   主窗口没有启动检查提示（Skill 目录不再报）
   卸载：/S，退出 0
   未在本机核（候用户新机验证）：默认安装目录名、开始菜单项、卸载项名、非静默安装时的 Skill 目录提问
+
+==== 第三版候选包（令 1444 第 6 条、一行令 1455）· 2026-10-05 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小 780000339 B（744 MB）
+  sha256 fbb093f3e73c4ed53ea203368c4ea64a1746169d2c3a2e2a70423ea96d3b1628
+  未签名
+基座 fcfcc9e；命令同第二版。全步骤 15:01 起，package 1002 s，15:20 完成。
+运行时 npm 锁对账：323 个第三方包，锁里与这次解析的一致（第一次用已入库的锁）。
+electron / electron-builder 缓存：前后 9 个，未新增。签名：339 个二进制 210 个无有效签名（同第二版）。
+冒烟（注记 1037 ＋ 令 1444 旧路径对照）：/S /D=D:\lawbench-smoke3，退出 0
+  布局同第二版清单，全在；%LOCALAPPDATA%\@deepseek-aidsh-desktop-updater 不存在
+  启动一次：首次配置页（smoke-第三版-首次配置.png），主窗口标题"连越律师工作台"，服务 <安装目录>\python\python.exe 在跑
+  新路径生成了数据：
+    %APPDATA%\lawbench-desktop                         15:24:42  18 项
+    %LOCALAPPDATA%\lawbench\dsh-home\profiles\desktop  15:24:33  4 项（package.json 的 bundles 含 lawbench-dsh）
+  旧路径未动：
+    %APPDATA%\@deepseek-ai\dsh-desktop  启动前后都不存在
+    %USERPROFILE%\.dsh                  mtime 前后都是 2026-10-04 19:54:11.662（卸载后仍是）
+    %USERPROFILE%\.dsh\profiles\desktop mtime 前后都是 2026-10-05 11:28:19.395
+  卸载 /S 退出 0
+  未在本机核（候用户新机）：默认安装目录名、开始菜单项、卸载项名、非静默安装的 Skill 目录提问；与原版 DSH 同时开（本机没装原版）
