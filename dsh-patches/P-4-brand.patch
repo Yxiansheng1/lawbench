@@ -1381,7 +1381,7 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..36bea2b4a3 100644
+index 0f4d859e78..d1b645e9f6 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
 @@ -3,6 +3,14 @@
@@ -1399,7 +1399,7 @@ index 0f4d859e78..36bea2b4a3 100644
  ManifestDPIAware true
  !ifndef BUILD_UNINSTALLER
    !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
-@@ -91,6 +99,27 @@ ManifestDPIAware true
+@@ -91,6 +99,50 @@ ManifestDPIAware true
    Call un.CleanData
  !macroend
  
@@ -1408,11 +1408,34 @@ index 0f4d859e78..36bea2b4a3 100644
 +; remove the copy right after installing and drop the folder when it is empty. No network is involved either way.
 +; Called from DSH's customInstall below (only one customInstall macro may exist).
 +!macro lawbenchAfterInstall
++  ; Order 1539: the updater cache directory name is the package name, shared with an original DeepSeek Harness. Delete
++  ; only the copy this installation just wrote (same size as this installer); anything else there is left alone.
 +  !ifdef APP_INSTALLER_STORE_FILE
-+    Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
 +    Push $0
-+    ${GetParent} "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" $0
-+    RMDir "$0"
++    Push $1
++    Push $2
++    StrCpy $1 "-1"
++    StrCpy $2 "-2"
++    ClearErrors
++    FileOpen $0 "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" r
++    ${IfNot} ${Errors}
++      FileSeek $0 0 END $1
++      FileClose $0
++    ${EndIf}
++    ClearErrors
++    FileOpen $0 "$EXEPATH" r
++    ${IfNot} ${Errors}
++      FileSeek $0 0 END $2
++      FileClose $0
++    ${EndIf}
++    ClearErrors
++    ${If} $1 == $2
++      Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
++      ${GetParent} "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" $0
++      RMDir "$0"
++    ${EndIf}
++    Pop $2
++    Pop $1
 +    Pop $0
 +  !endif
 +  ; lawbench P-4 (note 2053): optionally create the firm's shared Skill folder (%ProgramData%\lawbench\skills, ordinary
@@ -1427,7 +1450,19 @@ index 0f4d859e78..36bea2b4a3 100644
  !macro customPageAfterChangeDir
    !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
    !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
-@@ -209,6 +238,7 @@ ManifestDPIAware true
+@@ -132,8 +184,10 @@ ManifestDPIAware true
+ ; The report outlives $PLUGINSDIR so a user can send it; silent installs keep only the file. The updater cache
+ ; directory is never an installation target and leaves with the application on uninstall.
+ ; The directory smoke fixture predefines DSH_INSTALLER_LOG_DIR to keep reports inside its scratch tree.
++; lawbench P-4 (order 1539): the updater cache directory belongs to an original DeepSeek Harness (package name); keep
++; our installer reports in our own folder.
+ !ifndef DSH_INSTALLER_LOG_DIR
+-  !define DSH_INSTALLER_LOG_DIR "$LOCALAPPDATA\${DSH_UPDATER_CACHE_NAME}\installer-logs"
++  !define DSH_INSTALLER_LOG_DIR "$LOCALAPPDATA\lawbench\installer-logs"
+ !endif
+ 
+ !macro customInstallerExtractFailed Archive
+@@ -209,6 +263,7 @@ ManifestDPIAware true
    !insertmacro dshFinishDirectories
    ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
@@ -1498,10 +1533,10 @@ index 75b906a29d..6409e34160 100644
    it('renders owner props for the default sidebar and prospective right panel', () => {
 diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
 new file mode 100644
-index 0000000000..d6339dd231
+index 0000000000..c0f2db4400
 --- /dev/null
 +++ b/apps/desktop/src/lawbench-isolation.ts
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,48 @@
 +/**
 + * lawbench P-4 (order 1444): the installed lawyer workbench must not share state with an original DeepSeek Harness
 + * desktop on the same machine. Both packages are named "@deepseek-ai/dsh-desktop", so by default they share
@@ -1509,7 +1544,8 @@ index 0000000000..d6339dd231
 + *   the other runs only focuses the other;
 + * - the DSH home (~/.dsh) and its desktop profile (~/.dsh/profiles/desktop, with its lock): a profile created by the
 + *   original lacks the lawbench bundle, so P-14 refuses to start, and the original would load our bundle.
-+ * Only the installed package (app.isPackaged) moves; development instances keep their paths.
++ * - the Host's fixed web port 19387 (order 1539).
++ * Only the installed package (app.isPackaged) moves; development instances keep their paths and port.
 + */
 +import { join } from 'node:path'
 +
@@ -1543,14 +1579,18 @@ index 0000000000..d6339dd231
 +  if (paths === undefined || typeof application.setPath !== 'function') return undefined
 +  application.setPath('userData', paths.userData)
 +  env.DSH_HOME = paths.dshHome
++  // The Host's web server takes any free port (order 1539): a fixed 19387 fails with EADDRINUSE while an original
++  // DeepSeek Harness runs (now possible, the single-instance locks being separate). The main process reads the Host's
++  // actual URL from its ready message, so nothing else depends on the number.
++  env.LAWBENCH_HOST_PORT = '0'
 +  return paths
 +}
 diff --git a/apps/desktop/tests/lawbench-isolation.spec.ts b/apps/desktop/tests/lawbench-isolation.spec.ts
 new file mode 100644
-index 0000000000..93cbffb15e
+index 0000000000..e50a6659bd
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-isolation.spec.ts
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,48 @@
 +import { readFileSync } from 'node:fs'
 +import { join } from 'node:path'
 +import { describe, expect, it } from 'vitest'
@@ -1568,6 +1608,7 @@ index 0000000000..93cbffb15e
 +    expect(set).toEqual([['userData', join(ENV.APPDATA, 'lawbench-desktop')]])
 +    expect(env.DSH_HOME).toBe(join(ENV.LOCALAPPDATA, 'lawbench', 'dsh-home'))
 +    expect(env.DSH_HOME).not.toMatch(/\.dsh$/)
++    expect(env.LAWBENCH_HOST_PORT).toBe('0') // 令 1539：Host 不用写死的 19387
 +    expect(set[0]![1]).not.toMatch(/@deepseek-ai/)
 +  })
 +
@@ -1577,14 +1618,64 @@ index 0000000000..93cbffb15e
 +    expect(applyLawbenchIsolation({ isPackaged: false, setPath: (_n, p) => { set.push(p) } }, env)).toBeUndefined()
 +    expect(set).toEqual([])
 +    expect(env.DSH_HOME).toBeUndefined()
++    expect(env.LAWBENCH_HOST_PORT).toBeUndefined()
 +    expect(lawbenchIsolatedPaths({}, true)).toBeUndefined()
 +  })
 +
-+  it('main.ts 在单实例锁和读路径之前就隔离', () => {
++  it('main.ts 在单实例锁、日志路径和读路径之前就隔离（行首、未注释的调用；复核 F3）', () => {
 +    const src = readFileSync(join(__dirname, '..', 'src', 'main.ts'), 'utf8')
-+    const apply = src.indexOf('applyLawbenchIsolation(app)')
-+    expect(apply).toBeGreaterThan(0)
-+    expect(apply).toBeLessThan(src.indexOf('claimDesktopSingleInstance(app'))
-+    expect(apply).toBeLessThan(src.indexOf('const recovery = new DesktopFatalRecovery'))
++    const m = /^applyLawbenchIsolation\(app\)\s*$/m.exec(src)
++    expect(m).not.toBeNull()
++    const apply = m!.index
++    for (const later of [/^app\.setAppLogsPath\(\)/m, /^const ownsDesktopInstance = claimDesktopSingleInstance\(app/m, /^const recovery = new DesktopFatalRecovery/m]) {
++      const at = later.exec(src)
++      expect(at, String(later)).not.toBeNull()
++      expect(apply).toBeLessThan(at!.index)
++    }
++  })
++
++  it('Host 的端口：给了 LAWBENCH_HOST_PORT 就用它，开发期仍是 19387（复核 F1）', () => {
++    const host = readFileSync(join(__dirname, '..', '..', 'desktop-host', 'src', 'index.ts'), 'utf8')
++    expect(host).toMatch(/'--port', process\.env\.LAWBENCH_HOST_PORT \?\? '19387'/)
 +  })
 +})
+diff --git a/apps/desktop-host/src/index.ts b/apps/desktop-host/src/index.ts
+index 59747ec860..b3671489fd 100644
+--- a/apps/desktop-host/src/index.ts
++++ b/apps/desktop-host/src/index.ts
+@@ -30,7 +30,9 @@ async function main(): Promise<void> {
+     profile: 'desktop',
+     resolvedProfile: { profile, installAnchor },
+     patchFiles: [],
+-    args: ['--no-open', '--port', '19387'],
++    // lawbench P-4 (order 1539): the installed lawyer workbench lets the system pick the port (LAWBENCH_HOST_PORT=0, set by
++    // the desktop main process), so it can run next to an original DeepSeek Harness that holds 19387. Development keeps 19387.
++    args: ['--no-open', '--port', process.env.LAWBENCH_HOST_PORT ?? '19387'],
+     ...(process.argv[5] === undefined ? {} : {
+       packageManager: {
+         command: process.execPath,
+diff --git a/apps/desktop/installer/uninstall.nsh b/apps/desktop/installer/uninstall.nsh
+index defdd15923..9ebfce7cdb 100644
+--- a/apps/desktop/installer/uninstall.nsh
++++ b/apps/desktop/installer/uninstall.nsh
+@@ -25,12 +25,13 @@ Function un.CleanData
+   ClearErrors
+   StrCpy $UnTarget "$APPDATA\${PRODUCT_FILENAME}"
+   Call un.RemoveData
+-  !ifdef APP_PACKAGE_NAME
+-    ; Electron derives user data from the package name; a scoped name nests it one directory deeper.
+-    StrCpy $UnTarget "$APPDATA\${APP_PACKAGE_NAME}"
+-    Call un.RemoveData
+-    System::Call '$PLUGINSDIR\window-frame.dll::UninstallRemoveEmptyParents(w "$UnTarget", w "$APPDATA") ?c'
+-  !endif
+-  StrCpy $UnTarget "$LOCALAPPDATA\${DSH_UPDATER_CACHE_NAME}"
++  ; lawbench P-4 (order 1539): the installed workbench keeps its Electron data in %APPDATA%\lawbench-desktop and its DSH
++  ; home in %LOCALAPPDATA%\lawbench\dsh-home (lawbench-isolation.ts); both go with the uninstall (profile, lock and index
++  ; are rebuilt; sessions live in the case folders). The package-name directory (%APPDATA%\@deepseek-ai\dsh-desktop) and
++  ; the updater cache belong to an original DeepSeek Harness on the same machine and are no longer touched.
++  ; The rest of %LOCALAPPDATA%\lawbench (settings, logs) keeps its existing behaviour.
++  StrCpy $UnTarget "$APPDATA\lawbench-desktop"
++  Call un.RemoveData
++  StrCpy $UnTarget "$LOCALAPPDATA\lawbench\dsh-home"
+   Call un.RemoveData
+ FunctionEnd

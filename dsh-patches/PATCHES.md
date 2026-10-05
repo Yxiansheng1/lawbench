@@ -188,3 +188,9 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
 |---|---|---|---|
 | P-4 | 新文件 `apps/desktop/src/lawbench-isolation.ts`；`main.ts` 在全部 import 之后、单实例锁与读路径之前调用 `applyLawbenchIsolation(app)`：装好的包（`app.isPackaged`）把 Electron `userData` 改为 `%APPDATA%\lawbench-desktop`，把 `DSH_HOME` 设为 `%LOCALAPPDATA%\lawbench\dsh-home`（Host 子进程继承 `process.env`）；开发期不动 | 两边包名都是 `@deepseek-ai/dsh-desktop`：共用 Electron 用户数据（连带单实例锁，开着一个时另一个打不开、只把前者带到前台）和 DSH 主目录 `~/.dsh`（桌面端 profile 与锁；原版建的 profile 没有 `lawbench-dsh`，P-14 拒绝启动） | 新测试 `apps/desktop/tests/lawbench-isolation.spec.ts` 3 例（装好的包两处都不是原版路径；开发期不变；`main.ts` 里隔离在单实例锁之前）；`main-startup.spec.ts` 照常通过（其应用替身没有 `setPath`，隔离跳过） |
+
+| 补丁 | 本轮改了什么（令 1539，隔离修法复核 AMEND） | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | `apps/desktop-host/src/index.ts`：Host 的 `--port` 取 `LAWBENCH_HOST_PORT`，没有时仍是 19387；`lawbench-isolation.ts` 在装好的包里设 `LAWBENCH_HOST_PORT=0`（这个文件 P-12、P-14 也碰，P-4 这一节按"P-11 之后的状态 → 工作区"生成） | F1：单实例锁分开后两边能同时开，写死的 19387 让后起的 Host 端口被占、致命错误；主进程从 Host 的就绪消息取实际地址，不依赖端口号 | `lawbench-isolation.spec.ts` 加两项（装好的包 `LAWBENCH_HOST_PORT=0`、开发期不设；Host 读它）；第四版冒烟：先占住 19387 再启动 |
+| P-4 | `apps/desktop/installer/uninstall.nsh` 的 `un.CleanData`：清 `%APPDATA%\lawbench-desktop`、`%LOCALAPPDATA%\lawbench\dsh-home`，不再清包名目录（`%APPDATA%\@deepseek-ai\dsh-desktop`）和更新缓存目录；`scripts/installer.nsh`：更新缓存里的 `installer.exe` 只在与本安装包大小相同时删，安装报告目录改为 `%LOCALAPPDATA%\lawbench\installer-logs` | F2：隔离后包名目录、更新缓存只属原版 DSH；我方新目录（含 `Partitions\retainer`）卸载后原来会留下 | 最小 NSIS 脚本用同版本 makensis 编译通过；`windows-directory-installer`、`installer-packaging` 测试通过；第四版冒烟：卸载后两个新目录不在、预置的原版目录 marker 仍在 |
+| P-4 | `apps/desktop/tests/lawbench-isolation.spec.ts`：顺序检查改为行首、未注释语句的正则，且须在 `app.setAppLogsPath()` 之前 | F3：只比字符串位置，注释掉调用或挪到日志路径之后都抓不到 | 本例 |
