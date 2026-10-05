@@ -41,6 +41,8 @@ C:\EasyTier\easytier-core.exe --network-name lawbench --network-secret <密钥> 
 | 2026-09-29 | node-395 | 加 `-n 192.168.8.124/32` 和 `--tcp-whitelist 9000` | 用 `sc.exe config easytier binPath= "<去掉这两项的原命令>"` 后 `Restart-Service easytier` |
 | 2026-09-29 | firm-gw、node-395 | 实测发现经子网代理的访问绕过白名单，两台都去掉 `-n`；所外改用虚拟 IP | 需要恢复时把 `-n <本机地址>/32` 加回启动参数（不建议） |
 | 2026-09-29 | node-395 | Windows 防火墙新增入站规则 `EasyTier-9000-In`：TCP 9000，来源 `10.126.126.0/24` | `Remove-NetFirewallRule -DisplayName "EasyTier-9000-In"` |
+| 2026-10-05 | node-395 | 用户亲手（N76 定长期开运维 SSH、限虚拟网段）：服务参数 `--tcp-whitelist 9000,8743` 改 `9000,8743,22`（8743 为律所原有服务）；防火墙新增 `EasyTier-22-In`：TCP 22，来源 `10.126.126.0/24`。注：395 的 EasyTier 仍是命令行参数写法，`C:\EasyTier\lawbench.toml` 不存在，A3 时再转配置文件 | 服务参数去掉 `,22` 后 `Restart-Service easytier`；`Remove-NetFirewallRule -DisplayName "EasyTier-22-In"` |
+| 2026-10-05 | firm-gw | 用户亲手（N76）：`--tcp-whitelist 8000` 后加 `--tcp-whitelist 22`，`daemon-reload` + `restart`；所外 `10.126.126.1:22`、`10.126.126.3:22` 均通并 SSH 成功。`check_remote.py` 两条"22 应不通"口径待改（验收前） | 同 2026-09-29 行写法去掉 ` --tcp-whitelist 22` |
 
 ## 4. 验收（T27）
 
