@@ -180,3 +180,11 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 |---|---|---|---|
 | P-4 | `apps/desktop/scripts/installer.nsh` 开头把 `APP_FILENAME` 改为 `${PRODUCT_NAME}` | 产品名不是 ASCII 时 electron-builder 用包名当安装目录名（`@deepseek-aidsh-desktop`） | `windows-directory-installer`、`installer-packaging` 测试通过；装出的目录名明早重打包后核 |
 | P-4 | `installer.nsh` 的 `customInstall` 末尾：非静默安装时问一次是否创建律所统一 Skill 目录（默认否），选是就以管理员身份跑 `installer\set-skills-acl.ps1`；`apps/desktop/installer/strings.nsh` 加中英文问句 `LAWBENCH_SKILLS_DIR_ASK` | 注记 2053：DSH 完成页是 C++ 自绘，加勾选框要改 C++，改用一次询问 | 同上 |
+
+## 与原版 DeepSeek Harness 隔离（令 `致A-ORCH-执行令-与原版DSH隔离与第三版包-20261005-1444.md`）
+
+只改 P-4。`main.ts` 还有 P-3、P-9、P-11、P-17 碰，P-4 在它们之后、是最后一个：P-4 这一节按"P-11 之后的状态 → 工作区"重新生成；两个新文件只有 P-4 碰。改完 150 个路径与工作区逐字一致。
+
+| 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | 新文件 `apps/desktop/src/lawbench-isolation.ts`；`main.ts` 在全部 import 之后、单实例锁与读路径之前调用 `applyLawbenchIsolation(app)`：装好的包（`app.isPackaged`）把 Electron `userData` 改为 `%APPDATA%\lawbench-desktop`，把 `DSH_HOME` 设为 `%LOCALAPPDATA%\lawbench\dsh-home`（Host 子进程继承 `process.env`）；开发期不动 | 两边包名都是 `@deepseek-ai/dsh-desktop`：共用 Electron 用户数据（连带单实例锁，开着一个时另一个打不开、只把前者带到前台）和 DSH 主目录 `~/.dsh`（桌面端 profile 与锁；原版建的 profile 没有 `lawbench-dsh`，P-14 拒绝启动） | 新测试 `apps/desktop/tests/lawbench-isolation.spec.ts` 3 例（装好的包两处都不是原版路径；开发期不变；`main.ts` 里隔离在单实例锁之前）；`main-startup.spec.ts` 照常通过（其应用替身没有 `setPath`，隔离跳过） |

@@ -464,10 +464,10 @@ index b3f9e535c9..6413d619ac 100644
    later: '稍后',
    updateFailedTitle: '更新失败',
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index eb6f2ed0b0..7a48a15b05 100644
+index eb6f2ed0b0..35d9137a3c 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
-@@ -27,7 +27,7 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'
+@@ -27,12 +27,13 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'
  import { installMicrophonePermissions } from './microphone-permissions.ts'
  import { DesktopBackendController } from './backend-controller.ts'
  import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
@@ -476,7 +476,24 @@ index eb6f2ed0b0..7a48a15b05 100644
  import { claimDesktopSingleInstance } from './single-instance.ts'
  import { DesktopUpdateCoordinator } from './update-coordinator.ts'
  import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
-@@ -354,6 +354,7 @@ async function main(): Promise<void> {
+ import { lawbenchAppFileRoots, lawbenchRequestAllowed } from './lawbench-request-policy.ts'
+ import { installRetainerWindow } from './lawbench-retainer.ts'
++import { applyLawbenchIsolation } from './lawbench-isolation.ts'
+ import { DesktopFatalRecovery } from './fatal-recovery.ts'
+ import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
+ import { openWelcomeWindow } from './welcome-window.ts'
+@@ -56,6 +57,10 @@ import { DesktopQuitConfirmation } from './quit-confirmation.ts'
+ import { DesktopTray } from './tray.ts'
+ import { DesktopBackgroundNotice } from './background-notice.ts'
+ 
++// lawbench P-4 (order 1444): before anything reads userData or the DSH home, the installed package moves both away
++// from the original DeepSeek Harness's (shared single-instance lock, profile and Electron data otherwise).
++applyLawbenchIsolation(app)
++
+ let focusPrimaryWindow = (): void => {}
+ let stopForRecovery = async (): Promise<void> => {}
+ let shuttingDown = false
+@@ -354,6 +359,7 @@ async function main(): Promise<void> {
    const showAbout = async (): Promise<void> => {
      await ordinaryMessageBox({ type: 'info', title: locale.messages.aboutMenu, message: locale.messages.aboutProduct,
        detail: formatDesktopMessage(locale.messages.aboutVersion, { version: app.getVersion() }),
@@ -484,7 +501,7 @@ index eb6f2ed0b0..7a48a15b05 100644
        buttons: [locale.messages.updateAcknowledge], cancelId: 0 })
    }
    const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
-@@ -825,7 +826,7 @@ async function main(): Promise<void> {
+@@ -825,7 +831,7 @@ async function main(): Promise<void> {
    const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
      : join(process.resourcesPath, 'icon.png')
    app.setAboutPanelOptions({
@@ -1479,3 +1496,95 @@ index 75b906a29d..6409e34160 100644
    })
  
    it('renders owner props for the default sidebar and prospective right panel', () => {
+diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
+new file mode 100644
+index 0000000000..d6339dd231
+--- /dev/null
++++ b/apps/desktop/src/lawbench-isolation.ts
+@@ -0,0 +1,43 @@
++/**
++ * lawbench P-4 (order 1444): the installed lawyer workbench must not share state with an original DeepSeek Harness
++ * desktop on the same machine. Both packages are named "@deepseek-ai/dsh-desktop", so by default they share
++ * - Electron's userData (%APPDATA%\@deepseek-ai\dsh-desktop) and with it the single-instance lock: starting one while
++ *   the other runs only focuses the other;
++ * - the DSH home (~/.dsh) and its desktop profile (~/.dsh/profiles/desktop, with its lock): a profile created by the
++ *   original lacks the lawbench bundle, so P-14 refuses to start, and the original would load our bundle.
++ * Only the installed package (app.isPackaged) moves; development instances keep their paths.
++ */
++import { join } from 'node:path'
++
++/** The part of Electron's app this needs (replaceable in tests). */
++export interface IsolationApp {
++  readonly isPackaged: boolean
++  setPath(name: 'userData', path: string): void
++}
++
++/**
++ * Paths the installed lawyer workbench uses instead of the original DSH's.
++ * @param env - process environment (APPDATA, LOCALAPPDATA).
++ * @param packaged - whether this is the installed package.
++ * @returns userData and DSH home, or undefined in development (or without the Windows profile variables).
++ */
++export function lawbenchIsolatedPaths(env: NodeJS.ProcessEnv, packaged: boolean): { userData: string; dshHome: string } | undefined {
++  if (!packaged || !env.APPDATA || !env.LOCALAPPDATA) return undefined
++  return { userData: join(env.APPDATA, 'lawbench-desktop'), dshHome: join(env.LOCALAPPDATA, 'lawbench', 'dsh-home') }
++}
++
++/**
++ * Apply the isolation before anything reads userData or the DSH home (before the single-instance lock and
++ * resolveDesktopPaths). DSH_HOME is set in this process's environment, so the Host child process inherits it.
++ * @param application - Electron app.
++ * @param env - environment to read and update.
++ * @returns the applied paths, or undefined when nothing changed.
++ */
++export function applyLawbenchIsolation(application: IsolationApp, env: NodeJS.ProcessEnv = process.env): { userData: string; dshHome: string } | undefined {
++  const paths = lawbenchIsolatedPaths(env, application.isPackaged)
++  // Electron's app always has setPath; DSH's startup tests use a partial app double without it
++  if (paths === undefined || typeof application.setPath !== 'function') return undefined
++  application.setPath('userData', paths.userData)
++  env.DSH_HOME = paths.dshHome
++  return paths
++}
+diff --git a/apps/desktop/tests/lawbench-isolation.spec.ts b/apps/desktop/tests/lawbench-isolation.spec.ts
+new file mode 100644
+index 0000000000..93cbffb15e
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-isolation.spec.ts
+@@ -0,0 +1,37 @@
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { describe, expect, it } from 'vitest'
++import { applyLawbenchIsolation, lawbenchIsolatedPaths } from '../src/lawbench-isolation.ts'
++
++// lawbench P-4（令 1444）：装好的律师工作台不与原版 DeepSeek Harness 共用 Electron 用户数据（连带单实例锁）和 DSH 主目录（~/.dsh 与 profile）。
++const ENV = { APPDATA: 'C:\\Users\\x\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local' }
++
++describe('与原版 DSH 隔离（lawbench P-4）', () => {
++  it('装好的包：userData 与 DSH_HOME 都换到我方目录，不是原版的 %APPDATA%\\@deepseek-ai\\dsh-desktop、~/.dsh', () => {
++    const set: Array<[string, string]> = []
++    const env: NodeJS.ProcessEnv = { ...ENV }
++    const r = applyLawbenchIsolation({ isPackaged: true, setPath: (n, p) => { set.push([n, p]) } }, env)
++    expect(r).toEqual({ userData: join(ENV.APPDATA, 'lawbench-desktop'), dshHome: join(ENV.LOCALAPPDATA, 'lawbench', 'dsh-home') })
++    expect(set).toEqual([['userData', join(ENV.APPDATA, 'lawbench-desktop')]])
++    expect(env.DSH_HOME).toBe(join(ENV.LOCALAPPDATA, 'lawbench', 'dsh-home'))
++    expect(env.DSH_HOME).not.toMatch(/\.dsh$/)
++    expect(set[0]![1]).not.toMatch(/@deepseek-ai/)
++  })
++
++  it('开发期（未打包）不搬家：不改 userData、不设 DSH_HOME', () => {
++    const set: string[] = []
++    const env: NodeJS.ProcessEnv = { ...ENV }
++    expect(applyLawbenchIsolation({ isPackaged: false, setPath: (_n, p) => { set.push(p) } }, env)).toBeUndefined()
++    expect(set).toEqual([])
++    expect(env.DSH_HOME).toBeUndefined()
++    expect(lawbenchIsolatedPaths({}, true)).toBeUndefined()
++  })
++
++  it('main.ts 在单实例锁和读路径之前就隔离', () => {
++    const src = readFileSync(join(__dirname, '..', 'src', 'main.ts'), 'utf8')
++    const apply = src.indexOf('applyLawbenchIsolation(app)')
++    expect(apply).toBeGreaterThan(0)
++    expect(apply).toBeLessThan(src.indexOf('claimDesktopSingleInstance(app'))
++    expect(apply).toBeLessThan(src.indexOf('const recovery = new DesktopFatalRecovery'))
++  })
++})
