@@ -28,6 +28,7 @@ compact、换代或新会话的第一动作：读五门台账，答出"在哪张
 | `A` | 线 A（客户端：DSH、组合包、界面、打包） | Opus 5.5 · high | `D:\lawbench-A` / `line-A` |
 | `B` | 线 B（Python 工作台服务） | Opus 5.5 · high | `D:\lawbench-B` / `line-B` |
 | `C` | 线 C（395 服务与周边、归档、所外访问） | Opus 5.5 · high | `D:\lawbench-C` / `line-C` |
+| `D` | 线 D（macOS 版：平台隔离、云上打包与冒烟；T28 起，2026-10-06） | Opus 5.5 · high | `D:\lawbench-D` / `line-D` |
 | `REVIEW` | 复核员（主编排派的子代理） | Opus 5.5 · high，`model` 显式写 | 只读检出待复核分支 |
 | `SCAN` | 机械扫描、diff、只读取证、恢复演练（子代理） | Haiku · low 或 Sonnet · high，`model` 显式写 | 只读 |
 | `OWNER` | 用户本人 | — | SSH 密码、395 上亲手操作、与律所沟通、拍板、真人门 |

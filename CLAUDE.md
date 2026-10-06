@@ -11,7 +11,7 @@
 
 ## 你是谁
 
-看你所在的目录：`D:\lawbench` = 主编排（Fable）；`D:\lawbench-A` / `-B` / `-C` = 线 A / B / C（Opus 5.5）。只做派给你这条线的工单。主编排不写产品代码。
+看你所在的目录：`D:\lawbench` = 主编排（Fable）；`D:\lawbench-A` / `-B` / `-C` / `-D` = 线 A / B / C / D（Opus 5.5；线 D 做 macOS 版 T28，**不改 Windows 行为**）。只做派给你这条线的工单。主编排不写产品代码。
 
 ## 必须遵守
 
