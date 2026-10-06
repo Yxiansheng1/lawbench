@@ -237,10 +237,10 @@ step_lock() {
 }
 
 # Keys and user names must not be in the package (T28 acceptance): scan every text file in stage (LibreOffice.app is the
-# vendor's signed release, left out) for Key-like strings, the .env.local variable names, and the build machine's home
-# path (/Users/<name>: a build path baked into a file would carry the user name).
-scan_dir() {  # scan_dir <dir> <label> [home-path hits only warn: 1]
-  local hits="$WORK/scan-hits.txt" home="$OUT/scan-$2-home-paths.txt"
+# vendor's signed release, left out) for Key-like strings, the .env.local variable names, and this build's own paths
+# (on a person's Mac /Users/<name>/...: a build path baked into a file would carry the user name).
+scan_dir() {  # scan_dir <dir> <label>
+  local hits="$WORK/scan-hits.txt" home="$OUT/scan-$2-build-paths.txt"
   : > "$hits"
   # Text files: every pattern. Binary files (-I skips them here): crypto libraries carry PEM parsing literals such as
   # "BEGIN ... PRIVATE KEY" (third run: OpenCV's libgnutls / libmbedcrypto / libssh), so binaries are only searched for
@@ -255,14 +255,22 @@ scan_dir() {  # scan_dir <dir> <label> [home-path hits only warn: 1]
   find "$1" -path '*/LibreOffice.app' -prune -o -type f \( -name '.env' -o -name '.env.*' -o -name '*.p12' \) -print >> "$hits"
   sort -u -o "$hits" "$hits"
   if [ -s "$hits" ]; then sed 's/^/  hit: /' "$hits"; die "scan ($2): key-like strings or key-like file names found (see the hit lines above)"; fi
-  grep -rlaF --exclude-dir=LibreOffice.app -- "$HOME/" "$1" > "$home" || true
+  # This build's own paths (fourth run, order 1928): the checkout and every build folder, absolute. On a person's Mac they
+  # sit under /Users/<name>, so a hit carries that name; on the runner a hit means our path leaked into the package.
+  # Text files only: PyPI wheels are compiled on GitHub's macOS runners too and carry their own /Users/runner/... build
+  # paths inside .so/.dylib files and in the wheels' *.cyclonedx.json SBOMs. Those are upstream, not ours, and they stay
+  # (the Windows build keeps the wheels' dist-info/sboms as well). Fatal everywhere.
+  local pats="$WORK/scan-paths.txt" p
+  : > "$pats"
+  for p in "$ROOT" "$STAGE" "$WORK" "$CACHE" "$OUT"; do printf '%s/\n' "$p" >> "$pats"; done
+  sort -u -o "$pats" "$pats"
+  grep -rlIF --exclude-dir=LibreOffice.app -f "$pats" -- "$1" > "$home" || true
   if [ -s "$home" ]; then
-    sed 's/^/  home path in: /' "$home"
-    # on GitHub's runner the home is /Users/runner (no person's name): recorded for the next round, not fatal there
-    [ "${3:-0}" = 1 ] && [ "${GITHUB_ACTIONS:-}" = true ] || die "scan ($2): the build home path $HOME is baked into files (see above, out/$(basename "$home"))"
-    say "scan ($2): WARNING $(wc -l < "$home" | tr -d ' ') files carry the runner's home path (out/$(basename "$home"))"
-  else rm -f "$home"; fi
-  say "scan ($2): no key-like strings ($(find "$1" -type f | wc -l | tr -d ' ') files, LibreOffice.app excluded)"
+    sed 's/^/  build path in: /' "$home"
+    die "scan ($2): this build's own paths ($ROOT/ ...) are baked into text files (see above, out/$(basename "$home"))"
+  fi
+  rm -f -- "$home"
+  say "scan ($2): no key-like strings, no build paths in text files ($(find "$1" -type f | wc -l | tr -d ' ') files, LibreOffice.app excluded)"
 }
 step_scan() { scan_dir "$STAGE" stage; }
 
@@ -307,7 +315,7 @@ step_package() {
   local app
   app="$(find "$DSH/apps/desktop/.desktop-build/targets" -maxdepth 4 -type d -path '*mac-arm64/*.app' | head -n 1)"
   [ -n "$app" ] || die "package: no mac-arm64/*.app under dsh/apps/desktop/.desktop-build/targets"
-  scan_dir "$app/Contents" app 1
+  scan_dir "$app/Contents" app
   say "dmg: $(basename "$dmg")  $(( $(stat -f%z "$dmg") / 1048576 )) MB  sha256 $(sha256 "$dmg")"
 }
 
