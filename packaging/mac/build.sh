@@ -243,9 +243,18 @@ step_package() {
     > "$DSH/apps/desktop/.env.macos"
   local apps=""
   if [ -d "$OUT/dmg-apps" ]; then apps="$(find "$OUT/dmg-apps" -maxdepth 1 -name '*.app' | sort | paste -sd: -)"; fi
+  # third-party npm versions of the bundled runtime pinned by packaging/runtime-lock/pnpm-lock.yaml (same as build.ps1)
+  local pinned="$ROOT/packaging/runtime-lock/pnpm-lock.yaml" resolved="$OUT/runtime-pnpm-lock.yaml"
+  rm -f "$resolved"
   (cd "$DSH/apps/desktop" && CI=true LAWBENCH_MAC_ADHOC=1 LAWBENCH_STAGE_DIR="$STAGE" \
      LAWBENCH_MAC_SIGN_SCRIPT="$HERE/sign-adhoc.sh" LAWBENCH_MAC_DMG_APPS="$apps" \
+     LAWBENCH_RUNTIME_LOCK="$([ -f "$pinned" ] && echo "$pinned")" LAWBENCH_RUNTIME_LOCK_OUT="$resolved" \
      "${PNPM[@]}" run package:mac:arm64)
+  if [ -f "$pinned" ] && [ -f "$resolved" ]; then
+    # recorded, not fatal on the first Mac builds: macOS may resolve platform-only packages the Windows lock lacks
+    if node "$ROOT/packaging/runtime-lock-compare.mjs" "$pinned" "$resolved" >> "$REPORT" 2>&1; then say "runtime lock: same versions as packaging/runtime-lock"
+    else say "runtime lock: DIFFERS from packaging/runtime-lock (see above; out/runtime-pnpm-lock.yaml)"; fi
+  fi
   local dmg
   dmg="$(find "$DSH/apps/desktop/.desktop-build/targets" -name '*.dmg' -type f -print0 | xargs -0 ls -t | head -n 1)"
   [ -n "$dmg" ] || die "dmg not found under dsh/apps/desktop/.desktop-build/targets"

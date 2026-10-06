@@ -1,0 +1,118 @@
+# lawbench T28: macOS (Apple silicon) package and smoke test. Manual trigger only; no secrets (the workflow's own
+# GITHUB_TOKEN creates the draft release). The dmg is too large for artifact storage (order 1424 note 1431): it goes to a
+# draft prerelease mac-build-<run number>; delete the draft after downloading it. Logs, screenshots and scan results are
+# an ordinary artifact kept 14 days. Nothing here contacts 6000D or 395: the smoke test points both servers at dead
+# 127.0.0.1 ports.
+name: mac-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mac-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      dmg: ${{ steps.release.outputs.dmg }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.21.0'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Cache payloads and package stores
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/pnpm/store
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            dsh/apps/desktop/.desktop-build/downloads
+            packaging/mac/cache
+          key: mac-build-${{ hashFiles('packaging/versions.lock', 'dsh/pnpm-lock.yaml', 'dsh-ext/pnpm-lock.yaml', 'dsh/scripts/primary-runtime/lock.json') }}
+          restore-keys: mac-build-
+
+      - name: Build
+        env:
+          LAWBENCH_ALLOW_NO_TOKENIZER: '1'
+        run: |
+          mkdir -p packaging/mac/out
+          bash packaging/mac/build.sh 2>&1 | tee packaging/mac/out/build-log.txt
+          test "${PIPESTATUS[0]}" -eq 0
+
+      - name: Draft release with the dmg
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd packaging/mac/out
+          dmg="$(ls -t *.dmg | head -n 1)"
+          tag="mac-build-${{ github.run_number }}"
+          {
+            echo "macOS (Apple silicon) build for smoke testing. Ad-hoc signed, not notarized; tokenizer not included."
+            echo
+            echo "- commit: ${{ github.sha }}"
+            echo "- runner: ${{ runner.os }} $(sw_vers -productVersion) $(uname -m) (macos-15)"
+            echo "- sha256: $(cat "$dmg.sha256")"
+            echo
+            echo "Download, then delete this draft."
+          } > release-notes.md
+          gh release create "$tag" --draft --prerelease --target "${{ github.sha }}" \
+            --title "$tag (macOS smoke build)" --notes-file release-notes.md "$dmg" "$dmg.sha256"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+
+      - name: Build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build-logs-${{ github.run_number }}
+          retention-days: 14
+          path: |
+            packaging/mac/out/*.txt
+            packaging/mac/out/*.sha256
+            packaging/mac/out/release-notes.md
+
+  smoke:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: packaging/mac
+
+      - name: Download the dmg from the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dl
+          gh release download "${{ needs.build.outputs.tag }}" --repo "${{ github.repository }}" --dir dl
+          cd dl && shasum -a 256 -c "${{ needs.build.outputs.dmg }}.sha256"
+
+      - name: Smoke test
+        run: bash packaging/mac/smoke.sh "dl/${{ needs.build.outputs.dmg }}" smoke-out
+
+      - name: Smoke results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-smoke-${{ github.run_number }}
+          retention-days: 14
+          path: smoke-out/
