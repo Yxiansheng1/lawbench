@@ -213,6 +213,28 @@ index 5de710edea..d32cb30f45 100644
    if (journal) recordPackagingEvent(journal, { type: 'artifacts', directory: buildPaths.artifacts })
  }
  
+diff --git a/apps/desktop/scripts/prepare-dsh.ts b/apps/desktop/scripts/prepare-dsh.ts
+index 1d1d9dc7fd..23228e231c 100644
+--- a/apps/desktop/scripts/prepare-dsh.ts
++++ b/apps/desktop/scripts/prepare-dsh.ts
+@@ -32,6 +32,7 @@ import {
+ import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
+ import { desktopRuntimeFileExclusion } from './runtime-file-policy.ts'
+ import { selectOfficeEngine } from '../../../scripts/libreoffice-packages.mjs'
++import { lawbenchMacAdhoc } from './lawbench-product.mjs'
+ 
+ const APP_ROOT = resolve(import.meta.dirname, '..')
+ const BUILD_PATHS = resolveDesktopTargetBuildPaths()
+@@ -161,7 +162,8 @@ async function main(): Promise<void> {
+     if (!existsSync(join(DSH_OUTPUT_ROOT, 'node_modules', '@deepseek-ai', `libreoffice-kit-${officeEngine}`, 'prebuilds.json'))) {
+       throw new Error(`desktop runtime: missing required LibreOffice engine ${officeEngine}`)
+     }
+-    if (process.platform === 'darwin') {
++    // lawbench T28 (fifth run): an ad-hoc build has no Developer ID; packaging/mac/sign-adhoc.sh signs every Mach-O file in afterPack
++    if (process.platform === 'darwin' && !lawbenchMacAdhoc(process.env)) {
+       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'sign:dsh-native', () => signMacOSRuntime(DSH_OUTPUT_ROOT, resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env), join(BUILD_PATHS.root, 'signature-cache')))
+       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'sign:primary-native', () => signMacOSRuntime(join(RUNTIME_ROOT, 'primary-runtime'), resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env), join(BUILD_PATHS.root, 'signature-cache')))
+     }
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
 index 55cf6fbb56..6ac9c9c324 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
@@ -271,10 +293,12 @@ index d791412274..a4fca44a91 100644
    return resolve(app.getAppPath(), '..', '..', '..', 'engines')
 diff --git a/apps/desktop/tests/lawbench-macos.spec.ts b/apps/desktop/tests/lawbench-macos.spec.ts
 new file mode 100644
-index 0000000000..9b1c386d18
+index 0000000000..9bf162a498
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-macos.spec.ts
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,98 @@
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
 +import { describe, expect, it } from 'vitest'
 +import { lawbenchIsolatedPaths } from '../src/lawbench-isolation.ts'
 +
@@ -347,5 +371,27 @@ index 0000000000..9b1c386d18
 +    const c = createElectronBuilderConfig(win, 'win32', 'x64') as unknown as MacConfig
 +    expect(c.extraFiles).toEqual([{ from: 'D:\\build\\stage', to: '.', filter: ['**/*', '!requirements.txt'] }])
 +    expect(c.extraResources.some((r) => r.from === 'D:\\build\\stage')).toBe(false)
++  })
++})
++
++describe('ad-hoc 构建不走 Developer ID 签名（T28 第五跑）', { timeout: 60_000 }, () => {
++  it('prepare-dsh：两步原生模块签名只在 macOS 且非 ad-hoc 时执行（Windows 上 process.platform 不是 darwin，照旧不进）', () => {
++    const src = readFileSync(join(__dirname, '..', 'scripts', 'prepare-dsh.ts'), 'utf8')
++    const guard = src.indexOf("if (process.platform === 'darwin' && !lawbenchMacAdhoc(process.env)) {")
++    expect(guard).toBeGreaterThan(0)
++    const block = src.slice(guard, src.indexOf('\n    }\n', guard))
++    expect(block).toContain("'sign:dsh-native'")
++    expect(block).toContain("'sign:primary-native'")
++    expect(src.split('resolveMacOSSigningEnvironment(process.env)').length - 1).toBe(2)   // 没有别处在开关外调用
++  })
++  it('开关只认 LAWBENCH_MAC_ADHOC=1', async () => {
++    const { lawbenchMacAdhoc } = await import('../scripts/lawbench-product.mjs')
++    expect(lawbenchMacAdhoc({ LAWBENCH_MAC_ADHOC: '1' })).toBe(true)
++    expect(lawbenchMacAdhoc({ LAWBENCH_MAC_ADHOC: 'true' })).toBe(false)
++    expect(lawbenchMacAdhoc({})).toBe(false)
++  })
++  it('签名构建照旧：没有签名身份时 resolveMacOSSigningEnvironment 仍报错（P-22 没改它）', async () => {
++    const { resolveMacOSSigningEnvironment } = await import('../scripts/desktop-release-environment.mjs')
++    expect(() => resolveMacOSSigningEnvironment({ LAWBENCH_MAC_ADHOC: '1' })).toThrow(/SIGNING_IDENTITY/)
 +  })
 +})
