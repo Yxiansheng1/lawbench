@@ -5,6 +5,8 @@
 # record every network connection the app's processes hold, quit.
 # Usage: smoke.sh <dmg> <out dir>
 set -euo pipefail
+# UTF-8 for every tool's output (ninth run: Chinese app names came out garbled in the logs), same as build.sh
+export LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 DMG="${1:?usage: smoke.sh <dmg> <out>}"
 OUT="${2:?usage: smoke.sh <dmg> <out>}"
 mkdir -p "$OUT"

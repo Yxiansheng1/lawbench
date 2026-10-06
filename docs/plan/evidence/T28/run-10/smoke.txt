@@ -1,0 +1,20 @@
+[smoke] dmg: lawbench-0.1.0-mac-arm64-smoke-no-tokenizer.dmg 6d694d5b9001ace3f1359dfb1d2e75f2fb31e8607f7536b5d3a05e3adeb6be06
+[smoke] dmg contents: 格式互转.app|连越律师工作台.app|长截图切分.app|Applications|
+[smoke] codesign ok: 连越律师工作台.app
+[smoke] codesign ok: 长截图切分.app
+[smoke] codesign ok: 格式互转.app
+[smoke]   Signature=adhoc
+[smoke]   TeamIdentifier=not set
+[smoke]   gatekeeper: /Applications/连越律师工作台.app: rejected
+[smoke] settings: servers -> 127.0.0.1:18831-18834 (dead ports)
+[smoke] started pid 3862
+[smoke] windows of 连越律师工作台: 1
+[smoke]   {"ts":"2026-10-06T14:32:47.704Z","source":"host","level":"info","event":"config.packaged_layout"}
+[smoke]   {"ts":"2026-10-06T14:32:47.705Z","source":"host","level":"info","event":"service.state","state":"starting"}
+[smoke]   {"ts":"2026-10-06T14:32:48.009Z","source":"host","level":"info","event":"service.spawn","port":49178}
+[smoke]   {"ts":"2026-10-06T14:32:50.623Z","source":"host","level":"info","event":"service.state","state":"running"}
+[smoke]   {"ts":"2026-10-06T14:32:52.704Z","source":"host","level":"info","event":"selfcheck.done","python":"ok","tokenizer":"warn","libreoffice":"ok","pandoc":"ok","admin_skills":"info","cache_path":"ok"}
+[smoke] processes: 3862,4058,4059,4060,4069,4080,4111
+[smoke] connections: 39 distinct lines over the run (connections.txt)
+[smoke] connections: 127.0.0.1 only
+[smoke] done
