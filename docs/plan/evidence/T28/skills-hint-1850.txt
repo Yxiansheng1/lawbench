@@ -1,0 +1,22 @@
+﻿T28 第三跑修法（令 1850）· install.py 的 customSkillDirs 提示核对（2026-10-06）
+
+> python -E -s -B skills\_scripts\install.py --out D:\t28tmp\skills-out-1850
+（末行）cordis.patch.yml 中 skill-filesystem 的 customSkillDirs 加上："D:\\t28tmp\\skills-out-1850"
+输出目录 27 个文件中查 't28tmp'、'D:\'、'D:/'、'lawbench-D'：0 处命中。
+
+结论：这一行只是 install.py（skills\_scripts\install.py:118）打印给开发者的提示，不写任何文件；stage 里没有 cordis.patch.yml，
+manifest.json 等输出不含绝对路径。装好的 Mac 包里 Skill 目录由 dsh-ext\cordis.patch.yml 的 customSkillDirs 表达式运行时推导：
+<App>.app/Contents/MacOS/<名> → ../Resources/app.asar 存在 → [/Library/Application Support/lawbench/skills, <App>.app/Contents/Resources/skills]
+（用例 dsh-ext\tests\macos.spec.ts "customSkillDirs：darwin 装好的认 Contents/Resources/app.asar"）。
+Windows：build.ps1 的 skills 步调用同一个 install.py，构建日志里同样打印一行 Windows 绝对路径，同样只是提示、不进包；
+Windows 装好的包按 exe 旁的 resources\app.asar 推导（原有用例 install-layout.spec.ts）。
+Mac 构建日志里已去掉这一行，改为写明运行时从哪里找 Skill。
+
+扫描误报：build.ps1 没有 Key 扫描（无 BEGIN/PRIVATE/sk- 字样），Windows 不存在同样的误报。
+
+扫描改法本机验证（Git Bash，抽出 build.sh 的 scan_dir 原样执行；2026-10-06）：
+- 二进制里含 'BEGIN RSA PRIVATE KEY'（模拟 OpenCV 的 libgnutls），LibreOffice.app 下文本含 PEM 和 LAWFIRM_TEST_KEY_A= → 通过（不误报，LibreOffice 被排除）
+- 文本文件含 'BEGIN EC PRIVATE KEY' → 失败，命中该文件
+- 存在 .env.local 文件 → 失败，命中该文件
+- 二进制里含 'LAWFIRM_TEST_KEY_B=' → 失败，命中该文件
+另修：grep 的 --exclude-dir 原先写在模式和目录之后，macOS 的 BSD grep 不重排参数，会把它当文件名、LibreOffice.app 实际没被排除；三处都挪到模式之前。
