@@ -1,6 +1,6 @@
 // 纯聊天的默认工作区"日常事务"（执行令 2026-10-04 11:56 第 4 条，用户 N70：不选案件也能聊，记录落默认工作区）。
-// 首次配置之后第一次问到时建好并登记：位置是设置"日常办公文件夹"下的 日常事务\；该设置为空时用 文档\连越律师工作台\日常事务\，
-// 并把 文档\连越律师工作台 写回设置。登记走现有 /api/case/open（不带标准目录模板：日常事务不分民商事、刑事）。
+// 首次配置之后第一次问到时建好并登记：位置是设置"日常办公文件夹"下的 日常事务\；该设置为空时用 <用户目录>\连越律师工作台\日常事务\（令 2043 起；原为 文档\…），
+// 并把 <用户目录>\连越律师工作台 写回设置。登记走现有 /api/case/open（不带标准目录模板：日常事务不分民商事、刑事）。
 // 建成后在应用数据目录记 daily-case.json；之后只按记下的位置返回，文件夹被删或搬走时返回 null、不重建
 // （照 T17 既有的 CASE_MOVED 提示处理，不特判）。
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -17,8 +17,8 @@ export type DailyResult = { ok: true; value: { root: string | null; created: boo
 export interface DailyDeps {
   /** 记位置的文件（<应用数据>\daily-case.json）。 */
   marker: string
-  /** 本机"文档"文件夹。 */
-  documents: string
+  /** 用户目录（%USERPROFILE%）。日常办公文件夹没设时用 <用户目录>\连越律师工作台（令 2043 第 3 条：不放"文档"，Win11 默认把"文档""桌面"同步到 OneDrive）。 */
+  userProfile: string
   /** 首次配置做完没有（设置文件和 Key 都在）：没做完不建，免得先写出设置文件、首次配置页被跳过。 */
   configured(): Promise<boolean>
   getSettings(): Promise<{ office: { dir: string | null } } & Record<string, unknown>>
@@ -45,7 +45,7 @@ export async function ensureDailyCase(d: DailyDeps): Promise<DailyResult> {
     const settings = await d.getSettings()
     let dir = settings.office?.dir ?? null
     if (!dir) {
-      dir = join(d.documents, DEFAULT_OFFICE_DIR_NAME)
+      dir = join(d.userProfile, DEFAULT_OFFICE_DIR_NAME)
       await d.putSettings({ ...settings, office: { ...settings.office, dir } })
     }
     const root = join(dir, DAILY_NAME)

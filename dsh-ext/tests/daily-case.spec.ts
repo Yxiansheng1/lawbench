@@ -16,7 +16,7 @@ function deps(office: string | null, open: (p: string) => { ok: true; value: unk
   const calls = { put: [] as unknown[], open: [] as string[] }
   const d: DailyDeps = {
     marker: join(dir, 'appdata-daily-case.json'),
-    documents: join(dir, 'Documents'),
+    userProfile: join(dir, 'user'),
     configured: async () => configured,
     getSettings: async () => ({ v: 1, office: { dir: office, invoice_buyer: null } }),
     putSettings: async (s) => { calls.put.push(s) },
@@ -26,14 +26,14 @@ function deps(office: string | null, open: (p: string) => { ok: true; value: unk
 }
 
 describe('Host：日常事务', () => {
-  it('日常办公文件夹为空：建 文档\连越律师工作台\日常事务、写回设置、登记；第二次只返回记下的位置', async () => {
+  it('日常办公文件夹为空：建 <用户目录>\\连越律师工作台\\日常事务（令 2043：不放"文档"，避开 OneDrive）、写回设置、登记；第二次只返回记下的位置', async () => {
     const { d, calls } = deps(null)
     const r = await ensureDailyCase(d)
-    const root = join(dir, 'Documents', '连越律师工作台', '日常事务')
+    const root = join(dir, 'user', '连越律师工作台', '日常事务')
     expect(r).toEqual({ ok: true, value: { root, created: true } })
     expect(existsSync(root)).toBe(true)
     expect(calls.open).toEqual([root])
-    expect((calls.put[0] as { office: { dir: string } }).office.dir).toBe(join(dir, 'Documents', '连越律师工作台'))
+    expect((calls.put[0] as { office: { dir: string } }).office.dir).toBe(join(dir, 'user', '连越律师工作台'))
     expect(JSON.parse(readFileSync(d.marker, 'utf8'))).toEqual({ root })
     expect(await ensureDailyCase(d)).toEqual({ ok: true, value: { root, created: false } })
     expect(calls.open.length).toBe(1)
@@ -53,7 +53,7 @@ describe('Host：日常事务', () => {
     expect(await ensureDailyCase(d)).toEqual({ ok: false, error: { code: 'NOT_CONFIGURED', message: '还没完成首次配置' } })
     expect(calls.put).toEqual([])
     expect(calls.open).toEqual([])
-    expect(existsSync(join(dir, 'Documents'))).toBe(false)
+    expect(existsSync(join(dir, 'user'))).toBe(false)
   })
 
   it('登记被拒（如在云同步文件夹里）：返回错误、不记位置，下次再试', async () => {

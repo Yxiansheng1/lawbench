@@ -7,6 +7,7 @@ import { citationTargets, errorText, shouldNotifyWikiDone, ocrConfirmText, pageR
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoad } from './kit.tsx'
 import { app, call, confirm, notice, type CaseRef, type Params } from './state.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
+import { openCaseFolder, removeMaterial } from './folder-actions.ts'
 
 const POLL_MS = 3000
 const FALLBACK_PARAMS: Params = { thinking: '中', window: '128K', max_tokens: 16384 }
@@ -83,11 +84,14 @@ function Materials({ caseRef }: { caseRef: CaseRef }) {
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => { importPaths([...(e.target.files ?? [])].map((f) => getNav().pathFor(f))); e.target.value = '' }} />
       </div>
 
-      <Section title="材料" extra={mats.state === 'ok' && mats.value.materials.some((m) => m.pages_need_ocr.length) ? (
-        <Button size="sm" variant="outline" onClick={() => mats.state === 'ok' && setOcrFor(mats.value.materials.filter((m) => m.pages_need_ocr.length))}>待识别页全部提交…</Button>
-      ) : null}>
+      <Section title="材料" extra={<div style={{ ...S.row, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <Button size="sm" variant="ghost" onClick={() => void openCaseFolder(caseRef, 'materials')}>打开所在文件夹</Button>
+        {mats.state === 'ok' && mats.value.materials.some((m) => m.pages_need_ocr.length) ? (
+          <Button size="sm" variant="outline" onClick={() => mats.state === 'ok' && setOcrFor(mats.value.materials.filter((m) => m.pages_need_ocr.length))}>待识别页全部提交…</Button>
+        ) : null}
+      </div>}>
         <Loading data={mats}>{(v) => v.materials.length === 0 ? <Empty>还没有材料。点"导入文件"或把文件拖进来。</Empty> : (
-          <ul style={S.list}>{v.materials.map((m) => <MaterialRow key={m.material_id} m={m} onOcr={() => setOcrFor([m])} />)}</ul>
+          <ul style={S.list}>{v.materials.map((m) => <MaterialRow key={m.material_id} m={m} onOcr={() => setOcrFor([m])} onRemove={() => void removeMaterial(caseRef, m).then((done) => { if (done) void reloadMats() })} />)}</ul>
         )}</Loading>
       </Section>
 
@@ -105,7 +109,7 @@ function Materials({ caseRef }: { caseRef: CaseRef }) {
   )
 }
 
-function MaterialRow({ m, onOcr }: { m: Material; onOcr: () => void }) {
+function MaterialRow({ m, onOcr, onRemove }: { m: Material; onOcr: () => void; onRemove: () => void }) {
   const tone = m.status === 'parsed' ? 'ok' : m.status === 'failed' || m.status === 'source_deleted' ? 'err' : m.status === 'ocr_running' ? 'info' : 'warn'
   return (
     <li style={{ ...S.card, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -123,6 +127,10 @@ function MaterialRow({ m, onOcr }: { m: Material; onOcr: () => void }) {
           <Button size="sm" variant="outline" disabled={m.status === 'ocr_running'} onClick={onOcr}>提交识别…</Button>
         </div>
       ) : null}
+      {/* 令 2043 第 2 条：识别进行中不能移除（服务还在用这个文件） */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button size="sm" variant="ghost" disabled={m.status === 'ocr_running'} onClick={onRemove}>移除此材料</Button>
+      </div>
     </li>
   )
 }

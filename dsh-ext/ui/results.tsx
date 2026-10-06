@@ -10,6 +10,7 @@ import { app, call, lb, notice, setIntent, showTaskAnswer, type CaseRef } from '
 import type { TaskAnswerView } from './answer.tsx'
 import { useStore } from './store.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
+import { openCaseFolder } from './folder-actions.ts'
 import { ARCHIVE_SKILL, ArchiveDialog } from './archive.tsx'
 
 const NO_INPUTS: string[] = []
@@ -78,7 +79,10 @@ function Results({ caseRef, sessionId }: { caseRef: CaseRef; sessionId: string }
           )
         })}</ul>
       )}</Loading>
-      <div style={{ fontWeight: 600, marginTop: 8 }}>已确认的成果</div>
+      <div style={{ ...S.between, marginTop: 8 }}>
+        <span style={{ fontWeight: 600 }}>已确认的成果</span>
+        <Button size="sm" variant="ghost" onClick={() => void openCaseFolder(caseRef, 'outputs')}>打开所在文件夹</Button>
+      </div>
       <Loading data={outputs}>{(v) => v.outputs.length === 0 ? <Empty>还没有确认保存的成果。</Empty> : (
         <ul style={S.list}>{v.outputs.map((o) => (
           <li key={`${o.title}-${o.version}`} style={{ ...S.card, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
