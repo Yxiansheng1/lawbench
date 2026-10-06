@@ -1,0 +1,2 @@
+﻿dsh-ext 基线（改动前，同一工作目录，2026-10-06 14:39）：Test Files 48 passed (48) / Tests 618 passed | 6 skipped (624)
+改动后见 dsh-ext-vitest-after.txt

@@ -59,9 +59,11 @@ type Ctx = {
 }
 
 /** Windows 需要原样传入的系统变量（Spec 1.3），外加所有 OneDrive* 变量（云同步目录检测用）。 */
-export function passThroughEnv(source: NodeJS.ProcessEnv): Record<string, string> {
+/** macOS 上对应的那几个（T28）：家目录、用户名、临时目录、PATH、语言区域。 */
+const MAC_PASS_ENV = ['HOME', 'USER', 'LOGNAME', 'TMPDIR', 'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING']
+export function passThroughEnv(source: NodeJS.ProcessEnv, platform: string = process.platform): Record<string, string> {
   const out: Record<string, string> = {}
-  const keep = new Set(['SYSTEMROOT', 'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'PATH', 'PATHEXT', 'COMSPEC', 'WINDIR'])
+  const keep = new Set(platform === 'darwin' ? MAC_PASS_ENV : ['SYSTEMROOT', 'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'PATH', 'PATHEXT', 'COMSPEC', 'WINDIR'])
   for (const [k, v] of Object.entries(source)) {
     if (v === undefined) continue
     if (keep.has(k.toUpperCase()) || /^onedrive/i.test(k)) out[k] = v
@@ -472,17 +474,18 @@ export class LawbenchRemote {
 const UNAVAILABLE = '工作台服务未启动，请稍后重试'
 
 /** 去掉文字里的本机路径：安装目录换成"<安装目录>"，其余绝对路径只留文件名（日志只记元数据，令 2048）。 */
-export function scrubPaths(text: string, installDir: string | undefined): string {
+export function scrubPaths(text: string, installDir: string | undefined, platform: string = process.platform): string {
   // 复核 P2-3：安装目录外的绝对路径（盘符、\\服务器\共享、引号里带空格的）一律换成"<路径>"，不留文件名
   // （文件名、文件夹名可能就是材料名、案件名）；安装目录下的换成"<安装目录>\…"（只有程序自己的文件）。
   // Python 的 repr 会把反斜杠写成两个，两种写法都认。
   const norm = (p: string) => p.replace(/[\\/]+/g, '\\').toLowerCase()
   const root = installDir ? norm(installDir).replace(/\\$/, '') : undefined
   const one = (p: string): string => {
-    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) return '<安装目录>' + p.replace(/[\\/]+/g, '\\').slice(root.length)
+    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) return '<安装目录>' + (platform === 'darwin' ? p.slice(root.length) : p.replace(/[\\/]+/g, '\\').slice(root.length))
     return '<路径>'
   }
-  const START = String.raw`(?:[A-Za-z]:[\\/]|\\\\|//)`
+  // macOS（T28）：任何以 / 开头的绝对路径（/Users/…、/Volumes/…、/private/…）同样换掉
+  const START = platform === 'darwin' ? String.raw`(?:[A-Za-z]:[\\/]|\\\\|/)` : String.raw`(?:[A-Za-z]:[\\/]|\\\\|//)`
   let t = text.replace(new RegExp(String.raw`(["'])(${START}[^"'\r\n]*)\1`, 'g'), (_m, q: string, p: string) => q + one(p) + q)
   // 不带引号的：中间各段可以有空格（只要后面还跟着分隔符），最后一段到空白为止
   t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*[^\s\\/"'<>|]*`, 'g'), (p) => one(p))

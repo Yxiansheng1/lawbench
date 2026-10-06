@@ -5,8 +5,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Logger } from './core-client.ts'
 
-export function defaultAppData(): string {
-  return join(process.env.LOCALAPPDATA ?? homedir(), 'lawbench')
+export function defaultAppData(platform: string = process.platform, env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
+  // macOS（T28）：没有 LOCALAPPDATA，原写法会落到家目录里一个可见的 lawbench 文件夹
+  if (platform === 'darwin') return join(home, 'Library', 'Application Support', 'lawbench')
+  return join(env.LOCALAPPDATA ?? home, 'lawbench')
 }
 
 type CtxLogger = { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void } | undefined

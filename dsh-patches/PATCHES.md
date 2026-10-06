@@ -21,6 +21,7 @@ git -C dsh apply ..\dsh-patches\P-4-brand.patch
 git -C dsh apply ..\dsh-patches\P-19-awaiting-user-answer.patch
 git -C dsh apply ..\dsh-patches\P-20-no-workspace-word.patch
 git -C dsh apply ..\dsh-patches\P-21-home-above-new-session.patch
+git -C dsh apply ..\dsh-patches\P-22-macos.patch
 # P-4 的图片不放进补丁（与 packaging\brand\desktop\ 重复，且二进制补丁约 2MB）：由 packaging\brand\make_brand.py 从 logo\ 原件生成，打补丁后拷进去
 Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 ```
@@ -146,6 +147,18 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 | 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
 |---|---|---|---|---|
 | P-21 | `packages/client/ui-sidebar/src/client/SidebarRoot.tsx`；`tests/lawbench-top-panels.client.spec.tsx`（新）；`packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx`、`tests/workspace-browser.client.spec.tsx`（第二轮复核 AMEND F7）（补丁 `P-21-home-above-new-session.patch`，排在 P-20 之后） | 全局面板按 order 分两段：order <= -1000 的（我方"首页"）画在"新会话"按钮上方，其余照旧在下方。侧栏案件列表里没有会话的默认工作区（"未归入案件"）不显示，有会话时照常（DSH 的"默认工作区命名"一例改为带一个会话，另加"空时不显示"一例）。案件行的菜单去掉"重命名"（`rows/Rows.tsx`，令 1609 第 3 条：案件名就是文件夹名，改侧栏标题不改文件夹，会误导），只留"从列表移除案件"；`rows.client.spec` 一例改为断言没有重命名，`workspace-browser.client.spec` 三个走菜单重命名的例子标 skip 并注明 | 用户 10-04："首页需要入口，不然太难找到了，可以放在新会话上面"。DSH 侧栏的面板列表固定在新会话下方，没有新会话上方的插槽 | 新例：首页在新会话之前、"案件：xxx"在之后；去掉分段即红；空的默认工作区不显示一例；案件行菜单没有重命名两例。`ui-workspace` 382 项通过、3 项跳过。补丁链 141 个路径与工作区逐字节一致 |
+
+## P-22：macOS 版第一阶段（T28，线 D；令 `致D-ORCH-执行令-盘点通过八条裁决进第2至5步-20261006-1424.md`）
+
+Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支里（`extraFiles` 的条件多了 `!packagesMacOS`，打 Windows 包时恒真）。
+
+| 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
+|---|---|---|---|---|
+| P-22 | `apps/desktop/src/lawbench-isolation.ts` | 装好的 Mac 包：`userData=~/Library/Application Support/lawbench-desktop`、`DSH_HOME=~/Library/Application Support/lawbench/dsh-home` | Mac 没有 APPDATA/LOCALAPPDATA，原写法不隔离，会与原版 DSH 共用目录与单实例锁 | `tests/lawbench-macos.spec.ts` |
+| P-22 | `apps/desktop/src/lawbench-retainer.ts` | 装好的 Mac 包 engines 目录取 `process.resourcesPath` | Mac 载荷在 `Contents/Resources`，不在可执行文件旁 | Actions 冒烟 |
+| P-22 | `apps/desktop/src/client/WelcomePage.tsx` | 首次配置页提示 Mac 上说"钥匙串" | Mac 的 Key 存钥匙串（`dsh-ext\credentials\keychain.ts`） | 文案 |
+| P-22 | `apps/desktop/scripts/lawbench-product.mjs`（及 `.d.mts`）、`electron-builder-config.mjs`、`package-target.ts` | `LAWBENCH_MAC_ADHOC=1`：不要签名身份与公证凭据，不开 hardened runtime，不带更新源，只出 arm64 dmg；签名在 afterPack 调 `LAWBENCH_MAC_SIGN_SCRIPT`（由内到外 ad-hoc，LibreOffice.app 保留原签名）；`LAWBENCH_STAGE_DIR` 在 Mac 上进 `extraResources`；`LAWBENCH_MAC_DMG_APPS` 把两个小工具并排放进 dmg；打包流程跳过签名钥匙串、公证和发布记录 | 令 1424 第 3、4 条；第一阶段没有开发者证书（N74） | `tests/lawbench-macos.spec.ts` 7 项；Actions 首跑 |
+| P-22 | `apps/desktop/tests/lawbench-macos.spec.ts`（新） | 上面各项的用例 | — | `apps/desktop` 全部：1302 过 / 8 败 / 29 跳；8 败（`upload-with-credentials` 7、`profile-mcp` 1）在未打 P-22 的基线上同样失败 |
 
 ## P-4：设置"通用"里的当前版本（注记 `致A-ORCH-注记-版本号与说明句已定-20261004-1706.md`）
 

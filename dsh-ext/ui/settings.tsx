@@ -10,6 +10,7 @@ import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION } from '../shared/product.ts'
 import { app, call, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { discardDraft, isDirty, onLeaveSettings, saveDraft, settingsDraft } from './settings-draft.ts'
+import { isMac, keyStoreName } from './platform.ts'
 
 interface Settings {
   v: 1
@@ -24,6 +25,12 @@ interface Settings {
 }
 
 const CONVERTERS: Array<[Settings['converter'], string]> = [['auto', '自动（依次试 Word、WPS、内置转换程序）'], ['word', 'Microsoft Word'], ['wps', 'WPS'], ['libreoffice', '内置转换程序']]
+// Mac 版（令 1424 第 2 条）：不列 Word、WPS；旧设置里是 word / wps 时照样显示出来并注明不可用，不悄悄改值
+const MAC_CONVERTERS: Array<[Settings['converter'], string]> = [['auto', '自动（内置转换程序）'], ['libreoffice', '内置转换程序']]
+export function converterOptions(current: Settings['converter'], mac = isMac()): Array<[Settings['converter'], string]> {
+  if (!mac) return CONVERTERS
+  return current === 'word' || current === 'wps' ? [...MAC_CONVERTERS, [current, `${current === 'word' ? 'Microsoft Word' : 'WPS'}（Mac 版不可用）`]] : MAC_CONVERTERS
+}
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
 const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
 
@@ -76,7 +83,7 @@ export function SettingsSection() {
       <Block title="服务器和 Key" note="服务器地址本版只显示；Key 可以更换。">
         <Field label="律所模型服务器"><Ro>{loaded.servers.llm_base_url}</Ro><Ro>所外：{loaded.servers.llm_alt_base_url ?? '未设置'}</Ro></Field>
         <Field label="律所识别服务器"><Ro>{loaded.servers.prep_base_url}</Ro><Ro>所外：{loaded.servers.prep_alt_base_url ?? '未设置'}</Ro></Field>
-        <Field label="个人 Key"><Ro>{hasKey === null ? '读取中' : hasKey ? '已设置（保存在 Windows 凭据管理器）' : '未设置'}</Ro><ChangeKey onChanged={() => setHasKey(true)} /></Field>
+        <Field label="个人 Key"><Ro>{hasKey === null ? '读取中' : hasKey ? `已设置（保存在 ${keyStoreName()}）` : '未设置'}</Ro><ChangeKey onChanged={() => setHasKey(true)} /></Field>
       </Block>
 
       <Block title="胶囊" note="输入框上方的两层胶囊：排序、改名、隐藏、新增。只影响这台电脑。">
@@ -131,7 +138,7 @@ export function SettingsSection() {
       <Block title="Word 转 PDF">
         <Field label="使用的程序">
           <select style={S.input} value={draft.converter} onChange={(e) => up((d) => { d.converter = e.target.value as Settings['converter'] })}>
-            {CONVERTERS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+            {converterOptions(draft.converter).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
           </select>
         </Field>
       </Block>

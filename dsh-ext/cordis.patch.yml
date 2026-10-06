@@ -277,7 +277,7 @@
 # 首次使用目录指向应用数据下的空目录，避免在"文档"里建 deepseek-harness/default-workspace
 - id: workspace-controller
   config:
-    documentsDirectory: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench', 'dsh-documents')"
+    documentsDirectory: !!js "process.platform === 'darwin' ? process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), 'Library', 'Application Support', 'lawbench', 'dsh-documents') : process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench', 'dsh-documents')"
     documentsLookupTimeoutMs: 10000
 
 # ── 3. 律师工作台 preset ───────────────────────────────────────────────────
@@ -307,7 +307,7 @@
               # Spec 10.1：管理员目录 %ProgramData%\lawbench\skills 在前（DSH 同级先到先得，同名时它覆盖内置），
               # 内置目录 <安装目录>\skills 在后；开发期内置目录由 LAWBENCH_SKILLS_DIR 指定。装好的客户端（exe 旁有 resources\app.asar）
               # 固定为安装目录、不读这个环境变量（T20 步骤 3；与 host\install-layout.ts 同一判断，ProgramData 下目录名同 ADMIN_DIR_NAME）
-              customSkillDirs: !!js "((p, fs) => { const inst = p.dirname(process.execPath); const packaged = fs.existsSync(p.join(inst, 'resources', 'app.asar')); return [p.join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), packaged ? p.join(inst, 'skills') : process.env.LAWBENCH_SKILLS_DIR].filter(Boolean) })(process.getBuiltinModule('node:path'), process.getBuiltinModule('node:fs'))"
+              customSkillDirs: !!js "((p, fs) => { if (process.platform === 'darwin') { const res = p.join(p.dirname(process.execPath), '..', 'Resources'); const packaged = fs.existsSync(p.join(res, 'app.asar')); return ['/Library/Application Support/lawbench/skills', packaged ? p.join(res, 'skills') : process.env.LAWBENCH_SKILLS_DIR].filter(Boolean) } const inst = p.dirname(process.execPath); const packaged = fs.existsSync(p.join(inst, 'resources', 'app.asar')); return [p.join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), packaged ? p.join(inst, 'skills') : process.env.LAWBENCH_SKILLS_DIR].filter(Boolean) })(process.getBuiltinModule('node:path'), process.getBuiltinModule('node:fs'))"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user
@@ -355,12 +355,12 @@
       config:
         command: !!js "JSON.parse(process.env.LAWBENCH_SERVICE_CMD ?? '[]')"
         cwd: !!js "process.env.LAWBENCH_SERVICE_CWD ?? process.getBuiltinModule('node:os').homedir()"
-        appData: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
+        appData: !!js "process.platform === 'darwin' ? process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), 'Library', 'Application Support', 'lawbench') : process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
         forwardPort: 18765
         portRange: !!js "process.env.LAWBENCH_SERVICE_PORTS ? process.env.LAWBENCH_SERVICE_PORTS.split('-').map(Number) : undefined"
         env: !!js "JSON.parse(process.env.LAWBENCH_SERVICE_ENV ?? '{}')"
         # listSkills 读的 Skill 目录（T13 执行令 Q4），与上面 preset 的 skill-filesystem 同一写法、同一顺序（管理员目录在前）
-        skillDirs: !!js "[process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
+        skillDirs: !!js "[process.platform === 'darwin' ? '/Library/Application Support/lawbench/skills' : process.getBuiltinModule('node:path').join(process.env.ProgramData ?? 'C:\\\\ProgramData', 'lawbench', 'skills'), process.env.LAWBENCH_SKILLS_DIR].filter(Boolean)"
 
 # ── 5. 会话记录进案件文件夹（T17 第三步，执行令 2026-09-30 15:16）─────────────────
 # 原行把所有会话记录存进 $DSH_HOME\sessions；换成我方路由：案件里的会话存 <案件>\工作区\会话，
@@ -380,7 +380,7 @@
       config:
         backendModule: !!js "process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-session-persistence-jsonl')"
         defaultRoot: !!js dshHomePath('sessions')
-        appData: !!js "process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
+        appData: !!js "process.platform === 'darwin' ? process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), 'Library', 'Application Support', 'lawbench') : process.getBuiltinModule('node:path').join(process.env.LOCALAPPDATA ?? process.getBuiltinModule('node:os').homedir(), 'lawbench')"
         # 不在案件里的会话不许新建（N46 用户定 ②：没有打开案件就不能发消息）；已有的只读，不能续写
         allowOutsideCase: false
         # 会话投影缓存按案件存；写入节奏同 base 原行

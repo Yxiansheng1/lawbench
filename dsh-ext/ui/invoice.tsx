@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Badge, Button, C, ErrorLine, getNav, S, Section } from './kit.tsx'
 import { call, confirm, lb } from './state.ts'
 import { errorText } from './format.ts'
+import { isMac, MAC_NO_INVOICE } from './platform.ts'
 import {
   ACTION_LABEL, BUSY_CODE, BUSY_HOLD_MS, BUSY_TEXT, buildInvoiceRequest, emptyForm, EXCLUDE_CONFIRM, homeView, PRINT_FROM_OUTPUT, REVIEW_CONFIRM,
   REPLACE_CONFIRM, resultTone, TONE_TEXT, TWO_STEP, type InvoiceAction, type InvoiceForm, type InvoiceValue,
@@ -17,7 +18,26 @@ type Shown =
 
 export const SETUP_TEXT = '发票整理要先在设置里指定日常办公文件夹（发票台账放在这里）和发票购买方名称（用来核对发票抬头）。请到左下角"设置"→"律师工作台"→"日常办公"填好后再回来。'
 
+/** Mac 版（令 1424 第 1 条）：发票引擎只有 Windows 版，整页换成一句说明，不显示任何动作。 */
 export function InvoicePage() {
+  return isMac() ? <MacInvoiceNotice /> : <InvoiceWorkbench />
+}
+
+function MacInvoiceNotice() {
+  return (
+    <div style={S.page}>
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={S.between}>
+          <h2 style={S.h2}>发票整理</h2>
+          <Button size="sm" variant="outline" onClick={() => homeView.set('home')}>返回首页</Button>
+        </div>
+        <div role="alert" style={{ ...S.card, borderColor: C.warn, lineHeight: 1.7 }}>{MAC_NO_INVOICE}</div>
+      </div>
+    </div>
+  )
+}
+
+function InvoiceWorkbench() {
   const [office, setOffice] = useState<Office | null | 'fail'>(null)
   const [form, setForm] = useState<InvoiceForm>(() => emptyForm())
   const [running, setRunning] = useState<InvoiceAction | null>(null)
