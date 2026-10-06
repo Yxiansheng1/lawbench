@@ -209,7 +209,14 @@ step_smalltools() {
 step_skills() {
   reset_dir "$STAGE/skills"
   # -E -s rather than -I: install.py imports its sibling modules from the script folder (-I would drop it from sys.path)
-  "$STAGE/python/bin/python3" -E -s -B "$ROOT/skills/_scripts/install.py" --out "$STAGE/skills" || die "skills: install.py failed"
+  # install.py ends with a developer hint "customSkillDirs 加上：<absolute out dir>". It is only printed - nothing is
+  # written - and does not apply to the package: the installed app derives the folder at run time from
+  # process.execPath (dsh-ext/cordis.patch.yml customSkillDirs: <App>.app/Contents/Resources/skills). Dropped from the
+  # log so the build machine's path does not read like a setting (third run).
+  "$STAGE/python/bin/python3" -E -s -B "$ROOT/skills/_scripts/install.py" --out "$STAGE/skills" > "$WORK/skills-install.txt" 2>&1 \
+    || { cat "$WORK/skills-install.txt"; die "skills: install.py failed"; }
+  sed '/customSkillDirs 加上/d' "$WORK/skills-install.txt"
+  say "skills: $(find "$STAGE/skills" -name SKILL.md | wc -l | tr -d ' ') Skills; the app finds them at <App>.app/Contents/Resources/skills (cordis.patch.yml, run time)"
 }
 
 step_engines() {
@@ -235,10 +242,20 @@ step_lock() {
 scan_dir() {  # scan_dir <dir> <label> [home-path hits only warn: 1]
   local hits="$WORK/scan-hits.txt" home="$OUT/scan-$2-home-paths.txt"
   : > "$hits"
-  grep -rlaE 'sk-[A-Za-z0-9]{20,}|LAWFIRM_TEST_KEY_[AB]=|PREP395_BASE=|LAWFIRM_LLM_BASE=|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' \
-    "$1" --exclude-dir=LibreOffice.app >> "$hits" || true
-  if [ -s "$hits" ]; then sed 's/^/  hit: /' "$hits"; die "scan ($2): key-like strings found (see the hit lines above)"; fi
-  grep -rlaF -- "$HOME/" "$1" --exclude-dir=LibreOffice.app > "$home" || true
+  # Text files: every pattern. Binary files (-I skips them here): crypto libraries carry PEM parsing literals such as
+  # "BEGIN ... PRIVATE KEY" (third run: OpenCV's libgnutls / libmbedcrypto / libssh), so binaries are only searched for
+  # the strong markers below - our .env.local variable names and long sk- keys - never for the PEM header.
+  # options before the pattern: macOS's BSD grep does not reorder them (after the operands they would be file names)
+  grep -rlIE --exclude-dir=LibreOffice.app -- 'sk-[A-Za-z0-9]{20,}|LAWFIRM_TEST_KEY_[AB]=|PREP395_BASE=|LAWFIRM_LLM_BASE=|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' \
+    "$1" >> "$hits" || true
+  grep -rlaE --exclude-dir=LibreOffice.app -- 'LAWFIRM_TEST_KEY_[AB]=|PREP395_BASE=|LAWFIRM_LLM_BASE=|sk-[A-Za-z0-9]{32,}' \
+    "$1" >> "$hits" || true
+  # env files and certificate bundles by name, whatever their content (not *secret* / *.key: Python's own secrets.py and
+  # library test certificates would match)
+  find "$1" -path '*/LibreOffice.app' -prune -o -type f \( -name '.env' -o -name '.env.*' -o -name '*.p12' \) -print >> "$hits"
+  sort -u -o "$hits" "$hits"
+  if [ -s "$hits" ]; then sed 's/^/  hit: /' "$hits"; die "scan ($2): key-like strings or key-like file names found (see the hit lines above)"; fi
+  grep -rlaF --exclude-dir=LibreOffice.app -- "$HOME/" "$1" > "$home" || true
   if [ -s "$home" ]; then
     sed 's/^/  home path in: /' "$home"
     # on GitHub's runner the home is /Users/runner (no person's name): recorded for the next round, not fatal there
