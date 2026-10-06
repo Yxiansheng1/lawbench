@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import sys
 from dataclasses import dataclass, field
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -14,6 +15,8 @@ DEFAULT_FORWARD_PORT = 18765
 
 
 def _default_appdata() -> pathlib.Path:
+    if sys.platform == "darwin":  # T28：只在没传 LB_APPDATA 时用；与 Host 的 defaultAppData 同一位置
+        return pathlib.Path.home() / "Library" / "Application Support" / PRODUCT_DIR_NAME
     base = os.environ.get("APPDATA") or str(pathlib.Path.home())
     return pathlib.Path(base) / PRODUCT_DIR_NAME
 

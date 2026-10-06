@@ -17,6 +17,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -34,6 +35,8 @@ CANDIDATES = [
     r"C:\Program Files\LibreOffice\program\soffice.exe",
     r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
 ]
+# T28 macOS：默认安装位置（打包后 Host 传随包的 LAWBENCH_SOFFICE，用不到这里）
+MAC_CANDIDATES = ["/Applications/LibreOffice.app/Contents/MacOS/soffice"]
 
 
 def find_soffice() -> str | None:
@@ -45,7 +48,7 @@ def find_soffice() -> str | None:
     found = shutil.which("soffice")
     if found:
         return found
-    for c in CANDIDATES:
+    for c in (MAC_CANDIDATES if sys.platform == "darwin" else CANDIDATES):
         if os.path.isfile(c):
             return c
     return None
@@ -171,7 +174,7 @@ class _Session:
         with _LOCK:
             try:
                 proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
-                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), **procs.own_group())
             except OSError:
                 raise ParseError("no_converter")
             try:

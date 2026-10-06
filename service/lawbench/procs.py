@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
+import sys
 
 
 def python_env(env: dict[str, str]) -> dict[str, str]:
@@ -15,6 +17,20 @@ def python_env(env: dict[str, str]) -> dict[str, str]:
     %APPDATA%\\Python 下的 .pth，用户装的包会混进来）。就地加上 PYTHONNOUSERSITE=1 并返回。"""
     env["PYTHONNOUSERSITE"] = "1"
     return env
+
+
+def _leads_group(pid: int) -> bool:
+    """pid 是不是它所在进程组的组长（即由 own_group() 起的）；查不到按否。"""
+    try:
+        return os.getpgid(pid) == pid
+    except (OSError, AttributeError):
+        return False
+
+
+def own_group() -> dict:
+    """T28：非 Windows 上让子进程自成一个进程组（Popen(start_new_session=True)），kill_tree 才能连它拉起的子进程一起结束；
+    Windows 返回空（taskkill /T 按进程树结束，行为不变）。"""
+    return {} if os.name == "nt" else {"start_new_session": True}
 
 
 def kill_tree(proc: subprocess.Popen, drain: bool = False) -> None:
@@ -25,6 +41,11 @@ def kill_tree(proc: subprocess.Popen, drain: bool = False) -> None:
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, check=False,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        elif sys.platform == "darwin" and _leads_group(proc.pid):
+            try:                                   # own_group() 起的：整组结束（含孙进程）
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
         else:
             proc.kill()
     try:

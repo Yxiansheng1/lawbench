@@ -12,6 +12,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import urllib.parse
 
 from ..errors import ApiError
@@ -20,6 +21,7 @@ from ..procs import kill_tree
 TIMEOUT = 120  # 秒
 TEMPLATE_DIR = pathlib.Path(__file__).with_name("templates")
 TEMPLATES = ("文书", "合同")
+MAC_CANDIDATES = ("/opt/homebrew/bin/pandoc", "/usr/local/bin/pandoc")
 
 
 def find_pandoc() -> str | None:
@@ -31,6 +33,11 @@ def find_pandoc() -> str | None:
     found = shutil.which("pandoc")
     if found:
         return found
+    if sys.platform == "darwin":                 # T28：Finder 起的程序 PATH 里没有 Homebrew 目录
+        for c in MAC_CANDIDATES:
+            if os.path.isfile(c):
+                return c
+        return None
     for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
         if base:
             c = os.path.join(base, "Pandoc", "pandoc.exe")

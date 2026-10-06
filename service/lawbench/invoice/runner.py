@@ -46,6 +46,7 @@ OUTPUT_DIRS = ("_打印包", "_报销批次")
 # 引擎贴票清单里写死的购买方（engines/invoice-ledger/scripts/reimbursement.py:86）。换引擎版本时重新核对这一串
 HARDCODED_BUYER = "广东连越（深圳）律师事务所"
 LIST_NAME = "贴票清单.html"
+MAC_UNSUPPORTED = "Mac 版暂不支持发票整理"
 
 
 class InvoiceRunner:
@@ -61,6 +62,10 @@ class InvoiceRunner:
     # ---------------------------------------------------------------- 入口
 
     def run(self, req: dict) -> dict:
+        if sys.platform == "darwin":
+            # T28（令 1424 第 1 条）：引擎自带的运行环境只有 Windows 版（runtime_cache.py 非 Windows 直接报错），Mac 上不起引擎
+            logs.event("invoice", req.get("action", "?"), status="fail", error="darwin_unsupported")
+            raise ApiError("ENGINE_FAILED", "darwin_unsupported", detail=MAC_UNSUPPORTED)
         ledger = self._ledger_dir()
         action = req["action"]
         if not self._lock.acquire(timeout=BUSY_WAIT_S):           # 一次一个动作；后到的最多等 2 秒
