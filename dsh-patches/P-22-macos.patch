@@ -1,3 +1,12 @@
+diff --git a/apps/desktop/scripts/electron-builder-config.d.mts b/apps/desktop/scripts/electron-builder-config.d.mts
+index 655996a234..fb7f75da0b 100644
+--- a/apps/desktop/scripts/electron-builder-config.d.mts
++++ b/apps/desktop/scripts/electron-builder-config.d.mts
+@@ -1,2 +1,4 @@
+ /** Import the factory without evaluating an ordinary release configuration. */
+ export { createElectronBuilderConfig } from '../electron-builder.config.mjs'
++/** lawbench T28: disk image layout for the ad-hoc macOS build (electron-builder-config.mjs). */
++export function lawbenchDmgContents(apps: string): Array<{ x: number, y: number, type?: string, path?: string }>
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
 index e8b746ce45..7753746960 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
@@ -262,7 +271,7 @@ index d791412274..a4fca44a91 100644
    return resolve(app.getAppPath(), '..', '..', '..', 'engines')
 diff --git a/apps/desktop/tests/lawbench-macos.spec.ts b/apps/desktop/tests/lawbench-macos.spec.ts
 new file mode 100644
-index 0000000000..8510158548
+index 0000000000..9b1c386d18
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-macos.spec.ts
 @@ -0,0 +1,74 @@
@@ -304,7 +313,7 @@ index 0000000000..8510158548
 +describe('ad-hoc 打包开关（T28，令 1424 第 3 条）', { timeout: 60_000 }, () => {
 +  it('LAWBENCH_MAC_ADHOC=1：不要签名身份与公证凭据；不开 hardened runtime；只出 arm64 dmg', async () => {
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
-+    const c = createElectronBuilderConfig(base, 'darwin', 'arm64') as MacConfig
++    const c = createElectronBuilderConfig(base, 'darwin', 'arm64') as unknown as MacConfig
 +    expect(c.mac).toMatchObject({ identity: null, forceCodeSigning: false, hardenedRuntime: false, notarize: false, target: [{ target: 'dmg', arch: ['arm64'] }] })
 +    expect(c.dmg.sign).toBe(false)
 +    expect((c as { publish?: unknown }).publish).toBeNull()                 // 不带更新源：产品不外连（同 Windows 未签名包）
@@ -316,14 +325,14 @@ index 0000000000..8510158548
 +  })
 +  it('载荷进 Contents/Resources（extraResources），不用 extraFiles；requirements.txt 不带', async () => {
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
-+    const c = createElectronBuilderConfig({ ...base, LAWBENCH_STAGE_DIR: '/build/stage' }, 'darwin', 'arm64') as MacConfig
++    const c = createElectronBuilderConfig({ ...base, LAWBENCH_STAGE_DIR: '/build/stage' }, 'darwin', 'arm64') as unknown as MacConfig
 +    expect(c.extraResources).toContainEqual({ from: '/build/stage', to: '.', filter: ['**/*', '!requirements.txt'] })
 +    expect(c.extraFiles).toBeUndefined()
 +  })
 +  it('dmg 里：主程序、"应用程序"快捷方式、两个小工具并排（令 1424 第 4 条）', async () => {
 +    const { createElectronBuilderConfig, lawbenchDmgContents } = await import('../scripts/electron-builder-config.mjs')
 +    const apps = '/build/tools/长截图切分.app:/build/tools/格式互转.app'
-+    const c = createElectronBuilderConfig({ ...base, LAWBENCH_MAC_DMG_APPS: apps }, 'darwin', 'arm64') as MacConfig
++    const c = createElectronBuilderConfig({ ...base, LAWBENCH_MAC_DMG_APPS: apps }, 'darwin', 'arm64') as unknown as MacConfig
 +    expect(c.dmg.contents).toEqual(lawbenchDmgContents(apps))
 +    expect(lawbenchDmgContents(apps)).toEqual([
 +      { x: 130, y: 150 },
@@ -335,7 +344,7 @@ index 0000000000..8510158548
 +  it('Windows 配置不受开关影响：照旧 extraFiles', async () => {
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
 +    const win = { ...base, DSH_DESKTOP_TARGET_PLATFORM: 'win32', DSH_DESKTOP_TARGET_ARCH: 'x64', DSH_DESKTOP_UNSIGNED: '1', LAWBENCH_STAGE_DIR: 'D:\\build\\stage' }
-+    const c = createElectronBuilderConfig(win, 'win32', 'x64') as MacConfig
++    const c = createElectronBuilderConfig(win, 'win32', 'x64') as unknown as MacConfig
 +    expect(c.extraFiles).toEqual([{ from: 'D:\\build\\stage', to: '.', filter: ['**/*', '!requirements.txt'] }])
 +    expect(c.extraResources.some((r) => r.from === 'D:\\build\\stage')).toBe(false)
 +  })

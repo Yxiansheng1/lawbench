@@ -150,6 +150,13 @@ Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 
 ## P-22：macOS 版第一阶段（T28，线 D；令 `致D-ORCH-执行令-盘点通过八条裁决进第2至5步-20261006-1424.md`）
 
+**改任何补丁后的自检（令 1618 起，所有补丁适用）**：在打好全部补丁的 `dsh` 里跑两条类型检查，都要退出码 0（DSH 的构建会查 `apps/desktop/tests` 等用例文件，vitest 通过不代表类型通过）：
+
+```powershell
+node --max-old-space-size=4096 .\node_modules\typescript\bin\tsc -b tsconfig.host.json
+node --max-old-space-size=4096 .\node_modules\typescript\bin\tsc -b tsconfig.client.json
+```
+
 Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支里（`extraFiles` 的条件多了 `!packagesMacOS`，打 Windows 包时恒真）。
 
 | 编号 | 文件（相对 `dsh\`） | 改法 | 原因 | 验证方法 |
@@ -158,6 +165,7 @@ Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支
 | P-22 | `apps/desktop/src/lawbench-retainer.ts` | 装好的 Mac 包 engines 目录取 `process.resourcesPath` | Mac 载荷在 `Contents/Resources`，不在可执行文件旁 | Actions 冒烟 |
 | P-22 | `apps/desktop/src/client/WelcomePage.tsx` | 首次配置页提示 Mac 上说"钥匙串" | Mac 的 Key 存钥匙串（`dsh-ext\credentials\keychain.ts`） | 文案 |
 | P-22 | `apps/desktop/scripts/lawbench-product.mjs`（及 `.d.mts`）、`electron-builder-config.mjs`、`package-target.ts` | `LAWBENCH_MAC_ADHOC=1`：不要签名身份与公证凭据，不开 hardened runtime，不带更新源，只出 arm64 dmg；签名在 afterPack 调 `LAWBENCH_MAC_SIGN_SCRIPT`（由内到外 ad-hoc，LibreOffice.app 保留原签名）；`LAWBENCH_STAGE_DIR` 在 Mac 上进 `extraResources`；`LAWBENCH_MAC_DMG_APPS` 把两个小工具并排放进 dmg；打包流程跳过签名钥匙串、公证和发布记录 | 令 1424 第 3、4 条；第一阶段没有开发者证书（N74） | `tests/lawbench-macos.spec.ts` 7 项；Actions 首跑 |
+| P-22 | `apps/desktop/scripts/electron-builder-config.d.mts` | 声明 `lawbenchDmgContents`（用例从这里导入；首跑类型检查报缺，令 1618） | DSH 打包前的 `tsc -b tsconfig.host.json` 把 `apps/desktop/tests/**/*.ts` 一起查 | `tsc -b tsconfig.host.json`、`tsc -b tsconfig.client.json` 退出码 0 |
 | P-22 | `apps/desktop/tests/lawbench-macos.spec.ts`（新） | 上面各项的用例 | — | `apps/desktop` 全部：1302 过 / 8 败 / 29 跳；8 败（`upload-with-credentials` 7、`profile-mcp` 1）在未打 P-22 的基线上同样失败 |
 
 ## P-4：设置"通用"里的当前版本（注记 `致A-ORCH-注记-版本号与说明句已定-20261004-1706.md`）
