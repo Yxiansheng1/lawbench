@@ -45,6 +45,13 @@ say "settings: servers -> 127.0.0.1:18831-18834 (dead ports)"
 "$APP/Contents/MacOS/$NAME" > "$OUT/app-stdout.log" 2>&1 &
 PID=$!
 say "started pid $PID"
+# Connections of every process of the app, sampled each second from start to exit (review P3-4)
+( while kill -0 "$PID" 2>/dev/null; do
+    p="$(pgrep -f "/Applications/$NAME.app" | paste -sd, -)"
+    [ -n "$p" ] && lsof -nP -a -p "$p" -i 2>/dev/null | awk 'NR > 1'
+    sleep 1
+  done ) > "$OUT/connections-raw.txt" &
+SAMPLER=$!
 
 # Window of our process (owner name only; window titles would need screen-recording permission)
 cat > "$OUT/windows.swift" <<'SWIFT'
@@ -72,18 +79,23 @@ else
   say "no plugin logs under $APPDATA/logs"
 fi
 
-# Every connection held by the app's processes: only 127.0.0.1 is allowed (Spec 14.3)
+# The app's processes must be found, otherwise the connection record means nothing (review P3-4)
 PIDS="$(pgrep -f "/Applications/$NAME.app" | paste -sd, -)"
-lsof -nP -a -p "$PIDS" -i > "$OUT/connections.txt" 2>/dev/null || true
-say "connections: $(grep -c . "$OUT/connections.txt" || true) lines (connections.txt)"
-# NAME column: "local" for listeners, "local->remote" for connections; judge the remote side when there is one
-if awk 'NR > 1 { n = $9; i = index(n, "->"); if (i) n = substr(n, i + 2); print n }' "$OUT/connections.txt" \
-     | grep -vE '^(127\.0\.0\.1|\[::1\]|localhost|\*)[:.]' | grep -E . ; then
-  say "FAIL: a connection to something other than 127.0.0.1"; exit 1
-fi
-say "connections: 127.0.0.1 only"
+[ -n "$PIDS" ] || { say "FAIL: no process of $NAME found"; exit 1; }
+say "processes: $PIDS"
 
 osascript -e "tell application \"$NAME\" to quit" >/dev/null 2>&1 || true
 sleep 5
 pkill -f "/Applications/$NAME.app" || true
+wait "$SAMPLER" 2>/dev/null || true
+
+# Every connection seen during the run: only 127.0.0.1 is allowed (Spec 14.3)
+sort -u "$OUT/connections-raw.txt" > "$OUT/connections.txt"
+say "connections: $(grep -c . "$OUT/connections.txt" || true) distinct lines over the run (connections.txt)"
+# NAME column: "local" for listeners, "local->remote" for connections; judge the remote side when there is one
+if awk '{ n = $9; i = index(n, "->"); if (i) n = substr(n, i + 2); print n }' "$OUT/connections.txt" \
+     | grep -vE '^(127\.0\.0\.1|\[::1\]|localhost|\*)[:.]' | grep -E . ; then
+  say "FAIL: a connection to something other than 127.0.0.1"; exit 1
+fi
+say "connections: 127.0.0.1 only"
 say "done"

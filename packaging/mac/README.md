@@ -21,7 +21,9 @@ LAWBENCH_TOKENIZER=/path/tokenizer.json bash packaging/mac/build.sh
 
 载荷来源与 sha256 见 `packaging\versions.lock` 的 `[mac]` 段，每次构建都核对。
 
-**tokenizer**：6000D 同款分词文件不是公开文件（与 Hugging Face 上的 Qwen3 不同），仓库里也没有。不给时构建停下；`LAWBENCH_ALLOW_NO_TOKENIZER=1` 时照打（服务按估算计 token），只用于云上冒烟，`out/build-mac.txt` 里写明。
+**tokenizer**：6000D 同款分词文件不是公开文件（与 Hugging Face 上的 Qwen3 不同），仓库里也没有。云上构建从本仓库 Release `assets-v1` 的 `tokenizer.json` 取（用户在 GitHub 网页手工上传一次），按 sha256 `87a7830d…` 核对，不符即失败。资产不存在时才照打无 tokenizer 的包：服务按估算计 token，dmg 文件名带 `-smoke-no-tokenizer`，Release 草稿正文第一行写"冒烟包，无 tokenizer，不得交付律师"。本地构建用 `LAWBENCH_TOKENIZER=<文件>`。
+
+**工作流**（`.github\workflows\mac-build.yml`，手动触发）：build（只读令牌，跑全部第三方代码）→ release（唯一有写权限的 job，只建草稿，不跑项目代码）与 smoke（只读，干净 Mac 上装好冒烟）。dmg 太大放不进 artifact 存储，job 之间经 Actions 缓存传递（按本次运行编号，下游按 sha256 核对）。第三方 action 一律钉 commit SHA。
 
 **签名**：第一阶段 ad-hoc（令 1424 第 3 条）。`sign-adhoc.sh` 由内到外签：先签所有 Mach-O 文件，再签内嵌的 .app / .framework，最后签主程序；**不用 `--deep`**，`LibreOffice.app` 保留 The Document Foundation 的原签名。开发者证书（候 owner N74）定了以后走 DSH 原有的签名与公证流程，`LAWBENCH_SIGN_IDENTITY` 预留。
 

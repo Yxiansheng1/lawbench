@@ -125,7 +125,7 @@ step_python() {
   find "$STAGE/service" "$STAGE/contracts" "$STAGE/python" -name '__pycache__' -type d -prune -exec rm -rf {} +
   find "$STAGE/service" "$STAGE/contracts" "$STAGE/python" -name '*.py[co]' -delete
   (cd "$STAGE/service" && "$py" -I -B -m lawbench --help >/dev/null)
-  "$py" -I -c 'import sys; assert not any("Library/Python" in p for p in sys.path), sys.path'
+  "$py" -I -B -c 'import sys; assert not any("Library/Python" in p for p in sys.path), sys.path'
   say "python: $(lock_field python 2) aarch64, $(wc -l < "$req" | tr -d ' ') pinned packages (pywin32 left out), wheels: out/pip-mac-wheels.txt"
 }
 
@@ -258,8 +258,11 @@ step_package() {
   local dmg
   dmg="$(find "$DSH/apps/desktop/.desktop-build/targets" -name '*.dmg' -type f -print0 | xargs -0 ls -t | head -n 1)"
   [ -n "$dmg" ] || die "dmg not found under dsh/apps/desktop/.desktop-build/targets"
-  cp "$dmg" "$OUT/"
-  dmg="$OUT/$(basename "$dmg")"
+  # order 1526 P3-5: a package without the tokenizer says so in its file name
+  local name; name="$(basename "$dmg")"
+  [ -f "$STAGE/service/lawbench/llm/tokenizer.json" ] || name="${name%.dmg}-smoke-no-tokenizer.dmg"
+  cp "$dmg" "$OUT/$name"
+  dmg="$OUT/$name"
   (cd "$OUT" && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
   local app
   app="$(find "$DSH/apps/desktop/.desktop-build/targets" -maxdepth 4 -type d -path '*mac-arm64/*.app' | head -n 1)"

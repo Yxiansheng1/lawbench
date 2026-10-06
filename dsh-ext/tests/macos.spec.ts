@@ -7,7 +7,7 @@ import { defaultAppData } from '../shared/file-log.ts'
 import { effectiveConfig, packagedConfig, packagedInstallDir, packagedSkillDirs } from '../host/install-layout.ts'
 import { passThroughEnv, scrubPaths } from '../host/index.ts'
 import * as keychain from '../credentials/keychain.ts'
-import { macStore } from '../credentials/index.ts'
+import { credentialSource, macStore, macTrusted } from '../credentials/index.ts'
 import { isMac, keyStoreName, MAC_NO_INVOICE } from '../ui/platform.ts'
 import { converterOptions } from '../ui/settings.tsx'
 import type { Config } from '../host/index.ts'
@@ -60,7 +60,7 @@ describe('打包布局（darwin）', () => {
   })
   it('命令、工具、PATH 分隔符、Skill 目录', () => {
     const c = packagedConfig(DEV, RES, '', '/usr/bin:/bin', 'darwin')
-    expect(c.command).toEqual([`${RES}/python/bin/python3`, '-I', '-m', 'lawbench'])
+    expect(c.command).toEqual([`${RES}/python/bin/python3`, '-I', '-B', '-m', 'lawbench'])
     expect(c.cwd).toBe(`${RES}/service`)
     expect(c.env).toEqual({
       LAWBENCH_SOFFICE: `${RES}/tools/LibreOffice.app/Contents/MacOS/soffice`,
@@ -129,6 +129,7 @@ describe('钥匙串（keychain.ts，令 1424 补充第 3 条）', () => {
     for (const c of calls) expect(c.args.join(' ')).not.toContain(KEY)
     expect(calls[0]!.args).toEqual(['-i'])
     expect(calls[0]!.stdin).not.toContain(KEY)
+    expect(calls[0]!.stdin.startsWith('delete-generic-password -s "lawbench/LAWFIRM_KEY" -a "lawbench"\n')).toBe(true)   // 先删后加：访问名单换成本版程序
     expect(calls[0]!.stdin).toContain('add-generic-password -U -s "lawbench/LAWFIRM_KEY" -a "lawbench"')
     expect(calls[0]!.stdin).toContain(`-T "/usr/bin/security" -T "${EXE}" -T "${RES}/python/bin/python3"`)
     expect(stored).toBe(KEY)
@@ -151,6 +152,14 @@ describe('钥匙串（keychain.ts，令 1424 补充第 3 条）', () => {
   it('删除：不存在返回 false', async () => {
     expect(await keychain.deleteKey(undefined, undefined, fakeSecurity(() => ({ code: 44 })).spawner)).toBe(false)
     expect(await keychain.deleteKey(undefined, undefined, fakeSecurity(() => ({ code: 0 })).spawner)).toBe(true)
+  })
+  it('可免弹窗读取的程序（-T）：装好的含 Host 与内置 python3；开发期只有 Host（复核 P3-3）', () => {
+    expect(macTrusted(EXE, (p) => p === `${RES}/app.asar`)).toEqual([EXE, `${RES}/python/bin/python3`])
+    expect(macTrusted('/x/Electron', () => false)).toEqual(['/x/Electron'])
+  })
+  it('Key 来源标记：darwin 是钥匙串，不是 Windows 凭据管理器（复核 P3-3）', () => {
+    expect(credentialSource('darwin')).toBe('macos-keychain')
+    expect(credentialSource('win32')).toBe('windows-credential-manager')
   })
   it('macStore 可构造（装好的 / 开发期）', () => {
     expect(typeof macStore(EXE, (p) => p === `${RES}/app.asar`).write).toBe('function')

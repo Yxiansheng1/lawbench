@@ -35,7 +35,8 @@ function macPackagedConfig(config: Config, installDir: string, basePath: string)
   const pandoc = posix.join(installDir, 'tools', 'pandoc', 'bin', 'pandoc')
   const toolDirs = [posix.dirname(soffice), posix.dirname(pandoc)].join(':')
   return {
-    command: [posix.join(installDir, 'python', 'bin', 'python3'), '-I', '-m', 'lawbench'],
+    // -B: the signed .app must not get __pycache__ written into it at run time (T28 review P3-1)
+    command: [posix.join(installDir, 'python', 'bin', 'python3'), '-I', '-B', '-m', 'lawbench'],
     cwd: posix.join(installDir, 'service'),
     appData: config.appData,
     forwardPort: config.forwardPort,

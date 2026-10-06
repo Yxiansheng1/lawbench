@@ -25,7 +25,8 @@ COMPLAINT = FIXTURES / "closed-01" / "03一审" / "我方文件" / "民事起诉
 
 
 @pytest.fixture
-def darwin(monkeypatch):
+def darwin(monkeypatch, tmp_path_factory):
+    tmp_path_factory.getbasetemp()          # 复核 P3-7：先让 pytest 按 Windows 建好临时根目录，再换平台
     monkeypatch.setattr(sys, "platform", "darwin")
 
 
@@ -118,17 +119,16 @@ def test_find_pandoc_darwin_candidates(darwin, monkeypatch, tmp_path):
 # ---------------------------------------------------------------- 进程收尾（真整组结束只能在 Mac 上验）
 
 def test_own_group_only_off_windows(monkeypatch):
-    monkeypatch.setattr(procs.os, "name", "nt")
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="nt"))   # 只换 procs 看到的 os，不动全局 os.name（pathlib 依赖它）
     assert procs.own_group() == {}
-    monkeypatch.setattr(procs.os, "name", "posix")
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="posix"))
     assert procs.own_group() == {"start_new_session": True}
 
 
 def test_kill_tree_darwin_kills_group(darwin, monkeypatch):
-    monkeypatch.setattr(procs.os, "name", "posix")
     calls = []
-    monkeypatch.setattr(procs.os, "getpgid", lambda pid: pid, raising=False)
-    monkeypatch.setattr(procs.os, "killpg", lambda pid, sig: calls.append(("killpg", pid)), raising=False)
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="posix", getpgid=lambda pid: pid,
+                                                           killpg=lambda pid, sig: calls.append(("killpg", pid))))
     monkeypatch.setattr(procs.signal, "SIGKILL", 9, raising=False)
 
     class P_:
@@ -141,8 +141,7 @@ def test_kill_tree_darwin_kills_group(darwin, monkeypatch):
 
 
 def test_kill_tree_darwin_not_group_leader_falls_back(darwin, monkeypatch):
-    monkeypatch.setattr(procs.os, "name", "posix")
-    monkeypatch.setattr(procs.os, "getpgid", lambda pid: 1, raising=False)
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="posix", getpgid=lambda pid: 1))
     calls = []
 
     class P_:
@@ -242,3 +241,52 @@ def test_default_appdata_darwin(darwin, monkeypatch, tmp_path):
     monkeypatch.setattr(config.pathlib.Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path / "不该用"))
     assert config._default_appdata() == tmp_path / "Library" / "Application Support" / "lawbench"
+
+
+# ---------------------------------------------------------------- 子进程自成进程组（复核 P3-3）
+
+class _Exited:
+    pid = 1
+    returncode = 1
+    def poll(self): return 1
+    def wait(self, timeout=None): return 1
+    def kill(self): pass
+
+
+def test_libreoffice_popen_gets_own_group_off_windows(darwin, monkeypatch, tmp_path):
+    from conftest import short_dir
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="posix"))
+    seen = {}
+
+    def fake_popen(args, **kw):
+        seen.update(kw)
+        raise OSError("stop here")
+    monkeypatch.setattr(lo.subprocess, "Popen", fake_popen)
+    src = tmp_path / "a.docx"
+    src.write_bytes(b"x")
+    (tmp_path / "t").mkdir()
+    with short_dir("lbt28-") as base:
+        with pytest.raises(Exception):
+            with lo.Converter(tmp_path / "t", base, soffice="/x/soffice").session() as s:
+                s.convert(src, "pdf")
+    assert seen.get("start_new_session") is True
+
+
+def test_driver_popen_gets_own_group_off_windows(darwin, monkeypatch, tmp_path):
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="posix"))
+    monkeypatch.setattr(D, "models_ok", lambda d: True)
+    monkeypatch.setattr(D.RetainerDriver, "_health", lambda self: None)
+    monkeypatch.setattr(D.RetainerDriver, "_port_taken", lambda self: False)
+    seen = {}
+
+    def fake_popen(cmd, **kw):
+        seen.update(kw)
+        return _Exited()
+    monkeypatch.setattr(D.subprocess, "Popen", fake_popen)
+    r = D.RetainerDriver(python="/x/python3", driver_dir=tmp_path, ready_timeout_s=0.5).start()
+    assert r["running"] is False and seen.get("start_new_session") is True
+
+
+def test_own_group_empty_on_windows_popen(monkeypatch, tmp_path):
+    monkeypatch.setattr(procs, "os", types.SimpleNamespace(name="nt"))
+    assert procs.own_group() == {}

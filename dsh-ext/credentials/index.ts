@@ -15,7 +15,9 @@ export const name = 'lawbench-credentials'
 export const KEY_REF = 'LAWFIRM_KEY'
 /** 允许写入内存的授权记录种类（目前只有 DSH 连接插件的浏览器会话密钥）。 */
 export const ALLOWED_RECORDS: ReadonlySet<string> = new Set(['client-connection/browser-session'])
-const SOURCE = process.platform === 'darwin' ? 'macos-keychain' : 'windows-credential-manager'
+/** Key 来源的标记（describe / resolve 返回）：Windows 凭据管理器；macOS 钥匙串（T28）。 */
+export const credentialSource = (platform: string = process.platform): string => (platform === 'darwin' ? 'macos-keychain' : 'windows-credential-manager')
+const SOURCE = credentialSource()
 const CACHE_MS = 5 * 60_000
 
 export interface Store {
@@ -131,9 +133,13 @@ type Ctx = {
 }
 
 /** macOS（T28）：钥匙串；写入时把 Host 自己和内置 python3（装好的客户端）列为可免弹窗读取的程序。 */
-export function macStore(execPath: string = process.execPath, exists: (p: string) => boolean = existsSync): Store {
+export function macTrusted(execPath: string = process.execPath, exists: (p: string) => boolean = existsSync): string[] {
   const res = packagedInstallDir(execPath, exists, 'darwin')
-  const trusted = [execPath, ...(res ? [posix.join(res, 'python', 'bin', 'python3')] : [])]
+  return [execPath, ...(res ? [posix.join(res, 'python', 'bin', 'python3')] : [])]
+}
+
+export function macStore(execPath: string = process.execPath, exists: (p: string) => boolean = existsSync): Store {
+  const trusted = macTrusted(execPath, exists)
   return { read: () => keychain.readKey(), write: (v) => keychain.writeKey(v, trusted), remove: () => keychain.deleteKey() }
 }
 

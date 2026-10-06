@@ -48,9 +48,10 @@ export async function writeKey(secret: string, trusted: readonly string[] = [], 
   if (!/^[\x21-\x7e]+$/.test(secret)) throw new Error('Key 只能是可见的 ASCII 字符')
   const apps = [SECURITY, ...trusted].filter((p) => /^\/[^"\r\n]*$/.test(p)).map((p) => ` -T "${p}"`).join('')
   const hex = Buffer.from(secret, 'utf8').toString('hex')
-  const line = `add-generic-password -U -s "${target}" -a "${user}"${apps} -X ${hex}\n`
-  const { code } = await run(['-i'], line, spawner)
-  if (code !== 0 && code !== null) throw new Error(`钥匙串操作失败（退出码 ${code}）`)
+  // delete first (T28 review P3-2): -U keeps an existing item's access list, which names the previous build's binaries
+  const line = `delete-generic-password -s "${target}" -a "${user}"\nadd-generic-password -U -s "${target}" -a "${user}"${apps} -X ${hex}\n`
+  // the exit code of interactive mode is not reliable (the delete fails harmlessly on the first save): judge by reading back
+  await run(['-i'], line, spawner)
   if ((await readKey(target, user, spawner)) !== secret) throw new Error('钥匙串操作失败（写入后核对不一致）')
 }
 
