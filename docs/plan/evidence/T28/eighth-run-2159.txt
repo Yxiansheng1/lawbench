@@ -1,0 +1,18 @@
+﻿T28 第八跑修法（令 2159）· 核对记录（2026-10-06）
+
+DSH 怎么把 LibreOffice 引擎纳入：
+- prepare-dsh.ts：selectOfficeEngine(kit 的 optionalDependencies) → darwin-arm64；runtime:materialize-modules 按 runtime-file-policy 复制（只排除其他平台的引擎）；随后检查 libreoffice-kit-<engine>/prebuilds.json 必须存在；runtime:write-descriptor 把复制结果连同每个文件的 sha256 封成清单 desktop-runtime.json。
+- electron-builder-config.mjs：beforePack 用 officePackageDirectories 把 Office 包目录加进 asarUnpack（另有静态 unpack 规则 **/libreoffice-kit-<平台>/**）。
+- verify-runtime-archive.ts（smoke-prepared-runtime 调）：对比 ①unpacked 目录的文件名单（多一个就报 "unexpected unpacked entry"），②每个文件的字节数、sha256、可执行位与清单逐项一致（不符报 "ASAR integrity verification failed"）。
+  → afterPack 里任何就地签名都会改哈希；bundle 签名会多出 _CodeSignature/。所以 ORCH 令第 3 条的"跳过哈希项"不必做：改为在封清单之前签（DSH 正式签名流程本来就是这个顺序），自检原样保留。
+
+运行期：P-12 不挂 DSH 的 Office 组合（desktop-host），smoke-runtime 的 Office 两项已跳过；runtime-payload-smoke.mjs 不碰 Office。引擎拿掉后 DSH 不会因缺它拒启（外层 @deepseek-ai/libreoffice-kit 包仍在，没人调用）。
+
+修法（P-22，只在 LAWBENCH_MAC_ADHOC=1 的 macOS 构建生效）：
+1. prepare-dsh：复制运行时跳过原生引擎包；不再要求 prebuilds.json；在 write-descriptor 之前对 dsh 运行时与 primary-runtime 的每个 Mach-O 做 ad-hoc 签名（macos-runtime.ts lawbenchAdhocSignRuntime，单文件、无 --deep、不加文件）。
+2. electron-builder：ad-hoc 时 beforePack 的 Office 包目录为空。
+3. sign-adhoc.sh：app.asar.unpacked 一个字节都不动：不签单文件、不签 bundle；只逐个 codesign --verify --strict，无效就点名失败；unpacked 里出现任何 bundle 也点名失败。
+
+Windows：DSH 的 Windows 包同样带着 libreoffice-kit-win32-x64（线 A 第四版 win-unpacked 实测 182 MB，另有外层 libreoffice-kit 3 MB），我方不用。本令不动 Windows，记作 T20 下轮小修（体积）。
+
+本机验证：tsc -b tsconfig.host.json / tsconfig.client.json 退出码 0；lawbench-macos.spec.ts 15 passed（新增 4：引擎路径判断、prepare-dsh 三处与"先签后封清单"、beforePack、ad-hoc 签名只签单文件）；apps/desktop 全部 1308 过 / 10 败——8 为基线既有（upload-with-credentials 7、profile-mcp 1），package-target-errors 1、windows-signature-batch 1 单独跑 13/13 过（并发超时）；17 个补丁从 477b4f4 按序打与工作树逐字一致。

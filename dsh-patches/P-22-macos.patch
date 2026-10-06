@@ -8,7 +8,7 @@ index 655996a234..fb7f75da0b 100644
 +/** lawbench T28: disk image layout for the ad-hoc macOS build (electron-builder-config.mjs). */
 +export function lawbenchDmgContents(apps: string): Array<{ x: number, y: number, type?: string, path?: string }>
 diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
-index e8b746ce45..7753746960 100644
+index e8b746ce45..422ee91fcd 100644
 --- a/apps/desktop/scripts/electron-builder-config.mjs
 +++ b/apps/desktop/scripts/electron-builder-config.mjs
 @@ -12,7 +12,7 @@ import {
@@ -63,7 +63,7 @@ index e8b746ce45..7753746960 100644
    if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
    // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
    // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
-@@ -152,26 +168,31 @@ export function createElectronBuilderConfig(
+@@ -152,30 +168,36 @@ export function createElectronBuilderConfig(
        { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
        // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
        ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
@@ -102,7 +102,13 @@ index e8b746ce45..7753746960 100644
        writeUpdateInfo: false,
      },
      beforePack: async context => {
-@@ -201,6 +222,10 @@ export function createElectronBuilderConfig(
+-      const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
++      // lawbench T28 (eighth run): the ad-hoc Mac build carries no DSH LibreOffice engine (prepare-dsh leaves it out)
++      const office = macAdhoc ? [] : await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
+       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
+       const existing = context.packager.config.asarUnpack ?? []
+       context.packager.config.asarUnpack = [...(typeof existing === 'string' ? [existing] : existing), ...patterns]
+@@ -201,6 +223,10 @@ export function createElectronBuilderConfig(
          preparedRuntimeVersion ?? productVersion, { platform: resolvedPlatform, arch: resolvedArch })
        // Unsigned Windows builds skip electron-builder's afterSign hook.
        if (packagesWindows && unsigned) await verifyWindowsAsarUnpack(buildPaths.dsh, resourcesDir, windowsCode)
@@ -113,7 +119,7 @@ index e8b746ce45..7753746960 100644
      },
      afterSign: async context => {
        if (windowsSigner !== undefined) {
-@@ -211,7 +236,7 @@ export function createElectronBuilderConfig(
+@@ -211,7 +237,7 @@ export function createElectronBuilderConfig(
          })
          await verifyWindowsAsarUnpack(buildPaths.dsh, context.packager.getResourcesDir(context.appOutDir), windowsCode)
        }
@@ -122,7 +128,7 @@ index e8b746ce45..7753746960 100644
        const appPath = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
        if (update !== undefined) {
          await verifyMacOSAppUpdateConfig(appPath, resolveMacOSAppUpdateFeed(context.packager.config.publish),
-@@ -220,7 +245,7 @@ export function createElectronBuilderConfig(
+@@ -220,7 +246,7 @@ export function createElectronBuilderConfig(
        verifyMacOSSignatureAfterSign(context, macOSSigning ?? resolveMacOSSigningEnvironment(env))
      },
      artifactBuildCompleted: artifact => {
@@ -132,20 +138,22 @@ index e8b746ce45..7753746960 100644
          artifact,
          env,
 diff --git a/apps/desktop/scripts/lawbench-product.d.mts b/apps/desktop/scripts/lawbench-product.d.mts
-index 083a586d0f..b28bc95462 100644
+index 083a586d0f..2891761dc5 100644
 --- a/apps/desktop/scripts/lawbench-product.d.mts
 +++ b/apps/desktop/scripts/lawbench-product.d.mts
-@@ -2,3 +2,5 @@
+@@ -2,3 +2,7 @@
  export const LAWBENCH_PRODUCT_NAME: string
  /** lawbench P-4: version of the packaged app (see lawbench-product.mjs). */
  export const LAWBENCH_VERSION: string
 +/** lawbench T28: ad-hoc macOS build (see lawbench-product.mjs). */
 +export function lawbenchMacAdhoc(env: NodeJS.ProcessEnv): boolean
++/** lawbench T28: path inside DSH's native LibreOffice engine package, left out of ad-hoc macOS builds (see lawbench-product.mjs). */
++export function lawbenchOfficeEngineEntry(path: string, engine: string): boolean
 diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
-index 7e1fe411b0..22e27849cf 100644
+index 7e1fe411b0..795c5275e7 100644
 --- a/apps/desktop/scripts/lawbench-product.mjs
 +++ b/apps/desktop/scripts/lawbench-product.mjs
-@@ -8,3 +8,12 @@ export const LAWBENCH_PRODUCT_NAME = '连越律师工作台'
+@@ -8,3 +8,26 @@ export const LAWBENCH_PRODUCT_NAME = '连越律师工作台'
  
  /** lawbench P-4 (order 1756): the version of the packaged app (installer name, About, app.getVersion()); equals dsh-ext/shared/product.ts PRODUCT_VERSION. DSH's own package version stays for the bundled runtime checks. */
  export const LAWBENCH_VERSION = '0.1.0'
@@ -158,6 +166,55 @@ index 7e1fe411b0..22e27849cf 100644
 + * @returns {boolean} Whether this is an ad-hoc macOS build.
 + */
 +export const lawbenchMacAdhoc = env => env.LAWBENCH_MAC_ADHOC === '1'
++
++/**
++ * lawbench T28 (eighth run): the ad-hoc macOS build leaves out DSH's own native LibreOffice engine
++ * (@deepseek-ai/libreoffice-kit-<platform>-<arch>, a LibreOfficeDev.app of several hundred MB). lawbench never mounts DSH's
++ * Office bundle (P-12) and ships its own LibreOffice for the workbench service (Resources/tools/LibreOffice.app).
++ * @param {string} path Path relative to the production node_modules directory.
++ * @param {string} engine Engine suffix selected from the installed kit manifest (e.g. darwin-arm64; 'wasm' is kept).
++ * @returns {boolean} Whether the path belongs to that native engine package.
++ */
++export function lawbenchOfficeEngineEntry(path, engine) {
++  if (engine === 'wasm') return false
++  const parts = path.split(/[\\/]/u)
++  return parts.some((part, i) => part === '@deepseek-ai' && parts[i + 1] === `libreoffice-kit-${engine}`)
++}
+diff --git a/apps/desktop/scripts/macos-runtime.ts b/apps/desktop/scripts/macos-runtime.ts
+index b5d35f1672..556dfa667c 100644
+--- a/apps/desktop/scripts/macos-runtime.ts
++++ b/apps/desktop/scripts/macos-runtime.ts
+@@ -1,8 +1,10 @@
+ /** Sign final native runtime files before the enclosing Desktop application is signed. */
+ 
+ import { createHash } from 'node:crypto'
++import { execFile } from 'node:child_process'
+ import { closeSync, openSync, readSync } from 'node:fs'
+ import { join } from 'node:path'
++import { promisify } from 'node:util'
+ import { inventoryDesktopRuntime } from '../src/runtime-tree.ts'
+ import type { MacOSSigningEnvironment } from './desktop-release-environment.mjs'
+ import { cachedMacOSSignature, pruneMacOSSignatureCache } from './macos-signature-cache.ts'
+@@ -63,3 +65,19 @@ export async function signMacOSRuntime(
+   }
+   return files.length
+ }
++
++/**
++ * lawbench T28 (eighth run): the ad-hoc counterpart of signMacOSRuntime for builds without a Developer ID. Every
++ * materialized Mach-O file gets an ad-hoc signature before the runtime inventory is sealed, so the packaged
++ * app.asar.unpacked matches the inventory byte for byte (packaging/mac/sign-adhoc.sh leaves it alone afterwards).
++ * Single files only: no bundle is signed, no file is added.
++ * @param root - Self-contained production runtime without symlinks.
++ * @returns Number of signed native files.
++ */
++export async function lawbenchAdhocSignRuntime(root: string): Promise<number> {
++  const files = inventoryDesktopRuntime(root).map(file => file.path).filter(path => MACH_O_MAGICS.has(magic(join(root, path))))
++  for (const path of files) {
++    await promisify(execFile)('/usr/bin/codesign', ['--force', '--sign', '-', '--timestamp=none', join(root, path)])
++  }
++  return files.length
++}
 diff --git a/apps/desktop/scripts/package-target.ts b/apps/desktop/scripts/package-target.ts
 index 5de710edea..d32cb30f45 100644
 --- a/apps/desktop/scripts/package-target.ts
@@ -214,19 +271,44 @@ index 5de710edea..d32cb30f45 100644
  }
  
 diff --git a/apps/desktop/scripts/prepare-dsh.ts b/apps/desktop/scripts/prepare-dsh.ts
-index 1d1d9dc7fd..23228e231c 100644
+index 1d1d9dc7fd..3961085945 100644
 --- a/apps/desktop/scripts/prepare-dsh.ts
 +++ b/apps/desktop/scripts/prepare-dsh.ts
-@@ -32,6 +32,7 @@ import {
+@@ -28,10 +28,12 @@ import {
+ } from './desktop-release-environment.mjs'
+ import {
+   signMacOSRuntime,
++  lawbenchAdhocSignRuntime,
+ } from './macos-runtime.ts'
  import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
  import { desktopRuntimeFileExclusion } from './runtime-file-policy.ts'
  import { selectOfficeEngine } from '../../../scripts/libreoffice-packages.mjs'
-+import { lawbenchMacAdhoc } from './lawbench-product.mjs'
++import { lawbenchMacAdhoc, lawbenchOfficeEngineEntry } from './lawbench-product.mjs'
  
  const APP_ROOT = resolve(import.meta.dirname, '..')
  const BUILD_PATHS = resolveDesktopTargetBuildPaths()
-@@ -161,7 +162,8 @@ async function main(): Promise<void> {
-     if (!existsSync(join(DSH_OUTPUT_ROOT, 'node_modules', '@deepseek-ai', `libreoffice-kit-${officeEngine}`, 'prebuilds.json'))) {
+@@ -142,11 +144,14 @@ async function main(): Promise<void> {
+     const modules = join(BUILD_ROOT, 'node_modules')
+     const officeManifest = JSON.parse(readFileSync(join(modules, '@deepseek-ai/libreoffice-kit/package.json'), 'utf8'))
+     const officeEngine = selectOfficeEngine(officeManifest, target)
++    // lawbench T28 (eighth run): ad-hoc macOS builds leave DSH's native LibreOffice engine out (lawbench-product.mjs)
++    const omitOfficeEngine = process.platform === 'darwin' && lawbenchMacAdhoc(process.env)
+     mkdirSync(DSH_OUTPUT_ROOT, { recursive: true })
+     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:materialize-modules', async () => {
+       cpSync(modules, join(DSH_OUTPUT_ROOT, 'node_modules'), {
+         recursive: true, dereference: true,
+-        filter: source => desktopRuntimeFileExclusion(relative(modules, source), target, officeEngine) === undefined,
++        filter: source => desktopRuntimeFileExclusion(relative(modules, source), target, officeEngine) === undefined
++          && !(omitOfficeEngine && lawbenchOfficeEngineEntry(relative(modules, source), officeEngine)),
+       })
+     })
+     writeFileSync(join(DSH_OUTPUT_ROOT, 'package.json'), `${JSON.stringify({
+@@ -158,12 +163,17 @@ async function main(): Promise<void> {
+         throw new Error(`desktop runtime: missing private Host file ${file}`)
+       }
+     }
+-    if (!existsSync(join(DSH_OUTPUT_ROOT, 'node_modules', '@deepseek-ai', `libreoffice-kit-${officeEngine}`, 'prebuilds.json'))) {
++    if (!omitOfficeEngine && !existsSync(join(DSH_OUTPUT_ROOT, 'node_modules', '@deepseek-ai', `libreoffice-kit-${officeEngine}`, 'prebuilds.json'))) {
        throw new Error(`desktop runtime: missing required LibreOffice engine ${officeEngine}`)
      }
 -    if (process.platform === 'darwin') {
@@ -234,7 +316,13 @@ index 1d1d9dc7fd..23228e231c 100644
 +    if (process.platform === 'darwin' && !lawbenchMacAdhoc(process.env)) {
        await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'sign:dsh-native', () => signMacOSRuntime(DSH_OUTPUT_ROOT, resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env), join(BUILD_PATHS.root, 'signature-cache')))
        await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'sign:primary-native', () => signMacOSRuntime(join(RUNTIME_ROOT, 'primary-runtime'), resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env), join(BUILD_PATHS.root, 'signature-cache')))
++    } else if (process.platform === 'darwin') {
++      // lawbench T28 (eighth run): ad-hoc signatures before the inventory is sealed (macos-runtime.ts lawbenchAdhocSignRuntime)
++      await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'sign:dsh-native-adhoc', () => lawbenchAdhocSignRuntime(DSH_OUTPUT_ROOT))
++      await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'sign:primary-native-adhoc', () => lawbenchAdhocSignRuntime(join(RUNTIME_ROOT, 'primary-runtime')))
      }
+     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:manifests', () => prepareRuntimeManifests(DSH_OUTPUT_ROOT))
+     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:primary-smoke', async () => smokePrimaryRuntime(join(RUNTIME_ROOT, 'primary-runtime')))
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
 index 55cf6fbb56..6ac9c9c324 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
@@ -293,10 +381,10 @@ index d791412274..a4fca44a91 100644
    return resolve(app.getAppPath(), '..', '..', '..', 'engines')
 diff --git a/apps/desktop/tests/lawbench-macos.spec.ts b/apps/desktop/tests/lawbench-macos.spec.ts
 new file mode 100644
-index 0000000000..e3030bfe7f
+index 0000000000..8bee2728cd
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-macos.spec.ts
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,143 @@
 +import { readFileSync } from 'node:fs'
 +import { join } from 'node:path'
 +import { describe, expect, it } from 'vitest'
@@ -405,5 +493,38 @@ index 0000000000..e3030bfe7f
 +  it('签名构建照旧：没有签名身份时 resolveMacOSSigningEnvironment 仍报错（P-22 没改它）', async () => {
 +    const { resolveMacOSSigningEnvironment } = await import('../scripts/desktop-release-environment.mjs')
 +    expect(() => resolveMacOSSigningEnvironment({ LAWBENCH_MAC_ADHOC: '1' })).toThrow(/SIGNING_IDENTITY/)
++  })
++})
++
++describe('ad-hoc 构建不带 DSH 自己的 LibreOffice 引擎、unpacked 内容与清单一致（T28 第八跑）', { timeout: 60_000 }, () => {
++  it('lawbenchOfficeEngineEntry：只认原生引擎包，wasm 与外层 libreoffice-kit 包不动', async () => {
++    const { lawbenchOfficeEngineEntry } = await import('../scripts/lawbench-product.mjs')
++    expect(lawbenchOfficeEngineEntry('@deepseek-ai/libreoffice-kit-darwin-arm64', 'darwin-arm64')).toBe(true)
++    expect(lawbenchOfficeEngineEntry('@deepseek-ai/libreoffice-kit-darwin-arm64/program/LibreOfficeDev.app/Contents/_CodeSignature/CodeDirectory', 'darwin-arm64')).toBe(true)
++    expect(lawbenchOfficeEngineEntry('@deepseek-ai\\libreoffice-kit-darwin-arm64\\prebuilds.json', 'darwin-arm64')).toBe(true)
++    expect(lawbenchOfficeEngineEntry('@deepseek-ai/libreoffice-kit/package.json', 'darwin-arm64')).toBe(false)
++    expect(lawbenchOfficeEngineEntry('@deepseek-ai/libreoffice-kit-wasm/x', 'wasm')).toBe(false)
++    expect(lawbenchOfficeEngineEntry('sherpa-onnx-darwin-arm64/libonnxruntime.dylib', 'darwin-arm64')).toBe(false)
++  })
++  it('prepare-dsh：ad-hoc 时复制运行时跳过原生引擎、不再要求它存在、在封清单前逐个 ad-hoc 签 Mach-O', () => {
++    const src = readFileSync(join(__dirname, '..', 'scripts', 'prepare-dsh.ts'), 'utf8')
++    expect(src).toContain("const omitOfficeEngine = process.platform === 'darwin' && lawbenchMacAdhoc(process.env)")
++    expect(src).toContain('&& !(omitOfficeEngine && lawbenchOfficeEngineEntry(relative(modules, source), officeEngine))')
++    expect(src).toContain('if (!omitOfficeEngine && !existsSync(')
++    const adhoc = src.indexOf("} else if (process.platform === 'darwin') {")
++    expect(adhoc).toBeGreaterThan(0)
++    expect(src.indexOf("'sign:dsh-native-adhoc'", adhoc)).toBeGreaterThan(adhoc)
++    expect(src.indexOf("'sign:primary-native-adhoc'", adhoc)).toBeGreaterThan(adhoc)
++    expect(src.indexOf("'runtime:write-descriptor'")).toBeGreaterThan(src.indexOf("'sign:primary-native-adhoc'"))   // 先签后封清单
++  })
++  it('electron-builder：ad-hoc 时 beforePack 不再找 Office 包目录（引擎已不在）', () => {
++    const src = readFileSync(join(__dirname, '..', 'scripts', 'electron-builder-config.mjs'), 'utf8')
++    expect(src).toContain('const office = macAdhoc ? [] : await officePackageDirectories(')
++  })
++  it('lawbenchAdhocSignRuntime 只签单个 Mach-O 文件，不签 bundle、不加文件', () => {
++    const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
++    const body = src.slice(src.indexOf('export async function lawbenchAdhocSignRuntime'))
++    expect(body).toContain("['--force', '--sign', '-', '--timestamp=none', join(root, path)]")
++    expect(body).not.toContain('--deep')
 +  })
 +})
