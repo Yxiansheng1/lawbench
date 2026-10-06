@@ -31,6 +31,7 @@ DRIVER_DIR = REPO_ROOT / "engines" / "retainer" / "tools" / "ocr-driver"
 HOST, PORT = "127.0.0.1", 17801
 READY_TIMEOUT_S = 20.0
 PASS_ENV = ("SYSTEMROOT", "LOCALAPPDATA", "USERPROFILE", "TEMP", "TMP")
+MAC_PASS_ENV = ("HOME", "TMPDIR", "LANG")      # T28
 
 MSG_RUNNING = "证件识别已就绪"
 MSG_REUSED = "证件识别已就绪（沿用已在运行的驱动）"
@@ -90,7 +91,7 @@ class RetainerDriver:
                "--engine", "rapidocr"]
         self._proc = subprocess.Popen(cmd, cwd=str(self.driver_dir), env=child_env(), stdin=subprocess.DEVNULL,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), **procs.own_group())
         deadline = time.monotonic() + self.ready_timeout_s
         while time.monotonic() < deadline:
             if self._proc.poll() is not None:
@@ -177,7 +178,7 @@ def is_driver(h: dict) -> bool:
 
 
 def child_env() -> dict[str, str]:
-    env = {k: os.environ[k] for k in PASS_ENV if os.environ.get(k)}
+    env = {k: os.environ[k] for k in (MAC_PASS_ENV if sys.platform == "darwin" else PASS_ENV) if os.environ.get(k)}
     env["PYTHONUTF8"] = "1"
     return procs.python_env(env)
 
@@ -224,7 +225,9 @@ class _Pid:
 
 
 def _listener_pid(port: int) -> int | None:
-    """监听 127.0.0.1:<port> 的进程号（netstat -ano）。"""
+    """监听 127.0.0.1:<port> 的进程号（netstat -ano；macOS 用 lsof）。"""
+    if sys.platform == "darwin":
+        return _listener_pid_mac(port)
     try:
         out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, timeout=10,
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
@@ -239,11 +242,36 @@ def _listener_pid(port: int) -> int | None:
 
 def _is_our_driver(pid: int, driver_dir: pathlib.Path) -> bool:
     """进程命令行里有本产品的 ocr-driver/driver.py（按完整路径比，不认别处的同名脚本）。"""
+    if sys.platform == "darwin":
+        return _is_our_driver_mac(pid, driver_dir)
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
                               f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
                              capture_output=True, text=True, timeout=15,
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    want = str((driver_dir / "driver.py").resolve()).casefold()
+    return want in out.casefold()
+
+# ---------------------------------------------------------------- macOS（T28）
+
+def _listener_pid_mac(port: int) -> int | None:
+    """lsof 只列监听本端口的进程号（-t 只输出 pid）。"""
+    try:
+        out = subprocess.run(["/usr/sbin/lsof", "-nP", f"-iTCP@{HOST}:{port}", "-sTCP:LISTEN", "-t"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    first = out.split()[0] if out.split() else ""
+    return int(first) if first.isdigit() else None
+
+
+def _is_our_driver_mac(pid: int, driver_dir: pathlib.Path) -> bool:
+    """ps 取命令行，按完整路径比（APFS 默认不分大小写，同 Windows 一样不分大小写比）。"""
+    try:
+        out = subprocess.run(["/bin/ps", "-o", "command=", "-p", str(int(pid))],
+                             capture_output=True, text=True, timeout=15).stdout
     except (OSError, subprocess.TimeoutExpired):
         return False
     want = str((driver_dir / "driver.py").resolve()).casefold()

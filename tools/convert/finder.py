@@ -51,7 +51,29 @@ def _bundled_root() -> Path:
     return Path(sys.executable).resolve().parent
 
 
+def _mac_client_tools() -> list[Path]:
+    """T28 macOS（令 1424 第 4 条）：小工具是 dmg 里与主程序并排的独立 .app，拖进"应用程序"后按
+    /Applications/<客户端>.app/Contents/Resources/tools 找主程序带的 LibreOffice、pandoc。"""
+    return [Path("/Applications") / f"{n}.app" / "Contents" / "Resources" / "tools" for n in CLIENT_DIR_NAMES]
+
+
+def _mac_soffice_candidates() -> list[Path]:
+    c: list[Path | None] = [_env("LAWBENCH_SOFFICE")]
+    c += [r / "LibreOffice.app" / "Contents" / "MacOS" / "soffice" for r in _mac_client_tools()]
+    c.append(Path("/Applications/LibreOffice.app/Contents/MacOS/soffice"))
+    return [p for p in c if p]
+
+
+def _mac_pandoc_candidates() -> list[Path]:
+    c: list[Path | None] = [_env("LAWBENCH_PANDOC")]
+    c += [r / "pandoc" / "bin" / "pandoc" for r in _mac_client_tools()]
+    c += [Path("/opt/homebrew/bin/pandoc"), Path("/usr/local/bin/pandoc")]
+    return [p for p in c if p]
+
+
 def soffice_candidates() -> list[Path]:
+    if sys.platform == "darwin":
+        return _mac_soffice_candidates()
     c: list[Path | None] = [_env("LAWBENCH_SOFFICE")]
     c += [r / "libreoffice" / "program" / "soffice.exe" for r in _own_install_tools() + _client_roots()]
     c.append(_bundled_root() / "libreoffice" / "program" / "soffice.exe")
@@ -62,6 +84,8 @@ def soffice_candidates() -> list[Path]:
 
 
 def pandoc_candidates() -> list[Path]:
+    if sys.platform == "darwin":
+        return _mac_pandoc_candidates()
     c: list[Path | None] = [_env("LAWBENCH_PANDOC")]
     c += [r / "pandoc" / "pandoc.exe" for r in _own_install_tools() + _client_roots()]
     c.append(_bundled_root() / "pandoc" / "pandoc.exe")

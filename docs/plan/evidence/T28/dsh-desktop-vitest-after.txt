@@ -1,0 +1,40 @@
+﻿DSH apps/desktop 全部用例（打 P-3…P-22 后，2026-10-06）：
+
+fixture failure
+[REDACTED] 鉂?|thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts (9 tests | 7 failed) 446ms
+     脳 checks production credentials without uploading or changing the parent 54ms
+     脳 checks test credentials without uploading or changing the parent 25ms
+     脳 rejects plaintext credentials without printing values 30ms
+     脳 rejects blank credentials without printing values 28ms
+     脳 rejects missing credentials without printing values 34ms
+     脳 isolates the upload child and sanitizes both output streams 178ms
+     脳 isolates the upload-failure child and sanitizes both output streams 88ms
+ 鉂?|thread-safe| apps/desktop/tests/profile-mcp.spec.ts (1 test | 1 failed) 71ms
+   脳 retains one shared resource consumer in the Desktop Web profile 68ms
+鈳幆鈳幆鈳幆鈳?Failed Tests 8 鈳幆鈳幆鈳幆鈳?
+ FAIL  |thread-safe| apps/desktop/tests/profile-mcp.spec.ts > retains one shared resource consumer in the Desktop Web p
+rofile
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > checks productio
+n credentials without uploading or changing the parent
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > checks test cred
+entials without uploading or changing the parent
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > rejects plaintex
+t credentials without printing values
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > rejects blank cr
+edentials without printing values
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > rejects missing 
+credentials without printing values
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > isolates the upl
+oad child and sanitizes both output streams
+ FAIL  |thread-safe| apps/desktop/tests/upload-with-credentials.spec.ts > Windows upload credentials > isolates the upl
+oad-failure child and sanitizes both output streams
+ Test Files  2 failed | 119 passed | 4 skipped (125)
+      Tests  8 failed | 1302 passed | 29 skipped (1339)
+   Duration  16.16s (transform 43.90s, setup 30.83s, import 108.27s, tests 126.28s, environment 8.80s)
+
+
+
+[exited with code 1]
+
+同两份失败文件在未打 P-22 的基线（477b4f4 + P-3…P-21）上：Test Files 2 failed (2) / Tests 8 failed | 2 passed (10) —— 8 败与 P-22 无关（Windows 上传凭据 7、profile-mcp 1）
+新用例 apps/desktop/tests/lawbench-macos.spec.ts：7 passed

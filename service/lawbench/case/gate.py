@@ -25,6 +25,7 @@ import pathlib
 import re
 import shutil
 import stat
+import sys
 import uuid
 
 from .. import logs
@@ -41,6 +42,8 @@ SYNC_NAME_MARKERS: list[str] = [
     "iCloudDrive", "WPS云盘",
 ]
 SYNC_ENV_VARS = ("OneDrive", "OneDriveCommercial", "OneDriveConsumer")
+# T28 macOS（只在 darwin 追加）：iCloud 云盘在 ~/Library/Mobile Documents；Mac 版 OneDrive、Dropbox、Google Drive 在 ~/Library/CloudStorage
+MAC_SYNC_NAME_MARKERS: list[str] = ["Mobile Documents", "CloudStorage"]
 
 DEVICE_NAMES = frozenset(
     ["con", "prn", "aux", "nul", "conin$", "conout$"]
@@ -128,9 +131,20 @@ def _registry_onedrive_folders() -> list[str]:
     return out
 
 
+def _mac_sync_roots(home: pathlib.Path) -> list[str]:
+    """macOS 的同步根。开了"iCloud 云盘 → 桌面与文稿文件夹"时 ~/Documents、~/Desktop 路径不变但在同步，路径字样查不出：
+    看 iCloud 云盘里有没有 Documents 文件夹（令 1424 第 5 条；真机再核）。"""
+    roots = [str(home / "Library" / "Mobile Documents"), str(home / "Library" / "CloudStorage")]
+    if (home / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "Documents").is_dir():
+        roots += [str(home / "Documents"), str(home / "Desktop")]
+    return roots
+
+
 def sync_folder_roots() -> list[str]:
     roots = [os.environ[v] for v in SYNC_ENV_VARS if os.environ.get(v)]
     roots += _registry_onedrive_folders()
+    if sys.platform == "darwin":
+        roots += _mac_sync_roots(pathlib.Path.home())
     return roots
 
 
@@ -139,7 +153,7 @@ def in_sync_folder(path: str) -> bool:
         if _norm(path) == _norm(base) or is_within(base, path):
             return True
     parts = pathlib.PureWindowsPath(path).parts if os.name == "nt" else pathlib.PurePath(path).parts
-    markers = [m.casefold() for m in SYNC_NAME_MARKERS]
+    markers = [m.casefold() for m in SYNC_NAME_MARKERS + (MAC_SYNC_NAME_MARKERS if sys.platform == "darwin" else [])]
     for part in parts:
         low = part.casefold()
         if any(m in low for m in markers):
@@ -214,6 +228,8 @@ def _split_rel(rel: str, op: str) -> list[str]:
         if p.rstrip(" .") in ("", "..") or p == "..":
             raise _deny(op, "dotdot")
         if len(p) > MAX_COMPONENT:
+            raise _deny(op, "too_long")
+        if sys.platform == "darwin" and len(p.encode("utf-8")) > MAX_COMPONENT:   # T28：macOS 按 UTF-8 字节算，一个汉字 3 字节
             raise _deny(op, "too_long")
         if is_device_name(p):
             raise _deny(op, "device_name")

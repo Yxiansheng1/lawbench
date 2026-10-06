@@ -3,6 +3,10 @@
 // Q2 裁决：只认 LAWFIRM_KEY，从 Windows 凭据管理器读写；其他名字一律"未配置"；
 // 授权记录读取返回空、写入拒绝；不读环境变量（环境变量优先会留一个绕过凭据管理器的口子）。
 import { deleteKey, readKey, writeKey } from './credman.ts'
+import * as keychain from './keychain.ts'
+import { packagedInstallDir } from '../host/install-layout.ts'
+import { existsSync } from 'node:fs'
+import { posix } from 'node:path'
 import type { Logger } from '../shared/core-client.ts'
 import { defaultAppData, makeLogger } from '../shared/file-log.ts'
 
@@ -11,7 +15,9 @@ export const name = 'lawbench-credentials'
 export const KEY_REF = 'LAWFIRM_KEY'
 /** 允许写入内存的授权记录种类（目前只有 DSH 连接插件的浏览器会话密钥）。 */
 export const ALLOWED_RECORDS: ReadonlySet<string> = new Set(['client-connection/browser-session'])
-const SOURCE = 'windows-credential-manager'
+/** Key 来源的标记（describe / resolve 返回）：Windows 凭据管理器；macOS 钥匙串（T28）。 */
+export const credentialSource = (platform: string = process.platform): string => (platform === 'darwin' ? 'macos-keychain' : 'windows-credential-manager')
+const SOURCE = credentialSource()
 const CACHE_MS = 5 * 60_000
 
 export interface Store {
@@ -126,9 +132,20 @@ type Ctx = {
   logger?(name: string): { info(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void }
 }
 
+/** macOS（T28）：钥匙串；写入时把 Host 自己和内置 python3（装好的客户端）列为可免弹窗读取的程序。 */
+export function macTrusted(execPath: string = process.execPath, exists: (p: string) => boolean = existsSync): string[] {
+  const res = packagedInstallDir(execPath, exists, 'darwin')
+  return [execPath, ...(res ? [posix.join(res, 'python', 'bin', 'python3')] : [])]
+}
+
+export function macStore(execPath: string = process.execPath, exists: (p: string) => boolean = existsSync): Store {
+  const trusted = macTrusted(execPath, exists)
+  return { read: () => keychain.readKey(), write: (v) => keychain.writeKey(v, trusted), remove: () => keychain.deleteKey() }
+}
+
 export function apply(ctx: Ctx): void {
   const log = makeLogger('credentials', defaultAppData(), ctx.logger?.('lawbench-credentials'))
-  const impl = new LawbenchCredentials({ read: () => readKey(), write: (v) => writeKey(v), remove: () => deleteKey() }, Date.now, log,
+  const impl = new LawbenchCredentials(process.platform === 'darwin' ? macStore() : { read: () => readKey(), write: (v) => writeKey(v), remove: () => deleteKey() }, Date.now, log,
     (event, subject) => { ctx.emit(event, subject) })
   ctx.effect(() => ctx.provide('credentials', impl), 'lawbench-credentials: provider')
 }

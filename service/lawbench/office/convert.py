@@ -26,7 +26,12 @@ import subprocess
 import sys
 import threading
 import time
-from ctypes import wintypes
+import types
+
+try:
+    from ctypes import wintypes
+except (ImportError, ValueError):  # T28：非 Windows 上可能导入不了；进程快照只在 Windows 用，这里只为类定义能建出来
+    wintypes = types.SimpleNamespace(DWORD=ctypes.c_uint32, HANDLE=ctypes.c_void_p)
 
 from .. import logs
 from ..case import gate
@@ -216,6 +221,13 @@ class OfficeConverter:
     def to_pdf(self, root: str, src: pathlib.Path, job_rel: str, choice: str = "auto") -> tuple[pathlib.Path, str]:
         """把原件 src 转成 PDF，返回 (pdf 路径（在 工作区/临时/<本次>/ 里）, 实际用的程序)。"""
         ext = src.suffix.lower()
+        if sys.platform == "darwin":
+            # T28（令 1424 第 2 条）：Mac 没有 Word / WPS 的 COM，只用内置 LibreOffice；设置里指定了 word / wps 的照样报
+            # 不可用，不悄悄换成 LibreOffice（同"指定了就不换"的口径）
+            if choice in ("word", "wps"):
+                logs.event("office", "convert", status="fail", error=f"{choice}:darwin")
+                raise ApiError("CONVERTER_UNAVAILABLE", "darwin_no_com")
+            choice = "libreoffice"
         order = ORDER if choice == "auto" else (choice,)
         if ext in LO_ONLY:
             order = tuple(o for o in order if o == "libreoffice")

@@ -1,0 +1,201 @@
+# lawbench T28: macOS (Apple silicon) package and smoke test. Manual trigger only; no secrets.
+# Jobs and token rights (order 1526 P2-1):
+#   build   (macos-15, contents: read)  - builds the dmg; npm install scripts and PyInstaller run here, so this job
+#                                          never holds a writable token. The tokenizer comes from the release assets-v1
+#                                          (uploaded by hand, checked against its sha256) in a step before any third-party
+#                                          code runs. The dmg goes to the next jobs through the Actions cache (artifact
+#                                          storage is too small for it, order 1424 note 1431), checked by sha256.
+#   release (ubuntu, contents: write)   - only creates the draft prerelease mac-build-<run number> with the dmg and its
+#                                          sha256; runs no project code. Delete the draft after downloading the dmg.
+#   smoke   (macos-15, contents: read)  - installs the dmg on a clean Mac, both servers on dead 127.0.0.1 ports (no real
+#                                          server is contacted), screenshots the first-run page, records connections.
+# Logs, screenshots and scan results are ordinary artifacts kept 14 days.
+# Third-party actions are pinned to commit SHAs (order 1526 P2-2).
+name: mac-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# shell: bash runs every step as bash -eo pipefail: a failing build.sh behind a pipe fails the step (review P2-A)
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: mac-build
+  cancel-in-progress: false
+
+env:
+  TOKENIZER_SHA256: 87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      dmg: ${{ steps.dmg.outputs.dmg }}
+      sha256: ${{ steps.dmg.outputs.sha256 }}
+      tokenizer: ${{ steps.tokenizer.outputs.included }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Before any third-party code runs: the token (read-only) is only given to this step.
+      - name: Tokenizer from release assets-v1
+        id: tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p packaging/mac/tokenizer
+          # Only a successful query whose asset list lacks tokenizer.json falls back to a smoke build; any other error
+          # (network, permission, no published release assets-v1) fails the step (review P3)
+          names="$(gh release view assets-v1 --repo "${{ github.repository }}" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$names" | grep -qx tokenizer.json; then
+            gh release download assets-v1 --repo "${{ github.repository }}" -p tokenizer.json -D packaging/mac/tokenizer --clobber
+            echo "$TOKENIZER_SHA256  packaging/mac/tokenizer/tokenizer.json" | shasum -a 256 -c -
+            echo "included=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "assets-v1/tokenizer.json not found: smoke build without tokenizer"
+            echo "included=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.21.0'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Cache payloads and package stores
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/Library/pnpm/store
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            dsh/apps/desktop/.desktop-build/downloads
+            packaging/mac/cache
+          key: mac-build-${{ hashFiles('packaging/versions.lock', 'dsh/pnpm-lock.yaml', 'dsh-ext/pnpm-lock.yaml', 'dsh/scripts/primary-runtime/lock.json') }}
+          restore-keys: mac-build-
+
+      - name: Build
+        run: |
+          mkdir -p packaging/mac/out
+          if [ "${{ steps.tokenizer.outputs.included }}" = yes ]; then
+            export LAWBENCH_TOKENIZER="$PWD/packaging/mac/tokenizer/tokenizer.json"
+          else
+            export LAWBENCH_ALLOW_NO_TOKENIZER=1
+          fi
+          bash packaging/mac/build.sh 2>&1 | tee packaging/mac/out/build-log.txt
+          test "${PIPESTATUS[0]}" -eq 0
+
+      - name: Hand the dmg to the next jobs
+        id: dmg
+        run: |
+          mkdir -p handoff
+          cd packaging/mac/out
+          dmg="$(ls -t *.dmg | head -n 1)"
+          cp "$dmg" "$dmg.sha256" ../../../handoff/
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(awk '{print $1}' "$dmg.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Save the dmg for this run
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: handoff
+          key: mac-dmg-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+
+      - name: Build logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mac-build-logs-${{ github.run_number }}
+          retention-days: 14
+          path: |
+            packaging/mac/out/*.txt
+            packaging/mac/out/*.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Restore the dmg
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: handoff
+          key: mac-dmg-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+
+      - name: Draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DMG: ${{ needs.build.outputs.dmg }}
+          SHA: ${{ needs.build.outputs.sha256 }}
+          TOKENIZER: ${{ needs.build.outputs.tokenizer }}
+        run: |
+          cd handoff
+          echo "$SHA  $DMG" | sha256sum -c -
+          tag="mac-build-${{ github.run_number }}"
+          {
+            if [ "$TOKENIZER" != yes ]; then echo "**冒烟包，无 tokenizer，不得交付律师**"; echo; fi
+            echo "macOS (Apple silicon) build. Ad-hoc signed, not notarized."
+            echo
+            echo "- commit: ${{ github.sha }}"
+            echo "- runner: macos-15 arm64 (build job)"
+            echo "- tokenizer: $TOKENIZER"
+            echo "- sha256: $SHA"
+            echo
+            echo "Download, then delete this draft."
+          } > release-notes.md
+          gh release create "$tag" --repo "${{ github.repository }}" --draft --prerelease --target "${{ github.sha }}" \
+            --title "$tag (macOS)" --notes-file release-notes.md "$DMG" "$DMG.sha256"
+
+  smoke:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: packaging/mac
+
+      - name: Restore the dmg
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: handoff
+          key: mac-dmg-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+
+      - name: Smoke test
+        env:
+          DMG: ${{ needs.build.outputs.dmg }}
+          SHA: ${{ needs.build.outputs.sha256 }}
+        run: |
+          echo "$SHA  handoff/$DMG" | shasum -a 256 -c -
+          bash packaging/mac/smoke.sh "handoff/$DMG" smoke-out
+
+      - name: Smoke results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mac-smoke-${{ github.run_number }}
+          retention-days: 14
+          path: smoke-out/

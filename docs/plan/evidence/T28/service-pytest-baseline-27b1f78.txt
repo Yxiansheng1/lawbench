@@ -1,0 +1,10 @@
+..................sss..............................................      [100%]
+============================== warnings summary ===============================
+tests\conftest.py:17
+  D:\lawbench-D\service\tests\conftest.py:17: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1284 passed, 7 skipped, 1 warning in 770.23s (0:12:50)
+
+[exited with code 0]

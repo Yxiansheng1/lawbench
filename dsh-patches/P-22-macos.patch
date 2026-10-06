@@ -1,0 +1,342 @@
+diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
+index e8b746ce45..7753746960 100644
+--- a/apps/desktop/scripts/electron-builder-config.mjs
++++ b/apps/desktop/scripts/electron-builder-config.mjs
+@@ -12,7 +12,7 @@ import {
+   resolveMacOSSigningEnvironment,
+ } from './desktop-release-environment.mjs'
+ import { notarizeMacOSDiskImageArtifact } from './notarize-macos-disk-images.mjs'
+-import { LAWBENCH_PRODUCT_NAME, LAWBENCH_VERSION } from './lawbench-product.mjs'
++import { LAWBENCH_PRODUCT_NAME, LAWBENCH_VERSION, lawbenchMacAdhoc } from './lawbench-product.mjs'
+ import { verifyMacOSSignatureAfterSign } from './verify-macos-signature.mjs'
+ import {
+   createWindowsTokenSigner,
+@@ -35,6 +35,19 @@ import {
+   writeMacOSAppUpdateConfig,
+ } from './macos-app-update-config.mjs'
+ 
++/**
++ * lawbench T28: disk image layout for the ad-hoc macOS build: the app, the Applications link, then the small tools.
++ * @param {string} apps Colon-separated absolute paths of the small tool .app bundles.
++ * @returns {Array<{ x: number, y: number, type?: string, path?: string }>} electron-builder dmg.contents.
++ */
++export function lawbenchDmgContents(apps) {
++  const tools = apps.split(':').filter(Boolean)
++  return [
++    { x: 130, y: 150 },
++    { x: 410, y: 150, type: 'link', path: '/Applications' },
++    ...tools.map((path, i) => ({ x: 130 + 280 * i, y: 330, type: 'file', path })),
++  ]
++}
+ /**
+  * Create electron-builder configuration from one release environment.
+  * @param {NodeJS.ProcessEnv} env - Packaging environment.
+@@ -67,8 +80,10 @@ export function createElectronBuilderConfig(
+   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
+   const packagesWindows = resolvedPlatform === 'win32'
+   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
+-  const macOSSigning = packagesMacOS ? resolveMacOSSigningEnvironment(env) : undefined
+-  if (packagesMacOS) resolveMacOSNotarizationEnvironment(env)
++  // lawbench T28: an ad-hoc macOS build (LAWBENCH_MAC_ADHOC=1) needs no Developer ID and no notarization credentials
++  const macAdhoc = packagesMacOS && lawbenchMacAdhoc(env)
++  const macOSSigning = packagesMacOS && !macAdhoc ? resolveMacOSSigningEnvironment(env) : undefined
++  if (packagesMacOS && !macAdhoc) resolveMacOSNotarizationEnvironment(env)
+   const buildPaths = desktopTargetBuildPaths(resolveDesktopBuildTarget(env, hostPlatform, hostArch))
+   let primaryRuntimeDestination
+   let dshDestination
+@@ -94,7 +109,8 @@ export function createElectronBuilderConfig(
+   if (windowsSigner !== undefined) {
+     installWindowsNsisBootstrapSigner({ sign: windowsSigner })
+   }
+-  const update = unsigned ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
++  // lawbench T28: like the unsigned Windows build, the ad-hoc Mac build ships without an update feed (Spec 14.3: no outbound)
++  const update = unsigned || macAdhoc ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
+   if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
+   // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
+   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
+@@ -152,26 +168,31 @@ export function createElectronBuilderConfig(
+       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
+       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
+       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
++      // lawbench T28: on macOS the workbench payload goes to <App>.app/Contents/Resources (install-layout.ts)
++      ...(env.LAWBENCH_STAGE_DIR && packagesMacOS ? [{ from: env.LAWBENCH_STAGE_DIR, to: '.', filter: ['**/*', '!requirements.txt'] }] : []),
+     ],
+     // lawbench P-4 (T20 step 3): the workbench payload staged by packaging\build.ps1 (python\, service\, skills\,
+     // engines\, tools\) goes next to the executable, where the Host's packaged layout expects it.
+-    ...(env.LAWBENCH_STAGE_DIR ? { extraFiles: [{ from: env.LAWBENCH_STAGE_DIR, to: '.', filter: ['**/*', '!requirements.txt'] }] } : {}),
++    ...(env.LAWBENCH_STAGE_DIR && !packagesMacOS ? { extraFiles: [{ from: env.LAWBENCH_STAGE_DIR, to: '.', filter: ['**/*', '!requirements.txt'] }] } : {}),
+     mac: {
+       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
+       category: 'public.app-category.developer-tools',
+       // macOS matches the application locale against this bundle, not Electron Framework resources.
+       extendInfo: { CFBundleLocalizations: ['en', 'zh_CN'] },
+-      identity: macOSSigning?.signingIdentity,
+-      forceCodeSigning: true,
+-      hardenedRuntime: true,
++      // lawbench T28: ad-hoc builds skip electron-builder's signing (identity null); LAWBENCH_MAC_SIGN_SCRIPT signs in afterPack
++      identity: macAdhoc ? null : macOSSigning?.signingIdentity,
++      forceCodeSigning: !macAdhoc,
++      hardenedRuntime: !macAdhoc,
+       extendInfo: { NSMicrophoneUsageDescription: `${LAWBENCH_PRODUCT_NAME} uses your microphone to transcribe speech into message drafts.` },
+       // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
+       signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
+-      notarize: true,
+-      target: ['dmg', 'zip'],
++      notarize: !macAdhoc,
++      target: macAdhoc ? [{ target: 'dmg', arch: ['arm64'] }] : ['dmg', 'zip'],
+     },
+     dmg: {
+-      sign: true,
++      sign: !macAdhoc,
++      // lawbench T28 (order 1424 ruling 4): the two small tools sit beside the app in the disk image
++      ...(macAdhoc && env.LAWBENCH_MAC_DMG_APPS ? { contents: lawbenchDmgContents(env.LAWBENCH_MAC_DMG_APPS) } : {}),
+       writeUpdateInfo: false,
+     },
+     beforePack: async context => {
+@@ -201,6 +222,10 @@ export function createElectronBuilderConfig(
+         preparedRuntimeVersion ?? productVersion, { platform: resolvedPlatform, arch: resolvedArch })
+       // Unsigned Windows builds skip electron-builder's afterSign hook.
+       if (packagesWindows && unsigned) await verifyWindowsAsarUnpack(buildPaths.dsh, resourcesDir, windowsCode)
++      // lawbench T28 (order 1424 ruling 3): ad-hoc signature inside out, LibreOffice.app keeps The Document Foundation's
++      if (macAdhoc && env.LAWBENCH_MAC_SIGN_SCRIPT) {
++        await promisify(execFile)('/bin/bash', [env.LAWBENCH_MAC_SIGN_SCRIPT, join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)], { maxBuffer: 64 * 1024 * 1024 })
++      }
+     },
+     afterSign: async context => {
+       if (windowsSigner !== undefined) {
+@@ -211,7 +236,7 @@ export function createElectronBuilderConfig(
+         })
+         await verifyWindowsAsarUnpack(buildPaths.dsh, context.packager.getResourcesDir(context.appOutDir), windowsCode)
+       }
+-      if (context.electronPlatformName !== 'darwin') return
++      if (context.electronPlatformName !== 'darwin' || macAdhoc) return
+       const appPath = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+       if (update !== undefined) {
+         await verifyMacOSAppUpdateConfig(appPath, resolveMacOSAppUpdateFeed(context.packager.config.publish),
+@@ -220,7 +245,7 @@ export function createElectronBuilderConfig(
+       verifyMacOSSignatureAfterSign(context, macOSSigning ?? resolveMacOSSigningEnvironment(env))
+     },
+     artifactBuildCompleted: artifact => {
+-      if (!artifact.file.endsWith('.dmg')) return
++      if (macAdhoc || !artifact.file.endsWith('.dmg')) return
+       return notarizeMacOSDiskImageArtifact(
+         artifact,
+         env,
+diff --git a/apps/desktop/scripts/lawbench-product.d.mts b/apps/desktop/scripts/lawbench-product.d.mts
+index 083a586d0f..b28bc95462 100644
+--- a/apps/desktop/scripts/lawbench-product.d.mts
++++ b/apps/desktop/scripts/lawbench-product.d.mts
+@@ -2,3 +2,5 @@
+ export const LAWBENCH_PRODUCT_NAME: string
+ /** lawbench P-4: version of the packaged app (see lawbench-product.mjs). */
+ export const LAWBENCH_VERSION: string
++/** lawbench T28: ad-hoc macOS build (see lawbench-product.mjs). */
++export function lawbenchMacAdhoc(env: NodeJS.ProcessEnv): boolean
+diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
+index 7e1fe411b0..22e27849cf 100644
+--- a/apps/desktop/scripts/lawbench-product.mjs
++++ b/apps/desktop/scripts/lawbench-product.mjs
+@@ -8,3 +8,12 @@ export const LAWBENCH_PRODUCT_NAME = '连越律师工作台'
+ 
+ /** lawbench P-4 (order 1756): the version of the packaged app (installer name, About, app.getVersion()); equals dsh-ext/shared/product.ts PRODUCT_VERSION. DSH's own package version stays for the bundled runtime checks. */
+ export const LAWBENCH_VERSION = '0.1.0'
++
++/**
++ * lawbench T28 (order 1424 ruling 3): LAWBENCH_MAC_ADHOC=1 packages the macOS app without a Developer ID: no signing
++ * keychain, no notarization, ad-hoc signature applied by packaging/mac (LAWBENCH_MAC_SIGN_SCRIPT, inside out, LibreOffice.app
++ * keeps its own signature). Windows packaging never reads it.
++ * @param {NodeJS.ProcessEnv} env Packaging environment.
++ * @returns {boolean} Whether this is an ad-hoc macOS build.
++ */
++export const lawbenchMacAdhoc = env => env.LAWBENCH_MAC_ADHOC === '1'
+diff --git a/apps/desktop/scripts/package-target.ts b/apps/desktop/scripts/package-target.ts
+index 5de710edea..d32cb30f45 100644
+--- a/apps/desktop/scripts/package-target.ts
++++ b/apps/desktop/scripts/package-target.ts
+@@ -24,7 +24,7 @@ import { suggestDesktopBuildVersion } from './desktop-build-version-discovery.ts
+ import { desktopBuildCommitEnvironment, readDesktopBuildCommit, resolveDesktopBuildCommit } from './desktop-build-commit.mjs'
+ import { requireDesktopToolchain } from './desktop-toolchain-preflight.ts'
+ import { withMacOSNotarizationProxy } from './macos-notarization-proxy.ts'
+-import { LAWBENCH_PRODUCT_NAME } from './lawbench-product.mjs'
++import { LAWBENCH_PRODUCT_NAME, lawbenchMacAdhoc } from './lawbench-product.mjs'
+ 
+ const APP_ROOT = resolve(import.meta.dirname, '..')
+ const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
+@@ -360,14 +360,16 @@ async function main(): Promise<void> {
+   process.env.DSH_DESKTOP_PACKAGING_RUN_DIR = run.directory
+   let success = false
+   try {
+-    await packagingStep(run.directory, 'configuration', async () => { validateDesktopPackageEnvironment(environment, target, invocation) }, secrets)
++    // lawbench T28: an ad-hoc macOS build is validated like an unsigned one (no Developer ID, no notarization credentials)
++    const macAdhoc = target.platform === 'darwin' && lawbenchMacAdhoc(environment)
++    await packagingStep(run.directory, 'configuration', async () => { validateDesktopPackageEnvironment(environment, target, macAdhoc ? { ...invocation, unsigned: true } : invocation) }, secrets)
+     await packagingStep(run.directory, 'toolchain', () => requireDesktopToolchain(target.platform, environment), secrets)
+     if (target.platform === 'darwin') {
+       const settings = resolveMacOSPackageSettings(environment)
+       recordPackagingEvent(run.directory, { type: 'macos-settings', packConcurrency: settings.packConcurrency,
+         downloadProxyConfigured: settings.downloadProxy !== undefined,
+         notarizationProxyConfigured: settings.notarizationProxy !== undefined })
+-      await packagingStep(run.directory, 'macos-package', () => withMacOSSigningKeychain(environment,
++      await packagingStep(run.directory, 'macos-package', () => macAdhoc ? packageTarget(invocation, environment, run) : withMacOSSigningKeychain(environment,
+         signingEnvironment => packageTarget(invocation, signingEnvironment, run)), secrets)
+     } else {
+       await packagingStep(run.directory, 'windows-package', () => packageTarget(invocation, environment, run), secrets)
+@@ -478,7 +480,12 @@ export async function packageTarget(
+   await execute(['run', 'prepare:dsh', ...(signPrimaryRuntime ? ['--defer-runtime-smoke'] : [])], downloadEnv)
+   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime', '--dsh'], electronBuilderEnv)
+   if (invocation.prepareOnly) return
+-  if (target.platform === 'darwin' && !invocation.directory) {
++  const macAdhoc = target.platform === 'darwin' && lawbenchMacAdhoc(environment)
++  if (macAdhoc) {
++    // lawbench T28: one electron-builder run straight to the arm64 dmg; signing happens in afterPack (electron-builder-config.mjs)
++    await execute(desktopElectronBuilderArguments(target, invocation.directory), electronBuilderEnv)
++    await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
++  } else if (target.platform === 'darwin' && !invocation.directory) {
+     await execute([
+       ...desktopElectronBuilderArguments(target, true),
+       '--config.mac.notarize=false',
+@@ -501,7 +508,7 @@ export async function packageTarget(
+     await signedStage('artifacts', () => execute(desktopElectronBuilderArguments(target, invocation.directory), electronBuilderEnv))
+     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts', ...(invocation.unsigned ? ['--unsigned'] : [])], targetEnv)
+   }
+-  if (!invocation.directory && !invocation.unsigned) writeReleaseRecord(target, electronBuilderEnv, buildPaths.artifacts)
++  if (!invocation.directory && !invocation.unsigned && !macAdhoc) writeReleaseRecord(target, electronBuilderEnv, buildPaths.artifacts)
+   if (journal) recordPackagingEvent(journal, { type: 'artifacts', directory: buildPaths.artifacts })
+ }
+ 
+diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
+index 55cf6fbb56..6ac9c9c324 100644
+--- a/apps/desktop/src/client/WelcomePage.tsx
++++ b/apps/desktop/src/client/WelcomePage.tsx
+@@ -106,7 +106,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
+   return (
+     <form style={S.page} onSubmit={e => { void save(e) }}>
+       <h1 style={S.title}>首次配置</h1>
+-      <p style={S.hint}>填写律所服务器地址和你的个人 Key。所内地址连不上时，会自动改用所外地址。Key 保存在本机"凭据管理器"中，不写入任何文件。</p>
++      <p style={S.hint}>填写律所服务器地址和你的个人 Key。所内地址连不上时，会自动改用所外地址。Key 保存在本机"{/mac/i.test(globalThis.navigator?.platform ?? '') ? '钥匙串' : '凭据管理器'}"中，不写入任何文件。</p>
+       <div style={S.group}>
+         <span style={S.legend}>模型服务器（6000D）</span>
+         <label htmlFor="llm">所内地址</label><input id="llm" style={S.input} disabled={loading} {...bind('llm')} />
+diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
+index c0f2db4400..b65a0a2e3a 100644
+--- a/apps/desktop/src/lawbench-isolation.ts
++++ b/apps/desktop/src/lawbench-isolation.ts
+@@ -8,7 +8,8 @@
+  * - the Host's fixed web port 19387 (order 1539).
+  * Only the installed package (app.isPackaged) moves; development instances keep their paths and port.
+  */
+-import { join } from 'node:path'
++import { homedir } from 'node:os'
++import { join, posix } from 'node:path'
+ 
+ /** The part of Electron's app this needs (replaceable in tests). */
+ export interface IsolationApp {
+@@ -22,7 +23,13 @@ export interface IsolationApp {
+  * @param packaged - whether this is the installed package.
+  * @returns userData and DSH home, or undefined in development (or without the Windows profile variables).
+  */
+-export function lawbenchIsolatedPaths(env: NodeJS.ProcessEnv, packaged: boolean): { userData: string; dshHome: string } | undefined {
++export function lawbenchIsolatedPaths(env: NodeJS.ProcessEnv, packaged: boolean, platform: string = process.platform, home: string = homedir()): { userData: string; dshHome: string } | undefined {
++  // lawbench T28: macOS has no APPDATA/LOCALAPPDATA; without this branch the Mac package would share
++  // ~/Library/Application Support/@deepseek-ai/dsh-desktop and ~/.dsh with an original DeepSeek Harness.
++  if (packaged && platform === 'darwin') {
++    const support = posix.join(home, 'Library', 'Application Support')
++    return { userData: posix.join(support, 'lawbench-desktop'), dshHome: posix.join(support, 'lawbench', 'dsh-home') }
++  }
+   if (!packaged || !env.APPDATA || !env.LOCALAPPDATA) return undefined
+   return { userData: join(env.APPDATA, 'lawbench-desktop'), dshHome: join(env.LOCALAPPDATA, 'lawbench', 'dsh-home') }
+ }
+diff --git a/apps/desktop/src/lawbench-retainer.ts b/apps/desktop/src/lawbench-retainer.ts
+index d791412274..a4fca44a91 100644
+--- a/apps/desktop/src/lawbench-retainer.ts
++++ b/apps/desktop/src/lawbench-retainer.ts
+@@ -39,7 +39,8 @@ export type RetainerResult =
+  * `LAWBENCH_ENGINES_DIR` when given, else the repository's `engines`.
+  */
+ export function enginesDirectory(env: NodeJS.ProcessEnv = process.env): string {
+-  if (app.isPackaged) return join(dirname(process.execPath), 'engines')
++  // lawbench T28: on macOS the payload is in <App>.app/Contents/Resources (process.resourcesPath), not next to the executable
++  if (app.isPackaged) return process.platform === 'darwin' ? join(process.resourcesPath, 'engines') : join(dirname(process.execPath), 'engines')
+   const configured = env.LAWBENCH_ENGINES_DIR
+   if (configured !== undefined && configured !== '' && isAbsolute(configured)) return configured
+   return resolve(app.getAppPath(), '..', '..', '..', 'engines')
+diff --git a/apps/desktop/tests/lawbench-macos.spec.ts b/apps/desktop/tests/lawbench-macos.spec.ts
+new file mode 100644
+index 0000000000..8510158548
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-macos.spec.ts
+@@ -0,0 +1,74 @@
++import { describe, expect, it } from 'vitest'
++import { lawbenchIsolatedPaths } from '../src/lawbench-isolation.ts'
++
++// lawbench T28（令 1424）：macOS 版第一阶段——隔离目录、ad-hoc 打包开关、载荷放进 Contents/Resources、dmg 里并排放小工具。
++// Windows 的原有行为由 lawbench-isolation / lawbench-stage 等原用例守着。
++
++const base = {
++  DSH_DESKTOP_APP_ID: 'cn.lianyue.lawbench',
++  DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
++  DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
++  DSH_DESKTOP_TARGET_PLATFORM: 'darwin',
++  DSH_DESKTOP_TARGET_ARCH: 'arm64',
++  LAWBENCH_MAC_ADHOC: '1',
++}
++type MacConfig = {
++  mac: { identity?: string | null; forceCodeSigning?: boolean; hardenedRuntime?: boolean; notarize?: boolean; target?: unknown }
++  dmg: { sign?: boolean; contents?: unknown }
++  extraResources: Array<{ from: string; to: string; filter?: string[] }>
++  extraFiles?: unknown
++}
++
++describe('macOS 隔离目录（T28）', () => {
++  it('装好的 Mac 包：userData 与 DSH_HOME 进 ~/Library/Application Support 下我方目录', () => {
++    expect(lawbenchIsolatedPaths({}, true, 'darwin', '/Users/x')).toEqual({
++      userData: '/Users/x/Library/Application Support/lawbench-desktop',
++      dshHome: '/Users/x/Library/Application Support/lawbench/dsh-home',
++    })
++  })
++  it('开发期不搬家；Windows 缺变量时照旧不搬', () => {
++    expect(lawbenchIsolatedPaths({}, false, 'darwin', '/Users/x')).toBeUndefined()
++    expect(lawbenchIsolatedPaths({}, true, 'win32', 'C:\\Users\\x')).toBeUndefined()
++  })
++})
++
++// 第一次导入打包配置模块较慢（与其他打包用例并发时超过默认 5 秒）
++describe('ad-hoc 打包开关（T28，令 1424 第 3 条）', { timeout: 60_000 }, () => {
++  it('LAWBENCH_MAC_ADHOC=1：不要签名身份与公证凭据；不开 hardened runtime；只出 arm64 dmg', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const c = createElectronBuilderConfig(base, 'darwin', 'arm64') as MacConfig
++    expect(c.mac).toMatchObject({ identity: null, forceCodeSigning: false, hardenedRuntime: false, notarize: false, target: [{ target: 'dmg', arch: ['arm64'] }] })
++    expect(c.dmg.sign).toBe(false)
++    expect((c as { publish?: unknown }).publish).toBeNull()                 // 不带更新源：产品不外连（同 Windows 未签名包）
++  })
++  it('没有开关又没有签名身份：照 DSH 原样报错（不悄悄出未签名包）', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const { LAWBENCH_MAC_ADHOC: _, ...signed } = base
++    expect(() => createElectronBuilderConfig(signed, 'darwin', 'arm64')).toThrow(/SIGNING_IDENTITY/)
++  })
++  it('载荷进 Contents/Resources（extraResources），不用 extraFiles；requirements.txt 不带', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const c = createElectronBuilderConfig({ ...base, LAWBENCH_STAGE_DIR: '/build/stage' }, 'darwin', 'arm64') as MacConfig
++    expect(c.extraResources).toContainEqual({ from: '/build/stage', to: '.', filter: ['**/*', '!requirements.txt'] })
++    expect(c.extraFiles).toBeUndefined()
++  })
++  it('dmg 里：主程序、"应用程序"快捷方式、两个小工具并排（令 1424 第 4 条）', async () => {
++    const { createElectronBuilderConfig, lawbenchDmgContents } = await import('../scripts/electron-builder-config.mjs')
++    const apps = '/build/tools/长截图切分.app:/build/tools/格式互转.app'
++    const c = createElectronBuilderConfig({ ...base, LAWBENCH_MAC_DMG_APPS: apps }, 'darwin', 'arm64') as MacConfig
++    expect(c.dmg.contents).toEqual(lawbenchDmgContents(apps))
++    expect(lawbenchDmgContents(apps)).toEqual([
++      { x: 130, y: 150 },
++      { x: 410, y: 150, type: 'link', path: '/Applications' },
++      { x: 130, y: 330, type: 'file', path: '/build/tools/长截图切分.app' },
++      { x: 410, y: 330, type: 'file', path: '/build/tools/格式互转.app' },
++    ])
++  })
++  it('Windows 配置不受开关影响：照旧 extraFiles', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    const win = { ...base, DSH_DESKTOP_TARGET_PLATFORM: 'win32', DSH_DESKTOP_TARGET_ARCH: 'x64', DSH_DESKTOP_UNSIGNED: '1', LAWBENCH_STAGE_DIR: 'D:\\build\\stage' }
++    const c = createElectronBuilderConfig(win, 'win32', 'x64') as MacConfig
++    expect(c.extraFiles).toEqual([{ from: 'D:\\build\\stage', to: '.', filter: ['**/*', '!requirements.txt'] }])
++    expect(c.extraResources.some((r) => r.from === 'D:\\build\\stage')).toBe(false)
++  })
++})
