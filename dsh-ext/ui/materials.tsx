@@ -7,7 +7,7 @@ import { citationTargets, errorText, shouldNotifyWikiDone, ocrConfirmText, pageR
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoad } from './kit.tsx'
 import { app, call, confirm, notice, type CaseRef, type Params } from './state.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
-import { openCaseFolder, removeMaterial } from './folder-actions.ts'
+import { MATERIAL_REMOVE_ENABLED, openCaseFolder, REMOVE_DISABLED_TIP, removeMaterial } from './folder-actions.ts'
 
 const POLL_MS = 3000
 const FALLBACK_PARAMS: Params = { thinking: '中', window: '128K', max_tokens: 16384 }
@@ -127,9 +127,9 @@ function MaterialRow({ m, onOcr, onRemove }: { m: Material; onOcr: () => void; o
           <Button size="sm" variant="outline" disabled={m.status === 'ocr_running'} onClick={onOcr}>提交识别…</Button>
         </div>
       ) : null}
-      {/* 令 2043 第 2 条：识别进行中不能移除（服务还在用这个文件） */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button size="sm" variant="ghost" disabled={m.status === 'ocr_running'} onClick={onRemove}>移除此材料</Button>
+      {/* 令 2043 第 2 条：识别进行中不能移除（服务还在用这个文件）；服务能从索引里去掉之前整项禁用（MATERIAL_REMOVE_ENABLED） */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }} title={MATERIAL_REMOVE_ENABLED ? undefined : REMOVE_DISABLED_TIP}>
+        <Button size="sm" variant="ghost" disabled={!MATERIAL_REMOVE_ENABLED || m.status === 'ocr_running'} onClick={onRemove}>移除此材料</Button>
       </div>
     </li>
   )
