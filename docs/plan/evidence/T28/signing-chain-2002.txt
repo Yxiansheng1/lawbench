@@ -1,0 +1,30 @@
+﻿T28 第五跑修法（令 2002）· DSH macOS 打包链里读签名 / 公证 / 发布环境或会外连更新源的地方（打好 P-3…P-22 的 dsh；2026-10-06）
+
+调用点清单（git grep resolveMacOSSigningEnvironment / resolveMacOSNotarizationEnvironment / DSH_DESKTOP_MACOS_SIGNING_IDENTITY / withMacOSSigningKeychain / notarizeMacOS / verifyMacOSSignature / codesign / notarytool，apps/desktop/scripts 非用例文件）：
+
+| 步（package:mac:arm64 → package-target.ts） | 调用点 | ad-hoc（LAWBENCH_MAC_ADHOC=1）下 |
+|---|---|---|
+| main：配置校验 | desktop-package-environment.mjs validate → resolveMacOSSigningEnvironment / Notarization / CSC_LINK | 已覆盖（按 unsigned 校验，P-22 首版） |
+| main：签名钥匙串 | macos-signing-keychain.mjs withMacOSSigningKeychain（CSC_LINK、codesign Developer ID 探针） | 已覆盖（直接 packageTarget，P-22 首版） |
+| packageTarget：build:official、release:pack、pack、native/system build:ts、dsh-ext pack | — | 不涉及 |
+| prepare:runtime（下 Electron、node、python） | prepare-runtime.ts、prepare-primary-runtime.ts | 不涉及签名；联网下载仅在构建机（CI） |
+| prepare:packages | prepare-package-set.ts | 不涉及 |
+| prepare:dsh | prepare-dsh.ts:165-166 sign:dsh-native / sign:primary-native → macos-runtime.ts signMacOSRuntime → resolveMacOSSigningEnvironment + codesign Developer ID（macos-cache-policy.ts 同链） | **本次修**：ad-hoc 时跳过，afterPack 的 sign-adhoc.sh 统一签 |
+| electron-builder 配置 | electron-builder-config.mjs:85-86 签名身份、公证凭据 | 已覆盖（P-22 首版） |
+| beforePack | resolveDesktopPolicyConfig | 不涉及（policy 恒为 undefined，P-4） |
+| afterPack | verifyDesktopRuntime（无签名校验）；writeMacOSAppUpdateConfig（仅 update 有值） | 不涉及（ad-hoc 时 update 为 undefined）；sign-adhoc.sh 在这里 |
+| afterSign | verifyMacOSSignatureAfterSign（要求 Developer ID） | 已覆盖（ad-hoc 直接 return） |
+| artifactBuildCompleted | notarizeMacOSDiskImageArtifact | 已覆盖（ad-hoc 直接 return） |
+| 更新源 | publish（update 为 undefined → null） | 已覆盖：包里不带更新源，产品不外连 |
+| packageTarget 签名分支 | package-macos.ts（resolve 签名 / 公证、verifyMacOSSignature、notarize）、notarizeMacOS | 不进入（ad-hoc 走单独分支，P-22 首版） |
+| 发布记录 | writeReleaseRecord | 已覆盖（ad-hoc 跳过） |
+| smoke-packaged-runtime.ts | 只有 Windows 的 verifyWindowsCode | 不涉及 |
+| verify-macos-signature.mjs 命令行入口（verify:mac-signature） | 不在打包链里 | 不涉及 |
+
+做法说明：没有让 resolveMacOSSigningEnvironment 在开关下返回"无签名"：它的消费方（signMacOSRuntime、verifyMacOSSignature）拿身份拼 "Developer ID Application: …" 去 codesign / 校验，空值只会换个地方报错。改为在唯一漏掉的调用点（prepare-dsh）按开关跳过；resolveMacOSSigningEnvironment 行为不变（用例：开关在、无身份仍报错）。
+
+本机验证（Windows）：
+- tsc -b tsconfig.host.json → exit 0；tsc -b tsconfig.client.json → exit 0
+- vitest apps/desktop/tests/lawbench-macos.spec.ts → 10 passed（含 prepare-dsh 守卫与调用次数、开关只认 1、无身份照旧报错、ad-hoc 配置不要签名与公证凭据）
+- 从 477b4f4 按序打全部 17 个补丁，与检查过的工作树逐字一致
+- prepare:dsh 在 Windows 上走不到这两步：签名分支以 process.platform === 'darwin' 为前提，且 mac-arm64 目标的运行时只能在 Mac 上准备（package-target 对 darwin 目标要求 macOS 构建机）；能做的是上面的静态与逻辑用例。
