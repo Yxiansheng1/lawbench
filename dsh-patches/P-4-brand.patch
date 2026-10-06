@@ -25,7 +25,7 @@ index c885816c75..db024718b2 100644
      report += L"Result: " + DescribeResult(code) + L"\r\n";
      report += L"Archive: " + archive + L"\r\n";
 diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
-index 174ebfa28b..434ae85526 100644
+index 174ebfa28b..0fa179f80e 100644
 --- a/apps/desktop/installer/strings.nsh
 +++ b/apps/desktop/installer/strings.nsh
 @@ -19,20 +19,20 @@ LangString INSTALLER_BROWSE ${LANG_ENGLISH} "Browse"
@@ -55,7 +55,7 @@ index 174ebfa28b..434ae85526 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
-@@ -55,3 +55,11 @@ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_ENGLISH} "The full report could not
+@@ -55,3 +55,16 @@ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_ENGLISH} "The full report could not
  LangString INSTALLER_EXTRACT_UNSAVED ${LANG_SIMPCHINESE} "无法保存完整错误报告，请使用“复制错误信息”保留。"
  LangString INSTALLER_EXTRACT_COPIED ${LANG_ENGLISH} "Error details were copied to the clipboard."
  LangString INSTALLER_EXTRACT_COPIED ${LANG_SIMPCHINESE} "错误信息已复制到剪贴板。"
@@ -67,6 +67,11 @@ index 174ebfa28b..434ae85526 100644
 +LangString LAWBENCH_TOOL_SPLITTER ${LANG_SIMPCHINESE} "长截图切分"
 +LangString LAWBENCH_TOOL_CONVERT ${LANG_ENGLISH} "Format Converter"
 +LangString LAWBENCH_TOOL_CONVERT ${LANG_SIMPCHINESE} "格式互转"
++; Both language names of the tool shortcuts, so the uninstaller removes them whatever language it runs in (review P3)
++!define LAWBENCH_TOOL_SPLITTER_EN "Long Screenshot Splitter"
++!define LAWBENCH_TOOL_SPLITTER_ZH "长截图切分"
++!define LAWBENCH_TOOL_CONVERT_EN "Format Converter"
++!define LAWBENCH_TOOL_CONVERT_ZH "格式互转"
 diff --git a/apps/desktop/renderer/update-dialog.css b/apps/desktop/renderer/update-dialog.css
 index 98183989a5..9db70a3695 100644
 --- a/apps/desktop/renderer/update-dialog.css
@@ -1386,7 +1391,7 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..cc46b60085 100644
+index 0f4d859e78..e9074b1c57 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
 @@ -3,6 +3,14 @@
@@ -1404,13 +1409,16 @@ index 0f4d859e78..cc46b60085 100644
  ManifestDPIAware true
  !ifndef BUILD_UNINSTALLER
    !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
-@@ -88,9 +96,65 @@ ManifestDPIAware true
+@@ -88,9 +96,68 @@ ManifestDPIAware true
  !macroend
  
  !macro customUnInstall
-+  ; lawbench P-4 (order 2043): the small tools' Start menu entries (installer.nsh lawbenchAfterInstall)
-+  Delete "$SMPROGRAMS\$(LAWBENCH_TOOL_SPLITTER).lnk"
-+  Delete "$SMPROGRAMS\$(LAWBENCH_TOOL_CONVERT).lnk"
++  ; lawbench P-4 (order 2043): the small tools' Start menu entries (lawbenchAfterInstall), under either language's name
++  ; (the uninstaller may run in another language than the installer did; review P3)
++  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_SPLITTER_EN}.lnk"
++  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_SPLITTER_ZH}.lnk"
++  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_CONVERT_EN}.lnk"
++  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_CONVERT_ZH}.lnk"
    Call un.CleanData
  !macroend
  
@@ -1470,7 +1478,7 @@ index 0f4d859e78..cc46b60085 100644
  !macro customPageAfterChangeDir
    !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
    !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
-@@ -132,8 +196,10 @@ ManifestDPIAware true
+@@ -132,8 +199,10 @@ ManifestDPIAware true
  ; The report outlives $PLUGINSDIR so a user can send it; silent installs keep only the file. The updater cache
  ; directory is never an installation target and leaves with the application on uninstall.
  ; The directory smoke fixture predefines DSH_INSTALLER_LOG_DIR to keep reports inside its scratch tree.
@@ -1482,7 +1490,7 @@ index 0f4d859e78..cc46b60085 100644
  !endif
  
  !macro customInstallerExtractFailed Archive
-@@ -209,6 +275,7 @@ ManifestDPIAware true
+@@ -209,6 +278,7 @@ ManifestDPIAware true
    !insertmacro dshFinishDirectories
    ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
@@ -1553,7 +1561,7 @@ index 75b906a29d..6409e34160 100644
    it('renders owner props for the default sidebar and prospective right panel', () => {
 diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
 new file mode 100644
-index 0000000..8a95df0
+index 0000000..3958344
 --- /dev/null
 +++ b/apps/desktop/src/lawbench-isolation.ts
 @@ -0,0 +1,50 @@
