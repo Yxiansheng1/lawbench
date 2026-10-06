@@ -34,6 +34,15 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 uvicorn==0.54.0
 
+[mac]  # T28 macOS（Apple 芯片）载荷，packaging\mac\build.sh 按这里下载并核对；手工维护（放在 [client] 之前：gen_lock.py 只重写 [client*] 段）
+# 格式：组件  版本  下载地址  sha256  许可证（sha256 均为发布方给的值：DSH lock.json、TDF 镜像 .sha256、GitHub 发布资产 digest）
+python        3.12.14+20260901  https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.12.14%2B20260901-aarch64-apple-darwin-install_only_stripped.tar.gz  81a359f1cfadd4da11766534c5913791cea55f26e1bb902cacd2a531bb1e4b2b  PSF-2.0
+libreoffice   26.8.0  https://download.documentfoundation.org/libreoffice/stable/26.8.0/mac/aarch64/LibreOffice_26.8.0_MacOS_aarch64.dmg  8858d8058da4f862f47559486814e65efc27294da67c5e4bb56b006b1ee59f89  MPL-2.0
+pandoc        3.11  https://github.com/jgm/pandoc/releases/download/3.11/pandoc-3.11-arm64-macOS.zip  15806bedf9517bfead72e88fe6a6696635c3691efbb6e152173440e9c5bb50b4  GPL-2.0-or-later
+pandoc-copying  3.11  https://raw.githubusercontent.com/jgm/pandoc/3.11/COPYING.md  3ebfbf9235b049d384cdba5a66a1a3434bb544391e720b76faa8e1b3ee61a4e5  GPL-2.0-or-later
+pandoc-copyright  3.11  https://raw.githubusercontent.com/jgm/pandoc/3.11/COPYRIGHT  842e33ef01625e93f85bebb8bac83aa570186b7aa77a09971257cc29f8f60740  GPL-2.0-or-later
+# Python 依赖：与 [client.pip] 同一份钉版，去掉只在 Windows 用的 pywin32、pywin32-ctypes；轮子用 macosx arm64 版，哈希记在构建日志 pip-mac-wheels.txt
+
 [client]  # T20 步骤 5，packaging\gen_lock.py 生成；格式同上：组件  版本  文件  sha256  来源  许可证
 dsh           477b4f420553e8a52c2fbccc464d7561b239c443  dsh\（子模块，补丁见 dsh-patches\PATCHES.md）  -  github.com/deepseek-ai/dsh  MIT
 electron      44.0.0  -  -  npm electron  MIT
