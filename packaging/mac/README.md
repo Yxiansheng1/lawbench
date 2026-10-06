@@ -21,7 +21,7 @@ LAWBENCH_TOKENIZER=/path/tokenizer.json bash packaging/mac/build.sh
 
 载荷来源与 sha256 见 `packaging\versions.lock` 的 `[mac]` 段，每次构建都核对。
 
-**tokenizer**：6000D 同款分词文件不是公开文件（与 Hugging Face 上的 Qwen3 不同），仓库里也没有。云上构建从本仓库 Release `assets-v1` 的 `tokenizer.json` 取（用户在 GitHub 网页手工上传一次），按 sha256 `87a7830d…` 核对，不符即失败。资产不存在时才照打无 tokenizer 的包：服务按估算计 token，dmg 文件名带 `-smoke-no-tokenizer`，Release 草稿正文第一行写"冒烟包，无 tokenizer，不得交付律师"。本地构建用 `LAWBENCH_TOKENIZER=<文件>`。
+**tokenizer**：6000D 同款分词文件不是公开文件（与 Hugging Face 上的 Qwen3 不同），仓库里也没有。云上构建从本仓库 Release `assets-v1` 的 `tokenizer.json` 取（用户在 GitHub 网页手工上传一次），按 sha256 `87a7830d…` 核对，不符即失败。**`assets-v1` 必须是已发布的 Release（不能是草稿：工作流的只读令牌看不到草稿），并且要先建好**——查询出任何错误（网络、权限、找不到这个 Release）都直接失败；只有查询成功、但资产列表里确实没有 `tokenizer.json` 时，才照打无 tokenizer 的包：服务按估算计 token，dmg 文件名带 `-smoke-no-tokenizer`，Release 草稿正文第一行写"冒烟包，无 tokenizer，不得交付律师"。本地构建用 `LAWBENCH_TOKENIZER=<文件>`。
 
 **工作流**（`.github\workflows\mac-build.yml`，手动触发）：build（只读令牌，跑全部第三方代码）→ release（唯一有写权限的 job，只建草稿，不跑项目代码）与 smoke（只读，干净 Mac 上装好冒烟）。dmg 太大放不进 artifact 存储，job 之间经 Actions 缓存传递（按本次运行编号，下游按 sha256 核对）。第三方 action 一律钉 commit SHA。
 

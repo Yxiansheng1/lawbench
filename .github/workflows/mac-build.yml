@@ -19,6 +19,11 @@ on:
 permissions:
   contents: read
 
+# shell: bash runs every step as bash -eo pipefail: a failing build.sh behind a pipe fails the step (review P2-A)
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: mac-build
   cancel-in-progress: false
@@ -50,7 +55,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p packaging/mac/tokenizer
-          if gh release view assets-v1 --repo "${{ github.repository }}" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx tokenizer.json; then
+          # Only a successful query whose asset list lacks tokenizer.json falls back to a smoke build; any other error
+          # (network, permission, no published release assets-v1) fails the step (review P3)
+          names="$(gh release view assets-v1 --repo "${{ github.repository }}" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$names" | grep -qx tokenizer.json; then
             gh release download assets-v1 --repo "${{ github.repository }}" -p tokenizer.json -D packaging/mac/tokenizer --clobber
             echo "$TOKENIZER_SHA256  packaging/mac/tokenizer/tokenizer.json" | shasum -a 256 -c -
             echo "included=yes" >> "$GITHUB_OUTPUT"
@@ -87,6 +95,7 @@ jobs:
             export LAWBENCH_ALLOW_NO_TOKENIZER=1
           fi
           bash packaging/mac/build.sh 2>&1 | tee packaging/mac/out/build-log.txt
+          test "${PIPESTATUS[0]}" -eq 0
 
       - name: Hand the dmg to the next jobs
         id: dmg

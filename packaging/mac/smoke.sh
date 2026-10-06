@@ -47,8 +47,9 @@ PID=$!
 say "started pid $PID"
 # Connections of every process of the app, sampled each second from start to exit (review P3-4)
 ( while kill -0 "$PID" 2>/dev/null; do
-    p="$(pgrep -f "/Applications/$NAME.app" | paste -sd, -)"
-    [ -n "$p" ] && lsof -nP -a -p "$p" -i 2>/dev/null | awk 'NR > 1'
+    # the subshell inherits set -e: pgrep / lsof exit 1 when there is nothing to report (review P2-B)
+    p="$(pgrep -f "/Applications/$NAME.app" | paste -sd, -)" || true
+    if [ -n "$p" ]; then lsof -nP -a -p "$p" -i 2>/dev/null | awk 'NR > 1' || true; fi
     sleep 1
   done ) > "$OUT/connections-raw.txt" &
 SAMPLER=$!
@@ -68,8 +69,9 @@ for _ in $(seq 1 60); do
   sleep 3
 done
 say "windows of $NAME: $n"
+[ "${n:-0}" -ge 1 ] || { say "FAIL: no window of $NAME within 3 minutes"; exit 1; }
 sleep 15   # let the first-run page and the service settle
-screencapture -x "$OUT/smoke-first-run.png" && say "screenshot: smoke-first-run.png"
+screencapture -x "$OUT/smoke-first-run.png" && [ -s "$OUT/smoke-first-run.png" ] || { say "FAIL: screencapture"; exit 1; }
 
 # Start-up self-check and service state from the metadata-only plugin logs (no material names by design, Spec 4.5)
 if ls "$APPDATA/logs"/plugins-*.log >/dev/null 2>&1; then
@@ -80,7 +82,7 @@ else
 fi
 
 # The app's processes must be found, otherwise the connection record means nothing (review P3-4)
-PIDS="$(pgrep -f "/Applications/$NAME.app" | paste -sd, -)"
+PIDS="$(pgrep -f "/Applications/$NAME.app" | paste -sd, -)" || true
 [ -n "$PIDS" ] || { say "FAIL: no process of $NAME found"; exit 1; }
 say "processes: $PIDS"
 
@@ -92,6 +94,8 @@ wait "$SAMPLER" 2>/dev/null || true
 # Every connection seen during the run: only 127.0.0.1 is allowed (Spec 14.3)
 sort -u "$OUT/connections-raw.txt" > "$OUT/connections.txt"
 say "connections: $(grep -c . "$OUT/connections.txt" || true) distinct lines over the run (connections.txt)"
+# an empty record proves nothing: the Host's own web server must show up listening on 127.0.0.1 (review P2-B)
+grep -qE '127\.0\.0\.1:[0-9]+ \(LISTEN\)' "$OUT/connections.txt" || { say "FAIL: connection record empty or without the 127.0.0.1 listener"; exit 1; }
 # NAME column: "local" for listeners, "local->remote" for connections; judge the remote side when there is one
 if awk '{ n = $9; i = index(n, "->"); if (i) n = substr(n, i + 2); print n }' "$OUT/connections.txt" \
      | grep -vE '^(127\.0\.0\.1|\[::1\]|localhost|\*)[:.]' | grep -E . ; then
