@@ -6,7 +6,11 @@
 # Usage: sign-adhoc.sh <path to .app>
 set -euo pipefail
 APP="${1:?usage: sign-adhoc.sh <app>}"
-[ -d "$APP/Contents" ] || { echo "sign-adhoc: not an app bundle: $APP" >&2; exit 2; }
+echo "sign-adhoc: app = $APP"
+[ -d "$APP/Contents" ] || { echo "sign-adhoc: not an app bundle: $APP" >&2; ls -la "$(dirname "$APP")" >&2 || true; exit 2; }
+# a dangling symlink makes the final verify fail with "<app>: No such file or directory" (sixth run): say which first
+dangling="$(find "$APP" -type l ! -exec test -e {} \; -print)"
+if [ -n "$dangling" ]; then echo "$dangling" | sed 's/^/sign-adhoc: dangling link: /' >&2; echo "sign-adhoc: remove the dangling links above (codesign --verify --strict rejects them)" >&2; exit 3; fi
 LO_REL="Contents/Resources/tools/LibreOffice.app"
 LO="$APP/$LO_REL"
 sign() { codesign --force --sign - --timestamp=none "$1"; }
@@ -26,7 +30,11 @@ done < <(find "$APP/Contents" -depth -type d \( -name '*.app' -o -name '*.framew
 # 3. the app
 sign "$APP"
 echo "sign-adhoc: $n Mach-O files, $b nested bundles, app signed ad-hoc"
-codesign --verify --strict --verbose=2 "$APP"
+codesign --verify --strict --verbose=2 "$APP" || {
+  echo "sign-adhoc: verify failed; details:" >&2
+  codesign --verify --strict --deep --verbose=4 "$APP" 2>&1 | tail -n 40 >&2 || true
+  exit 4
+}
 if [ -d "$LO" ]; then
   # LibreOffice keeps its Developer ID signature (TeamIdentifier present, not "adhoc")
   codesign -dv "$LO" 2>&1 | grep -E '^(Authority|TeamIdentifier|Signature)=' | head -n 3 || true

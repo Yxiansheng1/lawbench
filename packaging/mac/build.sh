@@ -110,7 +110,11 @@ step_python() {
     --find-links "$CACHE/wheels" -r "$req"
   (cd "$CACHE/wheels" && shasum -a 256 *.whl) > "$OUT/pip-mac-wheels.txt"
   # pip's console scripts embed the build machine's interpreter path: broken once installed
-  find "$STAGE/python/bin" -type f ! -name 'python3*' -delete
+  # Symlinks too (sixth run): python-build-standalone ships 2to3 / idle3 / pydoc3 as links to 2to3-3.12 / idle3.12 /
+  # pydoc3.12; deleting only the files left them dangling, and codesign --verify --strict rejects a bundle that holds a
+  # dangling link ("<app>: No such file or directory").
+  find "$STAGE/python/bin" \( -type f -o -type l \) ! -name 'python3*' -delete
+  [ -x "$py" ] || die "python: bin/python3 missing after the bin/ clean-up"
   local site
   site="$("$py" -I -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
   cp "$ROOT/packaging/python/sitecustomize.py" "$site/"
@@ -272,7 +276,30 @@ scan_dir() {  # scan_dir <dir> <label>
   rm -f -- "$home"
   say "scan ($2): no key-like strings, no build paths in text files ($(find "$1" -type f | wc -l | tr -d ' ') files, LibreOffice.app excluded)"
 }
-step_scan() { scan_dir "$STAGE" stage; }
+# A dangling symlink anywhere in the bundle makes codesign --verify --strict fail at the very end of packaging (sixth
+# run); find them here, before the long DSH packaging run, and name them.
+check_links() {  # check_links <dir> <label>
+  local bad="$OUT/dangling-links-$2.txt"
+  find "$1" -type l ! -exec test -e {} \; -print > "$bad"
+  if [ -s "$bad" ]; then sed 's/^/  dangling link: /' "$bad"; die "$2: dangling symlinks (see above, out/$(basename "$bad"))"; fi
+  rm -f -- "$bad"
+  say "$2: no dangling symlinks"
+}
+step_scan() { scan_dir "$STAGE" stage; check_links "$STAGE" stage; }
+
+# What DSH's packaging left behind, for the next diagnosis (order 2049): the layout of .desktop-build/targets and the
+# dangling links inside any .app there.
+targets_tree() {
+  local t="$DSH/apps/desktop/.desktop-build/targets"
+  {
+    echo "== find $t -maxdepth 5"
+    find "$t" -maxdepth 5 -print 2>&1 || true
+    echo; echo "== ls -la of every *.app parent"
+    find "$t" -maxdepth 5 -type d -name '*.app' -print 2>/dev/null | while IFS= read -r a; do ls -la "$(dirname "$a")"; done
+    echo; echo "== dangling symlinks inside .app bundles"
+    find "$t" -path '*.app/*' -type l ! -exec test -e {} \; -print 2>/dev/null || true
+  } > "$OUT/targets-tree.txt"
+}
 
 step_package() {
   local need missing=()
@@ -297,7 +324,8 @@ step_package() {
      LAWBENCH_MAC_SIGN_SCRIPT="$HERE/sign-adhoc.sh" LAWBENCH_MAC_DMG_APPS="$apps" \
      LAWBENCH_RUNTIME_LOCK="$([ -f "$pinned" ] && echo "$pinned")" LAWBENCH_RUNTIME_LOCK_OUT="$resolved" \
      "${PNPM[@]}" run package:mac:arm64) \
-    || die "package: DSH packaging failed; its step journal is dsh/apps/desktop/.desktop-build/packaging-runs/*/events.jsonl (in the build logs artifact); a signing error there comes from sign-adhoc.sh (afterPack)"
+    || { targets_tree
+         die "package: DSH packaging failed; its step journal is dsh/apps/desktop/.desktop-build/packaging-runs/*/events.jsonl (in the build logs artifact); a signing error there comes from sign-adhoc.sh (afterPack); the real target layout is out/targets-tree.txt"; }
   if [ -f "$pinned" ] && [ -f "$resolved" ]; then
     # recorded, not fatal on the first Mac builds: macOS may resolve platform-only packages the Windows lock lacks
     if node "$ROOT/packaging/runtime-lock-compare.mjs" "$pinned" "$resolved" >> "$REPORT" 2>&1; then say "runtime lock: same versions as packaging/runtime-lock"
@@ -316,6 +344,7 @@ step_package() {
   app="$(find "$DSH/apps/desktop/.desktop-build/targets" -maxdepth 4 -type d -path '*mac-arm64/*.app' | head -n 1)"
   [ -n "$app" ] || die "package: no mac-arm64/*.app under dsh/apps/desktop/.desktop-build/targets"
   scan_dir "$app/Contents" app
+  check_links "$app/Contents" app
   say "dmg: $(basename "$dmg")  $(( $(stat -f%z "$dmg") / 1048576 )) MB  sha256 $(sha256 "$dmg")"
 }
 

@@ -1,0 +1,18 @@
+﻿T28 第六跑修法（令 2049）· 定位与本机核对（2026-10-06）
+
+日志（附件 mac-build-logs-7\packaging\mac\out\build-log.txt）：sign-adhoc.sh 已把全部 Mach-O、内嵌 .app/.framework 和主程序签完
+（最后一行 "<app>: replacing existing signature"），随后 codesign --verify --strict 报 "<app>: No such file or directory" → 脚本退出非 0 → electron-builder afterPack 失败。
+路径本身是对的（appOutDir=.desktop-build/targets/mac-arm64/artifacts/mac-arm64，.app 在那里，前面几百行都在签它）。
+
+真因：build.sh python 步原来 ind python/bin -type f ! -name 'python3*' -delete 只删文件、不删链接。
+本机下载钉版的 python-build-standalone 包（sha256 81a359f1… 核对通过）核对 python/bin：
+  2to3 -> 2to3-3.12、idle3 -> idle3.12、pydoc3 -> pydoc3.12 是链接，目标文件被删 → 包里留下 3 个悬空链接；
+  codesign --verify --strict 遇到悬空链接就报 "No such file or directory"。
+新规则（文件和链接都删，只留 python3*）后保留：python3 -> python3.12、python3-config -> python3.12-config、python3.12、python3.12-config，全部可解析。
+
+修法：
+1. build.sh：python/bin 清理同时删链接；清理后确认 bin/python3 可执行。
+2. build.sh：scan 步加 check_links（stage 里任何悬空链接 → 失败并点名，out/dangling-links-stage.txt），成品 .app 同样查。
+3. sign-adhoc.sh：开头打印收到的 app 路径；签名前先找悬空链接，有就点名退出；最后 verify 失败时打印 codesign --verify --strict --deep --verbose=4 的末 40 行。
+4. build.sh：DSH 打包失败时写 out/targets-tree.txt（.desktop-build/targets 五层目录、各 .app 父目录 ls -la、.app 内悬空链接），随 build-logs artifact 上传。
+P-22 未改（不需要），补丁链与类型检查不受影响。
