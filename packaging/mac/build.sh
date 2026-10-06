@@ -79,7 +79,7 @@ step_dsh() {
     # same order as dsh-patches/PATCHES.md (the lines 'git -C dsh apply ..\dsh-patches\<name>.patch')
     local p
     while IFS= read -r p; do
-      git -C "$DSH" apply "$ROOT/dsh-patches/$p"
+      git -C "$DSH" apply "$ROOT/dsh-patches/$p" || die "dsh: patch $p does not apply to the dsh checkout"
     done < <(sed -nE 's/^git -C dsh apply \.\.[\\]dsh-patches[\\]([^ ]+\.patch).*/\1/p' "$ROOT/dsh-patches/PATCHES.md" | tr -d '\r')
     say "dsh: patches applied ($(sed -nE 's/^git -C dsh apply .*[\\](P-[0-9]+)-.*/\1/p' "$ROOT/dsh-patches/PATCHES.md" | tr -d '\r' | tr '\n' ' '))"
   fi
@@ -124,8 +124,22 @@ step_python() {
   cp -R "$ROOT/contracts/." "$STAGE/contracts/"
   find "$STAGE/service" "$STAGE/contracts" "$STAGE/python" -name '__pycache__' -type d -prune -exec rm -rf {} +
   find "$STAGE/service" "$STAGE/contracts" "$STAGE/python" -name '*.py[co]' -delete
-  (cd "$STAGE/service" && "$py" -I -B -m lawbench --help >/dev/null)
-  "$py" -I -B -c 'import sys; assert not any("Library/Python" in p for p in sys.path), sys.path'
+  # The service package on sys.path (second run: "No module named lawbench"): Windows does it with python312._pth
+  # ("..\service"); macOS has no ._pth, and -I (implies -P) never adds the working directory. A .pth file in the
+  # interpreter's own site-packages is still read under -I; its relative line resolves against site-packages, so the
+  # path is computed from the real layout (stage/python/lib/python3.12/site-packages -> stage/service).
+  local rel
+  rel="$("$py" -I -B -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$STAGE/service" "$site")"
+  printf '%s\n' "$rel" > "$site/lawbench.pth"
+  [ -f "$site/sitecustomize.py" ] || die "sitecustomize.py missing in $site"
+  # Self-check with the runtime's own command line (install-layout.ts: python3 -I -B -m lawbench, cwd Resources/service)
+  # and from an unrelated directory: lawbench must come from stage/service, nothing from the user's Library/Python.
+  local where
+  where="$(cd / && "$py" -I -B -c 'import lawbench, sys; print(lawbench.__file__); assert not any("Library/Python" in p for p in sys.path), sys.path')" \
+    || die "python: 'import lawbench' failed with -I (lawbench.pth line: $rel)"
+  case "$where" in "$STAGE/service/lawbench/"*) ;; *) die "python: lawbench imported from $where, not from stage/service" ;; esac
+  (cd "$STAGE/service" && "$py" -I -B -m lawbench --help >/dev/null) || die "python: 'python3 -I -B -m lawbench --help' failed"
+  say "python: lawbench.pth -> $rel; lawbench imports from stage/service; -m lawbench --help ok"
   say "python: $(lock_field python 2) aarch64, $(wc -l < "$req" | tr -d ' ') pinned packages (pywin32 left out), wheels: out/pip-mac-wheels.txt"
 }
 
@@ -133,16 +147,18 @@ step_tools() {
   local dmg mnt zip tmp
   dmg="$(fetch libreoffice)"
   mnt="$WORK/lo-mnt"; mkdir -p "$mnt"
-  hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mnt" "$dmg" >/dev/null
+  hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mnt" "$dmg" >/dev/null || die "tools: hdiutil could not mount the LibreOffice dmg"
   rm -rf "$STAGE/tools/LibreOffice.app"; mkdir -p "$STAGE/tools"
-  ditto "$mnt/LibreOffice.app" "$STAGE/tools/LibreOffice.app"
+  ditto "$mnt/LibreOffice.app" "$STAGE/tools/LibreOffice.app" || { hdiutil detach "$mnt" >/dev/null || true; die "tools: LibreOffice.app not found in the dmg or copy failed"; }
   hdiutil detach "$mnt" >/dev/null
   codesign --verify --strict "$STAGE/tools/LibreOffice.app" || die "LibreOffice.app signature broken after copy"
   zip="$(fetch pandoc)"
   tmp="$WORK/pandoc"; reset_dir "$tmp"
   ditto -x -k "$zip" "$tmp"
   reset_dir "$STAGE/tools/pandoc/bin"
-  cp "$(find "$tmp" -type f -path '*/bin/pandoc' | head -n 1)" "$STAGE/tools/pandoc/bin/pandoc"
+  local pbin; pbin="$(find "$tmp" -type f -path '*/bin/pandoc' | head -n 1)"
+  [ -n "$pbin" ] || die "tools: no bin/pandoc inside the pandoc zip"
+  cp "$pbin" "$STAGE/tools/pandoc/bin/pandoc"
   chmod +x "$STAGE/tools/pandoc/bin/pandoc"
   # GPL: ship pandoc's license files next to it (same rule as build.ps1, T20 review P2-1)
   cp "$(fetch pandoc-copying)" "$STAGE/tools/pandoc/COPYING.md"
@@ -182,9 +198,9 @@ step_smalltools() {
       --distpath "$WORK/dist-$t" --workpath "$WORK/build-$t" --specpath "$WORK" \
       --paths "$ROOT/tools" --paths "$ROOT/tools/$t" \
       --hidden-import pypdfium2 --collect-all pypdfium2 --collect-all pypdfium2_raw \
-      "$WORK/$t-main.py"
+      "$WORK/$t-main.py" > "$OUT/pyinstaller-$t.txt" 2>&1 || { tail -n 30 "$OUT/pyinstaller-$t.txt"; die "small tools: PyInstaller failed for $t (out/pyinstaller-$t.txt)"; }
     [ -d "$WORK/dist-$t/$name.app" ] || die "small tool not built: $t"
-    bash "$HERE/sign-adhoc.sh" "$WORK/dist-$t/$name.app" >/dev/null
+    bash "$HERE/sign-adhoc.sh" "$WORK/dist-$t/$name.app" > "$OUT/sign-$t.txt" 2>&1 || { tail -n 20 "$OUT/sign-$t.txt"; die "small tools: ad-hoc signing failed for $name.app (out/sign-$t.txt)"; }
     ditto "$WORK/dist-$t/$name.app" "$OUT/dmg-apps/$name.app"
   done
   say "small tools: 长截图切分.app, 格式互转.app (ad-hoc signed, beside the app in the dmg)"
@@ -193,7 +209,7 @@ step_smalltools() {
 step_skills() {
   reset_dir "$STAGE/skills"
   # -E -s rather than -I: install.py imports its sibling modules from the script folder (-I would drop it from sys.path)
-  "$STAGE/python/bin/python3" -E -s -B "$ROOT/skills/_scripts/install.py" --out "$STAGE/skills"
+  "$STAGE/python/bin/python3" -E -s -B "$ROOT/skills/_scripts/install.py" --out "$STAGE/skills" || die "skills: install.py failed"
 }
 
 step_engines() {
@@ -216,14 +232,20 @@ step_lock() {
 # Keys and user names must not be in the package (T28 acceptance): scan every text file in stage (LibreOffice.app is the
 # vendor's signed release, left out) for Key-like strings, the .env.local variable names, and the build machine's home
 # path (/Users/<name>: a build path baked into a file would carry the user name).
-scan_dir() {  # scan_dir <dir> <label>
-  local hits="$WORK/scan-hits.txt"
+scan_dir() {  # scan_dir <dir> <label> [home-path hits only warn: 1]
+  local hits="$WORK/scan-hits.txt" home="$OUT/scan-$2-home-paths.txt"
   : > "$hits"
   grep -rlaE 'sk-[A-Za-z0-9]{20,}|LAWFIRM_TEST_KEY_[AB]=|PREP395_BASE=|LAWFIRM_LLM_BASE=|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' \
     "$1" --exclude-dir=LibreOffice.app >> "$hits" || true
-  grep -rlaF -- "$HOME/" "$1" --exclude-dir=LibreOffice.app >> "$hits" || true
-  if [ -s "$hits" ]; then sed 's/^/  hit: /' "$hits"; die "scan ($2): key-like strings or the build home path found (see above)"; fi
-  say "scan ($2): no key-like strings, no build home path ($(find "$1" -type f | wc -l | tr -d ' ') files, LibreOffice.app excluded)"
+  if [ -s "$hits" ]; then sed 's/^/  hit: /' "$hits"; die "scan ($2): key-like strings found (see the hit lines above)"; fi
+  grep -rlaF -- "$HOME/" "$1" --exclude-dir=LibreOffice.app > "$home" || true
+  if [ -s "$home" ]; then
+    sed 's/^/  home path in: /' "$home"
+    # on GitHub's runner the home is /Users/runner (no person's name): recorded for the next round, not fatal there
+    [ "${3:-0}" = 1 ] && [ "${GITHUB_ACTIONS:-}" = true ] || die "scan ($2): the build home path $HOME is baked into files (see above, out/$(basename "$home"))"
+    say "scan ($2): WARNING $(wc -l < "$home" | tr -d ' ') files carry the runner's home path (out/$(basename "$home"))"
+  else rm -f "$home"; fi
+  say "scan ($2): no key-like strings ($(find "$1" -type f | wc -l | tr -d ' ') files, LibreOffice.app excluded)"
 }
 step_scan() { scan_dir "$STAGE" stage; }
 
@@ -249,14 +271,15 @@ step_package() {
   (cd "$DSH/apps/desktop" && CI=true LAWBENCH_MAC_ADHOC=1 LAWBENCH_STAGE_DIR="$STAGE" \
      LAWBENCH_MAC_SIGN_SCRIPT="$HERE/sign-adhoc.sh" LAWBENCH_MAC_DMG_APPS="$apps" \
      LAWBENCH_RUNTIME_LOCK="$([ -f "$pinned" ] && echo "$pinned")" LAWBENCH_RUNTIME_LOCK_OUT="$resolved" \
-     "${PNPM[@]}" run package:mac:arm64)
+     "${PNPM[@]}" run package:mac:arm64) \
+    || die "package: DSH packaging failed; its step journal is dsh/apps/desktop/.desktop-build/packaging-runs/*/events.jsonl (in the build logs artifact); a signing error there comes from sign-adhoc.sh (afterPack)"
   if [ -f "$pinned" ] && [ -f "$resolved" ]; then
     # recorded, not fatal on the first Mac builds: macOS may resolve platform-only packages the Windows lock lacks
     if node "$ROOT/packaging/runtime-lock-compare.mjs" "$pinned" "$resolved" >> "$REPORT" 2>&1; then say "runtime lock: same versions as packaging/runtime-lock"
     else say "runtime lock: DIFFERS from packaging/runtime-lock (see above; out/runtime-pnpm-lock.yaml)"; fi
   fi
   local dmg
-  dmg="$(find "$DSH/apps/desktop/.desktop-build/targets" -name '*.dmg' -type f -print0 | xargs -0 ls -t | head -n 1)"
+  dmg="$(find "$DSH/apps/desktop/.desktop-build/targets" -name '*.dmg' -type f -exec stat -f '%m %N' {} + | sort -rn | head -n 1 | cut -d' ' -f2-)"
   [ -n "$dmg" ] || die "dmg not found under dsh/apps/desktop/.desktop-build/targets"
   # order 1526 P3-5: a package without the tokenizer says so in its file name
   local name; name="$(basename "$dmg")"
@@ -266,7 +289,8 @@ step_package() {
   (cd "$OUT" && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
   local app
   app="$(find "$DSH/apps/desktop/.desktop-build/targets" -maxdepth 4 -type d -path '*mac-arm64/*.app' | head -n 1)"
-  [ -n "$app" ] && scan_dir "$app/Contents" app
+  [ -n "$app" ] || die "package: no mac-arm64/*.app under dsh/apps/desktop/.desktop-build/targets"
+  scan_dir "$app/Contents" app 1
   say "dmg: $(basename "$dmg")  $(( $(stat -f%z "$dmg") / 1048576 )) MB  sha256 $(sha256 "$dmg")"
 }
 

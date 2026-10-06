@@ -1,0 +1,8 @@
+﻿T28 第二跑修法 · lawbench.pth 相对路径本机验证（2026-10-06，Windows 上模拟 Mac 目录层级）
+模拟布局：D:\t28tmp\pthsim2\python\lib\python3.12\site-packages（= stage/python/lib/python3.12/site-packages）；D:\t28tmp\pthsim2\service 为指向 D:\lawbench-D\service 的联接
+relpath(service, site-packages) = ..\..\..\..\service   （Mac 上同一计算得 ../../../../service）
+
+1) 不处理 .pth，在 C:\ 下 python -I -B -c 'import lawbench'：
+   ModuleNotFoundError: No module named 'lawbench'
+2) 在 C:\ 下 python -I -B，site.addsitedir(<模拟 site-packages>)（启动时处理 site-packages 里 .pth 用的就是这个函数）后 import lawbench：
+   file: D:\t28tmp\pthsim2\service\lawbench\__init__.py
