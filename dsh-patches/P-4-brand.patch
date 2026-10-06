@@ -25,7 +25,7 @@ index c885816c75..db024718b2 100644
      report += L"Result: " + DescribeResult(code) + L"\r\n";
      report += L"Archive: " + archive + L"\r\n";
 diff --git a/apps/desktop/installer/strings.nsh b/apps/desktop/installer/strings.nsh
-index 174ebfa28b..c1b7d72188 100644
+index 174ebfa28b..434ae85526 100644
 --- a/apps/desktop/installer/strings.nsh
 +++ b/apps/desktop/installer/strings.nsh
 @@ -19,20 +19,20 @@ LangString INSTALLER_BROWSE ${LANG_ENGLISH} "Browse"
@@ -55,13 +55,18 @@ index 174ebfa28b..c1b7d72188 100644
  LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
  LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
  LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."
-@@ -55,3 +55,6 @@ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_ENGLISH} "The full report could not
+@@ -55,3 +55,11 @@ LangString INSTALLER_EXTRACT_UNSAVED ${LANG_ENGLISH} "The full report could not
  LangString INSTALLER_EXTRACT_UNSAVED ${LANG_SIMPCHINESE} "无法保存完整错误报告，请使用“复制错误信息”保留。"
  LangString INSTALLER_EXTRACT_COPIED ${LANG_ENGLISH} "Error details were copied to the clipboard."
  LangString INSTALLER_EXTRACT_COPIED ${LANG_SIMPCHINESE} "错误信息已复制到剪贴板。"
 +; lawbench P-4 (note 2053): optional admin Skill folder after installing (default No; skipped with /S)
 +LangString LAWBENCH_SKILLS_DIR_ASK ${LANG_ENGLISH} "Create the firm's shared Skill folder now? This needs administrator rights. If the firm does not hand out shared Skills yet, choose No."
 +LangString LAWBENCH_SKILLS_DIR_ASK ${LANG_SIMPCHINESE} "是否创建律所统一 Skill 目录？需要管理员权限。律所还没有统一下发 Skill 时不用创建，选“否”即可。"
++; lawbench P-4 (order 2043): Start menu shortcuts for the two small tools (lawyers could not find them)
++LangString LAWBENCH_TOOL_SPLITTER ${LANG_ENGLISH} "Long Screenshot Splitter"
++LangString LAWBENCH_TOOL_SPLITTER ${LANG_SIMPCHINESE} "长截图切分"
++LangString LAWBENCH_TOOL_CONVERT ${LANG_ENGLISH} "Format Converter"
++LangString LAWBENCH_TOOL_CONVERT ${LANG_SIMPCHINESE} "格式互转"
 diff --git a/apps/desktop/renderer/update-dialog.css b/apps/desktop/renderer/update-dialog.css
 index 98183989a5..9db70a3695 100644
 --- a/apps/desktop/renderer/update-dialog.css
@@ -1381,7 +1386,7 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..d1b645e9f6 100644
+index 0f4d859e78..cc46b60085 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
 @@ -3,6 +3,14 @@
@@ -1399,7 +1404,13 @@ index 0f4d859e78..d1b645e9f6 100644
  ManifestDPIAware true
  !ifndef BUILD_UNINSTALLER
    !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
-@@ -91,6 +99,50 @@ ManifestDPIAware true
+@@ -88,9 +96,65 @@ ManifestDPIAware true
+ !macroend
+ 
+ !macro customUnInstall
++  ; lawbench P-4 (order 2043): the small tools' Start menu entries (installer.nsh lawbenchAfterInstall)
++  Delete "$SMPROGRAMS\$(LAWBENCH_TOOL_SPLITTER).lnk"
++  Delete "$SMPROGRAMS\$(LAWBENCH_TOOL_CONVERT).lnk"
    Call un.CleanData
  !macroend
  
@@ -1438,6 +1449,15 @@ index 0f4d859e78..d1b645e9f6 100644
 +    Pop $1
 +    Pop $0
 +  !endif
++  ; lawbench P-4 (order 2043, lawyers' first feedback): Start menu entries for the two small tools next to the app's own
++  ; (same Start menu as the app's shortcut: per-user install, current user's Programs). Removed by customUnInstall.
++  ${If} ${FileExists} "$INSTDIR\tools\splitter\splitter.exe"
++    CreateShortCut "$SMPROGRAMS\$(LAWBENCH_TOOL_SPLITTER).lnk" "$INSTDIR\tools\splitter\splitter.exe"
++  ${EndIf}
++  ${If} ${FileExists} "$INSTDIR\tools\convert\convert.exe"
++    CreateShortCut "$SMPROGRAMS\$(LAWBENCH_TOOL_CONVERT).lnk" "$INSTDIR\tools\convert\convert.exe"
++  ${EndIf}
++  ClearErrors
 +  ; lawbench P-4 (note 2053): optionally create the firm's shared Skill folder (%ProgramData%\lawbench\skills, ordinary
 +  ; users read-only). Default No; silent installs (/S) never ask. The script's default -Dir is that folder.
 +  ${IfNot} ${Silent}
@@ -1450,7 +1470,7 @@ index 0f4d859e78..d1b645e9f6 100644
  !macro customPageAfterChangeDir
    !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
    !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
-@@ -132,8 +184,10 @@ ManifestDPIAware true
+@@ -132,8 +196,10 @@ ManifestDPIAware true
  ; The report outlives $PLUGINSDIR so a user can send it; silent installs keep only the file. The updater cache
  ; directory is never an installation target and leaves with the application on uninstall.
  ; The directory smoke fixture predefines DSH_INSTALLER_LOG_DIR to keep reports inside its scratch tree.
@@ -1462,7 +1482,7 @@ index 0f4d859e78..d1b645e9f6 100644
  !endif
  
  !macro customInstallerExtractFailed Archive
-@@ -209,6 +263,7 @@ ManifestDPIAware true
+@@ -209,6 +275,7 @@ ManifestDPIAware true
    !insertmacro dshFinishDirectories
    ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
@@ -1533,10 +1553,10 @@ index 75b906a29d..6409e34160 100644
    it('renders owner props for the default sidebar and prospective right panel', () => {
 diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
 new file mode 100644
-index 0000000000..c0f2db4400
+index 0000000..8a95df0
 --- /dev/null
 +++ b/apps/desktop/src/lawbench-isolation.ts
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,50 @@
 +/**
 + * lawbench P-4 (order 1444): the installed lawyer workbench must not share state with an original DeepSeek Harness
 + * desktop on the same machine. Both packages are named "@deepseek-ai/dsh-desktop", so by default they share
@@ -1583,18 +1603,21 @@ index 0000000000..c0f2db4400
 +  // DeepSeek Harness runs (now possible, the single-instance locks being separate). The main process reads the Host's
 +  // actual URL from its ready message, so nothing else depends on the number.
 +  env.LAWBENCH_HOST_PORT = '0'
++  // Marks the installed package for code that has no Electron app object at hand (directory-picker.ts, order 2043)
++  env.LAWBENCH_PACKAGED = '1'
 +  return paths
 +}
 diff --git a/apps/desktop/tests/lawbench-isolation.spec.ts b/apps/desktop/tests/lawbench-isolation.spec.ts
 new file mode 100644
-index 0000000000..e50a6659bd
+index 0000000000..5420619540
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-isolation.spec.ts
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,57 @@
 +import { readFileSync } from 'node:fs'
 +import { join } from 'node:path'
 +import { describe, expect, it } from 'vitest'
 +import { applyLawbenchIsolation, lawbenchIsolatedPaths } from '../src/lawbench-isolation.ts'
++import { lawbenchDefaultFolder } from '../src/directory-picker.ts'
 +
 +// lawbench P-4（令 1444）：装好的律师工作台不与原版 DeepSeek Harness 共用 Electron 用户数据（连带单实例锁）和 DSH 主目录（~/.dsh 与 profile）。
 +const ENV = { APPDATA: 'C:\\Users\\x\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local' }
@@ -1609,6 +1632,7 @@ index 0000000000..e50a6659bd
 +    expect(env.DSH_HOME).toBe(join(ENV.LOCALAPPDATA, 'lawbench', 'dsh-home'))
 +    expect(env.DSH_HOME).not.toMatch(/\.dsh$/)
 +    expect(env.LAWBENCH_HOST_PORT).toBe('0') // 令 1539：Host 不用写死的 19387
++    expect(env.LAWBENCH_PACKAGED).toBe('1') // 令 2043：选目录对话框据此从 <用户目录>\连越律师工作台 开始
 +    expect(set[0]![1]).not.toMatch(/@deepseek-ai/)
 +  })
 +
@@ -1637,6 +1661,13 @@ index 0000000000..e50a6659bd
 +  it('Host 的端口：给了 LAWBENCH_HOST_PORT 就用它，开发期仍是 19387（复核 F1）', () => {
 +    const host = readFileSync(join(__dirname, '..', '..', 'desktop-host', 'src', 'index.ts'), 'utf8')
 +    expect(host).toMatch(/'--port', process\.env\.LAWBENCH_HOST_PORT \?\? '19387'/)
++  })
++
++  it('选目录对话框的起始位置（令 2043）：装好的包且 <用户目录>\\连越律师工作台 已在时从那里开始；开发期、文件夹不在时照旧', () => {
++    const home = String.raw`C:\Users\x`
++    expect(lawbenchDefaultFolder(true, home, () => true)).toBe(join(home, '连越律师工作台'))
++    expect(lawbenchDefaultFolder(true, home, () => false)).toBeUndefined()
++    expect(lawbenchDefaultFolder(false, home, () => true)).toBeUndefined()
 +  })
 +})
 diff --git a/apps/desktop-host/src/index.ts b/apps/desktop-host/src/index.ts
@@ -1679,3 +1710,44 @@ index defdd15923..9ebfce7cdb 100644
 +  StrCpy $UnTarget "$LOCALAPPDATA\lawbench\dsh-home"
    Call un.RemoveData
  FunctionEnd
+diff --git a/apps/desktop/src/directory-picker.ts b/apps/desktop/src/directory-picker.ts
+index e7cf84c393..4cfcda638f 100644
+--- a/apps/desktop/src/directory-picker.ts
++++ b/apps/desktop/src/directory-picker.ts
+@@ -1,7 +1,24 @@
+ /** Window-owned workspace directory dialogs for the local Desktop renderer. */
+ 
++import { existsSync } from 'node:fs'
++import { homedir } from 'node:os'
++import { join } from 'node:path'
+ import { dialog, ipcMain, type BrowserWindow } from 'electron'
+ import { DESKTOP_IPC, assertDesktopSender } from './ipc.ts'
++import { LAWBENCH_PRODUCT } from './locale.ts'
++
++/**
++ * lawbench P-4 (order 2043): the folder the directory dialog starts in — <user folder>\连越律师工作台 (dsh-ext
++ * host/desk-actions.ts LOCAL_ROOT_NAME), only in the installed package (LAWBENCH_PACKAGED, set by lawbench-isolation.ts)
++ * and only when it exists; otherwise undefined
++ * (the system's choice, as before).
++ */
++export function lawbenchDefaultFolder(packaged: boolean = process.env.LAWBENCH_PACKAGED === '1', home: string = process.env.USERPROFILE ?? homedir(),
++  exists: (p: string) => boolean = existsSync): string | undefined {
++  if (!packaged) return undefined
++  const dir = join(home, LAWBENCH_PRODUCT)
++  return exists(dir) ? dir : undefined
++}
+ 
+ /**
+  * Install the application-lifetime directory picker IPC handler.
+@@ -21,7 +38,10 @@ export function installDesktopDirectoryPicker(getWindow: () => BrowserWindow | u
+     if (window.isMinimized()) window.restore()
+     window.show()
+     window.focus()
+-    const result = dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'] }).then(
++    // lawbench P-4 (order 2043, lawyers' first feedback): open in <user folder>\连越律师工作台 when it exists — the default home
++    // of cases and the daily-matters case, outside the Documents/Desktop folders Windows 11 syncs to OneDrive.
++    const lawbenchRoot = lawbenchDefaultFolder()
++    const result = dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'], ...lawbenchRoot ? { defaultPath: lawbenchRoot } : {} }).then(
+       ({ canceled, filePaths }) => window.isDestroyed() || canceled ? null : filePaths[0] ?? null,
+     ).finally(() => { pending.delete(window) })
+     pending.set(window, result)
