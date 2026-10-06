@@ -293,10 +293,10 @@ index d791412274..a4fca44a91 100644
    return resolve(app.getAppPath(), '..', '..', '..', 'engines')
 diff --git a/apps/desktop/tests/lawbench-macos.spec.ts b/apps/desktop/tests/lawbench-macos.spec.ts
 new file mode 100644
-index 0000000000..9bf162a498
+index 0000000000..e3030bfe7f
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-macos.spec.ts
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,110 @@
 +import { readFileSync } from 'node:fs'
 +import { join } from 'node:path'
 +import { describe, expect, it } from 'vitest'
@@ -364,6 +364,18 @@ index 0000000000..9bf162a498
 +      { x: 130, y: 330, type: 'file', path: '/build/tools/长截图切分.app' },
 +      { x: 410, y: 330, type: 'file', path: '/build/tools/格式互转.app' },
 +    ])
++  })
++  it('dmg 里的小工具路径都在 DSH 工作区（dsh/）内：electron-builder 拒收工作区外的 dmg.contents（第七跑）', async () => {
++    const { lawbenchDmgContents } = await import('../scripts/electron-builder-config.mjs')
++    // packaging/mac/build.sh 把两个小工具拷进 dsh/apps/desktop/lawbench-dmg-apps/ 再交给 LAWBENCH_MAC_DMG_APPS
++    const build = readFileSync(join(__dirname, '..', '..', '..', '..', 'packaging', 'mac', 'build.sh'), 'utf8')
++    expect(build).toContain('local dmgapps="$DSH/apps/desktop/lawbench-dmg-apps"')
++    expect(build).toMatch(/apps="\$\(find "\$dmgapps"/)
++    const dsh = '/w/lawbench/dsh'
++    const apps = [`${dsh}/apps/desktop/lawbench-dmg-apps/长截图切分.app`, `${dsh}/apps/desktop/lawbench-dmg-apps/格式互转.app`].join(':')
++    const files = lawbenchDmgContents(apps).filter((c: { type?: string }) => c.type === 'file')
++    expect(files).toHaveLength(2)
++    for (const c of files) expect((c as { path: string }).path.startsWith(`${dsh}/`)).toBe(true)
 +  })
 +  it('Windows 配置不受开关影响：照旧 extraFiles', async () => {
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')

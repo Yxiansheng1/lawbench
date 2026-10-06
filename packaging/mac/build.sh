@@ -316,7 +316,16 @@ step_package() {
     'DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://update.invalid' 'DSH_DESKTOP_MACOS_PACK_CONCURRENCY=4' \
     > "$DSH/apps/desktop/.env.macos"
   local apps=""
-  if [ -d "$OUT/dmg-apps" ]; then apps="$(find "$OUT/dmg-apps" -maxdepth 1 -name '*.app' | sort | paste -sd: -)"; fi
+  # electron-builder refuses dmg.contents paths outside its workspace root (dsh/) (seventh run): copy the small tools into
+  # the DSH project folder (not .desktop-build/targets, which DSH's preparation may clear); ditto keeps the signatures.
+  local dmgapps="$DSH/apps/desktop/lawbench-dmg-apps" a
+  rm -rf -- "$dmgapps"
+  if [ -d "$OUT/dmg-apps" ]; then
+    mkdir -p "$dmgapps"
+    for a in "$OUT/dmg-apps"/*.app; do ditto "$a" "$dmgapps/$(basename "$a")"; done
+    apps="$(find "$dmgapps" -maxdepth 1 -name '*.app' | sort | paste -sd: -)"
+    case "$apps" in "$DSH/"*) ;; *) die "package: small tool apps must sit inside $DSH/ for electron-builder ($apps)" ;; esac
+  fi
   # third-party npm versions of the bundled runtime pinned by packaging/runtime-lock/pnpm-lock.yaml (same as build.ps1)
   local pinned="$ROOT/packaging/runtime-lock/pnpm-lock.yaml" resolved="$OUT/runtime-pnpm-lock.yaml"
   rm -f "$resolved"
