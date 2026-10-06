@@ -1,0 +1,17 @@
+preflight: macOS 15.7.9 arm64, node v24.21.0, version 0.1.0, commit 3af2b5e
+dsh: patches applied (P-10 P-12 P-13 P-3 P-5 P-9 P-14 P-15 P-16 P-17 P-18 P-11 P-4 P-19 P-20 P-21 P-22 )
+python: lawbench.pth -> ../../../../service; lawbench imports from stage/service; -m lawbench --help ok
+python: 3.12.14+20260901 aarch64, 53 pinned packages (pywin32 left out), wheels: out/pip-mac-wheels.txt
+tokenizer: NOT INCLUDED (LAWBENCH_ALLOW_NO_TOKENIZER=1; token counts are estimated; smoke build only)
+tools: LibreOffice 26.8.0 (signature kept), pandoc 3.11
+small tools: PyInstaller 6.22.3
+small tools: 长截图切分.app, 格式互转.app (ad-hoc signed, beside the app in the dmg)
+skills: 18 Skills; the app finds them at <App>.app/Contents/Resources/skills (cordis.patch.yml, run time)
+scan (stage): no key-like strings, no build paths in text files (25448 files, LibreOffice.app excluded)
+stage: no dangling symlinks
+runtime lock: 323 pinned third-party packages, 323 resolved
+runtime lock: same versions as packaging/runtime-lock
+scan (app): no key-like strings, no build paths in text files (32192 files, LibreOffice.app excluded)
+app: no dangling symlinks
+dmg: lawbench-0.1.0-mac-arm64-smoke-no-tokenizer.dmg  851 MB  sha256 6d694d5b9001ace3f1359dfb1d2e75f2fb31e8607f7536b5d3a05e3adeb6be06
+done
