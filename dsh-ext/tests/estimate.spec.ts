@@ -1,5 +1,5 @@
 // 令 2043 第 4 条：选 Skill（写任务单）之前按材料篇幅估一次，读不全先问。
-import { confirmScope, ESTIMATE_OK, ESTIMATE_TITLE, estimateCoverage, estimateText, READ_BUDGET_PAGES } from '../ui/estimate.ts'
+import { confirmScope, ESTIMATE_OK, ESTIMATE_TITLE, estimateCoverage, estimateText, READ_BUDGET_FILES, READ_BUDGET_PAGES } from '../ui/estimate.ts'
 import { app, setApi, type LawbenchApi } from '../ui/state.ts'
 
 afterEach(() => { setApi(undefined); app.set((s) => ({ ...s, dialogs: [] })) })
@@ -13,7 +13,15 @@ describe('估算', () => {
     // 折合：80、30、10（400 行 / 40）、6（3 张表 × 2）→ 共 126 页；从小到大 6 + 10 + 30 = 46，再加 80 超额
     expect(e).toEqual({ total: 4, fit: 3, pages: 126, over: true })
     expect(estimateText(e)).toContain('预计能读全约 3 份 / 共 4 份')
-    expect(READ_BUDGET_PAGES).toBeGreaterThan(0)
+    expect(estimateText(e)).toContain('按案件全部材料估')
+  })
+
+  it('阈值：100 页或 11 份，先到者触发；"能读全约 N 份"按 11 份封顶（注记 2156）', () => {
+    expect([READ_BUDGET_PAGES, READ_BUDGET_FILES]).toEqual([100, 11])
+    const small = Array.from({ length: 12 }, () => ({ unit: 'page' as const, unit_count: 1 }))
+    expect(estimateCoverage(small)).toEqual({ total: 12, fit: 11, pages: 12, over: true })
+    expect(estimateCoverage(small.slice(0, 11))).toEqual({ total: 11, fit: 11, pages: 11, over: false })
+    expect(estimateCoverage([{ unit: 'page', unit_count: 60 }, { unit: 'page', unit_count: 50 }])).toEqual({ total: 2, fit: 1, pages: 110, over: true })
   })
 })
 

@@ -28,6 +28,7 @@ import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
 import { folderKind, insideCase, localCaseFolder, removableMaterial, toolExe, type DeskDeps } from './desk-actions.ts'
 import { nodeDeskDeps } from './desk-node.ts'
+import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -222,13 +223,27 @@ export class LawbenchRemote {
    * @param request - { root, rel }，rel 为案件根下的相对路径（如"02 案件材料"、"工作区\成果"），空串为案件根。
    */
   async openFolder(request: unknown): Promise<{ ok: true; value: { opened: true } } | ApiFail> {
-    const r = request as { root?: unknown; rel?: unknown } | null
-    const at = r?.rel === '' && typeof r.root === 'string' ? { ok: true as const, value: r.root } : insideCase(r?.root, r?.rel)
-    if (!at.ok || !isAbsolute(at.value)) return at.ok ? { ok: false, error: { code: 'INVALID_ARGUMENT', message: '请求参数有误' } } : at
-    if (!this.desk.isDir(at.value)) return { ok: false, error: { code: 'NOT_FOUND', message: '这个文件夹还没有内容（还没建出来）' } }
+    const r = request as { case_id?: unknown; root?: unknown; rel?: unknown } | null
+    // 复核 AMEND P2-2：案件根不信界面给的，按服务登记核对后用登记的那个；网络路径、出案件根、联接指到外面的都不开
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const at = this.desk.openable(known.value, r?.rel)
+    if (!at.ok) return at
     try { await this.desk.openPath(at.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件夹没能打开，请重试' } } }
     this.log('info', 'folder.open', { kind: folderKind(String(r?.rel ?? '')) })
     return { ok: true, value: { opened: true } }
+  }
+
+  /** case_id 与案件根须是服务登记的同一个案件（不信界面给的路径）；对上了回登记的案件根。 */
+  private async knownCase(caseId: unknown, root: unknown): Promise<{ ok: true; value: string } | ApiFail> {
+    const bad: ApiFail = { ok: false, error: { code: 'INVALID_ARGUMENT', message: '请求参数有误' } }
+    if (typeof caseId !== 'string' || typeof root !== 'string') return bad
+    const recent = await this.callApi(API_ROUTES.find((x) => x.method === 'caseRecent')!, {})
+    if (!recent.ok) return recent
+    const cases = (recent.value as { cases?: Array<{ case_id: string; root: string }> }).cases ?? []
+    const known = cases.find((c) => c.case_id === caseId)
+    const norm = (p: string) => p.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
+    return known && norm(known.root) === norm(root) ? { ok: true, value: known.root } : bad
   }
 
   /**
@@ -238,19 +253,16 @@ export class LawbenchRemote {
    * @returns 重新扫描的结果（added/changed/removed/failed/review_needed）。
    */
   async materialRemove(request: unknown): Promise<ApiResult | ApiFail> {
+    // 复核 AMEND P2-3：服务能从检索里去掉之前整项关闭（不只是界面按钮禁用），调用一律拒绝
+    if (!MATERIAL_REMOVE_ENABLED) return { ok: false, error: { code: 'NOT_AVAILABLE', message: REMOVE_DISABLED_TIP } }
     const r = request as { case_id?: unknown; root?: unknown; rel_path?: unknown } | null
-    if (typeof r?.case_id !== 'string') return { ok: false, error: { code: 'INVALID_ARGUMENT', message: '请求参数有误' } }
-    const recent = await this.callApi(API_ROUTES.find((x) => x.method === 'caseRecent')!, {})
-    const cases = recent.ok ? ((recent.value as { cases?: Array<{ case_id: string; root: string }> }).cases ?? []) : []
-    const known = cases.find((c) => c.case_id === r.case_id)
-    if (!known || typeof r.root !== 'string' || known.root.toLowerCase().replace(/[\\/]+$/, '') !== r.root.toLowerCase().replace(/[\\/]+$/, '')) {
-      return recent.ok ? { ok: false, error: { code: 'INVALID_ARGUMENT', message: '请求参数有误' } } : recent
-    }
-    const file = removableMaterial(known.root, r.rel_path)
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const file = removableMaterial(known.value, r?.rel_path)
     if (!file.ok) return file
     try { await this.desk.remove(file.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件没能删除（可能正被别的程序打开），关掉后再试' } } }
     this.log('info', 'material.removed', {})
-    return this.callApi(API_ROUTES.find((x) => x.method === 'materialsScan')!, { case_id: r.case_id })
+    return this.callApi(API_ROUTES.find((x) => x.method === 'materialsScan')!, { case_id: (r as { case_id: string }).case_id })
   }
 
   /**

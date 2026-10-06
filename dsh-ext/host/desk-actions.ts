@@ -1,7 +1,7 @@
 // 律师第一批反馈（令 2043）里要 Host 动本机的几件事：打开小工具、打开案件子文件夹、移除一份材料、在本机建案件文件夹。
 // 路径判断都在这里（纯函数，tests\desk-actions.spec.ts）；真正启动程序、删文件由调用方注入，便于测。
 // 日志只记事件和结果，不记路径、文件名。
-import { lstatSync, realpathSync } from 'node:fs'
+import { lstatSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, join, normalize, relative, sep } from 'node:path'
 
 /** 首页"工具"一栏的两个小工具（打包后在 <安装目录>\tools\<名>\<名>.exe，见 packaging\build.ps1 smalltools 步）。 */
@@ -18,7 +18,7 @@ const BAD_ARG = fail('INVALID_ARGUMENT', '请求参数有误')
 
 /** 小工具的程序位置；开发期（没有安装目录）为 undefined。 */
 export function toolExe(installDir: string | undefined, name: unknown): { ok: true; value: string } | Fail {
-  if (typeof name !== 'string' || !(name in TOOLS)) return BAD_ARG
+  if (typeof name !== 'string' || !Object.hasOwn(TOOLS, name)) return BAD_ARG // 复核 P3：不认原型链上的名字（toString 等）
   if (!installDir) return fail('NOT_AVAILABLE', '开发环境里没有打包的小工具')
   return { ok: true, value: join(installDir, 'tools', name, `${name}.exe`) }
 }
@@ -61,8 +61,9 @@ export function removableMaterial(root: unknown, rel: unknown,
 /** 文件夹名里 Windows 不许的字符换成"_"，去掉首尾空格和点；空了用"新案件"。 */
 export function safeFolderName(name: unknown): string {
   const s = typeof name === 'string' ? name : ''
-  const t = s.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/^[\s.]+|[\s.]+$/g, '').slice(0, 80)
-  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(t) || t === '' ? '新案件' : t
+  // 复核 P3：先截长度再去首尾空格和点（截完末尾可能又是空格或点）；保留名带扩展名也不行（CON.txt）
+  const t = s.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 80).replace(/^[\s.]+|[\s.]+$/g, '')
+  return t === '' || /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(t) ? '新案件' : t
 }
 
 /** "为我在本机建一个文件夹"的位置：<用户目录>\连越律师工作台\<案件名>；同名已在时加"(2)"…… */
@@ -85,10 +86,29 @@ export interface DeskDeps {
   readonly userProfile: string
   exists(p: string): boolean
   isDir(p: string): boolean
+  /** 能打开的案件文件夹（openableFolder，真文件系统）。 */
+  openable(root: string, rel: unknown): { ok: true; value: string } | Fail
   /** 启动一个程序，不等它结束。 */
   launch(file: string, args: string[]): Promise<void>
   /** 在资源管理器（Mac 为访达）里打开文件夹。 */
   openPath(dir: string): Promise<void>
   remove(file: string): Promise<void>
   mkdir(dir: string): Promise<void>
+}
+
+/**
+ * 能打开的案件文件夹（复核 AMEND P2-2）：案件根须是普通绝对路径（不收网络路径：UNC 根会先连 SMB）；rel 为空即案件根，
+ * 否则不出案件根；解析联接、链接后实际位置仍须在案件根里（子目录是联接时可能指到案件外）；须是文件夹。
+ */
+export function openableFolder(root: unknown, rel: unknown,
+  realFn: (p: string) => string = realpathSync.native, isDir: (p: string) => boolean = (p) => { try { return statSync(p).isDirectory() } catch { return false } }): { ok: true; value: string } | Fail {
+  if (!plainAbsolute(root)) return BAD_ARG
+  const at = rel === '' ? { ok: true as const, value: normalize(root) } : insideCase(root, rel)
+  if (!at.ok) return at
+  let realRoot: string, real: string
+  try { realRoot = realFn(root); real = realFn(at.value) } catch { return fail('NOT_FOUND', '这个文件夹还没有内容（还没建出来）') }
+  const back = relative(realRoot, real)
+  if (back.startsWith('..') || isAbsolute(back)) return BAD_ARG
+  if (!isDir(real)) return fail('NOT_FOUND', '这个文件夹还没有内容（还没建出来）')
+  return { ok: true, value: real }
 }

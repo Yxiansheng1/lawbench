@@ -5,10 +5,12 @@ import { call, confirm, type CaseRef } from './state.ts'
 import type { Material } from './format.ts'
 
 /**
- * 一次能读全的量（折合页数）。**占位值**：线 B 从 T18 实测给出"每次调用能读的字数"后换成实测值（令 2043 第 4 条）。
+ * 一次能读全的量：**100 页或 11 份，先到者触发**（注记 2156、令 2203 第 5 条；线 B evidence\T18\read-capacity.md：
+ * 16 次预算 ≈ 11 次读取 × 7000 字 ≈ 7.7 万字、最多 11 份；按页估误差大）。契约 1.4 加 chars 后改按字数。
  * 改这一处即可；ESTIMATE_OFF 为 true 时整项不问。
  */
-export const READ_BUDGET_PAGES = 200
+export const READ_BUDGET_PAGES = 100
+export const READ_BUDGET_FILES = 11
 export const ESTIMATE_OFF = false
 
 /** 不同单位折合成页（占位比例，随阈值一起由线 B 的实测校准）：段 10 段一页，行 40 行一页，工作表一张算 2 页。 */
@@ -16,19 +18,19 @@ export const PAGE_EQUIV: Record<string, number> = { page: 1, para: 0.1, line: 0.
 
 export interface Estimate { total: number; fit: number; pages: number; over: boolean }
 
-/** 估一次能读全几份：从小到大装，装到超过额度为止（能读全的份数取最乐观的估计）。 */
-export function estimateCoverage(materials: ReadonlyArray<Pick<Material, 'unit' | 'unit_count'>>, budget = READ_BUDGET_PAGES): Estimate {
+/** 估一次能读全几份：从小到大装，页数超额度或份数到上限即停（能读全的份数取最乐观的估计，且不超过份数上限）。 */
+export function estimateCoverage(materials: ReadonlyArray<Pick<Material, 'unit' | 'unit_count'>>, budget = READ_BUDGET_PAGES, maxFiles = READ_BUDGET_FILES): Estimate {
   const sizes = materials.map((m) => Math.max(0, m.unit_count) * (PAGE_EQUIV[m.unit] ?? 1)).sort((a, b) => a - b)
   const pages = sizes.reduce((a, b) => a + b, 0)
   let used = 0
   let fit = 0
-  for (const s of sizes) { if (used + s > budget) break; used += s; fit++ }
-  return { total: sizes.length, fit, pages: Math.round(pages), over: pages > budget }
+  for (const s of sizes) { if (fit >= maxFiles || used + s > budget) break; used += s; fit++ }
+  return { total: sizes.length, fit, pages: Math.round(pages), over: pages > budget || sizes.length > maxFiles }
 }
 
 export const ESTIMATE_TITLE = '材料较长'
 export const estimateText = (e: Estimate): string =>
-  `这个案件的材料约 ${e.pages} 页，一次读不全：预计能读全约 ${e.fit} 份 / 共 ${e.total} 份。建议拆分、分批，或缩小范围（只导入这次要用的材料）。没读全的会在成果里列出。`
+  `按案件全部材料估：共 ${e.total} 份、约 ${e.pages} 页，一次读不全，预计能读全约 ${e.fit} 份 / 共 ${e.total} 份。建议拆分、分批，或缩小范围（只导入这次要用的材料）。没读全的会在成果里列出。`
 export const ESTIMATE_OK = '仍然开始'
 
 /**

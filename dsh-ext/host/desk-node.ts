@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import type { DeskDeps } from './desk-actions.ts'
+import { openableFolder, type DeskDeps } from './desk-actions.ts'
 
 function start(file: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -22,6 +22,7 @@ export function nodeDeskDeps(installDir: string | undefined, platform: NodeJS.Pl
     userProfile: process.env.USERPROFILE ?? homedir(),
     exists: (p) => existsSync(p),
     isDir: (p) => { try { return statSync(p).isDirectory() } catch { return false } },
+    openable: (root, rel) => openableFolder(root, rel),
     launch: (file, args) => start(file, args),
     // explorer.exe 打开成功也常返回非 0，这里只看能不能启动起来
     openPath: (dir) => (platform === 'darwin' ? start('open', [dir]) : start(`${process.env.SystemRoot ?? 'C:\\Windows'}\\explorer.exe`, [dir])),

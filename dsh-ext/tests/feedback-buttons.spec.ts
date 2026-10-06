@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { ToolsRow } from '../ui/home-page.tsx'
 import { MATERIAL_REMOVE_ENABLED, openCaseFolder, removeMaterial, REMOVE_TITLE } from '../ui/folder-actions.ts'
 import { app, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
-import { openCase, SYNC_OK, SYNC_TITLE, syncText } from '../ui/cases.ts'
+import { openCase, SYNC_NAME_TITLE, SYNC_OK, SYNC_TITLE, syncText } from '../ui/cases.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -40,11 +40,11 @@ describe('首页"工具"一栏', () => {
 
 describe('右栏按钮', () => {
   it('打开所在文件夹：材料区开默认导入位置，还没建出来时开案件根；成果区开"成果"', async () => {
-    const asked: Array<{ root: string; rel: string }> = []
+    const asked: Array<{ case_id?: string; root: string; rel: string }> = []
     setApi({ openFolder: async (r: { root: string; rel: string }) => { asked.push(r); return r.rel === '02案件材料' ? { ok: false, error: { code: 'NOT_FOUND', message: '这个文件夹还没有内容（还没建出来）' } } : { ok: true, value: { opened: true } } } } as unknown as LawbenchApi)
     expect(await openCaseFolder(CASE, 'materials')).toBe(true)
     expect(await openCaseFolder(CASE, 'outputs')).toBe(true)
-    expect(asked).toEqual([{ root: CASE.root, rel: '02案件材料' }, { root: CASE.root, rel: '' }, { root: CASE.root, rel: '成果' }])
+    expect(asked).toEqual([{ case_id: 'c-1', root: CASE.root, rel: '02案件材料' }, { case_id: 'c-1', root: CASE.root, rel: '' }, { case_id: 'c-1', root: CASE.root, rel: '成果' }])
   })
 
   it('移除此材料暂为禁用态（服务删原件后仍保留文本和检索，做不到从索引里去掉；令 2043 第 2 条退路）', () => {
@@ -94,5 +94,34 @@ describe('案件文件夹在云同步目录里（令 2043 第 3 条）', () => {
     await new Promise((r) => setTimeout(r, 0))
     lastDialog()!.resolve!(false)
     expect(await q).toBeUndefined()
+  })
+
+  it('名字里含同步软件名（如"Dropbox公司诉某某案"）：不提议建本机文件夹（建了也同样被拒），直接说明要改名（复核 P2-4）', async () => {
+    const made: unknown[] = []
+    setNav({ pickDirectory: async () => null, openCaseWorkspace: async () => {}, openTab: () => {} } as unknown as Nav)
+    setApi({
+      caseOpen: async () => ({ ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '该文件夹在云同步目录中，请移到本机普通文件夹后再打开' } }),
+      localCaseFolder: async (r: unknown) => { made.push(r); return { ok: true, value: { path: LOCAL + 'x' } } },
+    } as unknown as LawbenchApi)
+    expect(await openCase(String.raw`D:\案件\Dropbox公司诉某某案`, 'civil')).toBeUndefined()
+    expect(lastDialog()).toMatchObject({ kind: 'notice', title: SYNC_NAME_TITLE })
+    expect((lastDialog() as unknown as { text: string }).text).toContain('Dropbox')
+    expect(made).toEqual([])
+  })
+
+  it('本机建好的文件夹仍被拒：只说明，不再提议（不会每确认一次多一个空的"(n)"文件夹）（复核 P2-4）', async () => {
+    const made: unknown[] = []
+    setNav({ pickDirectory: async () => null, openCaseWorkspace: async () => {}, openTab: () => {} } as unknown as Nav)
+    setApi({
+      caseOpen: async () => ({ ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '该文件夹在云同步目录中，请移到本机普通文件夹后再打开' } }),
+      localCaseFolder: async (r: { name: string }) => { made.push(r); return { ok: true, value: { path: LOCAL + r.name } } },
+    } as unknown as LawbenchApi)
+    const p = openCase(SYNCED, 'civil')
+    await new Promise((r) => setTimeout(r, 0))
+    lastDialog()!.resolve!(true)
+    expect(await p).toBeUndefined()
+    expect(made).toEqual([{ name: '李某合同纠纷' }])
+    expect(lastDialog()).toMatchObject({ kind: 'notice', title: '没能打开案件' })
+    expect((app.get() as unknown as { dialogs: Array<{ kind: string }> }).dialogs.filter((d) => d.kind === 'confirm')).toHaveLength(1)
   })
 })

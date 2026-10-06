@@ -1,2 +1,4 @@
 # T20：品牌名单固定 LF（复核 NOTE）
 packaging/brand/names.txt text eol=lf
+# 令 2203 P1：补丁文件原样保存，不按 core.autocrlf 转行尾（转成 CRLF 后在干净 dsh 上打不上）
+*.patch -text

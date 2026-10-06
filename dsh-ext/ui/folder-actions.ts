@@ -13,19 +13,14 @@ export const OUTPUT_DIR = '成果'
  */
 export async function openCaseFolder(c: CaseRef, which: 'materials' | 'outputs'): Promise<boolean> {
   const rel = which === 'materials' ? DEFAULT_TARGET : OUTPUT_DIR
-  let r = await call<{ opened: true }>('openFolder', { root: c.root, rel })
-  if (!r.ok && r.error.code === 'NOT_FOUND' && which === 'materials') r = await call<{ opened: true }>('openFolder', { root: c.root, rel: '' })
+  let r = await call<{ opened: true }>('openFolder', { case_id: c.case_id, root: c.root, rel })
+  if (!r.ok && r.error.code === 'NOT_FOUND' && which === 'materials') r = await call<{ opened: true }>('openFolder', { case_id: c.case_id, root: c.root, rel: '' })
   if (!r.ok) { notice('文件夹没能打开', errorText(r.error)); return false }
   return true
 }
 
-/**
- * "移除此材料"暂不可用（令 2043 第 2 条的退路）：服务对删掉的原件只标"原件已删除"、保留文本，检索表也照样留着它的文字
- * （service/lawbench/case/materials.py 开头、search/fts.py refresh 只跳过 failed）——删文件 + 重新扫描做不到"从索引里去掉"。
- * 按令只做按钮禁用态，交主编排记 1.4；服务有了删除 / 重建索引的接口后把它改为 true，Host 的 materialRemove 和下面的确认流程已备好。
- */
-export const MATERIAL_REMOVE_ENABLED = false
-export const REMOVE_DISABLED_TIP = '暂不能在这里移除：删掉文件后，检索里还会留着它的文字。后续版本会支持；现在需要的话请联系技术支持。'
+// 开关与提示在 shared/feature-flags.ts（Host 也照它拒绝）
+export { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
 export const REMOVE_TITLE = '移除这份材料？'
 export const removeText = (m: Pick<Material, 'name' | 'rel_path'>): string =>
