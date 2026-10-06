@@ -1,0 +1,16 @@
+﻿T28 首跑修法（令 1618）· DSH 类型检查（在打好 P-3…P-22 的 D:\lawbench-D\dsh 里，2026-10-06）
+
+修前（复现首跑报错）：
+> node --max-old-space-size=4096 .\node_modules\typescript\bin\tsc -b tsconfig.host.json
+apps/desktop/tests/lawbench-macos.spec.ts(39,15): error TS2352 ... 'DesktopElectronBuilderConfig' to type 'MacConfig' ...（4 处）
+apps/desktop/tests/lawbench-macos.spec.ts(56,42): error TS2339: Property 'lawbenchDmgContents' does not exist ...
+exit=2
+
+修后：
+> node --max-old-space-size=4096 .\node_modules\typescript\bin\tsc -b tsconfig.host.json
+exit=0
+> node --max-old-space-size=4096 .\node_modules\typescript\bin\tsc -b tsconfig.client.json
+exit=0
+> vitest run apps/desktop/tests/lawbench-macos.spec.ts apps/desktop/tests/lawbench-isolation.spec.ts → 全过；lawbench-stage.spec.ts 单独跑 4 passed（与 mac 用例并发时首次导入超 5 秒，原有现象）
+
+从固定提交 477b4f4 按 PATCHES.md 顺序打全部 17 个补丁，结果与上面检查的工作树逐字一致（git diff 0 行）。

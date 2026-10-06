@@ -10,7 +10,7 @@
 #   smoke   (macos-15, contents: read)  - installs the dmg on a clean Mac, both servers on dead 127.0.0.1 ports (no real
 #                                          server is contacted), screenshots the first-run page, records connections.
 # Logs, screenshots and scan results are ordinary artifacts kept 14 days.
-# Third-party actions are pinned to commit SHAs (order 1526 P2-2).
+# Third-party actions are pinned to commit SHAs (order 1526 P2-2), all on the Node 24 runtime (order 1618).
 name: mac-build
 
 on:
@@ -42,7 +42,7 @@ jobs:
       sha256: ${{ steps.dmg.outputs.sha256 }}
       tokenizer: ${{ steps.tokenizer.outputs.included }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           submodules: true
           fetch-depth: 1
@@ -67,7 +67,7 @@ jobs:
             echo "included=no" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '24.21.0'
 
@@ -75,7 +75,7 @@ jobs:
         run: corepack enable
 
       - name: Cache payloads and package stores
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             ~/Library/pnpm/store
@@ -108,7 +108,7 @@ jobs:
           echo "sha256=$(awk '{print $1}' "$dmg.sha256")" >> "$GITHUB_OUTPUT"
 
       - name: Save the dmg for this run
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: handoff
           key: mac-dmg-${{ github.run_id }}-${{ github.run_attempt }}
@@ -116,7 +116,7 @@ jobs:
 
       - name: Build logs
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (v5.0.0 still runs on Node 20)
         with:
           name: mac-build-logs-${{ github.run_number }}
           retention-days: 14
@@ -132,7 +132,7 @@ jobs:
       contents: write
     steps:
       - name: Restore the dmg
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: handoff
           key: mac-dmg-${{ github.run_id }}-${{ github.run_attempt }}
@@ -170,14 +170,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 1
           persist-credentials: false
           sparse-checkout: packaging/mac
 
       - name: Restore the dmg
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: handoff
           key: mac-dmg-${{ github.run_id }}-${{ github.run_attempt }}
@@ -194,7 +194,7 @@ jobs:
 
       - name: Smoke results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (v5.0.0 still runs on Node 20)
         with:
           name: mac-smoke-${{ github.run_number }}
           retention-days: 14
