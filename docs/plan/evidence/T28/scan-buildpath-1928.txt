@@ -1,0 +1,10 @@
+﻿T28 第四跑修法（令 1928）· 构建路径扫描本机红绿（Git Bash，抽出 build.sh 的 scan_dir 原样执行；2026-10-06）
+
+规则：查本次构建自己的绝对路径（仓库根、stage、work、cache、out，各加尾部 /），只扫文本文件（grep -I），任何机器上命中都致命。
+不再查 $HOME/：PyPI 轮子也在 GitHub 的 macOS runner 上编译，.so/.dylib 和轮子自带的 *.cyclonedx.json SBOM 里有上游的 /Users/runner/... 构建路径（第四跑 27 处命中全是这类），与本构建机同名是巧合。
+
+1. 二进制 _imaging.so 含 /Users/runner/work/pillow/...，SBOM lxml.cyclonedx.json 含 /Users/runner/work/lxml/... → 通过
+2. 文本文件含 <stage>/service → 失败，点名 leak.txt
+3. 文本文件含 <仓库根>/tools → 失败，点名 leak2.cfg
+
+SBOM：保留。Windows build.ps1 也没删轮子的 dist-info/sboms（无 sbom / dist-info 处理），两边一致，只在 build.sh 注释说明。
