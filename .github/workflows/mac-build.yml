@@ -120,9 +120,12 @@ jobs:
         with:
           name: mac-build-logs-${{ github.run_number }}
           retention-days: 14
+          # DSH's packaging journal sits in a hidden folder (.desktop-build)
+          include-hidden-files: true
           path: |
             packaging/mac/out/*.txt
             packaging/mac/out/*.sha256
+            dsh/apps/desktop/.desktop-build/packaging-runs/**/events.jsonl
 
   release:
     needs: build
