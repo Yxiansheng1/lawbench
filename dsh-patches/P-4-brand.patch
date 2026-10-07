@@ -1391,7 +1391,7 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..1e9b4f4251 100644
+index 0f4d859e78..3fe0237039 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
 @@ -3,6 +3,21 @@
@@ -1416,7 +1416,7 @@ index 0f4d859e78..1e9b4f4251 100644
  ManifestDPIAware true
  !ifndef BUILD_UNINSTALLER
    !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
-@@ -88,9 +103,43 @@ ManifestDPIAware true
+@@ -88,9 +103,47 @@ ManifestDPIAware true
  !macroend
  
  !macro customUnInstall
@@ -1426,6 +1426,10 @@ index 0f4d859e78..1e9b4f4251 100644
 +  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_SPLITTER_ZH}.lnk"
 +  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_CONVERT_EN}.lnk"
 +  Delete "$SMPROGRAMS\${LAWBENCH_TOOL_CONVERT_ZH}.lnk"
++  ; review P3-2 (order 1430): an install that stopped half way may have left the installer copy (about 750 MB) in our
++  ; own cache folder (lawbenchAfterInstall never ran); remove it and the folder when empty
++  Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
++  RMDir "$LOCALAPPDATA\${LAWBENCH_INSTALLER_CACHE}"
    Call un.CleanData
  !macroend
  
@@ -1460,7 +1464,7 @@ index 0f4d859e78..1e9b4f4251 100644
  !macro customPageAfterChangeDir
    !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
    !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
-@@ -132,8 +181,10 @@ ManifestDPIAware true
+@@ -132,8 +185,10 @@ ManifestDPIAware true
  ; The report outlives $PLUGINSDIR so a user can send it; silent installs keep only the file. The updater cache
  ; directory is never an installation target and leaves with the application on uninstall.
  ; The directory smoke fixture predefines DSH_INSTALLER_LOG_DIR to keep reports inside its scratch tree.
@@ -1472,7 +1476,7 @@ index 0f4d859e78..1e9b4f4251 100644
  !endif
  
  !macro customInstallerExtractFailed Archive
-@@ -209,6 +260,7 @@ ManifestDPIAware true
+@@ -209,6 +264,7 @@ ManifestDPIAware true
    !insertmacro dshFinishDirectories
    ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"

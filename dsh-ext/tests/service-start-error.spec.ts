@@ -40,6 +40,10 @@ describe('服务起不来时说出原因（令 2048）', () => {
     expect(out('PermissionError: \\\\fs01\\案卷\\张某甲 诈骗案 卷宗 一.pdf busy\nnext line')).toBe('PermissionError: <路径> busy\nnext line')
     // 末段没有扩展名（文件夹）：吃到行尾，不吃下一行
     expect(out('NotADirectoryError: D:\\案件\\李某 合同纠纷\nTraceback')).toBe('NotADirectoryError: <路径>\nTraceback')
+    // 复核 P2-1：日期、版本号里的点不是扩展名（扩展名须字母开头）
+    expect(out('NotADirectoryError: D:\\案卷\\2026.10.07 张三 诉 李四')).toBe('NotADirectoryError: <路径>')
+    expect(out('OSError: D:\\案卷\\张三 诉 李四 2026.10 定稿')).toBe('OSError: <路径>')
+    expect(out('OSError: D:\\案卷\\孙八 案 第2.3稿 起诉状')).toBe('OSError: <路径>')
     // 同一行里两个扩展名：吃到最后一个（宁多吃）
     expect(out('OSError: D:\\x\\张三 证据.pdf and 李四 证言.docx')).toBe('OSError: <路径>')
     for (const t of ['李某', '合同纠纷', '起诉书', '清单', '张某甲', '卷宗', '张三', '李四']) {
@@ -50,6 +54,9 @@ describe('服务起不来时说出原因（令 2048）', () => {
   it('安装目录开头、但同一段里又夹着别的路径：整段换成"<路径>"，不留尾巴', () => {
     const out = (t: string) => scrubPaths(t, 'E:\\law')
     expect(out('OSError: E:\\law\\python\\x.pyd from C:\\Users\\张三\\证据 一.txt')).toBe('OSError: <路径>')
+    // 复核 P2-2：后面跟的是 \\服务器\共享（归一化会把它压成 \服务器，要对原串查）
+    expect(out('OSError: E:\\law\\python\\x.pyd from \\\\fs01\\案卷\\张三 诉 李四.pdf')).not.toContain('张三')
+    expect(out('OSError: E:\\law\\python\\x.pyd from \\\\fs01\\案卷\\张三 诉 李四.pdf')).toBe('OSError: <路径>')
     expect(out('OSError: cannot open E:\\law\\python\\DLLs\\_sqlite3.pyd')).toBe('OSError: cannot open <安装目录>\\python\\DLLs\\_sqlite3.pyd')
     expect(out('ImportError: E:\\law\\python\\DLLs\\_sqlite3.pyd: 应用程序控制策略已阻止此文件。')).toBe('ImportError: <安装目录>\\python\\DLLs\\_sqlite3.pyd: 应用程序控制策略已阻止此文件。')
   })

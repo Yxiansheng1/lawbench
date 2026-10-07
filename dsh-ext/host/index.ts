@@ -563,25 +563,29 @@ export function scrubPaths(text: string, installDir: string | undefined, platfor
   const root = installDir ? norm(installDir).replace(/\\$/, '') : undefined
   // macOS（T28）：任何以 / 开头的绝对路径（/Users/…、/Volumes/…、/private/…）同样换掉
   const START = platform === 'darwin' ? String.raw`(?:[A-Za-z]:[\\/]|\\\\|/)` : String.raw`(?:[A-Za-z]:[\\/]|\\\\|//)`
-  // 吃进来的一段里若还夹着别的路径（空白或标点后又是一个路径开头），就不当安装目录下的路径留尾巴
+  // 吃进来的一段里若还夹着别的路径（空白或标点后又是一个路径开头），就不当安装目录下的路径留尾巴。
+  // 对原串查（复核 P2-2）：归一化会把 \\服务器 压成 \服务器，就认不出 UNC 了
   const another = new RegExp(String.raw`[\s"'(,;:=]${START}`)
   const one = (p: string): string => {
-    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) {
-      const rest = platform === 'darwin' ? p.slice(root.length) : p.replace(/[\\/]+/g, '\\').slice(root.length)
-      if (!another.test(rest)) return '<安装目录>' + rest
+    if (root && (norm(p) === root || norm(p).startsWith(root + '\\')) && !another.test(p)) {
+      return '<安装目录>' + (platform === 'darwin' ? p.slice(root.length) : p.replace(/[\\/]+/g, '\\').slice(root.length))
     }
     return '<路径>'
   }
   let t = text.replace(new RegExp(String.raw`(["'])(${START}[^"'\r\n]*)\1`, 'g'), (_m, q: string, p: string) => q + one(p) + q)
   // 不带引号的：中间各段可以有空格（只要后面还跟着分隔符）；最后一段可能也带空格（令 1337 第 5 条），
-  // 吃到本行最后一个".扩展名"（\.\w{1,5}\b）为止，没有扩展名就吃到行尾——宁可多换掉几个字，不漏出材料名
-  t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*(?:[^\\/"'<>|\r\n]*\.\w{1,5}\b|[^\\/"'<>|\r\n]*)`, 'g'), (p) => one(p))
+  // 吃到本行最后一个".扩展名"为止，没有扩展名就吃到行尾——宁可多换掉几个字，不漏出材料名。
+  // 扩展名须字母开头（复核 P2-1）：2026.10.07、第2.3稿 里的点不算
+  t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*(?:[^\\/"'<>|\r\n]*\.[A-Za-z][A-Za-z0-9]{0,4}\b|[^\\/"'<>|\r\n]*)`, 'g'), (p) => one(p))
   return t
 }
 
 /** 服务不可用时给律师的话：重启也救不回来（failed）时说出原因、请联系技术支持；还在启动 / 重启中照旧"请稍后重试"（令 2033）。 */
 export function unavailableText(s: Pick<Supervisor, 'state' | 'lastFailure'>): string {
-  return s.state === 'failed' ? `本机服务未能启动：${startFailureText(s.lastFailure).replace(/[。.]+$/, '')}，请联系技术支持` : UNAVAILABLE
+  if (s.state !== 'failed') return UNAVAILABLE
+  const why = startFailureText(s.lastFailure).replace(/[。.]+$/, '')
+  // 律师自己能处理的（端口被占：关掉占用的程序再试）不再叫他找技术支持
+  return /重试$/.test(why) ? `本机服务未能启动：${why}` : `本机服务未能启动：${why}，请联系技术支持`
 }
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 
@@ -665,6 +669,7 @@ export function apply(ctx: Ctx, given: Config): void {
     probe: probeHealth,
     pickPort: () => freePort(config.portRange),
     scrubPaths: (t) => scrubPaths(t, installDir),
+    forwardPort: config.forwardPort ?? 18765,
     newToken: () => randomBytes(32).toString('hex'),
     expectedVersion: CONTRACT_VERSION,
     log,

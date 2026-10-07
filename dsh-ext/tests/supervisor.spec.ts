@@ -109,6 +109,18 @@ describe('看护：策略（模拟进程）', () => {
     expect(unavailableText(s)).toBe('本机服务未能启动：服务启动后退出（代码 1），请联系技术支持')
   })
 
+  it('固定的转发端口被占（令 1556 第 2 条）：一直退出码 2，换工作台端口重试用完后 failed，律师看到"本机 18765 端口被其他程序占用"', async () => {
+    const { deps } = simDeps(Array(30).fill(2))
+    const logged: Array<Record<string, unknown> | undefined> = []
+    const s = new Supervisor({ ...deps, forwardPort: 18765, log: (_l: string, e: string, m?: Record<string, unknown>) => { if (e === 'service.start_failed') logged.push(m) } })
+    await s.start()
+    await waitFor(() => s.state === 'failed', 10000)
+    expect(logged).toEqual([{ reason: 'exited', exitCode: 2, port: 18765 }])
+    expect(unavailableText(s)).toBe('本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试')
+    // 没给转发端口（旧调用方）：照旧只说退出码
+    expect(startFailureText({ reason: 'exited', exitCode: 2 })).toBe('服务启动后退出（代码 2）')
+  })
+
   it('程序拉不起来（找不到内置 Python、被拦截）：原因按类别说清楚', async () => {
     const logged: Array<Record<string, unknown> | undefined> = []
     const s = new Supervisor({

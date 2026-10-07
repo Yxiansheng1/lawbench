@@ -199,7 +199,7 @@ index 8bee2728cd..e31886ab6d 100644
      const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
 diff --git a/apps/desktop/tests/lawbench-windows-payload.spec.ts b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 new file mode 100644
-index 0000000000..87075d5d3c
+index 0000000000..f0f9cf53d9
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 @@ -0,0 +1,53 @@
@@ -239,7 +239,7 @@ index 0000000000..87075d5d3c
 +    type Res = { readonly extraResources: ReadonlyArray<{ readonly from: string; readonly to: string; readonly filter?: readonly string[] }> }
 +    const win = (createElectronBuilderConfig(base, 'win32', 'x64') as Res).extraResources.find((r) => r.to === 'runtime')
 +    expect(win?.filter).toEqual(['**/*', '!primary-runtime', '!primary-runtime/**'])
-+  })
++  }, 30_000) // 复核 P3-1：全量满载时加载打包配置要超过默认 5 秒
 +
 +  it('prepare-dsh 与 beforePack 走同一个判断（运行时清单、引擎在不在的自检、asar 外放三处一致）', () => {
 +    const prepare = readFileSync(join(__dirname, '..', 'scripts', 'prepare-dsh.ts'), 'utf8')

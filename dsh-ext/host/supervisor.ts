@@ -26,6 +26,11 @@ export interface SupervisorDeps {
   log(level: 'info' | 'warn' | 'error', event: string, meta?: Record<string, unknown>): void
   /** 把服务标准错误里的路径换掉（安装目录换成"<安装目录>"）；不给就按原样取最后的异常行。 */
   scrubPaths?(text: string): string
+  /**
+   * 服务的本机转发端口（固定，Spec 15）。退出码 2 是"有一个监听绑不上"：工作台端口每次换新的重试，
+   * 重试用完仍是 2，就是这个固定端口被占（令 1556 第 2 条），原因里带上它。
+   */
+  forwardPort?: number
   now?(): number
   setTimer?(fn: () => void, ms: number): unknown
   clearTimer?(handle: unknown): void
@@ -40,7 +45,7 @@ export type SupervisorState = 'stopped' | 'starting' | 'running' | 'failed' | 'v
  * - exited：进程退出（还没就绪或运行中）；
  * - startup_timeout：30 秒内 /health 没通过。
  */
-export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null; error?: string }
+export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null; error?: string; port?: number }
 
 export const PROBE_INTERVAL_MS = 5_000
 export const MAX_MISSED_PROBES = 3
@@ -208,7 +213,8 @@ export class Supervisor {
     if (this.stopping || this.state === 'version_mismatch') return
     if (this.timedOutGen !== gen) {
       const error = lastErrorLine(this.exitingChild?.errorText?.() ?? '', this.deps.scrubPaths)
-      this.lastFailure = { reason: 'exited', exitCode: code, ...(error ? { error } : {}) }
+      const port = code === EXIT_PORT_IN_USE && this.deps.forwardPort !== undefined ? { port: this.deps.forwardPort } : {}
+      this.lastFailure = { reason: 'exited', exitCode: code, ...(error ? { error } : {}), ...port }
     }
     if (code === EXIT_PORT_IN_USE && portRetries < MAX_PORT_RETRIES) {
       this.relaunch(portRetries + 1)
@@ -242,6 +248,8 @@ export function launchErrorKind(e: unknown): string {
 export function startFailureText(f: StartFailure | undefined): string {
   if (!f) return '原因不明'
   if (f.reason === 'startup_timeout') return '30 秒内没有就绪'
+  // 服务把 uvicorn 的出错日志关了（不记全文），绑定失败时标准错误里没有"address already in use"，只有退出码 2
+  if (f.reason === 'exited' && f.exitCode === EXIT_PORT_IN_USE && f.port !== undefined) return `本机 ${f.port} 端口被其他程序占用，请关闭占用程序后重试`
   if (f.reason === 'exited') return f.error ?? `服务启动后退出（代码 ${f.exitCode ?? '无'}）`
   if (f.detail === 'PYTHON_MISSING') return '找不到内置的 Python'
   if (f.detail === 'EACCES' || f.detail === 'EPERM') return '程序被拒绝运行（可能被安全软件拦截）'
