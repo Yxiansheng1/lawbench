@@ -24,7 +24,7 @@
 **NOTE**：退出码 2 只在 `__main__.py` 监听绑定失败返回（`EXIT_LISTEN_FAILED`）；模块缺失/`create_app` 异常为 1；argparse 退 2 但参数由 Host 拼不会误判；转发端口落在 Windows 保留段（WinError 10013）时"被占用"说法不准（推测，不阻断）。原因字符串无路径（端口句不含路径；其他仍走 `lastErrorLine(…, scrubPaths)`；只给界面不进日志）。darwin 无平台分支，两边一致。首页偏离若修 P2-1 自动消失。首次配置页最多 100 次（约 5 分钟）后停、无手动重读按钮需重开程序；首页 `useRetryLoad` 有上限。
 
 ### 包核（全过）
-大小/哈希一致；`primary-runtime` 零条、无 libreoffice-kit（仅两个 `koffi.node` 约 1 MB）；`sitecustomize.py`、`THIRD-PARTY-LICENSES.md`、pandoc `COPYING.rtf`/`COPYRIGHT.txt` 在；`python.exe` Authenticode Valid（PSF）；`skills\manifest.json` source 相对；机密扫描（10437 文本 + asar，317 MB）`\19705\` 零命中、`19705` 命中均数字巧合、`sk-` 零命中；NSIS 脚本无法从包提取，改核补丁后 `installer.nsh`：`installer-cache` 重定向（15–19 行）、`lawbenchAfterInstall` 第 267 行调用、无删 `@deepseek-aidsh-desktop-updater` 语句（188 行保留）。
+大小/哈希一致；`primary-runtime` 零条、无 libreoffice-kit（仅两个 `koffi.node` 约 1 MB）；`sitecustomize.py`、`THIRD-PARTY-LICENSES.md`、pandoc `COPYING.rtf`/`COPYRIGHT.txt` 在；`python.exe` Authenticode Valid（PSF）；`skills\manifest.json` source 相对；机密扫描（10437 文本 + asar，317 MB）`\<用户名>\` 零命中、纯数字串命中均为巧合、`sk-` 零命中；NSIS 脚本无法从包提取，改核补丁后 `installer.nsh`：`installer-cache` 重定向（15–19 行）、`lawbenchAfterInstall` 第 267 行调用、无删 `@deepseek-aidsh-desktop-updater` 语句（188 行保留）。
 
 ### 其余
 补丁链 `477b4f4205` 严格 18 个全成功零警告 158 文件，`diff --check` 0；dsh-ext vitest 664/6；tsc 0；`check_ui_words` 零命中；3 张新截图无用户名。
