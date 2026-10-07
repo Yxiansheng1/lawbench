@@ -181,3 +181,31 @@ DSH 打包冒烟（prepare 后与打包后各一次）："desktop runtime: front
     HKCU\Software\Classes\dsh 仍在（按设计）
   冒烟后还原：删掉冒烟写的 settings.json 等四个文件、<用户目录>\连越律师工作台 和两个 marker 目录
   注：smoke-第五版-首次配置.png 是作废那一包的首次配置页截图，页面与本包相同（未变的部分），保留作对照
+
+==== 第六版候选包（令 1759、一行令 1813）· 2026-10-07 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小 655925037 B（626 MB；第四版 780000161 B / 744 MB，约 −118 MB、−15.9%）
+  sha256 058648538564055428f63bb43c055360c20542cdbb7af5c298966ba388f298b4
+  未签名
+基座 0d8ce47。18:17 起 package，18:31 完成。
+各步耗时：brand 2 s · dsh 61 s · python 23 s · tools 17 s · smalltools 85 s · skills 0 s · engines 1 s · lock 2 s · signcheck 13 s · package 882 s
+运行时 npm 锁 323/323；electron 缓存未新增；签名 339 个 210 个无有效签名（同前）；DSH 打包后冒烟通过（无 primary-runtime）。
+
+冒烟：/S /D=D:\lawbench-smoke5，退出 0，46 s
+  布局全在；装后 24725 个文件、2108 MB；无 primary-runtime、无 libreoffice-kit-win32-x64 引擎（只剩 koffi.node，令 1556 定为留着）
+  installer-cache 装完不在；两个模拟原版 marker 装、卸都不变
+  开始菜单：连越律师工作台、长截图切分、格式互转，指向正确；桌面一个快捷方式
+  python -I：stderr utf-8，3.12.10
+  端口被占（令 1556 第 2 条、复核 rv-A50 P2-1）：先用 node 占住 127.0.0.1:18765 再启动，按秒计时：
+    拉起 6 次、6 次都以退出码 2 退出（首次 + 换端口重试 5 次），启动后 22 秒 Host 记
+      service.start_failed {reason: exited, exitCode: 2, port: 18765}
+    23 秒首次配置页自己显示"本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试"，表单随之放开
+      （smoke-第六版-端口被占-首次配置.png）
+    首页不用点"重试"，自己显示同一句原因（在 30 秒自动重读之内）
+    每次拉起 ≥4 秒的情形：本机每次约 3.7 秒（22 秒拉起 6 次），真包上造不出来；由用例证明（dsh-ext tests/supervisor.spec.ts
+      "每次拉起要 4 秒（杀毒、冷启动）也能到 failed"：假时钟每次拉起 4 秒，拉起 6 次后进 failed，原因带端口；修法前这条一直循环到超时）
+  放开端口、重启：服务 running，自检 python/tokenizer/libreoffice/pandoc ok；首次配置页地址已填好、可填；填"测试律师"→ 首页，
+    "工具：长截图切分、格式互转"可见（smoke-第六版-首页工具栏.png，用户名已遮）
+  卸载 /S，退出 0，8 s：安装目录、%APPDATA%\lawbench-desktop、dsh-home、installer-cache、开始菜单三项、桌面快捷方式都不在；两个 marker 仍在；
+    HKCU\Software\Classes\dsh 仍在（按设计）
+  冒烟后还原：删掉冒烟写的 settings.json 等四个文件、<用户目录>\连越律师工作台 和两个 marker 目录
