@@ -117,7 +117,7 @@ electron / electron-builder 缓存：前后 9 个，未新增。签名：339 个
   另：~\.dsh mtime 前后不变（2026-10-04 19:54:11.662）；%LOCALAPPDATA%\lawbench 其余（logs、capsules.json）卸载后照旧保留
   未在本机核（候用户新机）：默认安装目录名、开始菜单与桌面快捷方式、卸载项名、非静默安装的 Skill 目录提问；与真的原版 DSH 同时开
 
-==== 第五版候选包（令 1426）· 2026-10-07 ====
+==== 第五版候选包（令 1426）· 2026-10-07 ——【作废，令 1556：不含令 1430 修法；重打见本文件末节】 ====
 安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
   大小 655922817 B（626 MB；第四版 780000161 B / 744 MB，少 124,077,344 B，约 −118 MB、−15.9%）
   sha256 7096ee1d19c5661f78826f4d5d5dc06c182f799bb1f050f6bad24702ac7a16b6
@@ -153,3 +153,31 @@ DSH 打包冒烟（prepare 后与打包后各一次）："desktop runtime: front
     开始菜单三项、桌面快捷方式都不在；两个 marker 仍在；%LOCALAPPDATA%\lawbench 的 logs 等保留；HKCU\Software\Classes\dsh 仍在（按设计不删）
   冒烟后还原：删掉冒烟产生的 settings.json、cases.json、daily-case.json、案件根名单.json、<用户目录>\连越律师工作台\日常事务 和两个 marker 目录
   未在本机核（候用户新机）：非静默安装的 Skill 目录提问、默认安装目录名；与真的原版 DSH 同时开
+
+==== 第五版候选包·重打（令 1430、1540、1556）· 2026-10-07 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小 655923866 B（626 MB；第四版 780000161 B / 744 MB，约 −118 MB、−15.9%）
+  sha256 3c87508eb19089fd3a1952b70c9a4e6123f85acaa16acf417b95cd88ac856300
+  未签名
+基座 2c19a71（含令 1430 四条、令 1556 第 2 条端口原因）。17:15 起 package，17:29 完成。
+  中间两次作废的重打：16:09 那次 prepare-dsh 里 pnpm 打完 "Done" 后崩（PostQueuedCompletionStatus 句柄无效，退出码 0x80000003，
+  pnpm/Node 自身问题，原样重跑即过）；16:48 那次（501baa4，sha256 5d144138…）冒烟发现端口原因显示不出来，再改后重打。
+各步耗时：brand 2 s · dsh 63 s · python 23 s · tools 18 s · smalltools 97 s · skills 0 s · engines 1 s · lock 2 s · signcheck 17 s · package 908 s
+运行时 npm 锁 323/323；electron 缓存未新增；签名 339 个 210 个无有效签名（同前）；DSH 打包后冒烟通过（无 primary-runtime）。
+
+冒烟：/S /D=D:\lawbench-smoke5，退出 0，48 s
+  布局全在（同上一节清单）；装后 24725 个文件、2108 MB
+  resources\runtime\primary-runtime 不存在；libreoffice-kit-win32-x64 引擎不存在（只剩 koffi.node，令 1556 定为留着）
+  installer-cache 装完不在；两个模拟原版 marker 装、卸都不变
+  开始菜单：连越律师工作台、长截图切分、格式互转，指向正确；桌面一个快捷方式
+  python -I：stderr utf-8，3.12.10
+  端口被占（令 1556 第 2 条）：先用 node 占住 127.0.0.1:18765 再启动，约 78 秒后 Host 记
+    service.start_failed {reason: exited, exitCode: 2, port: 18765}
+    首次配置页自己显示"本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试"（smoke-第五版-端口被占-首次配置.png）
+    首页：30 秒自动重读先停在"未启动"，点"重试"后显示同一句原因（不再接"正在启动或已停止"）
+  放开端口、重启：服务 running，自检 python/tokenizer/libreoffice/pandoc ok；首次配置填"测试律师"→ 首页，"工具：长截图切分、格式互转"可见
+    （smoke-第五版-首页工具栏.png，用户名已遮）
+  卸载 /S，退出 0，8 s：安装目录、%APPDATA%\lawbench-desktop、dsh-home、installer-cache、开始菜单三项、桌面快捷方式都不在；两个 marker 仍在；
+    HKCU\Software\Classes\dsh 仍在（按设计）
+  冒烟后还原：删掉冒烟写的 settings.json 等四个文件、<用户目录>\连越律师工作台 和两个 marker 目录
+  注：smoke-第五版-首次配置.png 是作废那一包的首次配置页截图，页面与本包相同（未变的部分），保留作对照
