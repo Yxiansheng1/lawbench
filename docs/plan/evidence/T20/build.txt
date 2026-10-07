@@ -116,3 +116,40 @@ electron / electron-builder 缓存：前后 9 个，未新增。签名：339 个
   ③ 预置的 %APPDATA%\@deepseek-ai\dsh-desktop\marker.txt（模拟原版目录）卸载后仍在
   另：~\.dsh mtime 前后不变（2026-10-04 19:54:11.662）；%LOCALAPPDATA%\lawbench 其余（logs、capsules.json）卸载后照旧保留
   未在本机核（候用户新机）：默认安装目录名、开始菜单与桌面快捷方式、卸载项名、非静默安装的 Skill 目录提问；与真的原版 DSH 同时开
+
+==== 第五版候选包（令 1426）· 2026-10-07 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小 655922817 B（626 MB；第四版 780000161 B / 744 MB，少 124,077,344 B，约 −118 MB、−15.9%）
+  sha256 7096ee1d19c5661f78826f4d5d5dc06c182f799bb1f050f6bad24702ac7a16b6
+  未签名
+基座 7352223（2234f10 + P-23 用例类型修正）；命令同第二版（官方 Python 3.12.10 包）。
+  第一次 14:28 起在 dsh 步停住：DSH 的 tsc -b tsconfig.host.json 报 P-23 新用例 TS2352（只读元组），改类型后提交 7352223；
+  第二次 14:31 起在 smalltools 步被用户停下；第三次 15:03:46 起，15:22 完成。
+各步耗时（第三次）：brand 2 s · dsh 38 s · python 22 s（含新加的 stderr UTF-8 断言，过）· tools 13 s · smalltools 73 s · skills 0 s · engines 1 s · lock 2 s · signcheck 14 s · package 952 s
+暂存载荷：contracts 125 个 0.3 MB · engines 592 个 91.4 MB · python 7418 个 388.9 MB · service 85 个 19.6 MB · skills 27 个 0.2 MB · tools 15920 个 1048.0 MB · installer 1 · THIRD-PARTY-LICENSES.md 1
+联网：只有运行时 npm 包；运行时 npm 锁对账 323/323 一致。electron / electron-builder 缓存前后 9 个，未新增（本地 electron 镜像）。
+versions.lock：lock 步重生成后无变化（python 行为官方 3.12.10）。
+签名（python-signatures.txt）：339 个二进制 210 个无有效签名（同第四版）。
+DSH 打包冒烟（prepare 后与打包后各一次）："desktop runtime: frontend and plugin route passed (Office checks skipped: lawbench P-12)"——包里没有 primary-runtime 也过。
+
+冒烟（令 1426 第 2 条）：/S /D=D:\lawbench-smoke5，退出 0，54 s
+  先预置模拟原版的 %LOCALAPPDATA%\@deepseek-aidsh-desktop-updater\marker.txt、%APPDATA%\@deepseek-ai\dsh-desktop\marker.txt（本机原本都没有，冒烟后删掉）
+  布局：contracts\VERSION、python\python.exe、python312._pth、python\lawbench-python-source.json、service、tokenizer.json、LibreOffice、
+        pandoc 与 COPYING.rtf/COPYRIGHT.txt、两个小工具、engines、installer\set-skills-acl.ps1、skills\manifest.json、THIRD-PARTY-LICENSES.md、
+        resources\app.asar、连越律师工作台.exe 都在
+  装后 24725 个文件、2108 MB（第四版 win-unpacked 2630 MB）
+  剔除（令 1337 第 1、8 条）：resources\runtime\primary-runtime 不存在（runtime 下只剩 bin、office-skills、pnpm、versions.json）；
+        libreoffice-kit-win32-x64 引擎不存在；只剩 app.asar.unpacked\dsh\node_modules\@deepseek-ai\libreoffice-kit\…\koffi.node 一个文件
+        （约 1 MB，Office 包装包的 FFI 依赖，被 DSH 的 "**/*.node" 外放规则带出，运行期不用）
+  安装缓存：%LOCALAPPDATA%\lawbench\installer-cache 装完不存在；两个 marker 目录装前装后内容、时间都不变
+  开始菜单：连越律师工作台、长截图切分（→ tools\splitter\splitter.exe）、格式互转（→ tools\convert\convert.exe）；桌面一个快捷方式
+  python -I：stderr utf-8，版本 3.12.10，退出 0
+  启动（--remote-debugging-port 取截图）：首次配置页（smoke-第五版-首次配置.png）
+    本机的环境冲突：线 B 的开发版服务（由线 A 昨晚的开发桌面拉起）占着 18765，冒烟包的服务每 3 秒退出码 2、到上限进 failed；
+    用户同意后停掉那组开发进程，重启冒烟包：服务 running，自检 python/tokenizer/libreoffice ok
+  首次配置填律师姓名"测试律师"（Key 已在凭据管理器，不填）→ 保存并进入 → 首页，"日常事务"卡片下"工具：长截图切分、格式互转"可见
+    （smoke-第五版-首页工具栏.png，用户名已遮）
+  卸载 /S，退出 0，8 s：安装目录、%APPDATA%\lawbench-desktop、%LOCALAPPDATA%\lawbench\dsh-home、installer-cache、
+    开始菜单三项、桌面快捷方式都不在；两个 marker 仍在；%LOCALAPPDATA%\lawbench 的 logs 等保留；HKCU\Software\Classes\dsh 仍在（按设计不删）
+  冒烟后还原：删掉冒烟产生的 settings.json、cases.json、daily-case.json、案件根名单.json、<用户目录>\连越律师工作台\日常事务 和两个 marker 目录
+  未在本机核（候用户新机）：非静默安装的 Skill 目录提问、默认安装目录名；与真的原版 DSH 同时开
