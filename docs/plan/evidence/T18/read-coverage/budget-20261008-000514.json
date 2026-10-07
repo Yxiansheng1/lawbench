@@ -1,0 +1,131 @@
+{
+  "generated_at": "2026-10-08T00:05:14+08:00",
+  "cases": [
+    "rc-noocr",
+    "rc-ocr",
+    "rc-allscan"
+  ],
+  "window": {
+    "since": null,
+    "until": null
+  },
+  "rows": [
+    {
+      "task_id": "T-20261007213753-bd0f",
+      "case": "rc-noocr",
+      "kind": "agent",
+      "skill": "criminal-reading-notes",
+      "status": "completed",
+      "start": "2026-10-07T21:37:53+08:00",
+      "end": "2026-10-07T21:39:36+08:00",
+      "minutes": 1.7,
+      "budget": {
+        "model_calls": 16,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 15,
+        "tool_calls": 11,
+        "elapsed_s": 102
+      },
+      "measured": {
+        "model_calls": 15,
+        "tools": {
+          "case_read_material": 11,
+          "case_save_draft": 2,
+          "skill": 1
+        },
+        "tool_calls": 11,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 10,
+        "task_end": 1,
+        "progress": 1
+      },
+      "over_budget": []
+    },
+    {
+      "task_id": "T-20261007214009-0df2",
+      "case": "rc-ocr",
+      "kind": "agent",
+      "skill": "criminal-reading-notes",
+      "status": "completed",
+      "start": "2026-10-07T21:40:09+08:00",
+      "end": "2026-10-07T21:46:16+08:00",
+      "minutes": 6.1,
+      "budget": {
+        "model_calls": 16,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 14,
+        "tool_calls": 12,
+        "elapsed_s": 362
+      },
+      "measured": {
+        "model_calls": 14,
+        "tools": {
+          "ask_user_question": 1,
+          "case_list_materials": 1,
+          "case_read_material": 10,
+          "case_save_draft": 5,
+          "case_search": 1,
+          "skill": 1
+        },
+        "tool_calls": 12,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 17,
+        "task_end": 1,
+        "progress": 1
+      },
+      "over_budget": []
+    },
+    {
+      "task_id": "T-20261008000136-74d2",
+      "case": "rc-allscan",
+      "kind": "agent",
+      "skill": "criminal-reading-notes",
+      "status": "completed",
+      "start": "2026-10-08T00:01:36+08:00",
+      "end": "2026-10-08T00:01:49+08:00",
+      "minutes": 0.2,
+      "budget": {
+        "model_calls": 16,
+        "tool_calls": 24,
+        "minutes": 45
+      },
+      "self_reported": {
+        "model_calls": 5,
+        "tool_calls": 11,
+        "elapsed_s": 12
+      },
+      "measured": {
+        "model_calls": 5,
+        "tools": {
+          "case_list_materials": 1,
+          "case_read_material": 10
+        },
+        "tool_calls": 11,
+        "source": "DSH 会话记录"
+      },
+      "service_log": {
+        "task_begin": 1,
+        "context": 1,
+        "tool": 1,
+        "progress": 5,
+        "task_end": 1
+      },
+      "over_budget": []
+    }
+  ],
+  "notes": []
+}

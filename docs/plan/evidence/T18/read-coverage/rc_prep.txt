@@ -1,0 +1,37 @@
+rc-noocr a9f3e391-b948-409d-979c-57c1ed57dcfe {"added":10,"changed":0,"removed":0,"failed":0,"review_needed":true}
+   M0001 pdf parsed page 1 need_ocr [] mixed []
+   M0002 pdf parsed page 1 need_ocr [] mixed []
+   M0003 image needs_ocr page 1 need_ocr [1] mixed []
+   M0004 pdf parsed page 1 need_ocr [] mixed []
+   M0005 pdf parsed page 1 need_ocr [] mixed [1]
+   M0006 pdf parsed page 1 need_ocr [] mixed []
+   M0007 pdf needs_ocr page 3 need_ocr [1,2,3] mixed []
+   M0008 pdf parsed page 5 need_ocr [] mixed []
+   M0009 image needs_ocr page 1 need_ocr [1] mixed []
+   M0010 pdf parsed page 1 need_ocr [] mixed []
+rc-ocr 671d1490-f43b-46e4-9af8-732ae845a294 {"added":10,"changed":0,"removed":0,"failed":0,"review_needed":true}
+   M0001 pdf parsed page 1 need_ocr [] mixed []
+   M0002 pdf parsed page 1 need_ocr [] mixed []
+   M0003 image needs_ocr page 1 need_ocr [1] mixed []
+   M0004 pdf parsed page 1 need_ocr [] mixed []
+   M0005 pdf parsed page 1 need_ocr [] mixed [1]
+   M0006 pdf parsed page 1 need_ocr [] mixed []
+   M0007 pdf needs_ocr page 3 need_ocr [1,2,3] mixed []
+   M0008 pdf parsed page 5 need_ocr [] mixed []
+   M0009 image needs_ocr page 1 need_ocr [1] mixed []
+   M0010 pdf parsed page 1 need_ocr [] mixed []
+  ocr M0003 1 J-20261007212154-bce3
+  ocr M0005 1 J-20261007212154-070f
+  ocr M0007 3 J-20261007212154-8ce8
+  ocr M0009 1 J-20261007212154-2389
+  ocr done [["done",1,1,0],["done",3,3,0],["done",1,1,0],["done",1,1,0]] 70s
+  after M0001 parsed none need_ocr []
+  after M0002 parsed none need_ocr []
+  after M0003 parsed full need_ocr []
+  after M0004 parsed none need_ocr []
+  after M0005 parsed full need_ocr []
+  after M0006 parsed none need_ocr []
+  after M0007 parsed full need_ocr []
+  after M0008 parsed none need_ocr []
+  after M0009 parsed full need_ocr []
+  after M0010 parsed none need_ocr []

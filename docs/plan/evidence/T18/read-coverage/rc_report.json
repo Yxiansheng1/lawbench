@@ -1,0 +1,752 @@
+{
+ "rc-noocr": {
+  "task_id": "T-20261007213753-bd0f",
+  "status": "completed",
+  "usage": {
+   "model_calls": 15,
+   "tool_calls": 11,
+   "elapsed_s": 102
+  },
+  "drafts": [
+   "刑事阅卷笔录-v1.md",
+   "刑事阅卷笔录-v2.md"
+  ],
+  "tool_sequence": [
+   {
+    "tool": "skill"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "起诉意见书"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "委托代理合同"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "对账单"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "微信图片_20260301",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "授权委托书"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "现场勘验图文"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "聊天记录"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "讯问笔录",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "转账截图",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "送货单"
+   },
+   {
+    "tool": "case_save_draft"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "起诉意见书",
+    "start": 1
+   },
+   {
+    "tool": "case_save_draft"
+   }
+  ],
+  "reads": [
+   {
+    "material": "起诉意见书",
+    "unit": "page",
+    "from": 1,
+    "to": 5
+   },
+   {
+    "material": "委托代理合同",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "对账单",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "授权委托书",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "现场勘验图文",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "聊天记录",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "送货单",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "起诉意见书",
+    "unit": "page",
+    "from": 1,
+    "to": 5
+   }
+  ],
+  "materials": [
+   {
+    "id": "M0001",
+    "name": "委托代理合同",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0002",
+    "name": "对账单",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0003",
+    "name": "微信图片_20260301",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0004",
+    "name": "授权委托书",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0005",
+    "name": "现场勘验图文",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0006",
+    "name": "聊天记录",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0007",
+    "name": "讯问笔录",
+    "type": "pdf",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 3,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": "M0008",
+    "name": "起诉意见书",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 5,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0009",
+    "name": "转账截图",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0010",
+    "name": "送货单",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   }
+  ],
+  "coverage": {
+   "total": 10,
+   "fully_read": [
+    "委托代理合同",
+    "对账单",
+    "授权委托书",
+    "现场勘验图文",
+    "聊天记录",
+    "起诉意见书",
+    "送货单"
+   ],
+   "partially_read": [],
+   "not_read": [
+    "微信图片_20260301",
+    "讯问笔录",
+    "转账截图"
+   ],
+   "unreadable": []
+  },
+  "citation_check_stats": {
+   "citations": 41,
+   "must_fix": 0,
+   "hints": 1
+  },
+  "citation_classes": [
+   "F"
+  ]
+ },
+ "rc-ocr": {
+  "task_id": "T-20261007214009-0df2",
+  "status": "completed",
+  "usage": {
+   "model_calls": 14,
+   "tool_calls": 12,
+   "elapsed_s": 362
+  },
+  "drafts": [
+   "阅卷笔录-v1.md",
+   "阅卷笔录-v2.md",
+   "阅卷笔录-v3.md",
+   "阅卷笔录-v4.md",
+   "阅卷笔录-v5.md"
+  ],
+  "tool_sequence": [
+   {
+    "tool": "skill"
+   },
+   {
+    "tool": "case_list_materials"
+   },
+   {
+    "tool": "ask_user_question"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "委托代理合同"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "对账单"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "微信图片_20260301"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "授权委托书"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "现场勘验图文"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "聊天记录"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "转账截图"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "送货单"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "讯问笔录"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "起诉意见书"
+   },
+   {
+    "tool": "case_save_draft"
+   },
+   {
+    "tool": "case_save_draft"
+   },
+   {
+    "tool": "case_save_draft"
+   },
+   {
+    "tool": "case_search"
+   },
+   {
+    "tool": "case_save_draft"
+   },
+   {
+    "tool": "case_save_draft"
+   }
+  ],
+  "reads": [
+   {
+    "material": "委托代理合同",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "对账单",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "微信图片_20260301",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "授权委托书",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "现场勘验图文",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "聊天记录",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "转账截图",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "送货单",
+    "unit": "page",
+    "from": 1,
+    "to": 1
+   },
+   {
+    "material": "讯问笔录",
+    "unit": "page",
+    "from": 1,
+    "to": 3
+   },
+   {
+    "material": "起诉意见书",
+    "unit": "page",
+    "from": 1,
+    "to": 5
+   }
+  ],
+  "materials": [
+   {
+    "id": "M0001",
+    "name": "委托代理合同",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0002",
+    "name": "对账单",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0003",
+    "name": "微信图片_20260301",
+    "type": "image",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "full",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0004",
+    "name": "授权委托书",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0005",
+    "name": "现场勘验图文",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "full",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0006",
+    "name": "聊天记录",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0007",
+    "name": "讯问笔录",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 3,
+    "is_ocr": "full",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0008",
+    "name": "起诉意见书",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 5,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0009",
+    "name": "转账截图",
+    "type": "image",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "full",
+    "pages_need_ocr": []
+   },
+   {
+    "id": "M0010",
+    "name": "送货单",
+    "type": "pdf",
+    "status": "parsed",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": []
+   }
+  ],
+  "coverage": {
+   "total": 10,
+   "fully_read": [
+    "委托代理合同",
+    "对账单",
+    "微信图片_20260301",
+    "授权委托书",
+    "现场勘验图文",
+    "聊天记录",
+    "讯问笔录",
+    "起诉意见书",
+    "转账截图",
+    "送货单"
+   ],
+   "partially_read": [],
+   "not_read": [],
+   "unreadable": []
+  },
+  "citation_check_stats": {
+   "citations": 92,
+   "must_fix": 0,
+   "hints": 2
+  },
+  "citation_classes": [
+   "F"
+  ]
+ },
+ "rc-allscan": {
+  "task_id": "T-20261008000136-74d2",
+  "status": "completed",
+  "usage": {
+   "model_calls": 5,
+   "tool_calls": 11,
+   "elapsed_s": 12
+  },
+  "drafts": [],
+  "tool_sequence": [
+   {
+    "tool": "case_list_materials"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "微信图片1",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "微信图片2",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "微信图片3",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "讯问笔录（第1次）",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "讯问笔录（第2次）",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "讯问笔录（第3次）",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "讯问笔录（第4次）",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "转账截图1",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "转账截图2",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   },
+   {
+    "tool": "case_read_material",
+    "name": "转账截图3",
+    "error": "这份材料还不能读取（待识别或处理失败）"
+   }
+  ],
+  "reads": [],
+  "materials": [
+   {
+    "id": "M0001",
+    "name": "微信图片1",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0002",
+    "name": "微信图片2",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0003",
+    "name": "微信图片3",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0004",
+    "name": "讯问笔录（第1次）",
+    "type": "pdf",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 3,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": "M0005",
+    "name": "讯问笔录（第2次）",
+    "type": "pdf",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 3,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": "M0006",
+    "name": "讯问笔录（第3次）",
+    "type": "pdf",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 3,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": "M0007",
+    "name": "讯问笔录（第4次）",
+    "type": "pdf",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 3,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": "M0008",
+    "name": "转账截图1",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0009",
+    "name": "转账截图2",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   },
+   {
+    "id": "M0010",
+    "name": "转账截图3",
+    "type": "image",
+    "status": "needs_ocr",
+    "unit": "page",
+    "unit_count": 1,
+    "is_ocr": "none",
+    "pages_need_ocr": [
+     1
+    ]
+   }
+  ],
+  "coverage": {
+   "total": 10,
+   "fully_read": [],
+   "partially_read": [],
+   "not_read": [
+    "微信图片1",
+    "微信图片2",
+    "微信图片3",
+    "讯问笔录（第1次）",
+    "讯问笔录（第2次）",
+    "讯问笔录（第3次）",
+    "讯问笔录（第4次）",
+    "转账截图1",
+    "转账截图2",
+    "转账截图3"
+   ],
+   "unreadable": []
+  },
+  "citation_check_stats": null,
+  "citation_classes": []
+ }
+}

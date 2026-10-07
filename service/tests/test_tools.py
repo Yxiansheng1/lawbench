@@ -340,3 +340,19 @@ def test_line_material_every_line_numbered(tmp_path_factory):
         assert v["text"].splitlines() == [x for i in range(3, 8) for x in (f"【第{i}行】", f"第{i}句内容")]
     finally:
         e.close()
+
+
+def test_unrecognized_scan_is_unreadable_not_unread(tmp_path_factory):
+    """律师反馈"10 份 10 份没读全"（2026-10-07）：整份还没识别的扫描件，读取工具拒绝（MATERIAL_NOT_READY），
+    覆盖清单里列为"读不了（还没识别…）"，不混在"没有读"里。"""
+    from t8_helpers import FIXTURES
+    e = Env(tmp_path_factory.mktemp("t18scan"), {"讯问笔录.pdf": FIXTURES / "criminal-01" / "讯问笔录.pdf",
+                                                 "说明.txt": FIXTURES / "civil-01" / "情况说明.txt"})
+    try:
+        t = e.begin()["task_id"]
+        fail(e.tool(t, "case_read_material", {"name": "讯问笔录"}), "MATERIAL_NOT_READY")
+        cov = e.tool_ok(t, "case_save_draft", {"title": "a", "content": "x"})["coverage"]
+        assert cov["not_read"] == ["说明"]
+        assert [u["name"] for u in cov["unreadable"]] == ["讯问笔录"] and "还没识别" in cov["unreadable"][0]["reason"]
+    finally:
+        e.close()

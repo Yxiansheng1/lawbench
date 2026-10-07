@@ -399,6 +399,10 @@ class TaskStore:
             except ApiError:
                 cov["unreadable"].append({"name": m["name"], "reason": "材料文本不存在"})
                 continue
+            if units and all(u.text.strip() == texts.PENDING_OCR for u in units):
+                # 整份都还没识别：读取工具会拒绝，不是"没有读"（律师反馈"10 份 10 份没读全"的成因，2026-10-07）
+                cov["unreadable"].append({"name": m["name"], "reason": "还没识别，读不到文字，请先提交识别"})
+                continue
             got: set[int] = set()
             for r in reads:
                 if r["material_id"] == m["material_id"] and r["material_version"] == m["sha256"]:
