@@ -59,4 +59,20 @@ describe('首页启动时服务未就绪', () => {
     expect(box.textContent).toContain('周某诉青禾贸易借款合同纠纷（虚构）')
     expect(box.textContent).not.toContain('工作台服务未启动')
   })
+
+  it('Host 说出了起不来的原因（令 1556：端口被占）：不再自动重读，直接显示原因，不接"正在启动或已停止"', async () => {
+    const why = '本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试'
+    setApi({
+      caseRecent: async () => { calls++; return { ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: why } } },
+      listSkills: async () => ({ ok: true, value: { skills: [] } }),
+      selfCheck: async () => ({ ok: true, value: { items: [] } }),
+    } as unknown as LawbenchApi)
+    await render()
+    await wait(0)
+    expect(box.textContent).toContain(why)
+    expect(box.textContent).not.toContain('正在启动或已停止')
+    expect(box.textContent).not.toContain('正在连接本机服务…')
+    await wait(10_000)
+    expect(calls).toBe(1)
+  })
 })

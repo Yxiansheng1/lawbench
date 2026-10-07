@@ -133,10 +133,10 @@ index 151eeba4bf..41b6a03907 100644
      if (cordis === undefined) throw new Error('desktop runtime: missing shared Cordis package')
      writeFileSync(join(plugin, 'package.json'), JSON.stringify({
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
-index 6ac9c9c324..535b1d712d 100644
+index 6ac9c9c324..d6e7f09aeb 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
 +++ b/apps/desktop/src/client/WelcomePage.tsx
-@@ -52,13 +52,28 @@ export function Welcome({ api }: { api: WelcomeApi }) {
+@@ -52,13 +52,29 @@ export function Welcome({ api }: { api: WelcomeApi }) {
    useEffect(() => {
      document.documentElement.lang = api.id
      document.title = '首次配置'
@@ -147,8 +147,9 @@ index 6ac9c9c324..535b1d712d 100644
 -      setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '', lawyer: r.value?.lawyerName ?? '' }))
 -      setHasKey(r.value.hasKey)
 -    })
-+    // lawbench（令 1556 第 2 条）：首次启动时服务常常还没起来；每 3 秒再读一次、最多 1 分钟，
-+    // 服务起来就填好地址，起不来时显示 Host 给的原因（如"本机 18765 端口被其他程序占用"），不停在"未启动"
++    // lawbench（令 1556 第 2 条）：首次启动时服务常常还没起来；每 3 秒再读一次，服务起来就填好地址。
++    // Host 判定起不来要一分多钟（换端口重试、再重启几次），所以读到 Host 给出原因（"本机服务未能启动：…"，
++    // 如"本机 18765 端口被其他程序占用"）为止，最多 5 分钟；不停在"未启动"
 +    let stopped = false
 +    let tries = 0
 +    let timer: ReturnType<typeof setTimeout> | undefined
@@ -158,7 +159,7 @@ index 6ac9c9c324..535b1d712d 100644
 +        setLoading(false)
 +        if (!r.ok || r.value === undefined) {
 +          setError(r.ok ? '工作台服务未启动，请稍后重试' : r.message)
-+          if (++tries < 20) timer = setTimeout(load, 3000)
++          if (!(!r.ok && /^本机服务未能启动：/.test(r.message)) && ++tries < 100) timer = setTimeout(load, 3000)
 +          return
 +        }
 +        setError('')
@@ -239,12 +240,13 @@ index 8bee2728cd..e31886ab6d 100644
      const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
 diff --git a/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
 new file mode 100644
-index 0000000000..36920eda4f
+index 0000000000..244c417296
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,61 @@
 +// @vitest-environment jsdom
-+// lawbench（令 1556 第 2 条）：首次配置页读不到设置时每 3 秒再读，最多 1 分钟；起不来时显示 Host 给的原因，起来了就填好地址。
++// lawbench（令 1556 第 2 条）：首次配置页读不到设置时每 3 秒再读；服务起来就填好地址，Host 说出起不来的原因
++// （"本机服务未能启动：…"）就停在原因上，最多读 5 分钟。
 +import { act } from 'react'
 +import { createRoot } from 'react-dom/client'
 +import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -252,6 +254,7 @@ index 0000000000..36920eda4f
 +import type { WelcomeApi } from '../src/welcome-api.ts'
 +
 +const WHY = '本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试'
++const NOT_YET = { ok: false, message: '工作台服务未启动，请稍后重试' }
 +const servers = { llm_base_url: 'http://192.168.8.77:8000/v1', prep_base_url: 'http://192.168.8.124:9000' }
 +let box: HTMLDivElement
 +let root: ReturnType<typeof createRoot>
@@ -271,29 +274,36 @@ index 0000000000..36920eda4f
 +})
 +
 +const flush = async (ms = 0): Promise<void> => { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
++const render = (getSetup: () => Promise<unknown>): void => { act(() => { root.render(<Welcome api={{ id: 'zh-CN', getSetup } as unknown as WelcomeApi} />) }) }
 +
-+it('先说原因，服务起来后自动填好地址、原因消失', async () => {
-+  const answers = [{ ok: false, message: WHY }, { ok: false, message: WHY }, { ok: true, value: { servers, hasKey: true, lawyerName: null } }]
-+  const getSetup = vi.fn(async () => answers.shift() ?? answers[answers.length - 1])
-+  act(() => { root.render(<Welcome api={{ id: 'zh-CN', getSetup } as unknown as WelcomeApi} />) })
++it('服务还在起：每 3 秒再读，起来了就填好地址、提示消失，之后不再读', async () => {
++  const answers: unknown[] = [NOT_YET, NOT_YET, { ok: true, value: { servers, hasKey: true, lawyerName: null } }]
++  const getSetup = vi.fn(async () => answers.length > 1 ? answers.shift() : answers[0])
++  render(getSetup)
 +  await flush()
-+  expect(box.textContent).toContain(WHY)
-+  await flush(3000)
-+  expect(getSetup).toHaveBeenCalledTimes(2)
-+  await flush(3000)
++  expect(box.textContent).toContain('工作台服务未启动')
++  await flush(6000)
 +  expect(getSetup).toHaveBeenCalledTimes(3)
-+  expect(box.textContent).not.toContain(WHY)
++  expect(box.textContent).not.toContain('工作台服务未启动')
 +  expect((box.querySelector('input[name=llm], #llm') as HTMLInputElement | null)?.value).toBe(servers.llm_base_url)
-+  await flush(10_000)
-+  expect(getSetup).toHaveBeenCalledTimes(3) // 读到了就不再读
++  await flush(30_000)
++  expect(getSetup).toHaveBeenCalledTimes(3)
 +})
 +
-+it('一直起不来：最多读 20 次（约 1 分钟），停在原因上', async () => {
-+  const getSetup = vi.fn(async () => ({ ok: false, message: WHY }))
-+  act(() => { root.render(<Welcome api={{ id: 'zh-CN', getSetup } as unknown as WelcomeApi} />) })
++it('Host 判定起不来要一分多钟：读到原因前一直读，读到原因就停在原因上', async () => {
++  let calls = 0
++  const getSetup = vi.fn(async () => (++calls <= 26 ? NOT_YET : { ok: false, message: WHY })) // 第 27 次（约 78 秒）才有原因
++  render(getSetup)
 +  await flush(120_000)
-+  expect(getSetup).toHaveBeenCalledTimes(20)
++  expect(getSetup).toHaveBeenCalledTimes(27)
 +  expect(box.textContent).toContain(WHY)
++})
++
++it('一直只说"未启动"：最多读 100 次（约 5 分钟）', async () => {
++  const getSetup = vi.fn(async () => NOT_YET)
++  render(getSetup)
++  await flush(600_000)
++  expect(getSetup).toHaveBeenCalledTimes(100)
 +})
 diff --git a/apps/desktop/tests/lawbench-windows-payload.spec.ts b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 new file mode 100644

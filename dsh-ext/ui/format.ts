@@ -112,7 +112,7 @@ export function lawyerMessage(message: string | undefined | null): string {
 }
 
 /** Host 说出了服务没起来的原因（"本机服务未能启动：…"）：原因已含做法，不再接"正在启动或已停止，稍后再试"。 */
-const START_FAILED = /^本机服务未能启动：/
+export const START_FAILED = /^本机服务未能启动：/
 
 export function errorText(e: { code: string; message: string }): string {
   const hint = ERROR_HINT[e.code]

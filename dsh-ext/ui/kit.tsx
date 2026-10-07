@@ -1,7 +1,7 @@
 // 界面小部件与样式。颜色、圆角、字号一律取 DSH 的 --dsw-* 变量，跟随明暗主题；按钮、弹框用 DSH 共享组件库。
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import { errorText } from './format.ts'
+import { errorText, START_FAILED } from './format.ts'
 
 export const C = {
   text: 'var(--dsw-alias-label-primary)',
@@ -108,7 +108,8 @@ export function useRetryLoad<T>(load: () => Promise<{ ok: true; value: T } | { o
       const r = await load()
       if (my !== seq.current) return
       if (r.ok) { setData({ state: 'ok', value: r.value }); return }
-      if (waited + RETRY_EVERY_MS > RETRY_FOR_MS) { setData({ state: 'fail', error: r.error }); return }
+      // Host 已说出服务起不来的原因（如端口被占，令 1556）：再读也一样，直接显示
+      if (waited + RETRY_EVERY_MS > RETRY_FOR_MS || START_FAILED.test(r.error.message)) { setData({ state: 'fail', error: r.error }); return }
       setData({ state: 'connecting' })
       await new Promise((res) => setTimeout(res, RETRY_EVERY_MS))
       if (my !== seq.current) return
