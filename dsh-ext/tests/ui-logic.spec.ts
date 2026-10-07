@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsuleId, newCapsules, rename, toggleHidden, visible, type Capsules } from '../ui/capsules.ts'
-import { citationSummary, coverageLines, ERROR_HINT, GENERIC_ERROR, ocrConfirmText, statusErrorText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
+import { citationSummary, coverageLines, ERROR_HINT, errorText, GENERIC_ERROR, ocrConfirmText, statusErrorText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
 import { validateRoot } from '../shared/contracts.ts'
 
 const defaults = JSON.parse(readFileSync(join(__dirname, '..', '..', 'skills', 'capsules.default.json'), 'utf8')) as Capsules
@@ -198,6 +198,11 @@ describe('契约 1.2：新胶囊提示、覆盖清单、自检结果（执行令
     expect(statusErrorText({ code: 'SERVICE_UNAVAILABLE', message: 'fetch failed' })).toBe(ERROR_HINT.SERVICE_UNAVAILABLE)
     expect(statusErrorText({ code: 'CASE_NOT_FOUND', message: '案件不存在' })).toBe(`案件不存在 ${ERROR_HINT.CASE_NOT_FOUND}`)
     expect(statusErrorText({ code: 'TIMEOUT', message: 'timeout' })).toBe(GENERIC_ERROR)
+    // 令 1556 第 2 条：Host 说出了没起来的原因，不再接"正在启动或已停止，稍后再试"
+    const why = '本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试'
+    expect(statusErrorText({ code: 'SERVICE_UNAVAILABLE', message: why })).toBe(why)
+    expect(errorText({ code: 'SERVICE_UNAVAILABLE', message: why })).toBe(why)
+    expect(errorText({ code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' })).toBe(`工作台服务未启动，请稍后重试 ${ERROR_HINT.SERVICE_UNAVAILABLE}`)
   })
   it('自检结果：null 为"尚未核对"，不说通过；有必须修改的列出来', () => {
     expect(citationSummary(null)).toEqual({ tone: 'faint', summary: '尚未核对', lines: [] })

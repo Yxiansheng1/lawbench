@@ -111,10 +111,13 @@ export function lawyerMessage(message: string | undefined | null): string {
   return message && /[一-鿿]/.test(message) ? message : GENERIC_ERROR
 }
 
+/** Host 说出了服务没起来的原因（"本机服务未能启动：…"）：原因已含做法，不再接"正在启动或已停止，稍后再试"。 */
+const START_FAILED = /^本机服务未能启动：/
+
 export function errorText(e: { code: string; message: string }): string {
   const hint = ERROR_HINT[e.code]
   const msg = lawyerMessage(e.message)
-  return hint ? `${msg} ${hint}` : msg
+  return hint && !START_FAILED.test(msg) ? `${msg} ${hint}` : msg
 }
 
 /**
@@ -125,7 +128,7 @@ export function errorText(e: { code: string; message: string }): string {
 export function statusErrorText(e: { code: string; message: string }): string {
   const msg = lawyerMessage(e.message)
   const hint = ERROR_HINT[e.code]
-  if (!hint) return msg
+  if (!hint || START_FAILED.test(msg)) return msg
   if (msg === GENERIC_ERROR) return hint
   if (/稍后/.test(msg) && /稍后/.test(hint)) return msg
   return `${msg} ${hint}`

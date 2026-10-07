@@ -132,6 +132,46 @@ index 151eeba4bf..41b6a03907 100644
      const cordis = runtime.sharedPackages.find(entry => entry.name === '@deepseek-ai/cordis')
      if (cordis === undefined) throw new Error('desktop runtime: missing shared Cordis package')
      writeFileSync(join(plugin, 'package.json'), JSON.stringify({
+diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
+index 6ac9c9c324..535b1d712d 100644
+--- a/apps/desktop/src/client/WelcomePage.tsx
++++ b/apps/desktop/src/client/WelcomePage.tsx
+@@ -52,13 +52,28 @@ export function Welcome({ api }: { api: WelcomeApi }) {
+   useEffect(() => {
+     document.documentElement.lang = api.id
+     document.title = '首次配置'
+-    void api.getSetup().then((r) => {
+-      setLoading(false)
+-      if (!r.ok || r.value === undefined) { setError(r.ok ? '工作台服务未启动，请稍后重试' : r.message); return }
+-      const s = r.value.servers
+-      setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '', lawyer: r.value?.lawyerName ?? '' }))
+-      setHasKey(r.value.hasKey)
+-    })
++    // lawbench（令 1556 第 2 条）：首次启动时服务常常还没起来；每 3 秒再读一次、最多 1 分钟，
++    // 服务起来就填好地址，起不来时显示 Host 给的原因（如"本机 18765 端口被其他程序占用"），不停在"未启动"
++    let stopped = false
++    let tries = 0
++    let timer: ReturnType<typeof setTimeout> | undefined
++    const load = (): void => {
++      void api.getSetup().then((r) => {
++        if (stopped) return
++        setLoading(false)
++        if (!r.ok || r.value === undefined) {
++          setError(r.ok ? '工作台服务未启动，请稍后重试' : r.message)
++          if (++tries < 20) timer = setTimeout(load, 3000)
++          return
++        }
++        setError('')
++        const s = r.value.servers
++        setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '', lawyer: r.value?.lawyerName ?? '' }))
++        setHasKey(r.value.hasKey)
++      })
++    }
++    load()
++    return () => { stopped = true; if (timer !== undefined) clearTimeout(timer) }
+   }, [api])
+ 
+   const input = (): FirstRunInput | undefined => {
 diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
 index 7796902e01..b7592a4ca5 100644
 --- a/apps/desktop/src/lawbench-isolation.ts
@@ -197,6 +237,64 @@ index 8bee2728cd..e31886ab6d 100644
    })
    it('lawbenchAdhocSignRuntime 只签单个 Mach-O 文件，不签 bundle、不加文件', () => {
      const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
+diff --git a/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
+new file mode 100644
+index 0000000000..36920eda4f
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
+@@ -0,0 +1,52 @@
++// @vitest-environment jsdom
++// lawbench（令 1556 第 2 条）：首次配置页读不到设置时每 3 秒再读，最多 1 分钟；起不来时显示 Host 给的原因，起来了就填好地址。
++import { act } from 'react'
++import { createRoot } from 'react-dom/client'
++import { afterEach, beforeEach, expect, it, vi } from 'vitest'
++import { Welcome } from '../src/client/WelcomePage.tsx'
++import type { WelcomeApi } from '../src/welcome-api.ts'
++
++const WHY = '本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试'
++const servers = { llm_base_url: 'http://192.168.8.77:8000/v1', prep_base_url: 'http://192.168.8.124:9000' }
++let box: HTMLDivElement
++let root: ReturnType<typeof createRoot>
++
++beforeEach(() => {
++  vi.useFakeTimers()
++  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
++  box = document.createElement('div')
++  document.body.append(box)
++  root = createRoot(box)
++})
++
++afterEach(() => {
++  act(() => { root.unmount() })
++  box.remove()
++  vi.useRealTimers()
++})
++
++const flush = async (ms = 0): Promise<void> => { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
++
++it('先说原因，服务起来后自动填好地址、原因消失', async () => {
++  const answers = [{ ok: false, message: WHY }, { ok: false, message: WHY }, { ok: true, value: { servers, hasKey: true, lawyerName: null } }]
++  const getSetup = vi.fn(async () => answers.shift() ?? answers[answers.length - 1])
++  act(() => { root.render(<Welcome api={{ id: 'zh-CN', getSetup } as unknown as WelcomeApi} />) })
++  await flush()
++  expect(box.textContent).toContain(WHY)
++  await flush(3000)
++  expect(getSetup).toHaveBeenCalledTimes(2)
++  await flush(3000)
++  expect(getSetup).toHaveBeenCalledTimes(3)
++  expect(box.textContent).not.toContain(WHY)
++  expect((box.querySelector('input[name=llm], #llm') as HTMLInputElement | null)?.value).toBe(servers.llm_base_url)
++  await flush(10_000)
++  expect(getSetup).toHaveBeenCalledTimes(3) // 读到了就不再读
++})
++
++it('一直起不来：最多读 20 次（约 1 分钟），停在原因上', async () => {
++  const getSetup = vi.fn(async () => ({ ok: false, message: WHY }))
++  act(() => { root.render(<Welcome api={{ id: 'zh-CN', getSetup } as unknown as WelcomeApi} />) })
++  await flush(120_000)
++  expect(getSetup).toHaveBeenCalledTimes(20)
++  expect(box.textContent).toContain(WHY)
++})
 diff --git a/apps/desktop/tests/lawbench-windows-payload.spec.ts b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 new file mode 100644
 index 0000000000..f0f9cf53d9

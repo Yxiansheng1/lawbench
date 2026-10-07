@@ -3,7 +3,7 @@
 
 
  Test Files  52 passed (52)
-      Tests  662 passed | 6 skipped (668)
-   Start at  16:03:48
-   Duration  114.61s (transform 12.77s, setup 0ms, import 31.44s, tests 176.11s, environment 383.80s)
+      Tests  663 passed | 6 skipped (669)
+   Start at  16:41:51
+   Duration  116.38s (transform 20.79s, setup 0ms, import 45.64s, tests 185.22s, environment 41.21s)
 

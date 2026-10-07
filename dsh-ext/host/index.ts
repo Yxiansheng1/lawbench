@@ -164,7 +164,8 @@ export class LawbenchRemote {
     const built = buildRequest(route, req)
     if (!built) return done(fail('INVALID_ARGUMENT', BAD_ARGS))
     const ep = this.supervisor.endpoint()
-    if (!ep) return done(fail('SERVICE_UNAVAILABLE', UNAVAILABLE))
+    // 服务已停在 failed：说出原因（如端口被占，令 1556 第 2 条），不只说"未启动"
+    if (!ep) return done(fail('SERVICE_UNAVAILABLE', unavailableText(this.supervisor)))
     let json: unknown
     try {
       // 不用 fetch：它等响应头最多 300 秒，长路由（发票、归档、导入）会被掐断（T26 复核 P2-1，见 http-json.ts）

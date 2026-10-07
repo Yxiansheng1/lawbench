@@ -143,6 +143,12 @@ describe('Host /api 调用层', () => {
     const r2 = new LawbenchRemote(down(), appData, () => undefined)
     expect((await call(r2, 'caseRecent', {}) as { error: { code: string } }).error.code).toBe('SERVICE_UNAVAILABLE')
   })
+
+  it('服务已停在 failed：错误里说出原因（令 1556 第 2 条：端口被占）', async () => {
+    const failed = { endpoint: () => undefined, state: 'failed', lastFailure: { reason: 'exited', exitCode: 2, port: 18765 } } as unknown as Supervisor
+    const r = new LawbenchRemote(failed, appData, () => undefined)
+    expect(await call(r, 'caseRecent', {})).toEqual({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: '本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试' } })
+  })
 })
 
 describe('粘贴截图导入（Q3②）', () => {

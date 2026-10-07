@@ -16,4 +16,4 @@ ok P-20-no-workspace-word
 ok P-21-home-above-new-session
 ok P-22-macos
 ok P-23-windows-payload
-paths=157 differing=0 (strict: plain git apply, autocrlf=false)
+paths=158 differing=0 (strict: plain git apply, autocrlf=false)
