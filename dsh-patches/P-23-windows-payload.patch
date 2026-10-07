@@ -199,7 +199,7 @@ index 8bee2728cd..e31886ab6d 100644
      const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
 diff --git a/apps/desktop/tests/lawbench-windows-payload.spec.ts b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 new file mode 100644
-index 0000000000..d8fdf760e4
+index 0000000000..87075d5d3c
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 @@ -0,0 +1,53 @@
@@ -236,7 +236,7 @@ index 0000000000..d8fdf760e4
 +
 +  it('electron-builder：Windows 的 resources\\runtime 过滤掉 primary-runtime；Mac 照旧整目录', async () => {
 +    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
-+    type Res = { extraResources: Array<{ from: string; to: string; filter?: string[] }> }
++    type Res = { readonly extraResources: ReadonlyArray<{ readonly from: string; readonly to: string; readonly filter?: readonly string[] }> }
 +    const win = (createElectronBuilderConfig(base, 'win32', 'x64') as Res).extraResources.find((r) => r.to === 'runtime')
 +    expect(win?.filter).toEqual(['**/*', '!primary-runtime', '!primary-runtime/**'])
 +  })
