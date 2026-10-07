@@ -415,7 +415,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 所有读写案件文件的代码都必须经过闸门，没有其他写文件的途径。
 
 1. **案件根目录**：只从案件注册表取（Agent 路径先用会话头的 `cwd` 查注册表），取 `realpath` 保存为 `ROOT`。根目录本身是链接或 junction 的，拒绝登记，提示"请直接选择实际文件夹"。
-   **云同步目录**（SEC-14）：打开案件时，`ROOT` 位于以下位置之一即拒绝（错误码 `CASE_IN_SYNC_FOLDER`）：环境变量 `OneDrive`、`OneDriveCommercial`、`OneDriveConsumer` 指向的目录及其子目录；注册表 `HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder`；路径中任一级目录名包含 `OneDrive`、`坚果云`、`Nutstore`、`BaiduNetdisk`、`百度网盘`、`Dropbox`、`Google Drive`、`iCloudDrive`、`WPS云盘`。列表写在配置里，可以补充。按子串匹配，宁可误拒不可漏放：案件文件夹名里带这些字样（如"Dropbox公司诉某某案"）也会被拒，律师改个文件夹名即可（2026-09-29 用户定）。
+   **云同步目录**（SEC-14）：打开案件时，`ROOT` 位于以下位置之一即拒绝（错误码 `CASE_IN_SYNC_FOLDER`）：环境变量 `OneDrive`、`OneDriveCommercial`、`OneDriveConsumer` 指向的目录及其子目录；注册表 `HKCU\Software\Microsoft\OneDrive\Accounts\*\UserFolder`；路径中任一级目录名包含 `OneDrive`、`坚果云`、`Nutstore`、`BaiduNetdisk`、`百度网盘`、`Dropbox`、`Google Drive`、`iCloudDrive`、`WPS云盘`。列表写在配置里，可以补充。按子串匹配，宁可误拒不可漏放：案件文件夹名里带这些字样（如"Dropbox公司诉某某案"）也会被拒，律师改个文件夹名即可（2026-09-29 用户定）。规则不变；被拒时界面多给一个"为我在本机建一个文件夹"：Host 在 `<用户目录>\连越律师工作台\<案件名>` 建好（同名加"(2)"），以它继续打开或新建；这也是日常事务（日常办公文件夹没设时）和选目录对话框的默认位置（律师第一批反馈，2026-10-06）。
    **不能当案件根目录的位置**（2026-09-29 用户定）：盘符根目录（如 `D:\`）；包含本软件应用数据目录的文件夹（如整个用户目录）。选到时返回 `INVALID_ARGUMENT`。`\\?\` 前缀先去掉、统一 `realpath` 后再登记。
 2. **AI 传入的参数**：
    - 材料用 `case_list_materials` 返回的名称或相对路径；

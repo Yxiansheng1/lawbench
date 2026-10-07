@@ -43,6 +43,11 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'dailyCase', params: [] },
   // 1612 复核 P1：侧栏移除旧位置那一项之前，问 Host 这个文件夹是不是确实不在了
   { method: 'pathState', params: ['request'] },
+  // 令 2043（律师第一批反馈）：首页工具栏打开小工具；右栏"打开所在文件夹"；"移除此材料"（删文件后重新扫描）；云同步被拒时在本机建案件文件夹
+  { method: 'openTool', params: ['request'] },
+  { method: 'openFolder', params: ['request'] },
+  { method: 'materialRemove', params: ['request'] },
+  { method: 'localCaseFolder', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

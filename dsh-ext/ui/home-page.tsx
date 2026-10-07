@@ -7,7 +7,9 @@ import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
 import type { Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport } from './cases.ts'
 import { Badge, Button, C, CONNECTING_TEXT, Empty, ErrorLine, getNav, useLoad, useRetryLoad } from './kit.tsx'
-import { app, call, isDaily, type CaseRef } from './state.ts'
+import { app, call, isDaily, notice, type CaseRef } from './state.ts'
+import { isMac } from './platform.ts'
+import { errorText } from './format.ts'
 import { useStore } from './store.ts'
 import { BrandMark } from './brand.tsx'
 import { PRODUCT_NAME } from '../shared/product.ts'
@@ -137,6 +139,7 @@ export function CaseCard({ c, daily = false }: { c: CaseRef; daily?: boolean }) 
       </div>
       <div style={{ fontSize: 12, color: C.faint, wordBreak: 'break-all' }}>{c.root}</div>
       <div style={{ fontSize: 14, color: C.text }}>{stats}</div>
+      {daily ? <ToolsRow /> : null}
       <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.faint }}>
         <span>{over ? '松开即导入到这个案件' : '可把文件拖到这里导入'}</span>
         <span>{c.last_opened ? `上次打开 ${shortTime(c.last_opened)}` : ''}</span>
@@ -156,3 +159,21 @@ const DailyIcon = () => (
     <path d="M2.5 3.5h11v7.2h-6.3L4.5 13v-2.3h-2V3.5Z" strokeLinejoin="round" />
   </svg>
 )
+
+/** 首页"日常事务"卡片里常驻的"工具"一栏（令 2043 第 1 条：律师找不到小工具）。Mac 版不带这两个小工具，不显示。 */
+export const TOOL_BUTTONS = [{ name: 'splitter', label: '长截图切分' }, { name: 'convert', label: '格式互转' }] as const
+
+export function ToolsRow({ mac = isMac() }: { mac?: boolean }) {
+  if (mac) return null
+  const open = async (name: string, label: string) => {
+    const r = await call<{ opened: true }>('openTool', { name })
+    if (!r.ok) notice(`${label}没能打开`, errorText(r.error))
+  }
+  return (
+    <div data-lawbench-tools="" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+      onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <span style={{ fontSize: 12, color: C.sub }}>工具</span>
+      {TOOL_BUTTONS.map((t) => <Button key={t.name} size="sm" variant="outline" onClick={() => void open(t.name, t.label)}>{t.label}</Button>)}
+    </div>
+  )
+}

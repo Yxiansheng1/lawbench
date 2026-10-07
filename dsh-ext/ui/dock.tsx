@@ -17,6 +17,7 @@ import { useSessionCase, type SessionProps } from './session-case.tsx'
 import { CaseOverview, type SessionBrief } from './overview.tsx'
 import { homeView } from './invoice-logic.ts'
 import { openRetainer } from './retainer.ts'
+import { confirmScope } from './estimate.ts'
 import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
 
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
@@ -260,11 +261,13 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
   }
   const setParam = <K extends keyof Params>(k: K, v: Params[K]) => setSelection(sessionId, { params: { ...params, [k]: v } })
   /** 点第二层：Skill 胶囊写进任务单（同下拉框时的写法）；工具胶囊打开 T26 的页面。 */
-  const openItem = (item: Capsule) => {
+  const openItem = async (item: Capsule) => {
     if (item.kind === 'tool') {
       if (item.tool === 'invoice') { homeView.set('invoice'); getNav().goHome() } else void openRetainer(caseRef)
       return
     }
+    // 令 2043 第 4 条：写任务单之前按材料篇幅估一次，读不全先问（可"仍然开始"）
+    if (item.id !== sel.capsuleId && !await confirmScope(caseRef)) return
     pickCapsule(item.id)
     setRowsOpen(false)
   }
@@ -277,7 +280,7 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
           <span style={{ fontSize: 13, color: C.sub, minWidth: 76 }}>{group.name} · 选要做什么</span>
           {group.items.map((item) => (
             <button key={item.id} type="button" data-capsule-id={item.id} aria-pressed={item.id === sel.capsuleId} title={item.kind === 'tool' ? `内置工具：${TOOL_WORD[item.tool]}` : undefined}
-              onClick={() => openItem(item)} style={pill(item.id === sel.capsuleId, true)}>{item.name}</button>
+              onClick={() => void openItem(item)} style={pill(item.id === sel.capsuleId, true)}>{item.name}</button>
           ))}
           {group.items.length === 0 ? <span style={{ fontSize: 12, color: C.faint }}>这一类的胶囊都隐藏了，可在设置里"管理胶囊"显示。</span> : null}
         </div>

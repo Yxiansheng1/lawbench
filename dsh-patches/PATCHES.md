@@ -217,3 +217,12 @@ Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支
 | P-4 | `apps/desktop-host/src/index.ts`：Host 的 `--port` 取 `LAWBENCH_HOST_PORT`，没有时仍是 19387；`lawbench-isolation.ts` 在装好的包里设 `LAWBENCH_HOST_PORT=0`（这个文件 P-12、P-14 也碰，P-4 这一节按"P-11 之后的状态 → 工作区"生成） | F1：单实例锁分开后两边能同时开，写死的 19387 让后起的 Host 端口被占、致命错误；主进程从 Host 的就绪消息取实际地址，不依赖端口号 | `lawbench-isolation.spec.ts` 加两项（装好的包 `LAWBENCH_HOST_PORT=0`、开发期不设；Host 读它）；第四版冒烟：先占住 19387 再启动 |
 | P-4 | `apps/desktop/installer/uninstall.nsh` 的 `un.CleanData`：清 `%APPDATA%\lawbench-desktop`、`%LOCALAPPDATA%\lawbench\dsh-home`，不再清包名目录（`%APPDATA%\@deepseek-ai\dsh-desktop`）和更新缓存目录；`scripts/installer.nsh`：更新缓存里的 `installer.exe` 只在与本安装包大小相同时删，安装报告目录改为 `%LOCALAPPDATA%\lawbench\installer-logs` | F2：隔离后包名目录、更新缓存只属原版 DSH；我方新目录（含 `Partitions\retainer`）卸载后原来会留下 | 最小 NSIS 脚本用同版本 makensis 编译通过；`windows-directory-installer`、`installer-packaging` 测试通过；第四版冒烟：卸载后两个新目录不在、预置的原版目录 marker 仍在 |
 | P-4 | `apps/desktop/tests/lawbench-isolation.spec.ts`：顺序检查改为行首、未注释语句的正则，且须在 `app.setAppLogsPath()` 之前 | F3：只比字符串位置，注释掉调用或挪到日志路径之后都抓不到 | 本例 |
+
+## 律师第一批反馈（令 `致A-ORCH-执行令-律师反馈第一批-工具入口材料按钮云同步估算-20261006-2043.md`）
+
+只改 P-4。`lawbench-isolation.ts` 之后还有 P-22（macOS）碰：P-4 这一节按"工作区去掉 P-22 那一节"生成，即把 P-22 对这个文件的改动反向打回去，再与空文件比。其余文件只有 P-4 碰。改完 154 个路径与工作区逐字一致（链里已含 P-22）。
+
+| 补丁 | 本轮改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-4 | `apps/desktop/scripts/installer.nsh` 的 `lawbenchAfterInstall`：开始菜单加"长截图切分""格式互转"两项（指向 `<安装目录>\tools\splitter\splitter.exe`、`…\convert\convert.exe`，程序在才建）；`customUnInstall` 卸载时删这两项；`apps/desktop/installer/strings.nsh` 加中英文名 `LAWBENCH_TOOL_SPLITTER`、`LAWBENCH_TOOL_CONVERT` | 第 1 条：律师找不到小工具 | 最小 NSIS 脚本用打包同版本 makensis 编译通过；`windows-directory-installer`、`installer-packaging` 测试通过；装出效果待第五版 |
+| P-4 | `apps/desktop/src/directory-picker.ts`：选目录对话框在装好的包里、`<用户目录>\连越律师工作台` 已在时从那里开始（`lawbenchDefaultFolder`）；`lawbench-isolation.ts` 在装好的包里设 `LAWBENCH_PACKAGED=1` 供它判断（这里拿不到 Electron 的 app，DSH 自己的测试替身也没有） | 第 3 条：新建、打开案件的默认位置不在"文档"（OneDrive） | `lawbench-isolation.spec.ts` 加一例；`directory-picker.spec.ts` 照常通过 |

@@ -1,0 +1,19 @@
+令 2203 P1：补丁链严格核对（干净克隆 477b4f4205、core.autocrlf=false、git apply 不带任何空白选项，任一补丁出错或有警告即记；打完逐字比对工作区，工作区一侧 CRLF 当 LF）。脚本见交付说明。
+ok P-10-profile-lawbench-dsh
+ok P-12-desktop-no-office
+ok P-13-desktop-no-open-config
+ok P-3-first-run-page
+ok P-5-conversation-file-intake
+ok P-9-default-session-request-whitelist
+ok P-14-fail-closed-without-lawbench-bundle
+ok P-15-api-file-allowed-roots
+ok P-16-citation-inline-marks
+ok P-17-links-never-open
+ok P-18-no-mention-hint-no-developer-switch
+ok P-11-retainer-window
+ok P-4-brand
+ok P-19-awaiting-user-answer
+ok P-20-no-workspace-word
+ok P-21-home-above-new-session
+ok P-22-macos
+paths=154 differing=0 (strict: plain git apply, autocrlf=false)

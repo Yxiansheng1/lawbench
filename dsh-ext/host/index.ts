@@ -26,6 +26,9 @@ import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
+import { folderKind, insideCase, localCaseFolder, removableMaterial, toolExe, type DeskDeps } from './desk-actions.ts'
+import { nodeDeskDeps } from './desk-node.ts'
+import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -107,6 +110,7 @@ export type CredentialsLike = {
 
 /** /api 接口的统一返回（契约 common.schema.json 的 fail，或 {ok: true, value}）。 */
 export type ApiResult = { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } }
+type ApiFail = { ok: false; error: { code: string; message: string } }
 type LogFn = (level: 'info' | 'warn' | 'error', event: string, meta?: Record<string, unknown>) => void
 
 const fail = (code: string, message: string): ApiResult => ({ ok: false, error: { code, message } })
@@ -197,6 +201,83 @@ export class LawbenchRemote {
     return pathState(request)
   }
 
+  /** 启动程序、删文件、建文件夹的实际做法和安装目录（apply 里设；测试换成替身）。 */
+  desk: DeskDeps = nodeDeskDeps(undefined)
+
+  /**
+   * 首页"工具"一栏（令 2043 第 1 条）：打开长截图切分 / 格式互转。只认这两个名字，程序位置按安装目录写死。
+   * @param request - { name: 'splitter' | 'convert' }。
+   */
+  async openTool(request: unknown): Promise<{ ok: true; value: { opened: true } } | ApiFail> {
+    const name = (request as { name?: unknown } | null)?.name
+    const exe = toolExe(this.desk.installDir, name)
+    if (!exe.ok) return exe
+    if (!this.desk.exists(exe.value)) return { ok: false, error: { code: 'NOT_FOUND', message: '找不到这个小工具，请重新安装律师工作台' } }
+    try { await this.desk.launch(exe.value, []) } catch { return { ok: false, error: { code: 'INTERNAL', message: '小工具没能打开，请重试' } } }
+    this.log('info', 'tool.open', { tool: name as string })
+    return { ok: true, value: { opened: true } }
+  }
+
+  /**
+   * 右栏"打开所在文件夹"（令 2043 第 2 条）：在资源管理器里打开案件根下的子文件夹（不出案件根）。
+   * @param request - { root, rel }，rel 为案件根下的相对路径（如"02 案件材料"、"工作区\成果"），空串为案件根。
+   */
+  async openFolder(request: unknown): Promise<{ ok: true; value: { opened: true } } | ApiFail> {
+    const r = request as { case_id?: unknown; root?: unknown; rel?: unknown } | null
+    // 复核 AMEND P2-2：案件根不信界面给的，按服务登记核对后用登记的那个；网络路径、出案件根、联接指到外面的都不开
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const at = this.desk.openable(known.value, r?.rel)
+    if (!at.ok) return at
+    try { await this.desk.openPath(at.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件夹没能打开，请重试' } } }
+    this.log('info', 'folder.open', { kind: folderKind(String(r?.rel ?? '')) })
+    return { ok: true, value: { opened: true } }
+  }
+
+  /** case_id 与案件根须是服务登记的同一个案件（不信界面给的路径）；对上了回登记的案件根。 */
+  private async knownCase(caseId: unknown, root: unknown): Promise<{ ok: true; value: string } | ApiFail> {
+    const bad: ApiFail = { ok: false, error: { code: 'INVALID_ARGUMENT', message: '请求参数有误' } }
+    if (typeof caseId !== 'string' || typeof root !== 'string') return bad
+    const recent = await this.callApi(API_ROUTES.find((x) => x.method === 'caseRecent')!, {})
+    if (!recent.ok) return recent
+    const cases = (recent.value as { cases?: Array<{ case_id: string; root: string }> }).cases ?? []
+    const known = cases.find((c) => c.case_id === caseId)
+    const norm = (p: string) => p.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
+    return known && norm(known.root) === norm(root) ? { ok: true, value: known.root } : bad
+  }
+
+  /**
+   * 右栏"移除此材料"（令 2043 第 2 条，N61）：删掉案件文件夹里这份材料的文件，再走现有的重新扫描，让服务把它从材料表和索引里去掉。
+   * 先核对 case_id 与案件根确是服务登记的同一个案件；文件须是案件根里的普通文件。日志不记文件名。
+   * @param request - { case_id, root, rel_path }。
+   * @returns 重新扫描的结果（added/changed/removed/failed/review_needed）。
+   */
+  async materialRemove(request: unknown): Promise<ApiResult | ApiFail> {
+    // 复核 AMEND P2-3：服务能从检索里去掉之前整项关闭（不只是界面按钮禁用），调用一律拒绝
+    if (!MATERIAL_REMOVE_ENABLED) return { ok: false, error: { code: 'NOT_AVAILABLE', message: REMOVE_DISABLED_TIP } }
+    const r = request as { case_id?: unknown; root?: unknown; rel_path?: unknown } | null
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const file = removableMaterial(known.value, r?.rel_path)
+    if (!file.ok) return file
+    try { await this.desk.remove(file.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件没能删除（可能正被别的程序打开），关掉后再试' } } }
+    this.log('info', 'material.removed', {})
+    return this.callApi(API_ROUTES.find((x) => x.method === 'materialsScan')!, { case_id: (r as { case_id: string }).case_id })
+  }
+
+  /**
+   * 案件文件夹在云同步目录里被拒时"为我在本机建一个文件夹"（令 2043 第 3 条）：在 <用户目录>\连越律师工作台\<案件名> 建好，回它的位置，
+   * 界面以它继续打开 / 新建。同名已在时加 (2)……
+   * @param request - { name }（原来那个文件夹的名字）。
+   */
+  async localCaseFolder(request: unknown): Promise<{ ok: true; value: { path: string } } | ApiFail> {
+    const name = (request as { name?: unknown } | null)?.name
+    const path = localCaseFolder(this.desk.userProfile, name, (p) => this.desk.exists(p))
+    try { await this.desk.mkdir(path) } catch { return { ok: false, error: { code: 'INTERNAL', message: '本机文件夹没能建好，请重试' } } }
+    this.log('info', 'case.local_folder', {})
+    return { ok: true, value: { path } }
+  }
+
   private dailyQueue: Promise<unknown> = Promise.resolve()
 
   /**
@@ -206,7 +287,7 @@ export class LawbenchRemote {
   dailyCase(): Promise<DailyResult> {
     const run = this.dailyQueue.then(() => ensureDailyCase({
       marker: join(this.appData, 'daily-case.json'),
-      documents: join(process.env.USERPROFILE ?? homedir(), 'Documents'),
+      userProfile: this.desk.userProfile, // 令 2043 第 3 条：默认放 <用户目录>\连越律师工作台，不放"文档"（Win11 默认同步到 OneDrive）
       configured: async () => (await this.setupState()).configured,
       getSettings: () => this.getSettings() as never,
       putSettings: (s) => this.putSettings(s),
@@ -600,7 +681,9 @@ export function apply(ctx: Ctx, given: Config): void {
     command: python ? config.command : [], serviceDir: config.cwd, appData: config.appData,
     adminSkillsDir: config.skillDirs?.[0], sofficeCandidates: config.sofficeCandidates, pandocCandidates: config.pandocCandidates,
   })).then((items) => (python ? items : items.filter((i) => i.id !== 'python')))
-  ctx.provide(LAWBENCH_SERVICE, new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices, (name) => ctx.get(name), checker))
+  const remote = new LawbenchRemote(supervisor, config.appData, () => ctx.get('credentials') as never, config.skillDirs ?? [], log, notices, (name) => ctx.get(name), checker)
+  remote.desk = nodeDeskDeps(installDir) // 令 2043：小工具按安装目录
+  ctx.provide(LAWBENCH_SERVICE, remote)
   void cleanPasteDir(config.appData).then((n) => { if (n) log('info', 'paste.cleaned', { count: n }) })
   ctx.effect(() => {
     void supervisor.start().catch((e: unknown) => log('error', 'service.start_failed', { error: String((e as Error)?.message ?? e) }))

@@ -1,6 +1,6 @@
 // 案件：打开 / 新建（/api/case/open）、最近案件（/api/case/recent）、导入（/api/materials/import）。
 // 打开案件后把案件文件夹当 DSH 工作区打开（Spec 1.2"案件 = DSH 的工作区"），会话的工作目录即案件文件夹。
-import { app, call, caseForRoot, currentCase, folderName, notice, samePath, pushDialog, rememberCase, type CaseRef } from './state.ts'
+import { app, call, caseForRoot, confirm, currentCase, folderName, notice, samePath, pushDialog, rememberCase, type CaseRef } from './state.ts'
 import { getNav } from './kit.tsx'
 import { errorText } from './format.ts'
 
@@ -77,6 +77,12 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   const dir = path ?? await nav.pickDirectory()
   if (!dir) return undefined
   const r = await call<{ case_id: string; name: string; created: boolean; folders_created: string[] }>('caseOpen', { path: dir, template })
+  if (!r.ok && r.error.code === 'CASE_IN_SYNC_FOLDER') {
+    if (!noOffer) return offerLocalFolder(dir, template, navigate)
+    const name = folderName(dir)
+    notice(syncWordIn(name) ? SYNC_NAME_TITLE : '没能打开案件', syncWordIn(name) ? syncNameText(name) : errorText(r.error))
+    return undefined
+  }
   if (!r.ok) { notice('没能打开案件', errorText(r.error)); return undefined }
   const c: CaseRef = { case_id: r.value.case_id, name: folderName(dir) || r.value.name, root: dir, exists: true }
   // 同一案件（case_id 相同）原来登记在别的位置：文件夹改名或搬走后在新位置重新打开（令 1515 第 3 条）。
@@ -92,6 +98,40 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   }
   return c
 }
+
+export const SYNC_TITLE = '这个文件夹会被云盘同步'
+export const syncText = (name: string): string =>
+  `案件材料不能放在 OneDrive 等会自动上传的文件夹里（Windows 11 默认会同步"文档"和"桌面"）。可以在这台电脑上为你建一个不同步的文件夹"连越律师工作台\\${name}"（在你的用户文件夹下），以后就在那里办这个案件。原来文件夹里的材料不会自动搬过去，需要的话打开后点"导入文件夹"。`
+export const SYNC_OK = '为我在本机建一个文件夹'
+
+/**
+ * 案件文件夹在云同步目录里被拒（SEC-14 不变）时（令 2043 第 3 条）：说明原因，问要不要在 <用户目录>\连越律师工作台\<案件名> 建一个本机文件夹，
+ * 要就建好并以它继续（同样的新建 / 打开方式）。
+ */
+async function offerLocalFolder(dir: string, template: 'civil' | 'criminal' | null, navigate: boolean): Promise<CaseRef | undefined> {
+  const name = folderName(dir) || '新案件'
+  // 复核 AMEND P2-4：名字里就含同步软件的名字时，本机新建的同名文件夹照样被拒（SEC-14 按子串匹配），不给"为我建"，直接说清楚
+  if (syncWordIn(name)) { notice(SYNC_NAME_TITLE, syncNameText(name)); return undefined }
+  if (!await confirm(SYNC_TITLE, syncText(name), SYNC_OK)) return undefined
+  const made = await call<{ path: string }>('localCaseFolder', { name })
+  if (!made.ok) { notice('没能建好本机文件夹', errorText(made.error)); return undefined }
+  // 只给一次：本机文件夹仍被拒时只说明、不再提议（否则每确认一次多一个空的"(n)"文件夹）
+  return openCaseNoOffer(made.value.path, template, navigate)
+}
+
+/** SEC-14 按名字子串拒绝的同步软件名（Spec 4.2 的列表，服务端以配置为准；这里只用来选说法）。 */
+export const SYNC_NAME_WORDS = ['OneDrive', '坚果云', 'Nutstore', 'BaiduNetdisk', '百度网盘', 'Dropbox', 'Google Drive', 'iCloudDrive', 'WPS云盘']
+export const syncWordIn = (name: string): string | undefined => SYNC_NAME_WORDS.find((w) => name.toLowerCase().includes(w.toLowerCase()))
+export const SYNC_NAME_TITLE = '文件夹名字里有同步软件的名字'
+export const syncNameText = (name: string): string =>
+  `"${name}"里含有"${syncWordIn(name) ?? '同步软件的名字'}"，程序会把它当成云盘文件夹拒绝（不管它实际在哪）。请给文件夹换个不含这些字的名字，再打开或新建。`
+
+/** 打开本机建好的文件夹：再被同步目录闸门拒绝时只说明，不再提议建文件夹。 */
+async function openCaseNoOffer(path: string, template: 'civil' | 'criminal' | null, navigate: boolean): Promise<CaseRef | undefined> {
+  noOffer = true
+  try { return await openCase(path, template, navigate) } finally { noOffer = false }
+}
+let noOffer = false
 
 /** 有打开的案件就用它，否则先让律师选择或新建（F-ENT-01）。 */
 export function withCase(current: CaseRef | undefined, then: (c: CaseRef) => void): void {
