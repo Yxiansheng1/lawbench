@@ -33,6 +33,27 @@ describe('服务起不来时说出原因（令 2048）', () => {
     }
   })
 
+  it('不带引号、最后一段带空格（令 1337 第 5 条）：吃到最后一个扩展名；没有扩展名吃到行尾；宁多吃', () => {
+    const out = (t: string) => scrubPaths(t, 'E:\\law')
+    expect(out('OSError: cannot open D:\\案件\\李某 合同纠纷 起诉书 定稿.docx')).toBe('OSError: cannot open <路径>')
+    expect(out('OSError: D:\\案件\\证据 清单 第二版.pdf: permission denied')).toBe('OSError: <路径>: permission denied')
+    expect(out('PermissionError: \\\\fs01\\案卷\\张某甲 诈骗案 卷宗 一.pdf busy\nnext line')).toBe('PermissionError: <路径> busy\nnext line')
+    // 末段没有扩展名（文件夹）：吃到行尾，不吃下一行
+    expect(out('NotADirectoryError: D:\\案件\\李某 合同纠纷\nTraceback')).toBe('NotADirectoryError: <路径>\nTraceback')
+    // 同一行里两个扩展名：吃到最后一个（宁多吃）
+    expect(out('OSError: D:\\x\\张三 证据.pdf and 李四 证言.docx')).toBe('OSError: <路径>')
+    for (const t of ['李某', '合同纠纷', '起诉书', '清单', '张某甲', '卷宗', '张三', '李四']) {
+      expect(out('a D:\\案件\\李某 合同纠纷 起诉书.docx\nb \\\\fs01\\案卷\\张某甲 卷宗.pdf x\nc D:\\x\\张三 证据.pdf 李四 清单.doc')).not.toContain(t)
+    }
+  })
+
+  it('安装目录开头、但同一段里又夹着别的路径：整段换成"<路径>"，不留尾巴', () => {
+    const out = (t: string) => scrubPaths(t, 'E:\\law')
+    expect(out('OSError: E:\\law\\python\\x.pyd from C:\\Users\\张三\\证据 一.txt')).toBe('OSError: <路径>')
+    expect(out('OSError: cannot open E:\\law\\python\\DLLs\\_sqlite3.pyd')).toBe('OSError: cannot open <安装目录>\\python\\DLLs\\_sqlite3.pyd')
+    expect(out('ImportError: E:\\law\\python\\DLLs\\_sqlite3.pyd: 应用程序控制策略已阻止此文件。')).toBe('ImportError: <安装目录>\\python\\DLLs\\_sqlite3.pyd: 应用程序控制策略已阻止此文件。')
+  })
+
   it('反复退出到 failed：service.start_failed 带异常行，律师看到这句', async () => {
     const logged: Array<Record<string, unknown> | undefined> = []
     const s = new Supervisor({

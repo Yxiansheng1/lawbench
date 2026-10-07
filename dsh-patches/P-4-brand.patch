@@ -1391,10 +1391,10 @@ index 4f7ef6481b..c9447d8da1 100644
    })
  })
 diff --git a/apps/desktop/scripts/installer.nsh b/apps/desktop/scripts/installer.nsh
-index 0f4d859e78..e9074b1c57 100644
+index 0f4d859e78..1e9b4f4251 100644
 --- a/apps/desktop/scripts/installer.nsh
 +++ b/apps/desktop/scripts/installer.nsh
-@@ -3,6 +3,14 @@
+@@ -3,6 +3,21 @@
  !define INSTALLER_SOURCE_DIR "${__FILEDIR__}\..\installer"
  !define /ifndef INSTALLER_BUILD_DIR "${__FILEDIR__}\..\.desktop-build\targets\win-x64\installer-ui"
  
@@ -1405,11 +1405,18 @@ index 0f4d859e78..e9074b1c57 100644
 +  !undef APP_FILENAME
 +!endif
 +!define APP_FILENAME "${PRODUCT_NAME}"
++; Order 1337 item 2: the template's installer copy goes to our own folder, never to the package-name updater cache an
++; original DeepSeek Harness uses (lawbenchAfterInstall deletes it). Relative to $LOCALAPPDATA, as the template expects.
++!define LAWBENCH_INSTALLER_CACHE "lawbench\installer-cache"
++!ifdef APP_INSTALLER_STORE_FILE
++  !undef APP_INSTALLER_STORE_FILE
++!endif
++!define APP_INSTALLER_STORE_FILE "${LAWBENCH_INSTALLER_CACHE}\installer.exe"
 +
  ManifestDPIAware true
  !ifndef BUILD_UNINSTALLER
    !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
-@@ -88,9 +96,68 @@ ManifestDPIAware true
+@@ -88,9 +103,43 @@ ManifestDPIAware true
  !macroend
  
  !macro customUnInstall
@@ -1422,41 +1429,16 @@ index 0f4d859e78..e9074b1c57 100644
    Call un.CleanData
  !macroend
  
-+; lawbench P-4 (order 2033): electron-builder's NSIS copies the whole installer (about 780 MB) into
-+; %LOCALAPPDATA%\<updater cache>\installer.exe for differential updates. lawbench ships without an update feed, so
-+; remove the copy right after installing and drop the folder when it is empty. No network is involved either way.
++; lawbench P-4 (orders 2033, 1539, 1337): electron-builder's NSIS template copies the whole installer (about 750 MB) to
++; $LOCALAPPDATA\${APP_INSTALLER_STORE_FILE} for differential updates, unconditionally (include/installer.nsh, no !ifdef,
++; so it cannot simply be undefined). By default that is the package-name updater cache, shared with an original
++; DeepSeek Harness. The top of this file redirects it into our own folder (LAWBENCH_INSTALLER_CACHE); lawbench ships
++; without an update feed, so the copy is deleted right after installing and the folder removed when empty.
 +; Called from DSH's customInstall below (only one customInstall macro may exist).
 +!macro lawbenchAfterInstall
-+  ; Order 1539: the updater cache directory name is the package name, shared with an original DeepSeek Harness. Delete
-+  ; only the copy this installation just wrote (same size as this installer); anything else there is left alone.
-+  !ifdef APP_INSTALLER_STORE_FILE
-+    Push $0
-+    Push $1
-+    Push $2
-+    StrCpy $1 "-1"
-+    StrCpy $2 "-2"
-+    ClearErrors
-+    FileOpen $0 "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" r
-+    ${IfNot} ${Errors}
-+      FileSeek $0 0 END $1
-+      FileClose $0
-+    ${EndIf}
-+    ClearErrors
-+    FileOpen $0 "$EXEPATH" r
-+    ${IfNot} ${Errors}
-+      FileSeek $0 0 END $2
-+      FileClose $0
-+    ${EndIf}
-+    ClearErrors
-+    ${If} $1 == $2
-+      Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
-+      ${GetParent} "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}" $0
-+      RMDir "$0"
-+    ${EndIf}
-+    Pop $2
-+    Pop $1
-+    Pop $0
-+  !endif
++  Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
++  RMDir "$LOCALAPPDATA\${LAWBENCH_INSTALLER_CACHE}"
++  ClearErrors
 +  ; lawbench P-4 (order 2043, lawyers' first feedback): Start menu entries for the two small tools next to the app's own
 +  ; (same Start menu as the app's shortcut: per-user install, current user's Programs). Removed by customUnInstall.
 +  ${If} ${FileExists} "$INSTDIR\tools\splitter\splitter.exe"
@@ -1478,7 +1460,7 @@ index 0f4d859e78..e9074b1c57 100644
  !macro customPageAfterChangeDir
    !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
    !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
-@@ -132,8 +199,10 @@ ManifestDPIAware true
+@@ -132,8 +181,10 @@ ManifestDPIAware true
  ; The report outlives $PLUGINSDIR so a user can send it; silent installs keep only the file. The updater cache
  ; directory is never an installation target and leaves with the application on uninstall.
  ; The directory smoke fixture predefines DSH_INSTALLER_LOG_DIR to keep reports inside its scratch tree.
@@ -1490,7 +1472,7 @@ index 0f4d859e78..e9074b1c57 100644
  !endif
  
  !macro customInstallerExtractFailed Archive
-@@ -209,6 +278,7 @@ ManifestDPIAware true
+@@ -209,6 +260,7 @@ ManifestDPIAware true
    !insertmacro dshFinishDirectories
    ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
    WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"

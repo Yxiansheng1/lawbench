@@ -1,0 +1,274 @@
+diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
+index 422ee91fcd..b19ea8a5a0 100644
+--- a/apps/desktop/scripts/electron-builder-config.mjs
++++ b/apps/desktop/scripts/electron-builder-config.mjs
+@@ -12,7 +12,7 @@ import {
+   resolveMacOSSigningEnvironment,
+ } from './desktop-release-environment.mjs'
+ import { notarizeMacOSDiskImageArtifact } from './notarize-macos-disk-images.mjs'
+-import { LAWBENCH_PRODUCT_NAME, LAWBENCH_VERSION, lawbenchMacAdhoc } from './lawbench-product.mjs'
++import { LAWBENCH_PRODUCT_NAME, LAWBENCH_VERSION, lawbenchMacAdhoc, lawbenchOmitOfficeEngine, lawbenchOmitPrimaryRuntime } from './lawbench-product.mjs'
+ import { verifyMacOSSignatureAfterSign } from './verify-macos-signature.mjs'
+ import {
+   createWindowsTokenSigner,
+@@ -164,7 +164,8 @@ export function createElectronBuilderConfig(
+     ],
+     asarUnpack: unpack,
+     extraResources: [
+-      { from: buildPaths.runtime, to: 'runtime' },
++      // lawbench P-23: the Windows package leaves DSH's primary runtime out (lawbenchOmitPrimaryRuntime)
++      { from: buildPaths.runtime, to: 'runtime', ...lawbenchOmitPrimaryRuntime(resolvedPlatform) ? { filter: ['**/*', '!primary-runtime', '!primary-runtime/**'] } : {} },
+       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
+       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
+       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
+@@ -197,7 +198,8 @@ export function createElectronBuilderConfig(
+     },
+     beforePack: async context => {
+       // lawbench T28 (eighth run): the ad-hoc Mac build carries no DSH LibreOffice engine (prepare-dsh leaves it out)
+-      const office = macAdhoc ? [] : await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
++      // lawbench P-23: Windows builds carry no DSH LibreOffice engine either (prepare-dsh leaves it out)
++      const office = lawbenchOmitOfficeEngine(resolvedPlatform, env) ? [] : await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
+       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
+       const existing = context.packager.config.asarUnpack ?? []
+       context.packager.config.asarUnpack = [...(typeof existing === 'string' ? [existing] : existing), ...patterns]
+diff --git a/apps/desktop/scripts/lawbench-product.d.mts b/apps/desktop/scripts/lawbench-product.d.mts
+index 2891761dc5..b17b09e20f 100644
+--- a/apps/desktop/scripts/lawbench-product.d.mts
++++ b/apps/desktop/scripts/lawbench-product.d.mts
+@@ -6,3 +6,7 @@ export const LAWBENCH_VERSION: string
+ export function lawbenchMacAdhoc(env: NodeJS.ProcessEnv): boolean
+ /** lawbench T28: path inside DSH's native LibreOffice engine package, left out of ad-hoc macOS builds (see lawbench-product.mjs). */
+ export function lawbenchOfficeEngineEntry(path: string, engine: string): boolean
++/** lawbench P-23: builds that leave DSH's native LibreOffice engine out (see lawbench-product.mjs). */
++export function lawbenchOmitOfficeEngine(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): boolean
++/** lawbench P-23: Windows packages leave DSH's primary runtime out (see lawbench-product.mjs). */
++export function lawbenchOmitPrimaryRuntime(platform: NodeJS.Platform): boolean
+diff --git a/apps/desktop/scripts/lawbench-product.mjs b/apps/desktop/scripts/lawbench-product.mjs
+index 795c5275e7..17ae332374 100644
+--- a/apps/desktop/scripts/lawbench-product.mjs
++++ b/apps/desktop/scripts/lawbench-product.mjs
+@@ -31,3 +31,23 @@ export function lawbenchOfficeEngineEntry(path, engine) {
+   const parts = path.split(/[\\/]/u)
+   return parts.some((part, i) => part === '@deepseek-ai' && parts[i + 1] === `libreoffice-kit-${engine}`)
+ }
++
++/**
++ * lawbench P-23 (order 1337 item 1): whether this build leaves DSH's native LibreOffice engine out. The ad-hoc macOS
++ * build already does (T28); every Windows build does too (@deepseek-ai/libreoffice-kit-win32-x64, about 182 MB):
++ * lawbench never mounts DSH's Office bundle (P-12) and converts documents with its own LibreOffice under tools\.
++ * @param {NodeJS.Platform} platform Target platform of the build.
++ * @param {NodeJS.ProcessEnv} env Packaging environment.
++ * @returns {boolean} Whether the native engine package is left out.
++ */
++export const lawbenchOmitOfficeEngine = (platform, env) => platform === 'win32' || (platform === 'darwin' && lawbenchMacAdhoc(env))
++
++/**
++ * lawbench P-23 (order 1337 item 8): whether the Windows package leaves out DSH's primary runtime
++ * (resources\runtime\primary-runtime, a python-build-standalone of about 8 500 unsigned files). Its only runtime user is
++ * the desktop Office bundle (argv[4] of the Host, desktopOffice), which P-12 does not mount. The build still prepares and
++ * checks it (prepare:runtime); it is just not copied into the package.
++ * @param {NodeJS.Platform} platform Target platform of the build.
++ * @returns {boolean} Whether resources\runtime\primary-runtime is left out of the package.
++ */
++export const lawbenchOmitPrimaryRuntime = platform => platform === 'win32'
+diff --git a/apps/desktop/scripts/prepare-dsh.ts b/apps/desktop/scripts/prepare-dsh.ts
+index 3961085945..68ee8d4da4 100644
+--- a/apps/desktop/scripts/prepare-dsh.ts
++++ b/apps/desktop/scripts/prepare-dsh.ts
+@@ -33,7 +33,7 @@ import {
+ import { resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
+ import { desktopRuntimeFileExclusion } from './runtime-file-policy.ts'
+ import { selectOfficeEngine } from '../../../scripts/libreoffice-packages.mjs'
+-import { lawbenchMacAdhoc, lawbenchOfficeEngineEntry } from './lawbench-product.mjs'
++import { lawbenchMacAdhoc, lawbenchOfficeEngineEntry, lawbenchOmitOfficeEngine } from './lawbench-product.mjs'
+ 
+ const APP_ROOT = resolve(import.meta.dirname, '..')
+ const BUILD_PATHS = resolveDesktopTargetBuildPaths()
+@@ -145,7 +145,8 @@ async function main(): Promise<void> {
+     const officeManifest = JSON.parse(readFileSync(join(modules, '@deepseek-ai/libreoffice-kit/package.json'), 'utf8'))
+     const officeEngine = selectOfficeEngine(officeManifest, target)
+     // lawbench T28 (eighth run): ad-hoc macOS builds leave DSH's native LibreOffice engine out (lawbench-product.mjs)
+-    const omitOfficeEngine = process.platform === 'darwin' && lawbenchMacAdhoc(process.env)
++    // lawbench P-23: every Windows build leaves it out as well (lawbenchOmitOfficeEngine)
++    const omitOfficeEngine = lawbenchOmitOfficeEngine(process.platform, process.env)
+     mkdirSync(DSH_OUTPUT_ROOT, { recursive: true })
+     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:materialize-modules', async () => {
+       cpSync(modules, join(DSH_OUTPUT_ROOT, 'node_modules'), {
+diff --git a/apps/desktop/scripts/smoke-runtime.ts b/apps/desktop/scripts/smoke-runtime.ts
+index 151eeba4bf..41b6a03907 100644
+--- a/apps/desktop/scripts/smoke-runtime.ts
++++ b/apps/desktop/scripts/smoke-runtime.ts
+@@ -10,6 +10,7 @@ import { readPrimaryRuntime, workspaceDependencyPaths } from '../../../packages/
+ import { DesktopHostProcess } from '../src/host-process.ts'
+ import { createPluginProfile } from '../src/project-manager.ts'
+ import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
++import { lawbenchOmitPrimaryRuntime } from './lawbench-product.mjs'
+ 
+ /**
+  * Check Host startup, its matching frontend, external plugins and real Office-to-PDF conversion.
+@@ -34,13 +35,18 @@ export async function smokeDesktopRuntime(
+     const pluginName = 'desktop-runtime-smoke-plugin'
+     const plugin = join(profile, 'node_modules', pluginName)
+     mkdirSync(plugin, { recursive: true })
+-    const primary = join(resourcesRuntime, 'primary-runtime')
+-    const dependencies = workspaceDependencyPaths(primary, await readPrimaryRuntime(primary))
+-    await promisify(execFile)(dependencies.python, ['-I', '-B',
+-      fileURLToPath(new URL('../tests/fixtures/office-conversion-inputs.py', import.meta.url)), home],
+-    { env: environment, timeout: 120_000, windowsHide: true })
+-    const inputs = ['docx', 'xlsx', 'pptx'].map(extension => ({ extension,
+-      bytes: readFileSync(join(home, `input.${extension}`)).toString('base64') }))
++    // lawbench P-23: Windows packages carry no primary-runtime; it only generated the Office inputs, whose checks
++    // are skipped anyway (P-12, below)
++    const officeInputs = !lawbenchOmitPrimaryRuntime(process.platform)
++    if (officeInputs) {
++      const primary = join(resourcesRuntime, 'primary-runtime')
++      const dependencies = workspaceDependencyPaths(primary, await readPrimaryRuntime(primary))
++      await promisify(execFile)(dependencies.python, ['-I', '-B',
++        fileURLToPath(new URL('../tests/fixtures/office-conversion-inputs.py', import.meta.url)), home],
++      { env: environment, timeout: 120_000, windowsHide: true })
++    }
++    const inputs = officeInputs ? ['docx', 'xlsx', 'pptx'].map(extension => ({ extension,
++      bytes: readFileSync(join(home, `input.${extension}`)).toString('base64') })) : []
+     const cordis = runtime.sharedPackages.find(entry => entry.name === '@deepseek-ai/cordis')
+     if (cordis === undefined) throw new Error('desktop runtime: missing shared Cordis package')
+     writeFileSync(join(plugin, 'package.json'), JSON.stringify({
+diff --git a/apps/desktop/src/lawbench-isolation.ts b/apps/desktop/src/lawbench-isolation.ts
+index 7796902e01..b7592a4ca5 100644
+--- a/apps/desktop/src/lawbench-isolation.ts
++++ b/apps/desktop/src/lawbench-isolation.ts
+@@ -15,8 +15,13 @@ import { join, posix } from 'node:path'
+ export interface IsolationApp {
+   readonly isPackaged: boolean
+   setPath(name: 'userData', path: string): void
++  /** Windows taskbar / notification identity (Electron; optional so test doubles may omit it). */
++  setAppUserModelId?(id: string): void
+ }
+ 
++/** AppUserModelID of the installed workbench: the appId the shortcuts carry (packaginguild.ps1, order 1337 item 3). */
++export const LAWBENCH_APP_USER_MODEL_ID = 'cn.lianyue.lawbench'
++
+ /**
+  * Paths the installed lawyer workbench uses instead of the original DSH's.
+  * @param env - process environment (APPDATA, LOCALAPPDATA).
+@@ -46,6 +51,8 @@ export function applyLawbenchIsolation(application: IsolationApp, env: NodeJS.Pr
+   // Electron's app always has setPath; DSH's startup tests use a partial app double without it
+   if (paths === undefined || typeof application.setPath !== 'function') return undefined
+   application.setPath('userData', paths.userData)
++  // Order 1337 item 3: same AUMID as the shortcuts; otherwise notifications and taskbar grouping use DSH's default
++  application.setAppUserModelId?.(LAWBENCH_APP_USER_MODEL_ID)
+   env.DSH_HOME = paths.dshHome
+   // The Host's web server takes any free port (order 1539): a fixed 19387 fails with EADDRINUSE while an original
+   // DeepSeek Harness runs (now possible, the single-instance locks being separate). The main process reads the Host's
+diff --git a/apps/desktop/tests/lawbench-isolation.spec.ts b/apps/desktop/tests/lawbench-isolation.spec.ts
+index 5420619540..cd18c18068 100644
+--- a/apps/desktop/tests/lawbench-isolation.spec.ts
++++ b/apps/desktop/tests/lawbench-isolation.spec.ts
+@@ -11,7 +11,9 @@ describe('与原版 DSH 隔离（lawbench P-4）', () => {
+   it('装好的包：userData 与 DSH_HOME 都换到我方目录，不是原版的 %APPDATA%\\@deepseek-ai\\dsh-desktop、~/.dsh', () => {
+     const set: Array<[string, string]> = []
+     const env: NodeJS.ProcessEnv = { ...ENV }
+-    const r = applyLawbenchIsolation({ isPackaged: true, setPath: (n, p) => { set.push([n, p]) } }, env)
++    const ids: string[] = []
++    const r = applyLawbenchIsolation({ isPackaged: true, setPath: (n, p) => { set.push([n, p]) }, setAppUserModelId: (id) => { ids.push(id) } }, env)
++    expect(ids).toEqual(['cn.lianyue.lawbench']) // 令 1337 第 3 条：与快捷方式的 AUMID 一致
+     expect(r).toEqual({ userData: join(ENV.APPDATA, 'lawbench-desktop'), dshHome: join(ENV.LOCALAPPDATA, 'lawbench', 'dsh-home') })
+     expect(set).toEqual([['userData', join(ENV.APPDATA, 'lawbench-desktop')]])
+     expect(env.DSH_HOME).toBe(join(ENV.LOCALAPPDATA, 'lawbench', 'dsh-home'))
+diff --git a/apps/desktop/tests/lawbench-macos.spec.ts b/apps/desktop/tests/lawbench-macos.spec.ts
+index 8bee2728cd..e31886ab6d 100644
+--- a/apps/desktop/tests/lawbench-macos.spec.ts
++++ b/apps/desktop/tests/lawbench-macos.spec.ts
+@@ -121,7 +121,8 @@ describe('ad-hoc 构建不带 DSH 自己的 LibreOffice 引擎、unpacked 内容
+   })
+   it('prepare-dsh：ad-hoc 时复制运行时跳过原生引擎、不再要求它存在、在封清单前逐个 ad-hoc 签 Mach-O', () => {
+     const src = readFileSync(join(__dirname, '..', 'scripts', 'prepare-dsh.ts'), 'utf8')
+-    expect(src).toContain("const omitOfficeEngine = process.platform === 'darwin' && lawbenchMacAdhoc(process.env)")
++    // lawbench P-23：判断挪到 lawbenchOmitOfficeEngine（Windows 也不带），ad-hoc Mac 仍不带（lawbench-windows-payload.spec 核对）
++    expect(src).toContain('const omitOfficeEngine = lawbenchOmitOfficeEngine(process.platform, process.env)')
+     expect(src).toContain('&& !(omitOfficeEngine && lawbenchOfficeEngineEntry(relative(modules, source), officeEngine))')
+     expect(src).toContain('if (!omitOfficeEngine && !existsSync(')
+     const adhoc = src.indexOf("} else if (process.platform === 'darwin') {")
+@@ -132,7 +133,7 @@ describe('ad-hoc 构建不带 DSH 自己的 LibreOffice 引擎、unpacked 内容
+   })
+   it('electron-builder：ad-hoc 时 beforePack 不再找 Office 包目录（引擎已不在）', () => {
+     const src = readFileSync(join(__dirname, '..', 'scripts', 'electron-builder-config.mjs'), 'utf8')
+-    expect(src).toContain('const office = macAdhoc ? [] : await officePackageDirectories(')
++    expect(src).toContain('const office = lawbenchOmitOfficeEngine(resolvedPlatform, env) ? [] : await officePackageDirectories(')
+   })
+   it('lawbenchAdhocSignRuntime 只签单个 Mach-O 文件，不签 bundle、不加文件', () => {
+     const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
+diff --git a/apps/desktop/tests/lawbench-windows-payload.spec.ts b/apps/desktop/tests/lawbench-windows-payload.spec.ts
+new file mode 100644
+index 0000000000..d8fdf760e4
+--- /dev/null
++++ b/apps/desktop/tests/lawbench-windows-payload.spec.ts
+@@ -0,0 +1,53 @@
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { describe, expect, it } from 'vitest'
++import { lawbenchOmitOfficeEngine, lawbenchOmitPrimaryRuntime } from '../scripts/lawbench-product.mjs'
++
++// lawbench P-23（令 1337 第 1、8 条）：Windows 包不带 DSH 自己的 LibreOffice 原生引擎（libreoffice-kit-win32-x64，约 182 MB）
++// 和 primary-runtime（python-build-standalone，约 8500 个未签名文件）——lawbench 不挂 DSH 的 Office 组合（P-12），
++// 这两样运行时用不到；文书转换走工作台服务自己的 LibreOffice（tools\）。
++
++const base = {
++  DSH_DESKTOP_APP_ID: 'cn.lianyue.lawbench',
++  DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
++  DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
++  DSH_DESKTOP_TARGET_PLATFORM: 'win32',
++  DSH_DESKTOP_TARGET_ARCH: 'x64',
++  DSH_DESKTOP_UNSIGNED: '1',
++}
++
++describe('Windows 包的 DSH 载荷（lawbench P-23）', () => {
++  it('不带原生 LibreOffice 引擎：Windows 一律不带；Mac 只有 ad-hoc 构建不带（T28 原样）', () => {
++    expect(lawbenchOmitOfficeEngine('win32', {})).toBe(true)
++    expect(lawbenchOmitOfficeEngine('darwin', {})).toBe(false)
++    expect(lawbenchOmitOfficeEngine('darwin', { LAWBENCH_MAC_ADHOC: '1' })).toBe(true)
++    expect(lawbenchOmitOfficeEngine('linux', {})).toBe(false)
++  })
++
++  it('不带 primary-runtime：只 Windows', () => {
++    expect(lawbenchOmitPrimaryRuntime('win32')).toBe(true)
++    expect(lawbenchOmitPrimaryRuntime('darwin')).toBe(false)
++  })
++
++  it('electron-builder：Windows 的 resources\\runtime 过滤掉 primary-runtime；Mac 照旧整目录', async () => {
++    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
++    type Res = { extraResources: Array<{ from: string; to: string; filter?: string[] }> }
++    const win = (createElectronBuilderConfig(base, 'win32', 'x64') as Res).extraResources.find((r) => r.to === 'runtime')
++    expect(win?.filter).toEqual(['**/*', '!primary-runtime', '!primary-runtime/**'])
++  })
++
++  it('prepare-dsh 与 beforePack 走同一个判断（运行时清单、引擎在不在的自检、asar 外放三处一致）', () => {
++    const prepare = readFileSync(join(__dirname, '..', 'scripts', 'prepare-dsh.ts'), 'utf8')
++    expect(prepare).toContain('const omitOfficeEngine = lawbenchOmitOfficeEngine(process.platform, process.env)')
++    expect(prepare).toContain('&& !(omitOfficeEngine && lawbenchOfficeEngineEntry(relative(modules, source), officeEngine))')
++    expect(prepare).toContain("if (!omitOfficeEngine && !existsSync(join(DSH_OUTPUT_ROOT, 'node_modules', '@deepseek-ai', `libreoffice-kit-${officeEngine}`, 'prebuilds.json')))")
++    const config = readFileSync(join(__dirname, '..', 'scripts', 'electron-builder-config.mjs'), 'utf8')
++    expect(config).toContain('const office = lawbenchOmitOfficeEngine(resolvedPlatform, env) ? [] : await officePackageDirectories(')
++  })
++
++  it('打包后的冒烟不再读 primary-runtime（Windows 包里没有它；它只用来生成 Office 输入，而 Office 检查本来就跳过）', () => {
++    const smoke = readFileSync(join(__dirname, '..', 'scripts', 'smoke-runtime.ts'), 'utf8')
++    expect(smoke).toContain('const officeInputs = !lawbenchOmitPrimaryRuntime(process.platform)')
++    expect(smoke).toMatch(/if \(officeInputs\) \{\s+const primary = join\(resourcesRuntime, 'primary-runtime'\)/)
++  })
++})
+diff --git a/apps/desktop/tests/windows-asar-unpack.spec.ts b/apps/desktop/tests/windows-asar-unpack.spec.ts
+index 2fe4b3aaf2..2f6fcc03f8 100644
+--- a/apps/desktop/tests/windows-asar-unpack.spec.ts
++++ b/apps/desktop/tests/windows-asar-unpack.spec.ts
+@@ -245,8 +245,10 @@ it.each([false, true])('keeps the complete Office engine outside ASAR with exter
+   await packageFixture(input)
+   const archive = await readAsar(join(input.resources, 'app.asar'))
+   expect(archive.getFile(join('dsh', 'node_modules', '@deepseek-ai', 'libreoffice-kit-wasm', 'package.json')).unpacked).not.toBe(true)
++  // lawbench P-23: Windows builds carry no DSH Office engine (prepare-dsh leaves it out), so beforePack no longer
++  // unpacks the Office wrapper packages; the Office bundle that would run them is not mounted (P-12)
+   for (const name of ['@deepseek-ai/libreoffice-kit', 'office-codec']) {
+-    expect(archive.getFile(join('dsh', 'node_modules', name, 'cli.js')).unpacked).toBe(true)
++    expect(archive.getFile(join('dsh', 'node_modules', name, 'cli.js')).unpacked).not.toBe(true)
+   }
+   for (const file of files) {
+     expect(archive.getFile(join('dsh', engine, file), false).unpacked).toBe(true)

@@ -561,15 +561,21 @@ export function scrubPaths(text: string, installDir: string | undefined, platfor
   // Python 的 repr 会把反斜杠写成两个，两种写法都认。
   const norm = (p: string) => p.replace(/[\\/]+/g, '\\').toLowerCase()
   const root = installDir ? norm(installDir).replace(/\\$/, '') : undefined
-  const one = (p: string): string => {
-    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) return '<安装目录>' + (platform === 'darwin' ? p.slice(root.length) : p.replace(/[\\/]+/g, '\\').slice(root.length))
-    return '<路径>'
-  }
   // macOS（T28）：任何以 / 开头的绝对路径（/Users/…、/Volumes/…、/private/…）同样换掉
   const START = platform === 'darwin' ? String.raw`(?:[A-Za-z]:[\\/]|\\\\|/)` : String.raw`(?:[A-Za-z]:[\\/]|\\\\|//)`
+  // 吃进来的一段里若还夹着别的路径（空白或标点后又是一个路径开头），就不当安装目录下的路径留尾巴
+  const another = new RegExp(String.raw`[\s"'(,;:=]${START}`)
+  const one = (p: string): string => {
+    if (root && (norm(p) === root || norm(p).startsWith(root + '\\'))) {
+      const rest = platform === 'darwin' ? p.slice(root.length) : p.replace(/[\\/]+/g, '\\').slice(root.length)
+      if (!another.test(rest)) return '<安装目录>' + rest
+    }
+    return '<路径>'
+  }
   let t = text.replace(new RegExp(String.raw`(["'])(${START}[^"'\r\n]*)\1`, 'g'), (_m, q: string, p: string) => q + one(p) + q)
-  // 不带引号的：中间各段可以有空格（只要后面还跟着分隔符），最后一段到空白为止
-  t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*[^\s\\/"'<>|]*`, 'g'), (p) => one(p))
+  // 不带引号的：中间各段可以有空格（只要后面还跟着分隔符）；最后一段可能也带空格（令 1337 第 5 条），
+  // 吃到本行最后一个".扩展名"（\.\w{1,5}\b）为止，没有扩展名就吃到行尾——宁可多换掉几个字，不漏出材料名
+  t = t.replace(new RegExp(String.raw`(?<![<\w])${START}(?:[^\\/"'<>|\r\n]*[\\/])*(?:[^\\/"'<>|\r\n]*\.\w{1,5}\b|[^\\/"'<>|\r\n]*)`, 'g'), (p) => one(p))
   return t
 }
 

@@ -153,7 +153,7 @@ def client_sections(sites: list[pathlib.Path], stage: pathlib.Path | None = None
         f"dsh           {dsh_commit}  dsh\\（子模块，补丁见 dsh-patches\\PATCHES.md）  -  github.com/deepseek-ai/dsh  MIT",
         f"electron      {electron}  -  -  npm electron  MIT",
         f"node          {rt['nodeVersion']}  {win['nodeArchive']}  {win['nodeSha256']}  nodejs.org（DSH 内置运行时）  MIT",
-        f"python        {rt['pythonVersion']}（python-build-standalone {rt['pythonRelease']}, {win['pythonTarget']}, install_only_stripped）  -  {win['pythonSha256']}  DSH 内置运行时（复用，见 PATCHES.md 结论记录）  PSF-2.0",
+        python_row(stage, rt, win),
         f"invoice-ledger  {ver(ROOT / 'engines' / 'invoice-ledger' / 'CHANGELOG.md')}  engines\\invoice-ledger\\  -  律所提供（周海沺律师），见 CHANGELOG  作者授权",
         f"retainer      {ver(ROOT / 'engines' / 'retainer' / 'CHANGELOG.md')}  engines\\retainer\\  -  律所提供（周海沺律师）  作者授权",
         f"tokenizer     Qwen3  tokenizer.json  {sha256(tok) if tok.is_file() else PENDING}  6000D 同款模型的分词文件（N16）  Apache-2.0",
@@ -161,7 +161,7 @@ def client_sections(sites: list[pathlib.Path], stage: pathlib.Path | None = None
     for name, v, f, sha, src, lic in tools_rows(stage):
         lines.append(f"{name:<13} {v}  {f}  {sha}  {src}  {lic}")
     dists, missing = closure(distributions(sites), service_roots() + EXTRA_ROOTS)
-    lines += ["", "[client.pip]  # 客户端 Python 依赖闭包（单独解压的 3.12.14，-I 运行，不用 DSH 内置运行时自带的 numpy、pandas 等）"]
+    lines += ["", f"[client.pip]  # 客户端 Python 依赖闭包（内置解释器 {python_source(stage)['version'] if python_source(stage) else rt['pythonVersion']}，-I 运行，不用 DSH 内置运行时自带的 numpy、pandas 等）"]
     rows = []
     for d in dists:
         lines.append(f"{d.metadata['Name']}=={d.version}")
@@ -211,6 +211,27 @@ def write_licenses(rows: list[tuple[str, str, str]], missing: list[str]) -> None
     if missing:
         out += ["", f"{PENDING}：{', '.join(missing)}（依赖目录里没有，打包时装上再生成）。"]
     LICENSES.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
+
+
+def python_source(stage: pathlib.Path | None) -> dict | None:
+    """build.ps1 python 步记下的内置解释器来源（stage/python/lawbench-python-source.json；令 1337 第 4 条）。没有时为 None。"""
+    if stage is None:
+        return None
+    f = stage / "python" / "lawbench-python-source.json"
+    try:
+        return json.loads(f.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+
+
+def python_row(stage: pathlib.Path | None, rt: dict, win: dict) -> str:
+    """versions.lock [client] 的 python 一行：用了 python.org 官方包时记它（版本、包名、sha256）；否则照旧记 DSH 的 python-build-standalone。"""
+    src = python_source(stage)
+    if src:
+        return (f"python        {src['version']}（python.org 官方 NuGet 包 python，PSF 签名；3.12 最后一个带 Windows 二进制的版本）  "
+                f"{src['file']}  {src['sha256']}  nuget.org（build.ps1 -PythonPackage）  PSF-2.0")
+    return (f"python        {rt['pythonVersion']}（python-build-standalone {rt['pythonRelease']}, {win['pythonTarget']}, install_only_stripped）  -  "
+            f"{win['pythonSha256']}  DSH 内置运行时（复用，见 PATCHES.md 结论记录）  PSF-2.0")
 
 
 def main() -> None:

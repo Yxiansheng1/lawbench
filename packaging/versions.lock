@@ -47,14 +47,14 @@ pandoc-copyright  3.11  https://raw.githubusercontent.com/jgm/pandoc/3.11/COPYRI
 dsh           477b4f420553e8a52c2fbccc464d7561b239c443  dsh\（子模块，补丁见 dsh-patches\PATCHES.md）  -  github.com/deepseek-ai/dsh  MIT
 electron      44.0.0  -  -  npm electron  MIT
 node          24.21.0  win-x64.zip  158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541  nodejs.org（DSH 内置运行时）  MIT
-python        3.12.14（python-build-standalone 20260901, x86_64-pc-windows-msvc, install_only_stripped）  -  7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14  DSH 内置运行时（复用，见 PATCHES.md 结论记录）  PSF-2.0
+python        3.12.10（python.org 官方 NuGet 包 python，PSF 签名；3.12 最后一个带 Windows 二进制的版本）  python.3.12.10.nupkg  0eb85c2dfccccf1b17352de4c397f69194035b7d37149eacc16f1147d93de3b8  nuget.org（build.ps1 -PythonPackage）  PSF-2.0
 invoice-ledger  3.9.4.1  engines\invoice-ledger\  -  律所提供（周海沺律师），见 CHANGELOG  作者授权
 retainer      3.4.1  engines\retainer\  -  律所提供（周海沺律师）  作者授权
 tokenizer     Qwen3  tokenizer.json  87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4  6000D 同款模型的分词文件（N16）  Apache-2.0
 libreoffice   26.8.0.3  tools\libreoffice\program\soffice.exe  a2823391857db1dd8ebbd8234267f9ec58ec7e5b5fc434665c0ecec4671cb988  documentfoundation.org（本机现有安装拷入；正式构建以选定的发布包为准）  MPL-2.0
 pandoc        3.11  tools\pandoc\pandoc.exe  8063cc4bc334a73d1400e7434a34b13ff75b3709cec5a511595630eb9a3ea098  github.com/jgm/pandoc releases（本机现有安装拷入；正式构建以选定的发布包为准）  GPL-2.0-or-later
 
-[client.pip]  # 客户端 Python 依赖闭包（单独解压的 3.12.14，-I 运行，不用 DSH 内置运行时自带的 numpy、pandas 等）
+[client.pip]  # 客户端 Python 依赖闭包（内置解释器 3.12.10，-I 运行，不用 DSH 内置运行时自带的 numpy、pandas 等）
 anyio==4.15.1
 attrs==26.1.0
 certifi==2026.7.22

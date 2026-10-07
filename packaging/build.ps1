@@ -145,6 +145,10 @@ $Steps = [ordered]@{
       $py = Join-Path $Stage 'python\python.exe'
       Run $py @('-I', '-m', 'ensurepip', '--default-pip')  # bundled pip wheel, offline
       Say "python: official package $(Split-Path -Leaf $PythonPackage) (sha256 $hash)"
+      # Where this interpreter came from, for packaging\gen_lock.py (versions.lock [client] python line, order 1337 item 4)
+      $pyVer = (& $py -I -c "import platform;print(platform.python_version())").Trim()
+      @{ source = 'python.org official NuGet package "python" (nuget.org, PSF-signed binaries)'; version = $pyVer; file = (Split-Path -Leaf $PythonPackage); sha256 = $hash } |
+        ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $Stage 'python\lawbench-python-source.json')
     } else {
       # Fallback: the python-build-standalone archive DSH bundles (UNSIGNED: blocked where Smart App Control is on)
       $pyLock = Get-Content -Raw (Join-Path $Dsh 'scripts\primary-runtime\lock.json') | ConvertFrom-Json
@@ -178,6 +182,8 @@ $Steps = [ordered]@{
     # processing (pywin32). sitecustomize stays as a second guard.
     Copy-Item -Force (Join-Path $Root 'packaging\python\python312._pth') (Join-Path $Stage 'python\')
     Copy-Item -Force (Join-Path $Root 'packaging\python\sitecustomize.py') $site
+    # The shipped interpreter, started with -I as the service is, must run sitecustomize (stderr UTF-8; order 1337 item 7)
+    Run $py @('-I', '-c', "import sys;assert sys.stderr.encoding=='utf-8', sys.stderr.encoding")
     # Each step clears only what it places: keep the tokenizer.json the tools step put under service\ (re-running
     # the python step alone must not drop it).
     $tok = Join-Path $Stage 'service\lawbench\llm\tokenizer.json'

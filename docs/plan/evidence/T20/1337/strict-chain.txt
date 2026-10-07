@@ -1,0 +1,19 @@
+ok P-10-profile-lawbench-dsh
+ok P-12-desktop-no-office
+ok P-13-desktop-no-open-config
+ok P-3-first-run-page
+ok P-5-conversation-file-intake
+ok P-9-default-session-request-whitelist
+ok P-14-fail-closed-without-lawbench-bundle
+ok P-15-api-file-allowed-roots
+ok P-16-citation-inline-marks
+ok P-17-links-never-open
+ok P-18-no-mention-hint-no-developer-switch
+ok P-11-retainer-window
+ok P-4-brand
+ok P-19-awaiting-user-answer
+ok P-20-no-workspace-word
+ok P-21-home-above-new-session
+ok P-22-macos
+ok P-23-windows-payload
+paths=157 differing=0 (strict: plain git apply, autocrlf=false)
