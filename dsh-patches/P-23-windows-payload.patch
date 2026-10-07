@@ -133,10 +133,10 @@ index 151eeba4bf..41b6a03907 100644
      if (cordis === undefined) throw new Error('desktop runtime: missing shared Cordis package')
      writeFileSync(join(plugin, 'package.json'), JSON.stringify({
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
-index 6ac9c9c324..d6e7f09aeb 100644
+index 6ac9c9c324..f556e27384 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
 +++ b/apps/desktop/src/client/WelcomePage.tsx
-@@ -52,13 +52,29 @@ export function Welcome({ api }: { api: WelcomeApi }) {
+@@ -52,13 +52,30 @@ export function Welcome({ api }: { api: WelcomeApi }) {
    useEffect(() => {
      document.documentElement.lang = api.id
      document.title = '首次配置'
@@ -148,20 +148,21 @@ index 6ac9c9c324..d6e7f09aeb 100644
 -      setHasKey(r.value.hasKey)
 -    })
 +    // lawbench（令 1556 第 2 条）：首次启动时服务常常还没起来；每 3 秒再读一次，服务起来就填好地址。
-+    // Host 判定起不来要一分多钟（换端口重试、再重启几次），所以读到 Host 给出原因（"本机服务未能启动：…"，
-+    // 如"本机 18765 端口被其他程序占用"）为止，最多 5 分钟；不停在"未启动"
++    // 读到 Host 给出原因（"本机服务未能启动：…"，如"本机 18765 端口被其他程序占用"）就停在原因上，最多读 5 分钟。
++    // 重读期间表单保持不可填（复核 rv-A50 P3-1：先放开再在读到时整体填入，会盖掉律师已填的内容）
 +    let stopped = false
 +    let tries = 0
 +    let timer: ReturnType<typeof setTimeout> | undefined
 +    const load = (): void => {
 +      void api.getSetup().then((r) => {
 +        if (stopped) return
-+        setLoading(false)
 +        if (!r.ok || r.value === undefined) {
 +          setError(r.ok ? '工作台服务未启动，请稍后重试' : r.message)
-+          if (!(!r.ok && /^本机服务未能启动：/.test(r.message)) && ++tries < 100) timer = setTimeout(load, 3000)
++          if (!(!r.ok && /^本机服务未能启动：/.test(r.message)) && ++tries < 100) { timer = setTimeout(load, 3000); return }
++          setLoading(false)
 +          return
 +        }
++        setLoading(false)
 +        setError('')
 +        const s = r.value.servers
 +        setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '', lawyer: r.value?.lawyerName ?? '' }))
@@ -240,10 +241,10 @@ index 8bee2728cd..e31886ab6d 100644
      const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
 diff --git a/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
 new file mode 100644
-index 0000000000..244c417296
+index 0000000000..cda99af726
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,82 @@
 +// @vitest-environment jsdom
 +// lawbench（令 1556 第 2 条）：首次配置页读不到设置时每 3 秒再读；服务起来就填好地址，Host 说出起不来的原因
 +// （"本机服务未能启动：…"）就停在原因上，最多读 5 分钟。
@@ -296,6 +297,27 @@ index 0000000000..244c417296
 +  render(getSetup)
 +  await flush(120_000)
 +  expect(getSetup).toHaveBeenCalledTimes(27)
++  expect(box.textContent).toContain(WHY)
++})
++
++it('重读期间表单不可填，读到了才放开，不会盖掉律师已填的内容（复核 rv-A50 P3-1）', async () => {
++  const answers: unknown[] = [NOT_YET, { ok: true, value: { servers, hasKey: true, lawyerName: null } }]
++  render(vi.fn(async () => answers.length > 1 ? answers.shift() : answers[0]))
++  await flush()
++  const lawyer = (): HTMLInputElement => box.querySelector('#lawyer') as HTMLInputElement
++  const llm = (): HTMLInputElement => box.querySelector('#llm') as HTMLInputElement
++  expect(lawyer().disabled).toBe(true)
++  expect(llm().disabled).toBe(true)
++  expect([...box.querySelectorAll('button')].every((b) => b.disabled)).toBe(true)
++  await flush(3000)
++  expect(lawyer().disabled).toBe(false)
++  expect(llm().value).toBe(servers.llm_base_url)
++})
++
++it('读到原因（起不来）时放开表单，停在原因上', async () => {
++  render(vi.fn(async () => ({ ok: false, message: WHY })))
++  await flush()
++  expect((box.querySelector('#lawyer') as HTMLInputElement).disabled).toBe(false)
 +  expect(box.textContent).toContain(WHY)
 +})
 +

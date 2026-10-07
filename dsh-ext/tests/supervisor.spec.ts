@@ -121,6 +121,31 @@ describe('看护：策略（模拟进程）', () => {
     expect(startFailureText({ reason: 'exited', exitCode: 2 })).toBe('服务启动后退出（代码 2）')
   })
 
+  it('每次拉起要 4 秒（杀毒、冷启动）也能到 failed：换端口重试用完就停，不交给"1 分钟内 3 次"（复核 rv-A50 P2-1）', async () => {
+    let clock = 0
+    let spawns = 0
+    const logged: Array<Record<string, unknown> | undefined> = []
+    const s = new Supervisor({
+      spawn(): ChildHandle {
+        spawns++
+        clock += 4000 // 假时钟：每次拉起到退出 4 秒
+        return { pid: spawns, exited: new Promise((r) => setTimeout(() => r(2), 5)), kill: () => undefined }
+      },
+      probe: async () => undefined,
+      pickPort: async () => 18500 + spawns,
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      forwardPort: 18765,
+      now: () => clock,
+      log: (_l: string, e: string, m?: Record<string, unknown>) => { if (e === 'service.start_failed') logged.push(m) },
+    })
+    await s.start()
+    await waitFor(() => s.state === 'failed', 10000)
+    expect(spawns).toBe(6) // 首次 + 换端口重试 5 次
+    expect(logged).toEqual([{ reason: 'exited', exitCode: 2, port: 18765 }])
+    expect(unavailableText(s)).toBe('本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试')
+  })
+
   it('程序拉不起来（找不到内置 Python、被拦截）：原因按类别说清楚', async () => {
     const logged: Array<Record<string, unknown> | undefined> = []
     const s = new Supervisor({

@@ -4,6 +4,7 @@
 // - 1 分钟内重启超过 3 次就停止重启，状态记为 failed（界面提示"工作台服务异常"，由 T13 显示）；
 // - 启动后比对 contract_version，不一致记为 version_mismatch，不继续（"组件版本不一致，请重新安装"）；
 // - 端口由 Host 自己挑（服务不支持 --port 0）；退出码 2 = 端口绑定失败，换端口重启且不计入重启次数；
+//   换满 MAX_PORT_RETRIES 次仍是 2 = 固定的转发端口被占，直接 failed（复核 rv-A50 P2-1）；
 // - 退出码 3 = 被信号停止。是否重启看是谁停的，不看退出码：Host 自己发起的停止（stop()）不重启；
 //   不是 Host 发起的（包括退出码 3）照常重启，并计入 1 分钟内的重启次数（T7 返修令第 4 节）。
 
@@ -216,8 +217,14 @@ export class Supervisor {
       const port = code === EXIT_PORT_IN_USE && this.deps.forwardPort !== undefined ? { port: this.deps.forwardPort } : {}
       this.lastFailure = { reason: 'exited', exitCode: code, ...(error ? { error } : {}), ...port }
     }
-    if (code === EXIT_PORT_IN_USE && portRetries < MAX_PORT_RETRIES) {
-      this.relaunch(portRetries + 1)
+    if (code === EXIT_PORT_IN_USE) {
+      if (portRetries < MAX_PORT_RETRIES) {
+        this.relaunch(portRetries + 1)
+        return
+      }
+      // 换了 MAX_PORT_RETRIES 次工作台端口仍绑不上：固定的转发端口被占，再重启也一样，直接 failed（复核 rv-A50 P2-1：
+      // 原来交给"1 分钟内 3 次"的通用重启限额，每次拉起超过约 3.3 秒就永远攒不满、一直循环，原因永远出不来）
+      this.setState('failed')
       return
     }
     const t = this.now()
