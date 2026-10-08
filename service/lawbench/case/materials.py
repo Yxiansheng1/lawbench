@@ -578,9 +578,7 @@ class Materials:
                     else:
                         skipped.append({"path": src, "reason": "无法读取"})
                 continue  # 已在案件文件夹内：不复制，直接解析
-            if gate.in_sync_folder(p) or gate.in_sync_folder(real):
-                skipped.append({"path": src, "reason": "云同步目录"})
-                continue
+            # 源文件在云同步目录也照常复制（N80，2026-10-08 用户定）：只是复制进本机案件文件夹；案件根和日常办公文件夹仍按 SEC-14 拒绝
             if stat.S_ISDIR(st.st_mode):
                 self._import_dir(root, p, target, copied, skipped)
             elif stat.S_ISREG(st.st_mode):

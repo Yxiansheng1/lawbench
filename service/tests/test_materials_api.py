@@ -1,5 +1,5 @@
 """材料接口 /api/materials/import、/api/materials/scan、/api/materials（Spec 5.1）：
-复制不移动；目标默认 02案件材料；跳过云同步目录、快捷方式和链接、超大、同名同内容；同名不同内容改名"原名(2)"；
+复制不移动；目标默认 02案件材料；云同步目录的源文件照常复制（N80）；跳过快捷方式和链接、超大、同名同内容；同名不同内容改名"原名(2)"；
 已在案件内的直接解析；工作区 下的临时文件复制后删除；ZIP 解压规则；源文件 sha256 不变；返回通过契约校验。
 """
 from __future__ import annotations
@@ -134,7 +134,8 @@ def test_same_name_different_content_renamed(env):
     assert imp(client, cid, [other2])["copied"][0]["to"] == "02案件材料/起诉意见书(3).pdf"
 
 
-def test_sync_folder_source_skipped(env, tmp_path, monkeypatch):
+def test_sync_folder_source_imported(env, tmp_path, monkeypatch):
+    """N80（2026-10-08）：源文件在云同步目录（OneDrive 环境变量指向的目录、名字含"坚果云"的目录）也照常复制进案件。"""
     client, root, cid, src = env
     od = tmp_path / "云盘"
     od.mkdir()
@@ -144,8 +145,12 @@ def test_sync_folder_source_skipped(env, tmp_path, monkeypatch):
     nut.parent.mkdir()
     nut.write_text("x", encoding="utf-8")
     v = imp(client, cid, [od / "情况说明.txt", od, nut])
-    assert v["copied"] == []
-    assert [s["reason"] for s in v["skipped"]] == ["云同步目录"] * 3
+    assert v["skipped"] == []
+    assert sorted(c["to"] for c in v["copied"]) == ["02案件材料/b.txt", "02案件材料/云盘/情况说明.txt", "02案件材料/情况说明.txt"]
+    names = {m["rel_path"] for m in ok(client.get("/api/materials", params={"case_id": cid}), "materials_list")["materials"]}
+    assert {"02案件材料/b.txt", "02案件材料/云盘/情况说明.txt", "02案件材料/情况说明.txt"} <= names
+    # 案件根本身在云同步目录仍被拒（SEC-14 不变）
+    fail(client.post("/api/case/open", json={"path": str(od)}), "case_open", "CASE_IN_SYNC_FOLDER")
 
 
 def test_shortcut_and_link_skipped(env, tmp_path):
