@@ -7,6 +7,7 @@ import { citationTargets, errorText, shouldNotifyWikiDone, ocrConfirmText, pageR
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoad } from './kit.tsx'
 import { app, call, confirm, notice, type CaseRef, type Params } from './state.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
+import { ocrTargets } from './estimate.ts'
 import { MATERIAL_REMOVE_ENABLED, openCaseFolder, REMOVE_DISABLED_TIP, removeMaterial } from './folder-actions.ts'
 
 const POLL_MS = 3000
@@ -21,8 +22,12 @@ export function osNotify(text: '识别任务已完成' | '整理任务已完成'
   } catch { /* 系统不支持通知时不提示 */ }
 }
 
-export function MaterialsTab(p: SessionProps) {
-  return <WithCase p={p}>{(c) => <Materials caseRef={c} />}</WithCase>
+type TabInfo = { tab: { navigation: { params?: Record<string, unknown>; revision?: number } } }
+
+export function MaterialsTab(p: SessionProps & { useTabInfo?: () => TabInfo }) {
+  const params = (p.useTabInfo?.().tab.navigation.params ?? {}) as { ocr?: string; at?: string }
+  // 运行前提示点了"去识别"（令 1257 第 1 条）：带 ocr=pending 打开，每次的 at 不同
+  return <WithCase p={p}>{(c) => <Materials caseRef={c} ocrRequest={params.ocr === 'pending' ? params.at ?? 'pending' : undefined} />}</WithCase>
 }
 
 interface OcrJob { job_id: string; material_id: string; name: string; status: 'queued' | 'running' | 'paused' | 'done' | 'cancelled' | 'partial_failed'; pause_reason: string | null; total: number; done: number; failed: number }
@@ -32,12 +37,20 @@ interface Suggestion { id: string; field: string; value: string; source: string;
 const JOB_WORD: Record<OcrJob['status'], string> = { queued: '排队中', running: '识别中', paused: '已暂停', done: '已完成', cancelled: '已取消', partial_failed: '部分页失败' }
 const PAUSE_WORD: Record<string, string> = { offline: '网络断开', prep_down: '识别服务器不可用', key_invalid: 'Key 无效', app_exit: '软件关闭' }
 
-function Materials({ caseRef }: { caseRef: CaseRef }) {
+function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: string }) {
   const id = caseRef.case_id
   const [mats, reloadMats] = useLoad(() => call<{ materials: Material[] }>('materialsList', { case_id: id }), [id])
   const [jobs, reloadJobs] = useLoad(() => call<{ jobs: OcrJob[] }>('ocrList', { case_id: id }), [id], POLL_MS)
   const [over, setOver] = useState(false)
   const [ocrFor, setOcrFor] = useState<Material[] | null>(null)
+  // "去识别"：材料读到后弹出待识别页的提交框（每个请求只弹一次）
+  const handledOcr = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!ocrRequest || handledOcr.current === ocrRequest || mats.state !== 'ok') return
+    handledOcr.current = ocrRequest
+    const pending = ocrTargets(mats.value.materials)
+    if (pending.length) setOcrFor(pending)
+  }, [ocrRequest, mats])
   const [wikiOpen, setWikiOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 

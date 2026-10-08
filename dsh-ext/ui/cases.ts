@@ -71,14 +71,15 @@ export async function loadRecent(): Promise<CaseRef[] | { code: string; message:
  * 登记并打开案件：选目录（或用给定路径）→ /api/case/open → 打开工作区。
  * @param template - 新建案件时的标准目录（民商事 civil / 刑事 criminal）；打开已有案件为 null。
  * @param navigate - 登记后是否转到该案件的会话（在会话里"作为案件打开"时不转）。
+ * @param offerLocal - 在云同步目录里被拒时是否提议"为我在本机建一个文件夹"；打开本机建好的文件夹时为 false（只给一次）。
  */
-export async function openCase(path: string | null, template: 'civil' | 'criminal' | null, navigate = true): Promise<CaseRef | undefined> {
+export async function openCase(path: string | null, template: 'civil' | 'criminal' | null, navigate = true, offerLocal = true): Promise<CaseRef | undefined> {
   const nav = getNav()
   const dir = path ?? await nav.pickDirectory()
   if (!dir) return undefined
   const r = await call<{ case_id: string; name: string; created: boolean; folders_created: string[] }>('caseOpen', { path: dir, template })
   if (!r.ok && r.error.code === 'CASE_IN_SYNC_FOLDER') {
-    if (!noOffer) return offerLocalFolder(dir, template, navigate)
+    if (offerLocal) return offerLocalFolder(dir, template, navigate)
     const name = folderName(dir)
     notice(syncWordIn(name) ? SYNC_NAME_TITLE : '没能打开案件', syncWordIn(name) ? syncNameText(name) : errorText(r.error))
     return undefined
@@ -116,7 +117,8 @@ async function offerLocalFolder(dir: string, template: 'civil' | 'criminal' | nu
   const made = await call<{ path: string }>('localCaseFolder', { name })
   if (!made.ok) { notice('没能建好本机文件夹', errorText(made.error)); return undefined }
   // 只给一次：本机文件夹仍被拒时只说明、不再提议（否则每确认一次多一个空的"(n)"文件夹）
-  return openCaseNoOffer(made.value.path, template, navigate)
+  // 注记 0934 ③：不再用模块级开关，按参数传（并发打开两个案件时互不影响）
+  return openCase(made.value.path, template, navigate, false)
 }
 
 /** SEC-14 按名字子串拒绝的同步软件名（Spec 4.2 的列表，服务端以配置为准；这里只用来选说法）。 */
@@ -125,13 +127,6 @@ export const syncWordIn = (name: string): string | undefined => SYNC_NAME_WORDS.
 export const SYNC_NAME_TITLE = '文件夹名字里有同步软件的名字'
 export const syncNameText = (name: string): string =>
   `"${name}"里含有"${syncWordIn(name) ?? '同步软件的名字'}"，程序会把它当成云盘文件夹拒绝（不管它实际在哪）。请给文件夹换个不含这些字的名字，再打开或新建。`
-
-/** 打开本机建好的文件夹：再被同步目录闸门拒绝时只说明，不再提议建文件夹。 */
-async function openCaseNoOffer(path: string, template: 'civil' | 'criminal' | null, navigate: boolean): Promise<CaseRef | undefined> {
-  noOffer = true
-  try { return await openCase(path, template, navigate) } finally { noOffer = false }
-}
-let noOffer = false
 
 /** 有打开的案件就用它，否则先让律师选择或新建（F-ENT-01）。 */
 export function withCase(current: CaseRef | undefined, then: (c: CaseRef) => void): void {

@@ -173,8 +173,15 @@ export function coverageLines(c: Coverage | null): { ok: boolean; summary: strin
   ]
   if (!lines.length && c.total === 0) return { ok: false, summary: '本任务没有列入材料', lines }
   if (!lines.length) return { ok: true, summary: `本任务范围内 ${c.total} 份材料都读全了`, lines }
-  return { ok: false, summary: `本任务范围内 ${c.total} 份材料，${lines.length} 份没读全`, lines }
+  // 令 1257 第 2 条：还没识别的（服务 unreadable 的 reason 以"还没识别"开头）单独数，做法不同（先提交识别）
+  const pending = c.unreadable.filter((x) => OCR_PENDING_REASON.test(x.reason)).length
+  const rest = lines.length - pending
+  const parts = [pending ? `${pending} 份待识别` : '', rest ? `${rest} 份没读全` : ''].filter(Boolean).join('、')
+  return { ok: false, summary: `本任务范围内 ${c.total} 份材料，${parts}`, lines }
 }
+
+/** 服务覆盖清单里"整份还没识别"的 reason（service\lawbench\case\task.py："还没识别，读不到文字，请先提交识别"）。 */
+export const OCR_PENDING_REASON = /^还没识别/
 
 /** 出处核对结果（契约 1.2 tasks_list.citation_check；界面叫"数值与出处位置核对"）。 */
 export interface CitationCheck {

@@ -26,7 +26,7 @@ import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
-import { folderKind, insideCase, localCaseFolder, removableMaterial, toolExe, type DeskDeps } from './desk-actions.ts'
+import { folderKind, insideCase, localCaseFolder, removableMaterial, sameFolder, toolExe, type DeskDeps } from './desk-actions.ts'
 import { nodeDeskDeps } from './desk-node.ts'
 import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
@@ -243,8 +243,8 @@ export class LawbenchRemote {
     if (!recent.ok) return recent
     const cases = (recent.value as { cases?: Array<{ case_id: string; root: string }> }).cases ?? []
     const known = cases.find((c) => c.case_id === caseId)
-    const norm = (p: string) => p.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
-    return known && norm(known.root) === norm(root) ? { ok: true, value: known.root } : bad
+    // 注记 0934 ①：同一文件夹经联接、subst、映射盘到达时按实际位置比，不误拒；用的仍是登记的那个根
+    return known && sameFolder(known.root, root, this.desk.realpath) ? { ok: true, value: known.root } : bad
   }
 
   /**

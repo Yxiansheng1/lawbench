@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { insideCase, localCaseFolder, localRoot, openableFolder, removableMaterial, safeFolderName, toolExe, type DeskDeps } from '../host/desk-actions.ts'
+import { insideCase, localCaseFolder, localRoot, openableFolder, removableMaterial, safeFolderName, sameFolder, toolExe, type DeskDeps } from '../host/desk-actions.ts'
 import { MATERIAL_REMOVE_ENABLED } from '../shared/feature-flags.ts'
 import { LawbenchRemote } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
@@ -30,6 +30,9 @@ describe('路径判断', () => {
     expect(safeFolderName('  ..  ')).toBe('新案件')
     expect(safeFolderName('CON')).toBe('新案件')
     expect(safeFolderName('con.txt')).toBe('新案件') // 复核 P3：保留名带扩展名
+    // 注记 0934 ②：与服务 gate.py 的 DEVICE_NAMES 同一套
+    for (const n of ['com0', 'LPT0', 'com¹', 'lpt³', 'conin$', 'CONOUT$', 'CON .txt', 'nul.tar.gz', 'aux ']) expect(safeFolderName(n), n).toBe('新案件')
+    for (const n of ['com10', 'console', 'con甲', 'lpt']) expect(safeFolderName(n), n).toBe(n)
     expect(safeFolderName('甲'.repeat(79) + ' 乙')).toBe('甲'.repeat(79)) // 先截 80 再去末尾空格
     expect(safeFolderName(String.raw`a\b`)).toBe('a_b')
     expect(toolExe('E:\\law', 'toString').ok).toBe(false) // 复核 P3：不认原型链上的名字
@@ -99,6 +102,28 @@ describe('Host 方法', () => {
       if (junction) expect((await r.openFolder({ case_id: 'c-1', root, rel: '联接' })).ok).toBe(false)
       expect(calls.filter((c) => c[0] === 'open').map((c) => c[1])).toEqual([join(root, '成果'), root].map((p) => realpathSync.native(p)))
     } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('openFolder：界面经联接（或 subst、映射盘）给的案件根与登记的是同一文件夹时照开，开的是登记的那个（注记 0934 ①）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lb-desk-'))
+    try {
+      const root = join(dir, '甲案')
+      mkdirSync(join(root, '成果'), { recursive: true })
+      const alias = join(dir, '甲案别名')
+      try { symlinkSync(root, alias, 'junction') } catch { return } // 建不了联接的环境跳过
+      const api = { caseRecent: () => ({ cases: [{ case_id: 'c-1', root, name: '甲案', exists: true }] }) }
+      const { r, calls } = remote({ openable: (root2, rel) => openableFolder(root2, rel) }, api)
+      expect((await r.openFolder({ case_id: 'c-1', root: alias, rel: '成果' })).ok).toBe(true)
+      expect(calls.filter((c) => c[0] === 'open').map((c) => c[1])).toEqual([realpathSync.native(join(root, '成果'))])
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('sameFolder：字面相同（大小写、斜杠、末尾斜杠）直接认；不同再比实际位置；解析不了按不同', () => {
+    expect(sameFolder('D:\\案件\\甲\\', 'd:/案件/甲', () => { throw new Error('不该解析') })).toBe(true)
+    const subst = (p: string) => p.replace(/^X:/i, 'D:\\案件')
+    expect(sameFolder('D:\\案件\\甲', 'X:\\甲', subst)).toBe(true)
+    expect(sameFolder('D:\\案件\\甲', 'X:\\乙', subst)).toBe(false)
+    expect(sameFolder('D:\\案件\\甲', 'Y:\\甲', () => { throw new Error('ENOENT') })).toBe(false)
   })
 
   it('materialRemove：开关关着时 Host 直接拒绝（NOT_AVAILABLE），不问服务、不删文件（复核 P2-3）', async () => {

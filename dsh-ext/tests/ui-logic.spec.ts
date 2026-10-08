@@ -192,6 +192,12 @@ describe('契约 1.2：新胶囊提示、覆盖清单、自检结果（执行令
     expect(coverageLines({ total: 2, fully_read: ['甲', '乙'], partially_read: [], not_read: [], unreadable: [] })).toMatchObject({ ok: true, summary: '本任务范围内 2 份材料都读全了' })
     // T13 返修小项②：清单为 0 份时不说"0 份材料都读全了"，也不标绿
     expect(coverageLines({ total: 0, fully_read: [], partially_read: [], not_read: [], unreadable: [] })).toEqual({ ok: false, summary: '本任务没有列入材料', lines: [] })
+    // 令 1257 第 2 条：还没识别的单独数（服务的 reason 以"还没识别"开头）
+    const SCAN = { name: '扫描件甲', reason: '还没识别，读不到文字，请先提交识别' }
+    expect(coverageLines({ total: 12, fully_read: [], partially_read: [{ name: '乙', read_units: 2, total_units: 12 }], not_read: ['丙'], unreadable: [SCAN, { ...SCAN, name: '扫描件丁' }, { name: '戊', reason: '文件已加密' }] }).summary)
+      .toBe('本任务范围内 12 份材料，2 份待识别、3 份没读全')
+    expect(coverageLines({ total: 3, fully_read: ['甲', '乙'], partially_read: [], not_read: [], unreadable: [SCAN] }).summary).toBe('本任务范围内 3 份材料，1 份待识别')
+    expect(coverageLines({ total: 3, fully_read: ['甲', '乙'], partially_read: [], not_read: ['丙'], unreadable: [] }).summary).toBe('本任务范围内 3 份材料，1 份没读全')
   })
   it('输入区状态行的错误只说一句：原文和说明都叫人稍后再试时不重复（T13 返修小项③）；说明另有做法时照旧接上', () => {
     expect(statusErrorText({ code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' })).toBe('工作台服务未启动，请稍后重试')

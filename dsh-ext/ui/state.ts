@@ -24,6 +24,8 @@ export type Dialog =
   | { kind: 'casePick'; then?: (c: CaseRef) => void }
   /** 设置有未保存的修改时离开：保存 / 不保存 / 取消（令 1609 第 2 条）。 */
   | { kind: 'unsaved'; title: string; text: string; resolve: (choice: 'save' | 'discard' | 'cancel') => void }
+  /** 运行前有材料还没识别：去识别 / 仍然开始 / 取消（令 1257 第 1 条）。 */
+  | { kind: 'ocrFirst'; title: string; text: string; resolve: (choice: 'ocr' | 'go' | 'cancel') => void }
 
 export interface AppState {
   cases: CaseRef[]

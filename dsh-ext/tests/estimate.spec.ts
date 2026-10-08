@@ -1,6 +1,7 @@
 // 令 2043 第 4 条：选 Skill（写任务单）之前按材料篇幅估一次，读不全先问。
-import { confirmScope, ESTIMATE_OK, ESTIMATE_TITLE, estimateCoverage, estimateText, READ_BUDGET_FILES, READ_BUDGET_PAGES } from '../ui/estimate.ts'
+import { confirmScope, ESTIMATE_OK, ESTIMATE_TITLE, estimateCoverage, estimateText, OCR_TITLE, ocrTargets, ocrText, pendingOcr, READ_BUDGET_FILES, READ_BUDGET_PAGES } from '../ui/estimate.ts'
 import { app, setApi, type LawbenchApi } from '../ui/state.ts'
+import { setNav, type Nav } from '../ui/kit.tsx'
 
 afterEach(() => { setApi(undefined); app.set((s) => ({ ...s, dialogs: [] })) })
 const lastDialog = () => (app.get() as unknown as { dialogs: Array<{ kind: string; title: string; text: string; ok: string; resolve?: (v: unknown) => void }> }).dialogs.at(-1)
@@ -42,5 +43,65 @@ describe('选 Skill 之前问', () => {
     setApi({ materialsList: async () => ({ ok: false, error: { code: 'X', message: 'x' } }) } as unknown as LawbenchApi)
     expect(await confirmScope(CASE)).toBe(true)
     expect(await confirmScope(undefined)).toBe(true)
+  })
+})
+
+describe('运行前有材料还没识别（令 1257 第 1 条）', () => {
+  const SCAN = { unit: 'page', unit_count: 12, status: 'needs_ocr', pages_need_ocr: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }
+  const PART = { unit: 'page', unit_count: 9, status: 'partial', pages_need_ocr: [3, 4] }
+  const OK = { unit: 'page', unit_count: 2, status: 'parsed', pages_need_ocr: [] }
+  const opened: Array<[string, Record<string, string> | undefined]> = []
+  beforeEach(() => { opened.length = 0; setNav({ openTab: (k: string, p?: Record<string, string>) => { opened.push([k, p]) } } as unknown as Nav) })
+  afterEach(() => setNav(undefined))
+  const ask = async (materials: unknown[]) => {
+    setApi({ materialsList: async () => ({ ok: true, value: { materials } }) } as unknown as LawbenchApi)
+    const p = confirmScope(CASE)
+    await new Promise((r) => setTimeout(r, 0))
+    return { p } // 包一层：直接返回会被 await 摊平成"等弹框答完"
+  }
+
+  it('数份数和页数：有待识别页的都算；整份没识别但页号为空的按页数算', () => {
+    expect(pendingOcr([SCAN, PART, OK] as never)).toEqual({ files: 2, pages: 14 })
+    expect(pendingOcr([{ status: 'needs_ocr', unit_count: 5, pages_need_ocr: [] }] as never)).toEqual({ files: 1, pages: 5 })
+    expect(pendingOcr([OK] as never)).toEqual({ files: 0, pages: 0 })
+    expect(ocrText({ files: 2, pages: 14 })).toBe('有 2 份材料（14 页）还没识别，分析时读不到它们的文字。先识别吗？')
+    // "去识别"打开的提交框里列的材料：同一口径
+    const blank = { status: 'needs_ocr', unit_count: 5, pages_need_ocr: [] }
+    expect(ocrTargets([SCAN, PART, OK, blank] as never)).toEqual([SCAN, PART, blank])
+  })
+
+  it('"去识别"：不写任务单，打开右栏"材料"并请它弹出待识别页的提交框', async () => {
+    const { p } = await ask([SCAN, OK])
+    expect(lastDialog()).toMatchObject({ kind: 'ocrFirst', title: OCR_TITLE, text: ocrText({ files: 1, pages: 12 }) })
+    lastDialog()!.resolve!('ocr')
+    expect(await p).toBe(false)
+    expect(opened).toHaveLength(1)
+    expect(opened[0]![0]).toBe('lawbench-materials')
+    expect(opened[0]![1]).toMatchObject({ ocr: 'pending' })
+  })
+
+  it('"仍然开始"：接着按篇幅估（没超额就直接开始）；"取消"：不开始、不跳转', async () => {
+    const go = await ask([PART, OK])
+    lastDialog()!.resolve!('go')
+    expect(await go.p).toBe(true)
+    const cancel = await ask([PART])
+    lastDialog()!.resolve!('cancel')
+    expect(await cancel.p).toBe(false)
+    expect(opened).toHaveLength(0)
+  })
+
+  it('"仍然开始"后材料又超额：再弹"材料较长"', async () => {
+    const big = { ...PART, unit_count: READ_BUDGET_PAGES + 1 }
+    const { p } = await ask([big])
+    lastDialog()!.resolve!('go')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(lastDialog()).toMatchObject({ kind: 'confirm', title: ESTIMATE_TITLE })
+    lastDialog()!.resolve!(true)
+    expect(await p).toBe(true)
+  })
+
+  it('都识别过了：不问', async () => {
+    expect(await (await ask([OK])).p).toBe(true)
+    expect(app.get().dialogs).toHaveLength(0)
   })
 })

@@ -63,7 +63,17 @@ export function safeFolderName(name: unknown): string {
   const s = typeof name === 'string' ? name : ''
   // 复核 P3：先截长度再去首尾空格和点（截完末尾可能又是空格或点）；保留名带扩展名也不行（CON.txt）
   const t = s.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 80).replace(/^[\s.]+|[\s.]+$/g, '')
-  return t === '' || /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(t) ? '新案件' : t
+  return t === '' || isDeviceName(t) ? '新案件' : t
+}
+
+/**
+ * Windows 设备名，与服务 service\lawbench\case\gate.py 的 is_device_name / DEVICE_NAMES 同一套（注记 0934 ②）：
+ * 去尾部点和空格、取第一个点之前的部分再去尾部空格，不分大小写比对；含 com0/lpt0、com¹²³/lpt¹²³、conin$/conout$（"CON .txt" 同样算）。
+ */
+const DEVICE_NAMES = new Set(['con', 'prn', 'aux', 'nul', 'conin$', 'conout$',
+  ...['com', 'lpt'].flatMap((d) => [...'0123456789¹²³'].map((n) => d + n))])
+export function isDeviceName(name: string): boolean {
+  return DEVICE_NAMES.has(name.replace(/[ .]+$/, '').split('.')[0]!.replace(/ +$/, '').toLowerCase())
 }
 
 /** "为我在本机建一个文件夹"的位置：<用户目录>\连越律师工作台\<案件名>；同名已在时加"(2)"…… */
@@ -88,12 +98,24 @@ export interface DeskDeps {
   isDir(p: string): boolean
   /** 能打开的案件文件夹（openableFolder，真文件系统）。 */
   openable(root: string, rel: unknown): { ok: true; value: string } | Fail
+  /** 解析联接、subst、映射盘后的实际位置（sameFolder 用；不给时用 realpathSync.native）。 */
+  realpath?(p: string): string
   /** 启动一个程序，不等它结束。 */
   launch(file: string, args: string[]): Promise<void>
   /** 在资源管理器（Mac 为访达）里打开文件夹。 */
   openPath(dir: string): Promise<void>
   remove(file: string): Promise<void>
   mkdir(dir: string): Promise<void>
+}
+
+/**
+ * 界面给的案件根与服务登记的是不是同一个文件夹（注记 0934 ①，复核 rv-A48）：先按字面比（不分大小写、斜杠方向、末尾斜杠），
+ * 不同再各自解析联接、subst、映射盘后比实际位置——同一文件夹经两条路径到达时不误拒。解析不了（不存在等）按不同算。
+ */
+export function sameFolder(a: string, b: string, realFn: (p: string) => string = realpathSync.native): boolean {
+  const norm = (p: string) => p.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
+  if (norm(a) === norm(b)) return true
+  try { return norm(realFn(a)) === norm(realFn(b)) } catch { return false }
 }
 
 /**
