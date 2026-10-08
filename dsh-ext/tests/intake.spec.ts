@@ -93,6 +93,8 @@ function fakeCtx(registered: { intake: number; marks: number }, steps: string[] 
     sidebarRightTabs: { register: () => () => {} },
     conversationFileIntake: { register: () => { registered.intake++; return () => {} } },
     chatInlineMarks: { register: () => { registered.marks++; return () => {} } },
+    // 令 1321 C：成果卡片按会话事件收每轮草稿
+    uiConversation: { events: { register: () => () => {} } },
   })
   return ctx
 }

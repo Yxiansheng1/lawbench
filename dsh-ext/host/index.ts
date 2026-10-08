@@ -6,7 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { basename, isAbsolute, join, relative } from 'node:path'
+import { basename, extname, isAbsolute, join, relative } from 'node:path'
 import { homedir } from 'node:os'
 import { CONTRACT_VERSION, validate } from '../shared/contracts.ts'
 import { makeLogger } from '../shared/file-log.ts'
@@ -26,7 +26,7 @@ import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
-import { folderKind, insideCase, localCaseFolder, removableMaterial, sameFolder, toolExe, type DeskDeps } from './desk-actions.ts'
+import { folderKind, insideCase, localCaseFolder, openableFile, removableMaterial, sameFolder, toolExe, type DeskDeps } from './desk-actions.ts'
 import { nodeDeskDeps } from './desk-node.ts'
 import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
@@ -232,6 +232,22 @@ export class LawbenchRemote {
     if (!at.ok) return at
     try { await this.desk.openPath(at.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件夹没能打开，请重试' } } }
     this.log('info', 'folder.open', { kind: folderKind(String(r?.rel ?? '')) })
+    return { ok: true, value: { opened: true } }
+  }
+
+  /**
+   * 成果卡片"打开"（令 1321 C.2）：用默认程序打开案件根里的一个成果文件（Word 等）。
+   * 同 openFolder：案件根按服务登记核对；文件须在案件根里、是文书类普通文件、实际位置不出案件根。日志只记扩展名。
+   * @param request - { case_id, root, rel }，rel 为案件根下的相对路径（如"成果/借款合同-v1.docx"）。
+   */
+  async openFile(request: unknown): Promise<{ ok: true; value: { opened: true } } | ApiFail> {
+    const r = request as { case_id?: unknown; root?: unknown; rel?: unknown } | null
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const file = openableFile(known.value, r?.rel)
+    if (!file.ok) return file
+    try { await this.desk.openPath(file.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件没能打开，请重试' } } }
+    this.log('info', 'file.open', { ext: extname(file.value).toLowerCase() })
     return { ok: true, value: { opened: true } }
   }
 

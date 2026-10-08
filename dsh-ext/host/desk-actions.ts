@@ -2,7 +2,7 @@
 // 路径判断都在这里（纯函数，tests\desk-actions.spec.ts）；真正启动程序、删文件由调用方注入，便于测。
 // 日志只记事件和结果，不记路径、文件名。
 import { lstatSync, realpathSync, statSync } from 'node:fs'
-import { isAbsolute, join, normalize, relative, sep } from 'node:path'
+import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 
 /** 首页"工具"一栏的两个小工具（打包后在 <安装目录>\tools\<名>\<名>.exe，见 packaging\build.ps1 smalltools 步）。 */
 export const TOOLS = { splitter: '长截图切分', convert: '格式互转' } as const
@@ -53,6 +53,29 @@ export function removableMaterial(root: unknown, rel: unknown,
   if (st.isSymbolicLink() || !st.isFile()) return fail('INVALID_ARGUMENT', '只能移除普通文件')
   let realRoot: string, realFile: string
   try { realRoot = realFn(root as string); realFile = realFn(at.value) } catch { return fail('NOT_FOUND', '这份材料的文件已经不在了，点"重新扫描"更新列表') }
+  const back = relative(realRoot, realFile)
+  if (back === '' || back.startsWith('..') || isAbsolute(back)) return BAD_ARG
+  return { ok: true, value: at.value }
+}
+
+/** 成果卡片"打开"能开的文件类型（令 1321 C.2）：只开文书类，不开程序、脚本、快捷方式（案件文件夹里可能有任何东西）。 */
+export const OPENABLE_FILE_EXT: ReadonlySet<string> = new Set(['.docx', '.doc', '.wps', '.md', '.pdf', '.xlsx', '.xls', '.txt'])
+
+/**
+ * 成果卡片"打开"的文件：须在案件根里、是文书类的普通文件（不是链接、不是文件夹），且实际位置（解析链接后）仍在案件根里。
+ * @param statFn、realFn 测试替身；默认用真文件系统。
+ */
+export function openableFile(root: unknown, rel: unknown,
+  statFn: (p: string) => { isFile(): boolean; isSymbolicLink(): boolean } = lstatSync,
+  realFn: (p: string) => string = realpathSync.native): { ok: true; value: string } | Fail {
+  const at = insideCase(root, rel)
+  if (!at.ok) return at
+  if (!OPENABLE_FILE_EXT.has(extname(at.value).toLowerCase())) return fail('INVALID_ARGUMENT', '这类文件不在这里打开，请到"打开所在文件夹"里找')
+  let st
+  try { st = statFn(at.value) } catch { return fail('NOT_FOUND', '这份成果的文件已经不在了') }
+  if (st.isSymbolicLink() || !st.isFile()) return fail('INVALID_ARGUMENT', '只能打开普通文件')
+  let realRoot: string, realFile: string
+  try { realRoot = realFn(root as string); realFile = realFn(at.value) } catch { return fail('NOT_FOUND', '这份成果的文件已经不在了') }
   const back = relative(realRoot, realFile)
   if (back === '' || back.startsWith('..') || isAbsolute(back)) return BAD_ARG
   return { ok: true, value: at.value }

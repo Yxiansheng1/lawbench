@@ -1,5 +1,5 @@
-// 右侧栏默认展开（令 1347 第 3 条；第二轮复核 AMEND F2）：每个案件会话只自动展开一次；打开案件时依次开成果、原文查看、材料，停在材料。
-import { createRightbarSeeder, RIGHTBAR_TABS } from '../ui/rightbar.ts'
+// 右侧栏的标签（令 1347 第 3 条；第二轮复核 AMEND F2；令 1321 D.1 去掉"成果"、默认收起）：每个案件会话只开一次；打开案件时开好原文查看、材料，停在材料，右栏收起。
+import { createRightbarSeeder, RIGHTBAR_TABS, seedTabsCollapsed } from '../ui/rightbar.ts'
 import { openCase, TABS } from '../ui/cases.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
 import { setApi, type LawbenchApi } from '../ui/state.ts'
@@ -10,24 +10,28 @@ describe('右侧栏默认展开', () => {
   it('每个案件会话只开一次（记下的会话再显示不再开）；不是案件会话、没有会话不开；最后开的是材料', () => {
     const opened: string[] = []
     const saved: string[][] = []
-    const seed = createRightbarSeeder(new Set(['s-old']), (ids) => { saved.push(ids) }, (k) => { opened.push(k) })
+    const seed = createRightbarSeeder(new Set(['s-old']), (ids) => { saved.push(ids) }, () => { opened.push(...RIGHTBAR_TABS) })
     expect(seed('s1', true)).toBe(true)
-    expect(opened).toEqual([TABS.results, TABS.source, TABS.materials])
+    expect(opened).toEqual([TABS.source, TABS.materials])
     expect(seed('s1', true)).toBe(false)
     expect(seed('s-old', true)).toBe(false)
     expect(seed('s2', false)).toBe(false)
     expect(seed(undefined, true)).toBe(false)
-    expect(opened.length).toBe(3)
+    expect(opened.length).toBe(2)
     expect(saved.at(-1)).toEqual(['s-old', 's1'])
     expect(RIGHTBAR_TABS.at(-1)).toBe(TABS.materials)
   })
 
-  it('openCase：登记后打开案件，依次开成果、原文查看、材料（停在材料）', async () => {
+  it('openCase：登记后打开案件，开好原文查看、材料（右栏收起，由 seedTabs 做）；不再单独开标签', async () => {
     const tabs: string[] = []
-    setNav({ pickDirectory: async () => null, openCaseWorkspace: async () => {}, openTab: (k: string) => { tabs.push(k) } } as unknown as Nav)
+    let seeded = 0
+    setNav({ pickDirectory: async () => null, openCaseWorkspace: async () => {}, openTab: (k: string) => { tabs.push(k) }, seedTabs: () => { seeded++ } } as unknown as Nav)
     setApi({ caseOpen: async () => ({ ok: true, value: { case_id: 'c', name: '张某甲诈骗案', created: false, folders_created: [] } }) } as unknown as LawbenchApi)
     await openCase('D:\\案件\\张某甲诈骗案', null)
-    expect(tabs).toEqual([TABS.results, TABS.source, TABS.materials])
+    expect(seeded).toBe(1)
+    expect(tabs).toEqual([])
+    expect(RIGHTBAR_TABS).toEqual([TABS.source, TABS.materials])
+    expect(Object.values(TABS)).not.toContain('lawbench-results')
   })
 })
 
@@ -85,5 +89,45 @@ describe('先问 pathState 再撤（令 1726 补：复核员变异 M2）', () =>
       expect(r).toBe(want)
       expect(removed).toEqual(want ? [want] : [])
     }
+  })
+})
+
+describe('右栏默认收起（令 1321 D.1）', () => {
+  /** 假右栏：openTab 像 DSH 一样顺带展开。 */
+  const fake = (expanded: boolean) => {
+    const s = { expanded, tabs: [] as string[], toggles: 0,
+      openTab(k: string) { s.tabs.push(k); s.expanded = true },
+      isExpanded() { return s.expanded },
+      toggleExpanded() { s.toggles++; s.expanded = !s.expanded } }
+    return s
+  }
+
+  it('原来收起：开好原文查看、材料（停在材料）后收回去', () => {
+    const s = fake(false)
+    seedTabsCollapsed(s)
+    expect(s.tabs).toEqual([TABS.source, TABS.materials])
+    expect(s.expanded).toBe(false)
+    expect(s.toggles).toBe(1)
+  })
+
+  it('原来展开（律师自己展开过）：开好标签，不收', () => {
+    const s = fake(true)
+    seedTabsCollapsed(s)
+    expect(s.expanded).toBe(true)
+    expect(s.toggles).toBe(0)
+  })
+
+  it('拿不到 isExpanded（旧版 DSH）：只开标签，不去动展开状态', () => {
+    const tabs: string[] = []
+    seedTabsCollapsed({ openTab: (k: string) => { tabs.push(k) } })
+    expect(tabs).toEqual([TABS.source, TABS.materials])
+  })
+
+  it('点出处仍开"原文查看"（DSH 的 openTab 顺带展开右栏）', async () => {
+    const { citationDeps } = await import('../ui/citation-deps.ts')
+    const opened: Array<[string, unknown]> = []
+    setNav({ openTab: (k: string, p?: Record<string, string>) => { opened.push([k, p]) } } as unknown as Nav)
+    citationDeps.openSource('m-1', '〔起诉书 第2页〕')
+    expect(opened).toEqual([[TABS.source, { material_id: 'm-1', citation: '〔起诉书 第2页〕' }]])
   })
 })

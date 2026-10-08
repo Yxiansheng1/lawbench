@@ -46,6 +46,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   // 令 2043（律师第一批反馈）：首页工具栏打开小工具；右栏"打开所在文件夹"；"移除此材料"（删文件后重新扫描）；云同步被拒时在本机建案件文件夹
   { method: 'openTool', params: ['request'] },
   { method: 'openFolder', params: ['request'] },
+  // 令 1321 C.2：成果卡片"打开"（默认程序打开案件根里的成果文件）
+  { method: 'openFile', params: ['request'] },
   { method: 'materialRemove', params: ['request'] },
   { method: 'localCaseFolder', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}

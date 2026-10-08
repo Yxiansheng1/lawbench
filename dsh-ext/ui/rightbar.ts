@@ -1,21 +1,34 @@
-// 右侧栏默认展开（令 1347 第 3 条）：案件（含日常事务）的会话第一次显示时开好成果、原文查看、材料三个标签，停在"材料"
-// （最后开的为当前）；每个会话只做一次（记在本机，最多 500 个），之后折叠、关标签都由 DSH 按会话记住。
+// 右侧栏的标签（令 1347 第 3 条；令 1321 D.1 去掉"成果"、默认收起）：案件（含日常事务）的会话第一次显示时开好原文查看、材料两个标签，
+// 停在"材料"（最后开的为当前），右栏收起；每个会话只做一次（记在本机，最多 500 个），之后展开、折叠、关标签都由 DSH 按会话记住。
 import { TABS } from './cases.ts'
 
 /** 依次打开的标签：最后一个是停留的。 */
-export const RIGHTBAR_TABS = [TABS.results, TABS.source, TABS.materials] as const
+export const RIGHTBAR_TABS = [TABS.source, TABS.materials] as const
 export const SEEDED_KEY = 'lawbench.rightbar.seeded'
 
+/** DSH 右栏服务（ctx.sidebarRight）里用到的几样。 */
+export interface SidebarLike { openTab(kind: string): unknown; isExpanded?(): boolean; toggleExpanded?(): void }
+
 /**
- * @param seen - 已经开过的会话（读自本机）。@param persist - 记下（最多 500 个）。@param open - 开一个标签。
+ * 开好 RIGHTBAR_TABS、右栏保持收起（令 1321 D.1）：DSH 的 openTab 会顺带展开右栏，开之前是收起的就再收回去
+ * （DSH 只有 toggleExpanded，没有单独的收起）。拿不到 isExpanded 时按"原来展开"处理（不去动它）。
+ */
+export function seedTabsCollapsed(sidebar: SidebarLike, kinds: readonly string[] = RIGHTBAR_TABS): void {
+  const wasExpanded = sidebar.isExpanded?.() ?? true
+  for (const kind of kinds) { try { sidebar.openTab(kind) } catch { /* 没有会话界面时不开 */ } }
+  try { if (!wasExpanded && sidebar.isExpanded?.()) sidebar.toggleExpanded?.() } catch { /* 收不回就展开着 */ }
+}
+
+/**
+ * @param seen - 已经开过的会话（读自本机）。@param persist - 记下（最多 500 个）。@param seedTabs - 开好 RIGHTBAR_TABS（右栏保持收起）。
  * @returns seed(会话 id, 是不是案件会话)：这次开了返回 true。
  */
-export function createRightbarSeeder(seen: Set<string>, persist: (ids: string[]) => void, open: (kind: string) => void) {
+export function createRightbarSeeder(seen: Set<string>, persist: (ids: string[]) => void, seedTabs: () => void) {
   return (sid: string | undefined, isCase: boolean): boolean => {
     if (!sid || !isCase || seen.has(sid)) return false
     seen.add(sid)
     persist([...seen].slice(-500))
-    for (const kind of RIGHTBAR_TABS) open(kind)
+    seedTabs()
     return true
   }
 }

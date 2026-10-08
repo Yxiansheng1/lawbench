@@ -10,6 +10,9 @@
 //   T26：发票整理与委托材料两条接口见 dev/fake-tools.mjs（--invoice-delay、--invoice-blocked、--retainer-python、--retainer-stop-stuck）
 //   --llm-reply <文件>（T17：在本机转发端口 LB_FORWARD_PORT 上假扮模型网关，POST /v1/chat/completions 以流式返回这个文件的内容，
 //     让 DSH 用真实的 Markdown 渲染一段回答；只监听 127.0.0.1，不连外网）
+//   --llm-draft（令 1321：与 --llm-reply 同用。每轮第一次请求先流式返回一次 case_save_draft 工具调用，工具结果回来后再返回
+//     --llm-reply 的内容；case_save_draft 记成该任务的草稿，/api/tasks 列出、/api/outputs/confirm 后 /api/outputs 列出——
+//     看聊天里的草稿卡片 / 成果卡片用）
 import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
 import { API_ROUTES } from '../shared/api-routes.ts'
@@ -44,7 +47,9 @@ const CASE_ROOT_FILE = arg('--case-root-file', null)
 // /api/tasks 只列已开始执行的。--fail-task-create：写选择一律返回 SERVICE_UNAVAILABLE（测"写入失败保留下拉框"）
 const FAIL_TASK_CREATE = flag('--fail-task-create')
 const selections = new Map() // session_id → { task_id, entry, skill, inputs, params, updated_at }
-const started = [] // 已开始执行的：{ task_id, skill }
+const started = [] // 已开始执行的：{ task_id, skill, status?, drafts? }
+const LLM_DRAFT = flag('--llm-draft')
+const confirmed = [] // --llm-draft：确认保存过的成果
 const taskIdNow = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomBytes(2).toString('hex')}` }
 const isoNow = () => { const d = new Date(); const off = -d.getTimezoneOffset(); const p = (n) => String(Math.abs(n)).padStart(2, '0'); return new Date(d.getTime() + off * 60000).toISOString().slice(0, 19) + (off >= 0 ? '+' : '-') + p(Math.trunc(off / 60)) + ':' + p(off % 60) }
 const FAIL_API = new Set((arg('--fail-api', '') ?? '').split(',').filter(Boolean))
@@ -107,6 +112,17 @@ function handle(method, path, body) {
       if (!tasks.has(body.task_id) && !BAD_RESPONSE) return [fail('TASK_NOT_FOUND', '找不到该任务')]
       const va = check(`tools/${body.tool}`, 'args', body.args); if (va.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), va]
       if (LATER.has(body.tool)) return [fail('SERVICE_UNAVAILABLE', '工作台服务未启动，请稍后重试')]
+      if (LLM_DRAFT && body.tool === 'case_save_draft') {
+        // 令 1321：记成该任务的草稿（路径同真服务：<任务目录>/草稿/<标题>-v<版本>.md）
+        const t = started.find((x) => x.task_id === body.task_id)
+        const title = String(body.args.title)
+        const version = (t?.drafts ?? []).filter((d) => d.title === title).length + 1
+        const path = `工作区/任务/${body.task_id}/草稿/${title}-v${version}.md`
+        if (t) t.drafts = [...(t.drafts ?? []), { title, path, version }]
+        const coverage = { total: 3, fully_read: ['借款合同（虚构）.pdf'], partially_read: [{ name: '银行流水（虚构）.pdf', read_units: 4, total_units: 12 }], not_read: [], unreadable: [{ name: '收条扫描件（虚构）.pdf', reason: '还没识别，读不到文字，请先提交识别' }] }
+        const citation_check = { passed: false, problems: [{ class: 'B', severity: 'must_fix', excerpt: '借款本金 50 万元', citation: '〔借款合同（虚构） 第1页〕', message: '原文是 30 万元' }], stats: { citations: 5, must_fix: 1, hints: 0 } }
+        return [ok({ path, version, citation_check, coverage, not_fully_read: ['银行流水（虚构）.pdf', '收条扫描件（虚构）.pdf'] })]
+      }
       const make = TOOL_RESULTS[body.tool]
       if (!make) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`假服务没有 ${body.tool} 的样例`]]
       return [ok(make())]
@@ -117,6 +133,8 @@ function handle(method, path, body) {
     }
     case 'POST /core/task/end': {
       const v = check('core/task_end', 'request', body); if (v.length) return [fail('INVALID_ARGUMENT', '请求参数有误'), v]
+      const t = started.find((x) => x.task_id === body.task_id)
+      if (t) t.status = END_STATUS[body.reason]
       return [ok({ status: END_STATUS[body.reason] })]
     }
     case 'GET /api/settings': {
@@ -179,8 +197,21 @@ function fromFixtures(method, path, query, body) {
   }
   if (r.method === 'tasksList') {
     const base = fixture('tasks_list.json')
-    const mine = started.map((c) => ({ task_id: c.task_id, skill: c.skill, status: 'running', drafts: [], citation_passed: null, finished_at: null, coverage: null, citation_check: null }))
+    const mine = started.map((c) => ({ task_id: c.task_id, skill: c.skill, status: c.status ?? 'running', drafts: c.drafts ?? [], citation_passed: null, finished_at: c.status ? isoNow() : null, coverage: null, citation_check: null }))
     return [ok({ tasks: [...mine, ...base.value.tasks] })]
+  }
+  if (LLM_DRAFT && r.method === 'outputsConfirm') {
+    // 令 1321：确认保存——记下成果，/api/outputs 里列出（文件不真生成）
+    const t = started.find((x) => x.task_id === request.task_id)
+    const d = t?.drafts?.find((x) => x.path === request.draft)
+    if (!d) return [fail('INVALID_ARGUMENT', '请求参数有误')]
+    const files = (request.formats ?? ['docx']).map((f) => ({ format: f, path: `成果/${d.title}-v${d.version}.${f}` }))
+    confirmed.unshift({ title: d.title, version: d.version, files, task_id: t.task_id, inputs: [], citation_passed: false, confirmed_at: isoNow() })
+    return [ok({ outputs: files.map((f) => ({ ...f, version: d.version })) })]
+  }
+  if (LLM_DRAFT && r.method === 'outputsList') {
+    const base = fixture('outputs_list.json')
+    return [ok({ ...base.value, outputs: [...confirmed, ...base.value.outputs] })]
   }
   if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
   const out = fixture(`${r.contract}.json`)
@@ -245,6 +276,18 @@ if (LLM_REPLY) {
       const chunk = (delta, finish = null) => `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
       res.write(chunk({ role: 'assistant', content: '' }))
+      // 令 1321 --llm-draft：这一轮还没有工具结果时，先调一次 case_save_draft
+      let messages = []
+      try { messages = JSON.parse(body).messages ?? [] } catch { /* 读不出就当没有 */ }
+      const lastUser = messages.map((m) => m.role).lastIndexOf('user')
+      if (LLM_DRAFT && !messages.slice(lastUser + 1).some((m) => m.role === 'tool')) {
+        const args = JSON.stringify({ title: '借款合同审查意见', content: '# 借款合同审查意见（虚构）\n\n- 借款本金 50 万元〔借款合同（虚构） 第1页〕\n' })
+        res.write(chunk({ tool_calls: [{ index: 0, id: `call_draft_${Date.now()}`, type: 'function', function: { name: 'case_save_draft', arguments: args } }] }))
+        res.write(chunk({}, 'tool_calls'))
+        res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [], usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 } })}\n\n`)
+        res.end('data: [DONE]\n\n')
+        return
+      }
       for (let i = 0; i < text.length; i += 40) res.write(chunk({ content: text.slice(i, i + 40) }))
       res.write(chunk({}, 'stop'))
       res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'qwen38-27b', choices: [], usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 } })}\n\n`)

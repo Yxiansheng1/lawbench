@@ -1,0 +1,9 @@
+﻿
+ RUN  v4.1.8 D:/lawbench-A/dsh-ext
+
+
+ Test Files  54 passed (54)
+      Tests  687 passed | 6 skipped (693)
+   Start at  14:21:54
+   Duration  114.86s (transform 15.54s, setup 0ms, import 35.85s, tests 179.55s, environment 58.91s)
+

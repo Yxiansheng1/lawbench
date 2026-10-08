@@ -19,6 +19,17 @@ export async function openCaseFolder(c: CaseRef, which: 'materials' | 'outputs')
   return true
 }
 
+/**
+ * 用默认程序打开案件里的一个成果文件（令 1321 C.2 成果卡片"打开"）。经 Host，限案件根内的文书类文件。
+ * @param rel - 案件根下的相对路径（服务给的成果路径，如"成果/借款合同-v1.docx"）。
+ * @returns 打开了为 true。
+ */
+export async function openCaseFile(c: CaseRef, rel: string): Promise<boolean> {
+  const r = await call<{ opened: true }>('openFile', { case_id: c.case_id, root: c.root, rel })
+  if (!r.ok) { notice('文件没能打开', errorText(r.error)); return false }
+  return true
+}
+
 // 开关与提示在 shared/feature-flags.ts（Host 也照它拒绝）
 export { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 

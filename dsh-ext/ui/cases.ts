@@ -4,7 +4,8 @@ import { app, call, caseForRoot, confirm, currentCase, folderName, notice, sameP
 import { getNav } from './kit.tsx'
 import { errorText } from './format.ts'
 
-export const TABS = { materials: 'lawbench-materials', results: 'lawbench-results', source: 'lawbench-source' } as const
+// 令 1321 D.1：右栏不再有"成果"标签（成果在聊天里的卡片和案件概览卡）
+export const TABS = { materials: 'lawbench-materials', source: 'lawbench-source' } as const
 
 /** 默认导入位置（U-12、F-MAT-02a）。 */
 export const DEFAULT_TARGET = '02案件材料'
@@ -94,8 +95,8 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   if (navigate) {
     const opened = await nav.openCaseWorkspace(dir)
     if (prev) await nav.forgetCaseWorkspace?.(prev.root, opened || undefined).catch(() => undefined)
-    // 令 1347 第 3 条：右侧栏三个标签常显，停在"材料"（最后开的为当前）
-    for (const kind of [TABS.results, TABS.source, TABS.materials]) nav.openTab(kind) // 同 rightbar.ts 的 RIGHTBAR_TABS
+    // 令 1347 第 3 条、令 1321 D.1：开好"原文查看""材料"，停在"材料"，右栏收起（顶部按钮展开）
+    nav.seedTabs?.()
   }
   return c
 }

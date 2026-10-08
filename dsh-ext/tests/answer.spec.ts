@@ -13,7 +13,6 @@ import { citationInlineMarks } from '../ui/citation.ts'
 import { BUDGET_STOPPED } from '../ui/dock.tsx'
 import { BUDGET_STOPPED as AGENT_BUDGET_STOPPED } from '../agent/index.ts'
 import { setNav } from '../ui/kit.tsx'
-import { openAnswer } from '../ui/results.tsx'
 import { app, setApi } from '../ui/state.ts'
 import { api, CASE, flush, h, mount, setup, teardown } from './helpers/dock-lab.ts'
 
@@ -141,7 +140,7 @@ describe('turnNotice 带任务编号（shared/turn-notices.ts）', () => {
   })
 })
 
-describe('输入区上方显示草稿（dock）与成果页"在对话区查看"', () => {
+describe('输入区上方显示草稿（dock）', () => {
   let root = ''
   const opened: Array<[string, Record<string, string> | undefined]> = []
   const sessions: string[] = []
@@ -188,15 +187,7 @@ describe('输入区上方显示草稿（dock）与成果页"在对话区查看"'
     await act(async () => { fold.click() }); await flush()
     expect(h.container.textContent).not.toContain('本次运行的模型调用次数')
   })
-  it('成果页"在对话区查看"：转到任务记下的会话并在那里显示；读不到任务时给中文提示、不转', async () => {
-    withApi(null)
-    await openAnswer({ ...CASE, root }, 'S-NOW', T)
-    expect(sessions).toEqual(['S-RUN'])
-    expect(app.get().answers).toEqual({ 'S-RUN': T })
-    await openAnswer({ ...CASE, root }, 'S-NOW', 'T-20261003145955-0000')
-    expect(sessions).toEqual(['S-RUN'])
-    expect(app.get().dialogs.at(-1)).toMatchObject({ title: '没能打开这次运行的结果' })
-  })
+  // 成果页"在对话区查看"随右栏"成果"一并去掉（令 1321 D.1）：到达用量上限的那一轮仍由输入区自动显示（上一例），草稿卡片在那一轮答复下方
 })
 
 vi.setConfig({ testTimeout: 20_000 })

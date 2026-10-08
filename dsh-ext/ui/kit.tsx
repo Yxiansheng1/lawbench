@@ -135,6 +135,8 @@ export interface Nav {
   /** @returns 打开的工作区 id（侧栏移除旧位置时排除它，1612 复核 P1）。 */
   openCaseWorkspace(root: string): Promise<string | void>
   openTab(kind: string, params?: Record<string, string>): void
+  /** 开好右栏的"原文查看""材料"、右栏保持收起（令 1321 D.1）。 */
+  seedTabs?(): void
   goHome(): void
   refreshModels(): void
   /** 转到某个会话（成果页"在对话区查看"，T14 派修 2）。 */

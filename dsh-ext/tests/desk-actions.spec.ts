@@ -118,6 +118,26 @@ describe('Host 方法', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
+  it('openFile（真文件系统，令 1321 C.2）：只开登记案件根里的文书类普通文件；程序、出案件根、文件夹、未登记的根都不开', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lb-desk-'))
+    try {
+      const root = join(dir, '甲案')
+      mkdirSync(join(root, '成果'), { recursive: true })
+      writeFileSync(join(root, '成果', '借款合同-v1.docx'), 'x')
+      writeFileSync(join(root, '成果', '工具.exe'), 'x')
+      writeFileSync(join(dir, '外面.docx'), 'x')
+      const api = { caseRecent: () => ({ cases: [{ case_id: 'c-1', root, name: '甲案', exists: true }] }) }
+      const { r, calls } = remote({}, api)
+      expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/借款合同-v1.docx' })).toEqual({ ok: true, value: { opened: true } })
+      expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/工具.exe' })).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+      expect((await r.openFile({ case_id: 'c-1', root, rel: '..\\外面.docx' })).ok).toBe(false)
+      expect((await r.openFile({ case_id: 'c-1', root, rel: '成果' })).ok).toBe(false)
+      expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/没有.docx' })).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+      expect((await r.openFile({ case_id: 'c-9', root, rel: '成果/借款合同-v1.docx' })).ok).toBe(false)
+      expect(calls.filter((c) => c[0] === 'open').map((c) => c[1])).toEqual([join(root, '成果', '借款合同-v1.docx')])
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
   it('sameFolder：字面相同（大小写、斜杠、末尾斜杠）直接认；不同再比实际位置；解析不了按不同', () => {
     expect(sameFolder('D:\\案件\\甲\\', 'd:/案件/甲', () => { throw new Error('不该解析') })).toBe(true)
     const subst = (p: string) => p.replace(/^X:/i, 'D:\\案件')

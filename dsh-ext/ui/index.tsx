@@ -6,7 +6,7 @@ import { LAWBENCH_REMOTE } from './remote.ts'
 import { DialogHost } from './dialogs.tsx'
 import { HomePage } from './home.tsx'
 import { MaterialsTab } from './materials.tsx'
-import { ResultsTab } from './results.tsx'
+import { draftsDefinition, refreshCaseResults, TurnResultCards } from './result-cards.tsx'
 import { SourceTab } from './source.tsx'
 import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
@@ -14,7 +14,7 @@ import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
 import { CaseSwitcher } from './case-switcher.tsx'
-import { createRightbarSeeder, forgetIfGone, loadSeeded, saveSeeded } from './rightbar.ts'
+import { createRightbarSeeder, forgetIfGone, loadSeeded, RIGHTBAR_TABS, saveSeeded, seedTabsCollapsed } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
@@ -47,7 +47,9 @@ type Ctx = {
     delete(workspaceId: string): Promise<void>
     list?: Observable<{ items: Array<{ workspaceId: string; path: string; title?: string }> }>
   }
-  sidebarRight: { openTab(kind: string, opts?: { params?: Record<string, string> }): unknown; mounted: Observable<string | undefined> }
+  sidebarRight: { openTab(kind: string, opts?: { params?: Record<string, string> }): unknown; mounted: Observable<string | undefined>; isExpanded?(): boolean; toggleExpanded?(): void }
+  /** DSH ui-conversation：按会话事件收每轮数据（成果卡片用，令 1321 C）。 */
+  uiConversation: { events: { register(definition: unknown): Disposer } }
   sidebarRightTabs: { register(def: Record<string, unknown>): Disposer }
   /** P-5 源码补丁提供；没打补丁时不存在。 */
   conversationFileIntake: { register(hook: IntakeHook): Disposer }
@@ -74,6 +76,7 @@ const nav: Nav = {
   pathFor: (f) => navImpl.pathFor!(f),
   openCaseWorkspace: (root) => navImpl.openCaseWorkspace?.(root) ?? Promise.resolve(),
   openTab: (kind, params) => { if (navImpl.openTab) navImpl.openTab(kind, params); else navImpl.pending = { kind, params } },
+  seedTabs: () => navImpl.seedTabs?.(),
   goHome: () => navImpl.goHome?.(),
   refreshModels: () => navImpl.refreshModels!(),
   openSession: (id) => navImpl.openSession?.(id),
@@ -197,11 +200,10 @@ function registerCitationMarks(ctx: Ctx): void {
   ctx.effect(() => ctx.chatInlineMarks.register(citationMark(citationDeps)), '律师工作台界面：出处按钮')
 }
 
-/** 右侧栏三个标签：材料、成果、原文查看。 */
+/** 右侧栏两个标签：材料、原文查看（令 1321 D.1：成果挪进聊天里的卡片和案件概览卡，右栏不再有"成果"）。 */
 function registerTabs(ctx: Ctx): void {
   const tabs: Array<[string, string, string, number, unknown]> = [
     [TABS.materials, '材料', '案件材料、导入、识别和案件 wiki', 10, MaterialsTab],
-    [TABS.results, '成果', '任务、草稿、确认保存和导出', 20, ResultsTab],
     [TABS.source, '原文查看', '按出处查看原文，检索本案材料', 30, SourceTab],
   ]
   for (const [id, title, description, order, Body] of tabs) {
@@ -211,25 +213,44 @@ function registerTabs(ctx: Ctx): void {
     }), `律师工作台界面：标签 ${id}`)
     ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: id }, Body))
   }
-  const open = (kind: string, params?: Record<string, string>) => {
-    const go = () => { try { ctx.sidebarRight.openTab(kind, params ? { params } : undefined) } catch { /* 没有会话界面时不开 */ } }
+  // 刚打开工作区时会话界面还没挂上：等挂上再做（最多 10 秒）
+  const whenMounted = (go: () => void) => {
     if (ctx.sidebarRight.mounted.getSnapshot() !== undefined) { go(); return }
-    // 刚打开工作区时会话界面还没挂上：等挂上再开（最多 10 秒）
     let off: Disposer | undefined = ctx.sidebarRight.mounted.subscribe(() => {
       if (ctx.sidebarRight.mounted.getSnapshot() === undefined) return
       off?.(); off = undefined; go()
     })
     setTimeout(() => { off?.(); off = undefined }, 10_000)
   }
+  // 点出处等：开标签（DSH 的 openTab 会顺带展开右栏）
+  const open = (kind: string, params?: Record<string, string>) => {
+    whenMounted(() => { try { ctx.sidebarRight.openTab(kind, params ? { params } : undefined) } catch { /* 没有会话界面时不开 */ } })
+  }
+  // 令 1321 D.1：开好"原文查看""材料"两个标签但右栏保持收起（默认收起，顶部按钮展开）——openTab 会自动展开，
+  // 原来是收起的就再收回去（DSH 只有 toggleExpanded，没有单独的收起）
+  const seedTabs = () => { whenMounted(() => seedTabsCollapsed(ctx.sidebarRight, RIGHTBAR_TABS)) }
   navImpl.openTab = open
-  // 令 1347 第 3 条：打开案件（含日常事务）的会话第一次显示时，右侧栏展开并开好材料、成果、原文查看三个标签，停在"材料"；
-  // 每个会话只做一次（记在本机），之后折叠、关掉都由 DSH 按会话记住
-  const seeder = createRightbarSeeder(loadSeeded(), saveSeeded, open)
+  navImpl.seedTabs = seedTabs
+  // 令 1347 第 3 条、令 1321 D.1：打开案件（含日常事务）的会话第一次显示时开好"原文查看""材料"两个标签、停在"材料"，右栏收起；
+  // 每个会话只做一次（记在本机），之后展开、折叠、关掉都由 DSH 按会话记住
+  const seeder = createRightbarSeeder(loadSeeded(), saveSeeded, seedTabs)
   const seed = () => { seeder(ctx.sidebarRight.mounted.getSnapshot(), !!currentCase(app.get())) }
   ctx.effect(() => ctx.sidebarRight.mounted.subscribe(seed), '律师工作台界面：右侧栏默认展开')
   ctx.effect(() => app.subscribe(seed), '律师工作台界面：右侧栏默认展开（案件列表）')
   if (navImpl.pending) { const p = navImpl.pending; navImpl.pending = undefined; open(p.kind, p.params) }
-  ctx.effect(() => () => { navImpl.openTab = undefined }, '律师工作台界面：标签导航')
+  ctx.effect(() => () => { navImpl.openTab = undefined; navImpl.seedTabs = undefined }, '律师工作台界面：标签导航')
+}
+
+/**
+ * 聊天里交代成果（令 1321 C）：按会话事件收每轮存下的草稿，答复下方插草稿卡片 / 成果卡片（conversation.chat.turnTail，
+ * 同 DSH 的 ui-deliverables）。一轮结束时重读任务和成果（卡片上"确认保存"要任务号）。
+ */
+function registerResultCards(ctx: Ctx): void {
+  ctx.effect(() => ctx.uiConversation.events.register(draftsDefinition), '律师工作台界面：每轮草稿')
+  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'lawbench.results', order: 50 }, TurnResultCards))
+  const onTurnEnd = () => { const c = currentCase(app.get()); if (c) void refreshCaseResults(c.case_id) }
+  window.addEventListener(TURN_ENDED, onTurnEnd)
+  ctx.effect(() => () => window.removeEventListener(TURN_ENDED, onTurnEnd), '律师工作台界面：成果卡片刷新')
 }
 
 export async function apply(ctx: Ctx): Promise<() => Promise<void>> {
@@ -245,6 +266,7 @@ export async function apply(ctx: Ctx): Promise<() => Promise<void>> {
     ctx.inject(['slots', 'sidebarRight', 'sidebarRightTabs'], registerTabs),
     ctx.inject(['conversationFileIntake', 'sessions'], registerIntake), // ui-words: 标识符（DSH 服务名）
     ctx.inject(['chatInlineMarks'], registerCitationMarks), // ui-words: 标识符（DSH 服务名）
+    ctx.inject(['slots', 'uiConversation'], registerResultCards), // ui-words: 标识符（DSH 服务名）
   ]
   return async () => {
     for (const o of others) await o.dispose()

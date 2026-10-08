@@ -1,9 +1,10 @@
 // 空会话顶部的案件概览卡（令 1347 第 2 条，用户："工作区和案件是分开的吗""首页不是很大气"）：
-// 案件名；材料 N 份（其中待识别 M 份）；最近 3 条成果（点开成果标签）；最近一次对话（点开那条会话）。
+// 案件名；材料 N 份（其中待识别 M 份）；已确认的成果（令 1321 D.2：全部，点开即用默认程序打开，另有"打开所在文件夹"）；最近一次对话（点开那条会话）。
 // "日常事务"换成一句提示和最近 3 条对话。数据走现有的 /api/materials、/api/outputs 和 DSH 会话列表，不加接口。
 import { TABS } from './cases.ts'
 import { C, getNav, useLoad } from './kit.tsx'
 import { call, type CaseRef } from './state.ts'
+import { openCaseFile, openCaseFolder } from './folder-actions.ts'
 
 export interface SessionBrief { id: string; title: string; updatedAt: number }
 
@@ -25,9 +26,14 @@ export function materialCounts(materials: Array<{ pages_need_ocr?: unknown[] }>)
 
 type Output = { title: string; version: number; confirmed_at: string; files: Array<{ path: string }> }
 
-/** 最近 n 条成果（按确认时间倒序）。 */
-export function recentOutputs(outputs: Output[], n = 3): Output[] {
+/** 最近 n 条成果（按确认时间倒序）；n 不给为全部。 */
+export function recentOutputs(outputs: Output[], n = Infinity): Output[] {
   return [...outputs].sort((a, b) => Date.parse(b.confirmed_at) - Date.parse(a.confirmed_at)).slice(0, n)
+}
+
+/** 一条成果点开时打开哪个文件：有 Word 开 Word，否则第一个。 */
+export function outputFile(o: Output): string | undefined {
+  return (o.files.find((f) => /\.docx$/i.test(f.path)) ?? o.files[0])?.path
 }
 
 const row = { display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 } as const
@@ -69,15 +75,20 @@ function CaseBody({ caseRef, last, open }: { caseRef: CaseRef; last: SessionBrie
           {counts ? `${counts.total} 份${counts.pending ? `（其中待识别 ${counts.pending} 份）` : ''}` : mats.state === 'fail' ? '读不到' : '…'}
         </button>
       </div>
+      {/* 令 1321 D.2：右栏去掉"成果"后，"已确认的成果"列表在这里；点文件名用默认程序打开，旁边"打开所在文件夹" */}
       <div style={{ ...row, alignItems: 'flex-start' }}>
-        <span style={label}>最近成果</span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-          {latest.length ? latest.map((o) => (
-            <div key={`${o.title}-${o.version}`} style={row}>
-              <button type="button" style={link} onClick={() => getNav().openTab(TABS.results)}>{o.files[0]?.path.split('/').pop() ?? `${o.title} v${o.version}`}</button>
-              <span style={{ ...label, fontSize: 12 }}>{shortTime(o.confirmed_at)}</span>
-            </div>
-          )) : <span style={{ color: C.faint }}>{outs.state === 'loading' ? '…' : '还没有'}</span>}
+        <span style={label}>已确认的成果</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
+          {latest.length ? latest.map((o) => {
+            const file = outputFile(o)
+            return (
+              <div key={`${o.title}-${o.version}`} style={row}>
+                <button type="button" style={link} title={file ?? undefined} disabled={!file} onClick={() => { if (file) void openCaseFile(caseRef, file) }}>{file?.split('/').pop() ?? `${o.title} 第 ${o.version} 版`}</button>
+                <span style={{ ...label, fontSize: 12 }}>{shortTime(o.confirmed_at)}</span>
+              </div>
+            )
+          }) : <span style={{ color: C.faint }}>{outs.state === 'loading' ? '…' : '还没有'}</span>}
+          <div><button type="button" style={{ ...link, fontSize: 12 }} onClick={() => void openCaseFolder(caseRef, 'outputs')}>打开所在文件夹</button></div>
         </div>
       </div>
       <div style={row}>
