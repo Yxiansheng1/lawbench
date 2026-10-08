@@ -46,27 +46,27 @@ export function CaseOverview({ caseRef, daily, sessions }: { caseRef: CaseRef; d
   return (
     <section aria-label="案件概览" style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 14 }}>
       <div style={{ fontSize: 17, fontWeight: 600 }}>{caseRef.name}</div>
-      {daily ? <DailyBody recent={recent.slice(0, 3)} open={open} /> : <CaseBody caseRef={caseRef} last={recent[0]} open={open} />}
+      {daily ? <DailyBody caseRef={caseRef} recent={recent.slice(0, 3)} open={open} /> : <CaseBody caseRef={caseRef} last={recent[0]} open={open} />}
     </section>
   )
 }
 
-function DailyBody({ recent, open }: { recent: SessionBrief[]; open: (id: string) => void }) {
+function DailyBody({ caseRef, recent, open }: { caseRef: CaseRef; recent: SessionBrief[]; open: (id: string) => void }) {
   return (
     <>
       <div style={{ color: C.sub }}>{DAILY_HINT}</div>
       {recent.length ? recent.map((s) => (
         <div key={s.id} style={row}><button type="button" style={link} onClick={() => open(s.id)}>{s.title}</button><span style={{ ...label, fontSize: 12 }}>{shortTime(s.updatedAt)}</span></div>
       )) : <div style={{ color: C.faint }}>还没有对话。</div>}
+      {/* 注记 1432 第 2 条：律师在日常事务里也起草，已确认的成果同样列出（只这一行，不读材料） */}
+      <OutputsLine caseRef={caseRef} />
     </>
   )
 }
 
 function CaseBody({ caseRef, last, open }: { caseRef: CaseRef; last: SessionBrief | undefined; open: (id: string) => void }) {
   const [mats] = useLoad(() => call<{ materials: Array<{ pages_need_ocr?: unknown[] }> }>('materialsList', { case_id: caseRef.case_id }), [caseRef.case_id])
-  const [outs] = useLoad(() => call<{ outputs: Output[] }>('outputsList', { case_id: caseRef.case_id }), [caseRef.case_id])
   const counts = mats.state === 'ok' ? materialCounts(mats.value.materials) : null
-  const latest = outs.state === 'ok' ? recentOutputs(outs.value.outputs) : []
   return (
     <>
       <div style={row}>
@@ -75,26 +75,34 @@ function CaseBody({ caseRef, last, open }: { caseRef: CaseRef; last: SessionBrie
           {counts ? `${counts.total} 份${counts.pending ? `（其中待识别 ${counts.pending} 份）` : ''}` : mats.state === 'fail' ? '读不到' : '…'}
         </button>
       </div>
-      {/* 令 1321 D.2：右栏去掉"成果"后，"已确认的成果"列表在这里；点文件名用默认程序打开，旁边"打开所在文件夹" */}
-      <div style={{ ...row, alignItems: 'flex-start' }}>
-        <span style={label}>已确认的成果</span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
-          {latest.length ? latest.map((o) => {
-            const file = outputFile(o)
-            return (
-              <div key={`${o.title}-${o.version}`} style={row}>
-                <button type="button" style={link} title={file ?? undefined} disabled={!file} onClick={() => { if (file) void openCaseFile(caseRef, file) }}>{file?.split('/').pop() ?? `${o.title} 第 ${o.version} 版`}</button>
-                <span style={{ ...label, fontSize: 12 }}>{shortTime(o.confirmed_at)}</span>
-              </div>
-            )
-          }) : <span style={{ color: C.faint }}>{outs.state === 'loading' ? '…' : '还没有'}</span>}
-          <div><button type="button" style={{ ...link, fontSize: 12 }} onClick={() => void openCaseFolder(caseRef, 'outputs')}>打开所在文件夹</button></div>
-        </div>
-      </div>
+      <OutputsLine caseRef={caseRef} />
       <div style={row}>
         <span style={label}>最近对话</span>
         {last ? <><button type="button" style={link} onClick={() => open(last.id)}>{last.title}</button><span style={{ ...label, fontSize: 12 }}>{shortTime(last.updatedAt)}</span></> : <span style={{ color: C.faint }}>还没有</span>}
       </div>
     </>
+  )
+}
+
+/** 令 1321 D.2：右栏去掉"成果"后，"已确认的成果"列表在这里（案件与日常事务都有）；点文件名用默认程序打开，下面"打开所在文件夹"。 */
+function OutputsLine({ caseRef }: { caseRef: CaseRef }) {
+  const [outs] = useLoad(() => call<{ outputs: Output[] }>('outputsList', { case_id: caseRef.case_id }), [caseRef.case_id])
+  const latest = outs.state === 'ok' ? recentOutputs(outs.value.outputs) : []
+  return (
+    <div style={{ ...row, alignItems: 'flex-start' }}>
+      <span style={label}>已确认的成果</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
+        {latest.length ? latest.map((o) => {
+          const file = outputFile(o)
+          return (
+            <div key={`${o.title}-${o.version}`} style={row}>
+              <button type="button" style={link} title={file ?? undefined} disabled={!file} onClick={() => { if (file) void openCaseFile(caseRef, file) }}>{file?.split('/').pop() ?? `${o.title} 第 ${o.version} 版`}</button>
+              <span style={{ ...label, fontSize: 12 }}>{shortTime(o.confirmed_at)}</span>
+            </div>
+          )
+        }) : <span style={{ color: C.faint }}>{outs.state === 'loading' ? '…' : '还没有'}</span>}
+        <div><button type="button" style={{ ...link, fontSize: 12 }} onClick={() => void openCaseFolder(caseRef, 'outputs')}>打开所在文件夹</button></div>
+      </div>
+    </div>
   )
 }

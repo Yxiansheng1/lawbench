@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { addCapsule, checkBeforeSave, moveCapsule, moveGroup, newCapsuleId, newCapsules, rename, toggleHidden, visible, type Capsules } from '../ui/capsules.ts'
-import { citationSummary, coverageLines, ERROR_HINT, errorText, GENERIC_ERROR, ocrConfirmText, statusErrorText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
+import { citationSummary, coverageLines, ERROR_HINT, errorText, GENERIC_ERROR, OCR_PENDING_REASON, ocrConfirmText, statusErrorText, pageRanges, parsePageRanges, sumUnits, wikiConfirmText, type Material } from '../ui/format.ts'
 import { validateRoot } from '../shared/contracts.ts'
 
 const defaults = JSON.parse(readFileSync(join(__dirname, '..', '..', 'skills', 'capsules.default.json'), 'utf8')) as Capsules
@@ -198,6 +198,10 @@ describe('契约 1.2：新胶囊提示、覆盖清单、自检结果（执行令
       .toBe('本任务范围内 12 份材料，2 份待识别、3 份没读全')
     expect(coverageLines({ total: 3, fully_read: ['甲', '乙'], partially_read: [], not_read: [], unreadable: [SCAN] }).summary).toBe('本任务范围内 3 份材料，1 份待识别')
     expect(coverageLines({ total: 3, fully_read: ['甲', '乙'], partially_read: [], not_read: ['丙'], unreadable: [] }).summary).toBe('本任务范围内 3 份材料，1 份没读全')
+    // 复核 rv-A52 NOTE：对照服务源码里的那句 reason（service\\lawbench\\case\\task.py），服务改了说法这里就红
+    const src = readFileSync(join(__dirname, '..', '..', 'service', 'lawbench', 'case', 'task.py'), 'utf8')
+    const reasons = [...src.matchAll(/"reason":\s*"([^"]+)"/g)].map((m) => m[1]!)
+    expect(reasons.filter((r) => OCR_PENDING_REASON.test(r))).toEqual(['还没识别，读不到文字，请先提交识别'])
   })
   it('输入区状态行的错误只说一句：原文和说明都叫人稍后再试时不重复（T13 返修小项③）；说明另有做法时照旧接上', () => {
     expect(statusErrorText({ code: 'SERVICE_UNAVAILABLE', message: '工作台服务未启动，请稍后重试' })).toBe('工作台服务未启动，请稍后重试')

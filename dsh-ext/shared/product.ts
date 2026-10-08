@@ -3,6 +3,11 @@
 // 版本与 service\pyproject.toml 的 version 一致；正式版本号的规则候主编排定（T20 发版时一并定），这里只放一处。
 export const PRODUCT_NAME = '连越律师工作台'
 export const PRODUCT_VERSION = '0.1.0'
+declare const __LAWBENCH_BUILD__: string | undefined
+/** 构建号（注记 1432 第 6 条）：scripts\\build.mjs 打包时写进来（yyyymmddHHMM）；测试、没经构建时为空。 */
+export const PRODUCT_BUILD: string = typeof __LAWBENCH_BUILD__ === 'string' ? __LAWBENCH_BUILD__ : ''
+/** 界面上显示的版本：有构建号时为"0.1.0+202610081500"（语义化版本的构建元数据写法），覆盖安装后分得清新旧。 */
+export const versionLabel = (build: string = PRODUCT_BUILD): string => (build ? `${PRODUCT_VERSION}+${build}` : PRODUCT_VERSION)
 /** 技术公司全称（执行令 2026-10-04 11:56 第 2 条，用户定）：侧栏底部、首次配置页底部、关于里的"技术支持"一行。 */
 export const VENDOR_NAME = '上海莫来特智能科技有限公司'
 /** 律所全称（packaging\brand\names.txt 第一行）。 */

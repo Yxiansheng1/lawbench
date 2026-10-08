@@ -48,16 +48,19 @@ describe('案件概览卡', () => {
     expect(opened).toEqual(['s-new'])
   })
 
-  it('日常事务：一句提示＋最近 3 条对话，不读材料和成果', async () => {
+  it('日常事务：一句提示＋最近 3 条对话＋已确认的成果（注记 1432 第 2 条）；不读材料', async () => {
     let reads = 0
-    setApi({ materialsList: async () => { reads++; return { ok: true, value: { materials: [] } } }, outputsList: async () => { reads++; return { ok: true, value: { outputs: [] } } } } as unknown as LawbenchApi)
+    let outReads = 0
+    setApi({ materialsList: async () => { reads++; return { ok: true, value: { materials: [] } } }, outputsList: async () => { outReads++; return { ok: true, value: { outputs: [{ title: '起草的通知', version: 1, confirmed_at: '2026-10-08T10:00:00+08:00', files: [{ path: '成果/起草的通知-v1.docx' }] }] } } } } as unknown as LawbenchApi)
     const ss = [1, 2, 3, 4].map((n) => ({ id: `s${n}`, title: `对话${n}`, updatedAt: n }))
     await render(createElement(CaseOverview, { caseRef: DAILY, daily: true, sessions: ss }))
     expect(box.textContent).toContain('日常事务')
     expect(box.textContent).not.toContain('（非办案）')
     expect(box.textContent).toContain(DAILY_HINT)
-    expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['对话4', '对话3', '对话2'])
+    expect([...box.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['对话4', '对话3', '对话2', '起草的通知-v1.docx', '打开所在文件夹'])
+    expect(box.textContent).toContain('已确认的成果')
     expect(reads).toBe(0)
+    expect(outReads).toBe(1)
   })
 
   it('小工具：份数、成果排序、时间', () => {

@@ -134,8 +134,23 @@ describe('Host 方法', () => {
       expect((await r.openFile({ case_id: 'c-1', root, rel: '成果' })).ok).toBe(false)
       expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/没有.docx' })).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
       expect((await r.openFile({ case_id: 'c-9', root, rel: '成果/借款合同-v1.docx' })).ok).toBe(false)
-      expect(calls.filter((c) => c[0] === 'open').map((c) => c[1])).toEqual([join(root, '成果', '借款合同-v1.docx')])
+      // 复核 rv-A52 / 注记 1432 第 5 条：扩展名不分大小写；双扩展名按最后一个算（x.docx.exe、x.docx.lnk 拒）；含 ":"（备用数据流）拒
+      writeFileSync(join(root, '成果', '大写.DOCX'), 'x')
+      writeFileSync(join(root, '成果', '伪装.docx.exe'), 'x')
+      writeFileSync(join(root, '成果', '伪装.docx.lnk'), 'x')
+      expect((await r.openFile({ case_id: 'c-1', root, rel: '成果/大写.DOCX' })).ok).toBe(true)
+      expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/伪装.docx.exe' })).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+      expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/伪装.docx.lnk' })).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+      expect(await r.openFile({ case_id: 'c-1', root, rel: '成果/借款合同-v1.docx:evil' })).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+      expect(calls.filter((c) => c[0] === 'open').map((c) => c[1])).toEqual([join(root, '成果', '借款合同-v1.docx'), join(root, '成果', '大写.DOCX')])
     } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('insideCase：rel 含 ":"、控制字符、Windows 保留字符一律拒（与服务 gate.py _BAD_CHARS 一致，复核 rv-A52 P3-1）', () => {
+    for (const rel of ['成果/a.docx:evil', 'C:a.docx', '成果/a?.docx', '成果/a|b.docx', '成果/a\u0001.docx', '成果/"a".docx', '成果/<a>.docx', '成果/a*.docx']) {
+      expect(insideCase('D:\\案件\\甲', rel).ok, rel).toBe(false)
+    }
+    expect(insideCase('D:\\案件\\甲', '成果/借款合同-v1.docx').ok).toBe(true)
   })
 
   it('sameFolder：字面相同（大小写、斜杠、末尾斜杠）直接认；不同再比实际位置；解析不了按不同', () => {
@@ -144,6 +159,8 @@ describe('Host 方法', () => {
     expect(sameFolder('D:\\案件\\甲', 'X:\\甲', subst)).toBe(true)
     expect(sameFolder('D:\\案件\\甲', 'X:\\乙', subst)).toBe(false)
     expect(sameFolder('D:\\案件\\甲', 'Y:\\甲', () => { throw new Error('ENOENT') })).toBe(false)
+    // 复核 rv-A52 P3-2：界面给的是网络路径时不解析（不连 SMB）
+    expect(sameFolder('D:\\案件\\甲', '\\\\fs01\\案卷\\甲', () => { throw new Error('不该解析') })).toBe(false)
   })
 
   it('materialRemove：开关关着时 Host 直接拒绝（NOT_AVAILABLE），不问服务、不删文件（复核 P2-3）', async () => {

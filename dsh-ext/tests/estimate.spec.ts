@@ -64,6 +64,10 @@ describe('运行前有材料还没识别（令 1257 第 1 条）', () => {
     expect(pendingOcr([SCAN, PART, OK] as never)).toEqual({ files: 2, pages: 14 })
     expect(pendingOcr([{ status: 'needs_ocr', unit_count: 5, pages_need_ocr: [] }] as never)).toEqual({ files: 1, pages: 5 })
     expect(pendingOcr([OK] as never)).toEqual({ files: 0, pages: 0 })
+    // 复核 rv-A52 P3-3：已经在识别的不算、也不进提交框
+    const RUNNING = { ...SCAN, status: 'ocr_running' }
+    expect(pendingOcr([RUNNING, PART] as never)).toEqual({ files: 1, pages: 2 })
+    expect(ocrTargets([RUNNING, PART] as never)).toEqual([PART])
     expect(ocrText({ files: 2, pages: 14 })).toBe('有 2 份材料（14 页）还没识别，分析时读不到它们的文字。先识别吗？')
     // "去识别"打开的提交框里列的材料：同一口径
     const blank = { status: 'needs_ocr', unit_count: 5, pages_need_ocr: [] }

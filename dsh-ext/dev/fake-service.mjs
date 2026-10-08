@@ -205,9 +205,12 @@ function fromFixtures(method, path, query, body) {
     const t = started.find((x) => x.task_id === request.task_id)
     const d = t?.drafts?.find((x) => x.path === request.draft)
     if (!d) return [fail('INVALID_ARGUMENT', '请求参数有误')]
-    const files = (request.formats ?? ['docx']).map((f) => ({ format: f, path: `成果/${d.title}-v${d.version}.${f}` }))
-    confirmed.unshift({ title: d.title, version: d.version, files, task_id: t.task_id, inputs: [], citation_passed: false, confirmed_at: isoNow() })
-    return [ok({ outputs: files.map((f) => ({ ...f, version: d.version })) })]
+    // 成果版本与真服务同口径（service\lawbench\export\outputs.py _next_version）：按案件同标题（不分大小写）已有的最大版本 + 1，与草稿版本无关
+    const all = [...confirmed, ...fixture('outputs_list.json').value.outputs]
+    const version = Math.max(0, ...all.filter((o) => o.title.toLowerCase() === d.title.toLowerCase()).map((o) => o.version)) + 1
+    const files = (request.formats ?? ['docx']).map((f) => ({ format: f, path: `成果/${d.title}-v${version}.${f}` }))
+    confirmed.unshift({ title: d.title, version, files, task_id: t.task_id, inputs: [], citation_passed: false, confirmed_at: isoNow() })
+    return [ok({ outputs: files.map((f) => ({ ...f, version })) })]
   }
   if (LLM_DRAFT && r.method === 'outputsList') {
     const base = fixture('outputs_list.json')

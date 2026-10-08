@@ -58,3 +58,13 @@ describe('设置"通用"里的当前版本（注记 1706，P-4）', () => {
     expect(src).toContain(`LAWBENCH_VERSION = '${PRODUCT_VERSION}'`)
   })
 })
+
+describe('构建号（注记 1432 第 6 条）', () => {
+  it('有构建号时显示"0.1.0+<yyyymmddHHMM>"；测试里没经构建，构建号为空、只显示版本', async () => {
+    const { PRODUCT_BUILD, PRODUCT_VERSION, versionLabel } = await import('../shared/product.ts')
+    expect(versionLabel('202610081538')).toBe(`${PRODUCT_VERSION}+202610081538`)
+    expect(versionLabel('')).toBe(PRODUCT_VERSION)
+    expect(PRODUCT_BUILD).toBe('')
+    expect(versionLabel()).toBe(PRODUCT_VERSION)
+  })
+})

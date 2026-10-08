@@ -23,6 +23,12 @@ const contractsPlugin = {
 // 界面插件（T13）：DSH 界面模块格式——CommonJS 包在 window.__ModuleLoader__.load({ id, factory: (require) => … }) 里，
 // react、cordis 等从 DSH 的共享模块表 require（packages/client/web/src/seed.ts），不自带 React。
 const CLIENT_ID = 'lawbench-dsh'
+// 构建号（注记 1432 第 6 条）：界面显示"0.1.0+<yyyymmddHHMM>"，覆盖安装后一眼分得清新旧。给了 LAWBENCH_BUILD_STAMP 就用它（打包时可统一），否则取本机此刻
+const pad = (n) => String(n).padStart(2, '0')
+const now = new Date()
+const BUILD_STAMP = process.env.LAWBENCH_BUILD_STAMP ?? `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}`
+if (!/^[0-9A-Za-z.-]{1,40}$/.test(BUILD_STAMP)) throw new Error('LAWBENCH_BUILD_STAMP 只能是字母、数字、点和连字符')
+const define = { __LAWBENCH_BUILD__: JSON.stringify(BUILD_STAMP) }
 const SHARED = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/*']
 await esbuild.build({
   absWorkingDir: root,
@@ -37,6 +43,7 @@ await esbuild.build({
   banner: { js: `window.__ModuleLoader__.load({\n  id: ${JSON.stringify(CLIENT_ID)},\n  factory: (require) => {\n    var module = { exports: {} };\n    var exports = module.exports;` },
   footer: { js: '    return module.exports;\n  }\n});' },
   plugins: [contractsPlugin],
+  define,
   logLevel: 'info',
 })
 
@@ -53,8 +60,10 @@ await esbuild.build({
   // 打进来的 CommonJS 依赖（如 yaml）会 require('process') 等内置模块；纯 ESM 里没有 require，给一个
   banner: { js: "import { createRequire as __lbCreateRequire } from 'node:module'; const require = __lbCreateRequire(import.meta.url);" },
   plugins: [contractsPlugin],
+  define,
   logLevel: 'info',
 })
+console.log(`构建号 ${BUILD_STAMP}`)
 
 // 构建后在纯 ESM 进程里逐个导入（不能用 node -e：那是 CommonJS，有全局 require，会掩盖上面这类问题）
 for (const name of ['agent', 'host', 'credentials', 'session-store', 'index']) {

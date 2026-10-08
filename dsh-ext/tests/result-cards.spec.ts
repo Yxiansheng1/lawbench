@@ -53,15 +53,30 @@ describe('每轮草稿（会话事件）', () => {
     expect(draftsForClosing(undefined)).toEqual([])
   })
 
-  it('对上任务和成果：草稿路径找任务；同任务、同标题、同版本找成果', () => {
+  it('对上任务和成果：草稿路径找任务；没有确认记录时，任务里同标题只有这一份草稿、成果里这个任务同标题只有一条才对上（不按版本）', () => {
     const tasks = [{ task_id: T, skill: 'civil-contract-review', status: 'completed', drafts: [{ title: '借款合同', path: PATH, version: 1 }] }]
     const task = taskOfDraft(tasks, PATH)
     expect(task?.task_id).toBe(T)
     expect(taskOfDraft(tasks, 'x')).toBeUndefined()
+    // 成果版本按案件同标题最大 +1：这个任务唯一的草稿 v1 生成的可能是成果 v3
+    const out = { title: '借款合同', version: 3, files: [{ format: 'docx', path: '成果/借款合同-v3.docx' }], task_id: T, confirmed_at: '2026-10-08T12:00:00+08:00' }
+    expect(outputOfDraft([out], task, { title: '借款合同', version: 1, path: PATH })).toBe(out)
+    expect(outputOfDraft([out], undefined, { title: '借款合同', version: 1, path: PATH })).toBeUndefined()
+    // 别的任务的同名成果不算
+    expect(outputOfDraft([{ ...out, task_id: 'T-20261008120000-ffff' }], task, { title: '借款合同', version: 1, path: PATH })).toBeUndefined()
+  })
+
+  it('复核 rv-A52 P1：同一任务存了 v1、v2，确认 v2 生成的是成果 v1——没有记录时两张卡都不切换；有确认记录时只切 v2', () => {
+    const P1 = `工作区/任务/${T}/草稿/借款合同-v1.md`
+    const P2 = `工作区/任务/${T}/草稿/借款合同-v2.md`
+    const task = { task_id: T, skill: null, status: 'completed', drafts: [{ title: '借款合同', path: P1, version: 1 }, { title: '借款合同', path: P2, version: 2 }] }
     const out = { title: '借款合同', version: 1, files: [{ format: 'docx', path: '成果/借款合同-v1.docx' }], task_id: T, confirmed_at: '2026-10-08T12:00:00+08:00' }
-    expect(outputOfDraft([out], task, { title: '借款合同', version: 1 })).toBe(out)
-    expect(outputOfDraft([out], task, { title: '借款合同', version: 2 })).toBeUndefined()
-    expect(outputOfDraft([out], undefined, { title: '借款合同', version: 1 })).toBeUndefined()
+    // 旧做法（同版本）会把 v1 卡片错标"已保存"、v2 仍可再点
+    expect(outputOfDraft([out], task, { title: '借款合同', version: 1, path: P1 })).toBeUndefined()
+    expect(outputOfDraft([out], task, { title: '借款合同', version: 2, path: P2 })).toBeUndefined()
+    const rec = { [P2]: { version: 1, files: [{ format: 'docx', path: '成果/借款合同-v1.docx' }] } }
+    expect(outputOfDraft([out], task, { title: '借款合同', version: 1, path: P1 }, rec)).toBeUndefined()
+    expect(outputOfDraft([out], task, { title: '借款合同', version: 2, path: P2 }, rec)?.files).toEqual([{ format: 'docx', path: '成果/借款合同-v1.docx' }])
   })
 })
 
@@ -75,14 +90,16 @@ describe('卡片', () => {
     outputs = []
     calls = []
     resetCaseResults()
+    localStorage.clear()
     app.set((s) => ({ ...s, cases: [CASE], intents: {}, selections: {} }))
     setApi({
       tasksList: async () => ({ ok: true, value: { tasks: [{ task_id: T, skill: 'civil-contract-review', status: 'completed', drafts: [{ title: '借款合同', path: PATH, version: 1 }], finished_at: null, coverage: null, citation_check: null }] } }),
       outputsList: async () => ({ ok: true, value: { outputs } }),
       outputsConfirm: async (req: unknown) => {
         calls.push(['outputsConfirm', req])
-        outputs = [{ title: '借款合同', version: 1, files: [{ format: 'docx', path: '成果/借款合同-v1.docx' }], task_id: T, confirmed_at: '2026-10-08T12:00:00+08:00' }]
-        return { ok: true, value: { outputs: [{ format: 'docx', path: '成果/借款合同-v1.docx', version: 1 }] } }
+        // 真服务口径：成果版本按案件同标题最大 +1（这里已有 v1、v2，生成 v3）
+        outputs = [{ title: '借款合同', version: 3, files: [{ format: 'docx', path: '成果/借款合同-v3.docx' }], task_id: T, confirmed_at: '2026-10-08T12:00:00+08:00' }]
+        return { ok: true, value: { outputs: [{ format: 'docx', path: '成果/借款合同-v3.docx', version: 3 }] } }
       },
       openFile: async (req: unknown) => { calls.push(['openFile', req]); return { ok: true, value: { opened: true } } },
       openFolder: async (req: unknown) => { calls.push(['openFolder', req]); return { ok: true, value: { opened: true } } },
@@ -133,11 +150,13 @@ describe('卡片', () => {
     const card = box.querySelector('[data-result-state="output"]')!
     expect(card).toBeTruthy()
     expect(box.querySelector('[data-result-state="draft"]')).toBeNull()
-    expect(card.textContent).toContain('成果/借款合同-v1.docx')
+    expect(card.textContent).toContain('成果/借款合同-v3.docx')
+    // 记在本机：重开（缓存清掉）后仍是成果卡片
+    expect(JSON.parse(localStorage.getItem('lawbench.confirmed.c-1')!)).toEqual({ [PATH]: { version: 3, files: [{ format: 'docx', path: '成果/借款合同-v3.docx' }] } })
     await act(async () => { button('打开')!.click() })
     await act(async () => { button('打开所在文件夹')!.click() })
     expect(calls.slice(1)).toEqual([
-      ['openFile', { case_id: 'c-1', root: CASE.root, rel: '成果/借款合同-v1.docx' }],
+      ['openFile', { case_id: 'c-1', root: CASE.root, rel: '成果/借款合同-v3.docx' }],
       ['openFolder', { case_id: 'c-1', root: CASE.root, rel: '成果' }],
     ])
   })

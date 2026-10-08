@@ -32,6 +32,8 @@ const plainAbsolute = (p: unknown): p is string => typeof p === 'string' && p !=
  */
 export function insideCase(root: unknown, rel: unknown): { ok: true; value: string } | Fail {
   if (!plainAbsolute(root) || typeof rel !== 'string' || isAbsolute(rel) || /^[\\/]/.test(rel)) return BAD_ARG
+  // 复核 rv-A52 P3-1：与服务 gate.py 的 _BAD_CHARS 一致——":"（盘符、备用数据流 x.docx:evil）、控制字符、Windows 保留字符都拒
+  if (/[\u0000-\u001f<>:"|?*]/.test(rel)) return BAD_ARG
   const full = normalize(join(root, rel))
   const back = relative(normalize(root), full)
   if (back === '' && rel !== '') return BAD_ARG
@@ -138,6 +140,8 @@ export interface DeskDeps {
 export function sameFolder(a: string, b: string, realFn: (p: string) => string = realpathSync.native): boolean {
   const norm = (p: string) => p.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
   if (norm(a) === norm(b)) return true
+  // 复核 rv-A52 P3-2：界面给的不是普通绝对路径（网络路径等）就不去解析（UNC 解析会先连 SMB）
+  if (!plainAbsolute(b)) return false
   try { return norm(realFn(a)) === norm(realFn(b)) } catch { return false }
 }
 

@@ -6,7 +6,7 @@ import { LAWBENCH_REMOTE } from './remote.ts'
 import { DialogHost } from './dialogs.tsx'
 import { HomePage } from './home.tsx'
 import { MaterialsTab } from './materials.tsx'
-import { draftsDefinition, refreshCaseResults, TurnResultCards } from './result-cards.tsx'
+import { draftsDefinition, OLD_RESULTS_TAB, OldResultsTab, refreshCaseResults, TurnResultCards } from './result-cards.tsx'
 import { SourceTab } from './source.tsx'
 import { ComposerDock, TURN_ENDED } from './dock.tsx'
 import { turnEnds } from './tasksheet.ts'
@@ -213,6 +213,9 @@ function registerTabs(ctx: Ctx): void {
     }), `律师工作台界面：标签 ${id}`)
     ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: id }, Body))
   }
+  // 复核 rv-A52 P3-4：旧会话里 DSH 记住了以前开过的"成果"标签——种类留着登记（不进"添加标签"的列表），里面一句话指路，不空白、不报错
+  ctx.effect(() => ctx.sidebarRightTabs.register({ id: OLD_RESULTS_TAB, kind: OLD_RESULTS_TAB, priority: 'extension', title: () => '成果', guide: [] }), '律师工作台界面：旧"成果"标签')
+  ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: OLD_RESULTS_TAB }, OldResultsTab))
   // 刚打开工作区时会话界面还没挂上：等挂上再做（最多 10 秒）
   const whenMounted = (go: () => void) => {
     if (ctx.sidebarRight.mounted.getSnapshot() !== undefined) { go(); return }

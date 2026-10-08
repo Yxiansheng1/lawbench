@@ -43,6 +43,7 @@ export function pendingOcr(materials: ReadonlyArray<Pick<Material, 'status' | 'p
   let files = 0
   let pages = 0
   for (const m of materials) {
+    if (m.status === 'ocr_running') continue // 复核 rv-A52 P3-3：已经在识别的不再问
     const n = (m.pages_need_ocr?.length ?? 0) || (m.status === 'needs_ocr' ? Math.max(0, m.unit_count) : 0)
     if (n > 0) { files++; pages += n }
   }
@@ -51,7 +52,7 @@ export function pendingOcr(materials: ReadonlyArray<Pick<Material, 'status' | 'p
 
 /** "去识别"打开的提交框里列哪些材料：有待识别页的，和整份没识别的（页号为空时由律师自己填页）。 */
 export function ocrTargets<T extends Pick<Material, 'status' | 'pages_need_ocr'>>(materials: readonly T[]): T[] {
-  return materials.filter((m) => (m.pages_need_ocr?.length ?? 0) > 0 || m.status === 'needs_ocr')
+  return materials.filter((m) => m.status !== 'ocr_running' && ((m.pages_need_ocr?.length ?? 0) > 0 || m.status === 'needs_ocr'))
 }
 
 export const OCR_TITLE = '有材料还没识别'

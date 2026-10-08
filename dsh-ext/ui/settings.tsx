@@ -6,7 +6,7 @@ import { Button, C, ErrorLine, getNav, S } from './kit.tsx'
 import { lawyerMessage } from './format.ts'
 import { BrandMark, VendorLine } from './brand.tsx'
 import { CapsuleSettings } from './home.tsx'
-import { FIRM_NAME, PRODUCT_NAME, PRODUCT_VERSION } from '../shared/product.ts'
+import { FIRM_NAME, PRODUCT_NAME, versionLabel } from '../shared/product.ts'
 import { app, call, lb, MODE_AGENT, type ConnectionResult, type Params, type SkillInfo } from './state.ts'
 import { useStore } from './store.ts'
 import { discardDraft, isDirty, onLeaveSettings, saveDraft, settingsDraft } from './settings-draft.ts'
@@ -144,7 +144,7 @@ export function SettingsSection() {
       </Block>
 
       <Block title="关于">
-        <div style={{ ...S.row, gap: 12 }}><BrandMark size={32} /><span style={{ fontWeight: 600 }}>{PRODUCT_NAME} {PRODUCT_VERSION}</span></div>
+        <div style={{ ...S.row, gap: 12 }}><BrandMark size={32} /><span style={{ fontWeight: 600 }}>{PRODUCT_NAME} {versionLabel()}</span></div>
         <div style={S.sub}>{FIRM_NAME} · 本机运行，案件材料只在这台电脑和律所服务器之间处理。</div>
         <VendorLine />
         <SelfCheckNotes />

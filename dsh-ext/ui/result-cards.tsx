@@ -117,7 +117,13 @@ export function draftsForClosing(drafts: readonly SavedDraft[] | undefined, seq 
 
 interface Task { task_id: string; skill: string | null; status: string; drafts: Array<{ title: string; path: string; version: number }> }
 export interface Output { title: string; version: number; files: Array<{ format: string; path: string }>; task_id: string; confirmed_at: string }
-interface CaseData { tasks: Task[] | null; outputs: Output[] | null }
+interface CaseData { tasks: Task[] | null; outputs: Output[] | null; confirmed: ConfirmedRecord }
+/** 确认保存时记下的"草稿路径 → 那次生成的成果文件"（复核 rv-A52 P1：成果版本按案件同标题最大 +1，与草稿版本对不上，只能靠这份记录）。 */
+export type ConfirmedRecord = Readonly<Record<string, { version: number; files: Array<{ format: string; path: string }> }>>
+const CONFIRMED_KEY = (caseId: string) => `lawbench.confirmed.${caseId}`
+function loadConfirmed(caseId: string): ConfirmedRecord {
+  try { const v = JSON.parse(localStorage.getItem(CONFIRMED_KEY(caseId)) ?? '{}') as unknown; return v && typeof v === 'object' ? v as ConfirmedRecord : {} } catch { return {} }
+}
 
 const cache = new Map<string, CaseData>()
 const loading = new Set<string>()
@@ -131,7 +137,7 @@ export async function refreshCaseResults(caseId: string): Promise<void> {
   try {
     const [t, o] = await Promise.all([call<{ tasks: Task[] }>('tasksList', { case_id: caseId }), call<{ outputs: Output[] }>('outputsList', { case_id: caseId })])
     const prev = cache.get(caseId)
-    cache.set(caseId, { tasks: t.ok ? t.value.tasks : prev?.tasks ?? null, outputs: o.ok ? o.value.outputs : prev?.outputs ?? null })
+    cache.set(caseId, { tasks: t.ok ? t.value.tasks : prev?.tasks ?? null, outputs: o.ok ? o.value.outputs : prev?.outputs ?? null, confirmed: prev?.confirmed ?? loadConfirmed(caseId) })
   } finally { loading.delete(caseId); emit() }
 }
 
@@ -139,6 +145,15 @@ function useCaseResults(caseId: string | undefined): CaseData | undefined {
   const data = useSyncExternalStore((fn) => { listeners.add(fn); return () => listeners.delete(fn) }, () => (caseId ? cache.get(caseId) : undefined))
   useEffect(() => { if (caseId && !cache.has(caseId)) void refreshCaseResults(caseId) }, [caseId])
   return data
+}
+
+/** 确认保存成功：记下这份草稿生成了哪些成果文件（本机记住，重启后卡片仍是成果卡片）。 */
+export function recordConfirmed(caseId: string, draftPath: string, outputs: ReadonlyArray<{ format: string; path: string; version: number }>): void {
+  const prev = cache.get(caseId)
+  const confirmed = { ...(prev?.confirmed ?? loadConfirmed(caseId)), [draftPath]: { version: outputs[0]?.version ?? 0, files: outputs.map(({ format, path }) => ({ format, path })) } }
+  try { localStorage.setItem(CONFIRMED_KEY(caseId), JSON.stringify(confirmed)) } catch { /* 记不下：本次运行内仍对 */ }
+  cache.set(caseId, { tasks: prev?.tasks ?? null, outputs: prev?.outputs ?? null, confirmed })
+  emit()
 }
 
 /** 测试用：清空缓存。 */
@@ -149,10 +164,19 @@ export function taskOfDraft(tasks: readonly Task[] | null | undefined, path: str
   return tasks?.find((t) => t.drafts.some((d) => d.path === path))
 }
 
-/** 这份草稿确认保存后的成果：同一任务、同标题、同版本。 */
-export function outputOfDraft(outputs: readonly Output[] | null | undefined, task: Task | undefined, d: Pick<SavedDraft, 'title' | 'version'>): Output | undefined {
+/**
+ * 这份草稿确认保存后的成果（复核 rv-A52 P1）：
+ * 1. 确认保存时记下的（ConfirmedRecord）为准；
+ * 2. 没有记录（别的机器、清过本机记录的历史卡片）：只在能唯一对上时才算——这个任务里同标题的草稿只有这一份、
+ *    成果里这个任务同标题的也只有一条。成果版本按案件同标题最大 +1，与草稿版本无关，不能按版本对。
+ */
+export function outputOfDraft(outputs: readonly Output[] | null | undefined, task: Task | undefined, d: Pick<SavedDraft, 'title' | 'version' | 'path'>, confirmed: ConfirmedRecord = {}): Output | undefined {
+  const rec = confirmed[d.path]
+  if (rec) return { title: d.title, version: rec.version, files: rec.files, task_id: task?.task_id ?? '', confirmed_at: '' }
   if (!task) return undefined
-  return outputs?.find((o) => o.task_id === task.task_id && o.title === d.title && o.version === d.version)
+  if (task.drafts.filter((x) => x.title === d.title).length !== 1) return undefined
+  const mine = outputs?.filter((o) => o.task_id === task.task_id && o.title === d.title) ?? []
+  return mine.length === 1 ? mine[0] : undefined
 }
 
 // —— 卡片 ——
@@ -179,7 +203,7 @@ export const NO_TASK_TIP = '找不到这份草稿的运行记录，不能在这�
 export function ResultCard({ caseRef, sessionId, draft }: { caseRef: CaseRef; sessionId: string; draft: SavedDraft }) {
   const data = useCaseResults(caseRef.case_id)
   const task = taskOfDraft(data?.tasks, draft.path)
-  const output = outputOfDraft(data?.outputs, task, draft)
+  const output = outputOfDraft(data?.outputs, task, draft, data?.confirmed)
   const inputs = useStore(app, (s) => s.intents[caseRef.case_id]?.inputs ?? s.selections[sessionId]?.inputs) ?? NO_INPUTS
   const [confirming, setConfirming] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -213,7 +237,7 @@ export function ResultCard({ caseRef, sessionId, draft }: { caseRef: CaseRef; se
         {task?.skill === ARCHIVE_SKILL ? <Button size="sm" variant="outline" disabled={running} onClick={() => setArchiving(true)}>核对归档方案并生成归档文件…</Button> : null}
       </div>
       <Checks draft={draft} />
-      {confirming && task ? <ConfirmDialog caseRef={caseRef} taskId={task.task_id} draft={draft} onClose={() => setConfirming(false)} onDone={() => { setConfirming(false); void refreshCaseResults(caseRef.case_id) }} /> : null}
+      {confirming && task ? <ConfirmDialog caseRef={caseRef} taskId={task.task_id} draft={draft} onClose={() => setConfirming(false)} onDone={(outs) => { setConfirming(false); recordConfirmed(caseRef.case_id, draft.path, outs); void refreshCaseResults(caseRef.case_id) }} /> : null}
       {archiving && task ? <ArchiveDialog caseRef={caseRef} taskId={task.task_id} onClose={() => { setArchiving(false); void refreshCaseResults(caseRef.case_id) }} /> : null}
     </section>
   )
@@ -243,7 +267,7 @@ export function CheckLine({ title, tone, summary, lines }: { title: string; tone
 }
 
 /** 确认保存：草稿进成果目录并导出（/api/outputs/confirm）；选导出格式和 Word 模板。本机生成，不发服务器。 */
-export function ConfirmDialog({ caseRef, taskId, draft, onClose, onDone }: { caseRef: CaseRef; taskId: string; draft: Pick<SavedDraft, 'title' | 'path' | 'version'>; onClose: () => void; onDone: () => void }) {
+export function ConfirmDialog({ caseRef, taskId, draft, onClose, onDone }: { caseRef: CaseRef; taskId: string; draft: Pick<SavedDraft, 'title' | 'path' | 'version'>; onClose: () => void; onDone: (outputs: Array<{ format: string; path: string; version: number }>) => void }) {
   const [md, setMd] = useState(false)
   const [docx, setDocx] = useState(true)
   const [template, setTemplate] = useState<'文书' | '合同' | ''>('文书')
@@ -256,7 +280,7 @@ export function ConfirmDialog({ caseRef, taskId, draft, onClose, onDone }: { cas
     })
     setBusy(false)
     if (!r.ok) { notice('没有保存成功', errorText(r.error)); return }
-    onDone()
+    onDone(r.value.outputs)
   }
   return (
     <Modal open onClose={onClose} title="确认保存" closeLabel="关闭"
@@ -278,4 +302,13 @@ export function ConfirmDialog({ caseRef, taskId, draft, onClose, onDone }: { cas
       </div>
     </Modal>
   )
+}
+
+/** 以前右栏的"成果"标签种类（令 1321 D.1 去掉；旧会话可能还开着它）。 */
+export const OLD_RESULTS_TAB = 'lawbench-results'
+export const OLD_RESULTS_TEXT = '成果已移到对话里每一轮答复下方的卡片，已确认的成果在空会话顶部的案件概览里。这个标签可以关掉。'
+
+/** 旧会话里还开着的"成果"标签：一句话指路（复核 rv-A52 P3-4）。 */
+export function OldResultsTab() {
+  return <div style={{ ...S.pane }}><div style={S.sub}>{OLD_RESULTS_TEXT}</div></div>
 }
