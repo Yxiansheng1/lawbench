@@ -26,8 +26,9 @@ import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
-import { folderKind, insideCase, localCaseFolder, openableFile, removableMaterial, sameFolder, toolExe, type DeskDeps } from './desk-actions.ts'
+import { chosenFolders, folderKind, insideCase, localCaseFolder, mkdirInCase, openableFile, removableMaterial, sameFolder, toolExe, type DeskDeps } from './desk-actions.ts'
 import { nodeDeskDeps } from './desk-node.ts'
+import { readCaseWiki, type CaseWiki } from './case-wiki.ts'
 import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
 export const name = 'lawbench-host'
@@ -293,6 +294,38 @@ export class LawbenchRemote {
     try { await this.desk.mkdir(path) } catch { return { ok: false, error: { code: 'INTERNAL', message: '本机文件夹没能建好，请重试' } } }
     this.log('info', 'case.local_folder', {})
     return { ok: true, value: { path } }
+  }
+
+  /**
+   * 新建案件时律师勾的子文件夹（令 1852 第 17 条）。契约 case_open 的 template 只能整套建，所以界面以 template=null 登记案件后，
+   * 由 Host 按名单在案件根里补建（只补缺、不改已有的，规则同服务 gate.py 的 mkdir_original）。案件根按服务登记核对；名单按标准目录再核一遍。
+   * 日志只记建了几个，不记名字。
+   * @param request - { case_id, root, kind: 'civil' | 'criminal', tops: 标准目录里勾的一级目录名, custom: 自填的一级目录名 }。
+   * @returns 本次新建的相对路径（正斜杠）。
+   */
+  async caseFolders(request: unknown): Promise<{ ok: true; value: { folders_created: string[] } } | ApiFail> {
+    const r = request as { case_id?: unknown; root?: unknown; kind?: unknown; tops?: unknown; custom?: unknown } | null
+    const rels = chosenFolders(r?.kind, r?.tops, r?.custom)
+    if (!rels.ok) return rels
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const made = rels.value.filter((rel) => mkdirInCase(known.value, rel, this.desk.mkdirFs))
+    this.log('info', 'case.folders', { asked: rels.value.length, created: made.length })
+    return { ok: true, value: { folders_created: made } }
+  }
+
+  /**
+   * 案件 wiki 合成一张卡（令 1852 第 18 条），见 case-wiki.ts：读六个板块、生成时间、生成后材料的变化。
+   * 案件根按服务登记核对；只读不写，日志只记有没有 wiki。
+   * @param request - { case_id, root }。
+   */
+  async caseWiki(request: unknown): Promise<{ ok: true; value: CaseWiki } | ApiFail> {
+    const r = request as { case_id?: unknown; root?: unknown } | null
+    const known = await this.knownCase(r?.case_id, r?.root)
+    if (!known.ok) return known
+    const out = readCaseWiki(known.value)
+    this.log('info', 'wiki.read', { exists: out.ok ? out.value.exists : undefined })
+    return out
   }
 
   private dailyQueue: Promise<unknown> = Promise.resolve()

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { DEFAULT_TARGET, startImport, TABS } from './cases.ts'
+import { WikiCard } from './wiki-card.tsx'
 import { citationTargets, errorText, shouldNotifyWikiDone, ocrConfirmText, pageRanges, parsePageRanges, STATUS_WORD, TYPE_WORD, UNIT_WORD, wikiConfirmText, type Material } from './format.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoad } from './kit.tsx'
 import { app, call, confirm, notice, type CaseRef, type Params } from './state.ts'
@@ -97,6 +98,9 @@ function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: str
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => { importPaths([...(e.target.files ?? [])].map((f) => getNav().pathFor(f))); e.target.value = '' }} />
       </div>
 
+      {/* 令 1852 第 18 条：案件 wiki 一张卡放在材料页顶部（生成 / 更新按钮就在它上面） */}
+      <WikiSection caseRef={caseRef} materials={mats.state === 'ok' ? mats.value.materials : []} onOpen={() => setWikiOpen(true)} />
+
       <Section title="材料" extra={<div style={{ ...S.row, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <Button size="sm" variant="ghost" onClick={() => void openCaseFolder(caseRef, 'materials')}>打开所在文件夹</Button>
         {mats.state === 'ok' && mats.value.materials.some((m) => m.pages_need_ocr.length) ? (
@@ -113,8 +117,6 @@ function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: str
           <ul style={S.list}>{v.jobs.map((j) => <JobRow key={j.job_id} j={j} onChanged={() => void reloadJobs()} />)}</ul>
         )}</Loading>
       </Section>
-
-      <WikiSection caseRef={caseRef} materials={mats.state === 'ok' ? mats.value.materials : []} onOpen={() => setWikiOpen(true)} />
 
       {ocrFor ? <OcrDialog caseRef={caseRef} materials={ocrFor} onClose={() => setOcrFor(null)} onDone={() => { setOcrFor(null); void reloadJobs(); void reloadMats() }} /> : null}
       {wikiOpen && mats.state === 'ok' ? <WikiDialog caseRef={caseRef} materials={mats.value.materials} onClose={() => setWikiOpen(false)} /> : null}
@@ -244,6 +246,8 @@ function WikiSection({ caseRef, materials, onOpen }: { caseRef: CaseRef; materia
   const [status, setStatus] = useState<PipelineStatus | null>(null)
   const [sugs, reloadSugs] = useLoad(() => call<{ suggestions: Suggestion[] }>('getWikiSuggestions', { case_id: id }), [id])
   const watched = useRef<string | null>(null)
+  // 整理结束、采纳建议后让 wiki 卡重读
+  const [wikiTick, setWikiTick] = useState(0)
 
   useEffect(() => {
     const on = (e: Event) => { if ((e as CustomEvent).detail === id) void reloadTasks() }
@@ -257,6 +261,7 @@ function WikiSection({ caseRef, materials, onOpen }: { caseRef: CaseRef; materia
         if (shouldNotifyWikiDone(watched.current, tasks.state === 'ok' ? tasks.value.tasks : undefined)) osNotify('整理任务已完成')
         watched.current = null
         void reloadSugs()
+        setWikiTick((n) => n + 1)
       }
       setStatus(null)
       return
@@ -281,6 +286,7 @@ function WikiSection({ caseRef, materials, onOpen }: { caseRef: CaseRef; materia
     const r = await call('postWikiSuggestions', { case_id: id, id: s.id, accept })
     if (!r.ok) notice('没有处理成功', errorText(r.error))
     void reloadSugs()
+    setWikiTick((n) => n + 1)
   }
   return (
     <Section title="案件 wiki" extra={<Button size="sm" variant="outline" disabled={!!running} onClick={onOpen}>生成 / 更新 wiki…</Button>}>
@@ -290,6 +296,7 @@ function WikiSection({ caseRef, materials, onOpen }: { caseRef: CaseRef; materia
           <div style={S.sub}>{status ? `第 ${status.step_index} / ${status.step_total} 步${status.current ? `：${status.current}` : ''}${status.queue_wait_ms ? `（服务器排队约 ${Math.ceil(status.queue_wait_ms / 1000)} 秒）` : ''}` : '读取进度中…'}</div>
         </div>
       ) : null}
+      <WikiCard caseRef={caseRef} materials={materials} refreshKey={wikiTick} />
       <Loading data={sugs}>{(v) => {
         const pending = v.suggestions.filter((s) => s.status === 'pending')
         return pending.length === 0 ? <Empty>没有待确认的 wiki 修改建议</Empty> : (

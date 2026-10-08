@@ -50,6 +50,10 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'openFile', params: ['request'] },
   { method: 'materialRemove', params: ['request'] },
   { method: 'localCaseFolder', params: ['request'] },
+  // 令 1852 第 17 条：新建案件时按律师勾的名单补建子文件夹（契约 case_open 的 template 只能整套建）
+  { method: 'caseFolders', params: ['request'] },
+  // 令 1852 第 18 条：案件 wiki 合成一张卡，Host 读六个板块（服务没有读 wiki 正文的接口）
+  { method: 'caseWiki', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

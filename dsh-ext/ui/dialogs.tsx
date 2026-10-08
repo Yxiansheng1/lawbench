@@ -7,6 +7,7 @@ import { Button, C, Empty, S } from './kit.tsx'
 import { DEFAULT_TARGET, loadRecent, openCase, runImport } from './cases.ts'
 import { KEEP_LABEL } from './settings-draft.ts'
 import { OCR_FIRST, OCR_GO } from './estimate.ts'
+import { CASE_TEMPLATES, customFolderProblem, KIND_WORD, MAX_CUSTOM, type FolderChoice } from '../shared/case-folders.ts'
 
 export function DialogHost() {
   const top = useStore(app, (s) => s.dialogs[0])
@@ -63,6 +64,8 @@ function OneDialog({ d }: { d: Dialog }) {
       return <ImportDialog d={d} close={close} />
     case 'casePick':
       return <CasePickDialog then={d.then} close={close} />
+    case 'folders':
+      return <FoldersDialog d={d} />
   }
 }
 
@@ -111,8 +114,9 @@ function CasePickDialog({ then, close }: { then?: (c: CaseRef) => void; close: (
     <Modal open onClose={close} title="先选择案件" closeLabel="关闭"
       footer={<>
         <Button variant="outline" onClick={() => void openCase(null, null).then(done)}>打开案件文件夹…</Button>
-        <Button variant="outline" onClick={() => void openCase(null, 'civil').then(done)}>新建（民商事目录）…</Button>
-        <Button variant="outline" onClick={() => void openCase(null, 'criminal').then(done)}>新建（刑事目录）…</Button>
+        {/* 新建先关掉本框：选完文件夹要弹"建哪些子文件夹"，弹框一次只显示队首一个（令 1852 第 17 条） */}
+        <Button variant="outline" onClick={() => { close(); void openCase(null, 'civil').then((c) => { if (c) then?.(c) }) }}>新建民商事案件…</Button>
+        <Button variant="outline" onClick={() => { close(); void openCase(null, 'criminal').then((c) => { if (c) then?.(c) }) }}>新建刑事案件…</Button>
       </>}>
       <div style={S.sub}>这项业务要在案件里做。选最近的案件，或打开、新建一个案件文件夹。</div>
       {loading ? <Empty>读取中…</Empty> : cases.length === 0 ? <Empty>还没有案件</Empty> : (
@@ -128,6 +132,64 @@ function CasePickDialog({ then, close }: { then?: (c: CaseRef) => void; close: (
           ))}
         </ul>
       )}
+    </Modal>
+  )
+}
+
+/**
+ * 新建案件：要建哪些子文件夹（令 1852 第 17 条）。列出该类型的标准目录（一级，括号里写它带的二级），默认全不勾；
+ * "全选 / 全不选"；底部"添加一项"自填一级目录名（非法字符、保留名当场拒）。"工作区""成果"由工作台自己建，不列。
+ */
+function FoldersDialog({ d }: { d: Extract<Dialog, { kind: 'folders' }> }) {
+  const list = CASE_TEMPLATES[d.template]
+  const [tops, setTops] = useState<string[]>([])
+  const [custom, setCustom] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const answer = (choice: FolderChoice | null) => { popDialog(d); d.resolve(choice) }
+  const toggle = (name: string) => setTops(tops.includes(name) ? tops.filter((x) => x !== name) : list.map((f) => f.name).filter((n) => n === name || tops.includes(n)))
+  const all = tops.length === list.length
+  const add = () => {
+    const name = draft.trim()
+    const problem = customFolderProblem(name)
+    if (problem) { setErr(problem); return }
+    if ([...list.map((f) => f.name), ...custom].some((x) => x.toLowerCase() === name.toLowerCase())) { setErr(`"${name}"已经在列表里了`); return }
+    if (custom.length >= MAX_CUSTOM) { setErr(`自己添加的最多 ${MAX_CUSTOM} 项`); return }
+    setCustom([...custom, name]); setDraft(''); setErr(null)
+  }
+  const count = tops.length + custom.length
+  return (
+    <Modal open onClose={() => answer(null)} title="要建哪些子文件夹" closeLabel="关闭"
+      footer={<><Button variant="outline" onClick={() => answer(null)}>取消</Button><Button variant="primary" data-modal-autofocus onClick={() => answer({ tops, custom })}>{count ? `新建案件并建 ${count} 项` : '新建案件（不建子文件夹）'}</Button></>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div>在"{d.caseName}"里按{KIND_WORD[d.template]}案件的常用目录建子文件夹。勾了的才建，已经有的不动；工作台自用的文件夹和"成果"会另外建好，不用勾。</div>
+        <div style={S.row}>
+          <Button size="sm" variant="ghost" onClick={() => setTops(all ? [] : list.map((f) => f.name))}>{all ? '全不选' : '全选'}</Button>
+        </div>
+        <ul style={{ ...S.list, maxHeight: 280, overflow: 'auto' }}>
+          {list.map((f) => (
+            <li key={f.name}>
+              <label style={{ ...S.row, alignItems: 'baseline' }}>
+                <input type="checkbox" checked={tops.includes(f.name)} onChange={() => toggle(f.name)} />
+                <span>{f.name}{f.subs.length ? <span style={S.sub}>（含 {f.subs.join('、')}）</span> : null}</span>
+              </label>
+            </li>
+          ))}
+          {custom.map((c) => (
+            <li key={c} style={S.row}>
+              <input type="checkbox" checked readOnly aria-label={c} />
+              <span style={{ flex: 1 }}>{c}</span>
+              <Button size="sm" variant="ghost" onClick={() => setCustom(custom.filter((x) => x !== c))}>去掉</Button>
+            </li>
+          ))}
+        </ul>
+        <div style={S.row}>
+          <input style={{ ...S.input, flex: 1 }} value={draft} placeholder="自己添加一项，例如 09往来函件" aria-label="自己添加的子文件夹名"
+            onChange={(e) => { setDraft(e.target.value); setErr(null) }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }} />
+          <Button size="sm" variant="outline" disabled={!draft.trim()} onClick={add}>添加一项</Button>
+        </div>
+        {err ? <div role="alert" style={{ color: C.err, fontSize: 12 }}>{err}</div> : null}
+      </div>
     </Modal>
   )
 }

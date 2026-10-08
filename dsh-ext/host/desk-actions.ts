@@ -1,8 +1,9 @@
 // 律师第一批反馈（令 2043）里要 Host 动本机的几件事：打开小工具、打开案件子文件夹、移除一份材料、在本机建案件文件夹。
 // 路径判断都在这里（纯函数，tests\desk-actions.spec.ts）；真正启动程序、删文件由调用方注入，便于测。
 // 日志只记事件和结果，不记路径、文件名。
-import { lstatSync, realpathSync, statSync } from 'node:fs'
+import { lstatSync, mkdirSync, realpathSync, statSync } from 'node:fs'
 import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
+import { CASE_TEMPLATES, customFolderProblem, folderRels, isDeviceName, MAX_CUSTOM, safeFolderName, type CaseKind } from '../shared/case-folders.ts'
 
 /** 首页"工具"一栏的两个小工具（打包后在 <安装目录>\tools\<名>\<名>.exe，见 packaging\build.ps1 smalltools 步）。 */
 export const TOOLS = { splitter: '长截图切分', convert: '格式互转' } as const
@@ -83,23 +84,8 @@ export function openableFile(root: unknown, rel: unknown,
   return { ok: true, value: at.value }
 }
 
-/** 文件夹名里 Windows 不许的字符换成"_"，去掉首尾空格和点；空了用"新案件"。 */
-export function safeFolderName(name: unknown): string {
-  const s = typeof name === 'string' ? name : ''
-  // 复核 P3：先截长度再去首尾空格和点（截完末尾可能又是空格或点）；保留名带扩展名也不行（CON.txt）
-  const t = s.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 80).replace(/^[\s.]+|[\s.]+$/g, '')
-  return t === '' || isDeviceName(t) ? '新案件' : t
-}
-
-/**
- * Windows 设备名，与服务 service\lawbench\case\gate.py 的 is_device_name / DEVICE_NAMES 同一套（注记 0934 ②）：
- * 去尾部点和空格、取第一个点之前的部分再去尾部空格，不分大小写比对；含 com0/lpt0、com¹²³/lpt¹²³、conin$/conout$（"CON .txt" 同样算）。
- */
-const DEVICE_NAMES = new Set(['con', 'prn', 'aux', 'nul', 'conin$', 'conout$',
-  ...['com', 'lpt'].flatMap((d) => [...'0123456789¹²³'].map((n) => d + n))])
-export function isDeviceName(name: string): boolean {
-  return DEVICE_NAMES.has(name.replace(/[ .]+$/, '').split('.')[0]!.replace(/ +$/, '').toLowerCase())
-}
+// safeFolderName、isDeviceName 移到 shared\case-folders.ts（界面检查自填的子文件夹名也用，令 1852 第 17 条）
+export { isDeviceName, safeFolderName }
 
 /** "为我在本机建一个文件夹"的位置：<用户目录>\连越律师工作台\<案件名>；同名已在时加"(2)"…… */
 export function localCaseFolder(userProfile: string, name: unknown, exists: (p: string) => boolean): string {
@@ -131,6 +117,8 @@ export interface DeskDeps {
   openPath(dir: string): Promise<void>
   remove(file: string): Promise<void>
   mkdir(dir: string): Promise<void>
+  /** 新建案件补建子文件夹（mkdirInCase）用的文件系统操作；不给时用真文件系统。 */
+  mkdirFs?: MkdirFs
 }
 
 /**
@@ -160,4 +148,61 @@ export function openableFolder(root: unknown, rel: unknown,
   if (back.startsWith('..') || isAbsolute(back)) return BAD_ARG
   if (!isDir(real)) return fail('NOT_FOUND', '这个文件夹还没有内容（还没建出来）')
   return { ok: true, value: real }
+}
+
+/**
+ * 新建案件时律师勾的子文件夹（令 1852 第 17 条）：界面给的名单再核一遍——种类只认 civil / criminal，一级目录须在该类标准目录里，
+ * 自填的须是合法的一级目录名（同 customFolderProblem）。
+ * @returns 要建的相对路径（正斜杠，一级后紧跟它的二级）。
+ */
+export function chosenFolders(kind: unknown, tops: unknown, custom: unknown): { ok: true; value: string[] } | Fail {
+  if (kind !== 'civil' && kind !== 'criminal') return BAD_ARG
+  const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string')
+  if (!strings(tops) || !strings(custom) || custom.length > MAX_CUSTOM) return BAD_ARG
+  const known = new Set(CASE_TEMPLATES[kind as CaseKind].map((f) => f.name))
+  if (tops.some((t) => !known.has(t)) || custom.some((c) => customFolderProblem(c) !== null)) return BAD_ARG
+  return { ok: true, value: folderRels(kind as CaseKind, { tops, custom }) }
+}
+
+/** 建子文件夹用到的文件系统操作（测试换成替身，默认真文件系统）。 */
+export interface MkdirFs {
+  lstat(p: string): { isDirectory(): boolean; isSymbolicLink(): boolean } | undefined
+  realpath(p: string): string
+  mkdir(p: string): void
+}
+export const nodeMkdirFs: MkdirFs = {
+  lstat: (p) => { try { return lstatSync(p) } catch { return undefined } },
+  realpath: (p) => realpathSync.native(p),
+  mkdir: (p) => { mkdirSync(p) },
+}
+
+/**
+ * 在案件根里补建一个空文件夹，规则同服务 gate.py 的 mkdir_original：只补缺、不改已有的；
+ * 路上哪一级已是链接（含联接）或同名文件就整条跳过、不往里建；逐级建，每建一级前核它的上级实际位置仍在案件根里。
+ * @returns 新建了为 true；已有或跳过为 false。
+ */
+export function mkdirInCase(root: string, rel: string, fs: MkdirFs = nodeMkdirFs): boolean {
+  const at = insideCase(root, rel)
+  if (!at.ok) return false
+  const parts = rel.split('/')
+  let realRoot: string
+  try { realRoot = fs.realpath(root) } catch { return false }
+  let cur = root
+  let made = false
+  for (const p of parts) {
+    const parent = cur
+    cur = join(cur, p)
+    const st = fs.lstat(cur)
+    if (st) {
+      if (st.isSymbolicLink() || !st.isDirectory()) return false
+      continue
+    }
+    let realParent: string
+    try { realParent = fs.realpath(parent) } catch { return false }
+    const back = relative(realRoot, realParent)
+    if (back.startsWith('..') || isAbsolute(back)) return false
+    try { fs.mkdir(cur) } catch { return false }
+    made = true
+  }
+  return made
 }

@@ -3,7 +3,7 @@
 // 确认保存生成 Word 后同一位置变成成果卡片（打开、打开所在文件夹）。
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { DRAFT_TOOL, draftsDefinition, draftsForClosing, NO_TASK_TIP, outputOfDraft, parseDraftResult, resetCaseResults, taskOfDraft, TURN_DATA_KEY, TurnResultCards, type SavedDraft } from '../ui/result-cards.tsx'
+import { DRAFT_TOOL, draftsDefinition, draftsForClosing, NO_TASK_TIP, OLD_RESULTS_TEXT, OldResultsTab, outputOfDraft, parseDraftResult, resetCaseResults, taskOfDraft, TURN_DATA_KEY, TurnResultCards, type SavedDraft } from '../ui/result-cards.tsx'
 import { app, setApi, type LawbenchApi } from '../ui/state.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -77,6 +77,23 @@ describe('每轮草稿（会话事件）', () => {
     const rec = { [P2]: { version: 1, files: [{ format: 'docx', path: '成果/借款合同-v1.docx' }] } }
     expect(outputOfDraft([out], task, { title: '借款合同', version: 1, path: P1 }, rec)).toBeUndefined()
     expect(outputOfDraft([out], task, { title: '借款合同', version: 2, path: P2 }, rec)?.files).toEqual([{ format: 'docx', path: '成果/借款合同-v1.docx' }])
+  })
+
+  it('注记 1605 NOTE：同一份草稿确认两次（成果 v1、v2）——没有记录时不切换（对不上唯一一条）；有记录时按最后一次确认的成果', () => {
+    const task = { task_id: T, skill: null, status: 'completed', drafts: [{ title: '借款合同', path: PATH, version: 1 }] }
+    const o1 = { title: '借款合同', version: 1, files: [{ format: 'docx', path: '成果/借款合同-v1.docx' }], task_id: T, confirmed_at: '2026-10-08T12:00:00+08:00' }
+    const o2 = { ...o1, version: 2, files: [{ format: 'docx', path: '成果/借款合同-v2.docx' }], confirmed_at: '2026-10-08T12:05:00+08:00' }
+    expect(outputOfDraft([o1, o2], task, { title: '借款合同', version: 1, path: PATH })).toBeUndefined()
+    const rec = { [PATH]: { version: 2, files: [{ format: 'docx', path: '成果/借款合同-v2.docx' }] } }
+    expect(outputOfDraft([o1, o2], task, { title: '借款合同', version: 1, path: PATH }, rec)).toMatchObject({ version: 2, files: [{ path: '成果/借款合同-v2.docx' }] })
+  })
+
+  it('注记 1605 NOTE：旧"成果"标签（隐藏登记）渲染出指路的那句，不空白', () => {
+    const div = document.createElement('div')
+    const r = createRoot(div)
+    act(() => { r.render(createElement(OldResultsTab)) })
+    expect(div.textContent).toBe(OLD_RESULTS_TEXT)
+    act(() => { r.unmount() })
   })
 })
 

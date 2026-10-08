@@ -1,6 +1,7 @@
 // 案件：打开 / 新建（/api/case/open）、最近案件（/api/case/recent）、导入（/api/materials/import）。
 // 打开案件后把案件文件夹当 DSH 工作区打开（Spec 1.2"案件 = DSH 的工作区"），会话的工作目录即案件文件夹。
-import { app, call, caseForRoot, confirm, currentCase, folderName, notice, samePath, pushDialog, rememberCase, type CaseRef } from './state.ts'
+import { app, askFolders, call, caseForRoot, confirm, currentCase, folderName, notice, samePath, pushDialog, rememberCase, type CaseRef } from './state.ts'
+import { folderRels, type CaseKind, type FolderChoice } from '../shared/case-folders.ts'
 import { getNav } from './kit.tsx'
 import { errorText } from './format.ts'
 
@@ -69,18 +70,23 @@ export async function loadRecent(): Promise<CaseRef[] | { code: string; message:
 }
 
 /**
- * 登记并打开案件：选目录（或用给定路径）→ /api/case/open → 打开工作区。
- * @param template - 新建案件时的标准目录（民商事 civil / 刑事 criminal）；打开已有案件为 null。
+ * 登记并打开案件：选目录（或用给定路径）→（新建时）问要建哪些子文件夹 → /api/case/open → 按勾选补建子文件夹 → 打开工作区。
+ * @param template - 新建案件的类型（民商事 civil / 刑事 criminal），决定子文件夹列表；打开已有案件为 null（不问）。
  * @param navigate - 登记后是否转到该案件的会话（在会话里"作为案件打开"时不转）。
  * @param offerLocal - 在云同步目录里被拒时是否提议"为我在本机建一个文件夹"；打开本机建好的文件夹时为 false（只给一次）。
+ * @param picked - 已经选好的子文件夹（换到本机文件夹再开时沿用，不再问）。
  */
-export async function openCase(path: string | null, template: 'civil' | 'criminal' | null, navigate = true, offerLocal = true): Promise<CaseRef | undefined> {
+export async function openCase(path: string | null, template: CaseKind | null, navigate = true, offerLocal = true, picked?: FolderChoice): Promise<CaseRef | undefined> {
   const nav = getNav()
   const dir = path ?? await nav.pickDirectory()
   if (!dir) return undefined
-  const r = await call<{ case_id: string; name: string; created: boolean; folders_created: string[] }>('caseOpen', { path: dir, template })
+  // 令 1852 第 17 条：新建时子文件夹由律师勾（默认全不勾），取消即不新建
+  const choice = template ? picked ?? await askFolders(folderName(dir) || '新案件', template) : undefined
+  if (template && !choice) return undefined
+  // 契约 case_open 的 template 只能整套建：一律传 null（服务只建 工作区/、成果/），勾的由 Host 补建（交回件说明，候契约 1.4）
+  const r = await call<{ case_id: string; name: string; created: boolean; folders_created: string[] }>('caseOpen', { path: dir, template: null })
   if (!r.ok && r.error.code === 'CASE_IN_SYNC_FOLDER') {
-    if (offerLocal) return offerLocalFolder(dir, template, navigate)
+    if (offerLocal) return offerLocalFolder(dir, template, navigate, choice ?? undefined)
     const name = folderName(dir)
     notice(syncWordIn(name) ? SYNC_NAME_TITLE : '没能打开案件', syncWordIn(name) ? syncNameText(name) : errorText(r.error))
     return undefined
@@ -91,7 +97,7 @@ export async function openCase(path: string | null, template: 'civil' | 'crimina
   // 服务的登记已替换成新位置；界面这边也只留新的一条，打开后把侧栏里旧位置那一项移除
   const prev = app.get().cases.find((x) => x.case_id === c.case_id && !samePath(x.root, dir))
   rememberCase(c)
-  if (r.value.folders_created.length) notice('已建好标准目录', `在"${c.name}"里新建了 ${r.value.folders_created.length} 个子文件夹。`, r.value.folders_created)
+  if (template && choice) await makeFolders(c, template, choice)
   if (navigate) {
     const opened = await nav.openCaseWorkspace(dir)
     if (prev) await nav.forgetCaseWorkspace?.(prev.root, opened || undefined).catch(() => undefined)
@@ -110,7 +116,7 @@ export const SYNC_OK = '为我在本机建一个文件夹'
  * 案件文件夹在云同步目录里被拒（SEC-14 不变）时（令 2043 第 3 条）：说明原因，问要不要在 <用户目录>\连越律师工作台\<案件名> 建一个本机文件夹，
  * 要就建好并以它继续（同样的新建 / 打开方式）。
  */
-async function offerLocalFolder(dir: string, template: 'civil' | 'criminal' | null, navigate: boolean): Promise<CaseRef | undefined> {
+async function offerLocalFolder(dir: string, template: CaseKind | null, navigate: boolean, picked: FolderChoice | undefined): Promise<CaseRef | undefined> {
   const name = folderName(dir) || '新案件'
   // 复核 AMEND P2-4：名字里就含同步软件的名字时，本机新建的同名文件夹照样被拒（SEC-14 按子串匹配），不给"为我建"，直接说清楚
   if (syncWordIn(name)) { notice(SYNC_NAME_TITLE, syncNameText(name)); return undefined }
@@ -119,7 +125,15 @@ async function offerLocalFolder(dir: string, template: 'civil' | 'criminal' | nu
   if (!made.ok) { notice('没能建好本机文件夹', errorText(made.error)); return undefined }
   // 只给一次：本机文件夹仍被拒时只说明、不再提议（否则每确认一次多一个空的"(n)"文件夹）
   // 注记 0934 ③：不再用模块级开关，按参数传（并发打开两个案件时互不影响）
-  return openCase(made.value.path, template, navigate, false)
+  return openCase(made.value.path, template, navigate, false, picked)
+}
+
+/** 按律师勾的建子文件夹（经 Host，只补缺）；一个没勾就不问 Host。建了的列出来，建不成的说明。 */
+async function makeFolders(c: CaseRef, template: CaseKind, choice: FolderChoice): Promise<void> {
+  if (folderRels(template, choice).length === 0) return
+  const r = await call<{ folders_created: string[] }>('caseFolders', { case_id: c.case_id, root: c.root, kind: template, tops: choice.tops, custom: choice.custom })
+  if (!r.ok) { notice('子文件夹没能建好', `案件已经建好，子文件夹没有建（${errorText(r.error)}）。可以在资源管理器里自己建。`); return }
+  if (r.value.folders_created.length) notice('已建好子文件夹', `在"${c.name}"里新建了 ${r.value.folders_created.length} 个子文件夹。`, r.value.folders_created)
 }
 
 /** SEC-14 按名字子串拒绝的同步软件名（Spec 4.2 的列表，服务端以配置为准；这里只用来选说法）。 */

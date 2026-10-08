@@ -69,6 +69,8 @@ describe('右栏按钮', () => {
 
 const SYNCED = String.raw`C:\Users\x\OneDrive\文档\李某合同纠纷`
 const LOCAL = String.raw`C:\Users\x\连越律师工作台` + '\\'
+/** 令 1852 第 17 条：新建时先问子文件夹；这几例只看云同步，按"一个不勾"传入，不弹那一框。 */
+const NONE = { tops: [], custom: [] }
 
 describe('案件文件夹在云同步目录里（令 2043 第 3 条）', () => {
   it('被拒时问"为我在本机建一个文件夹"；同意就在本机建好并以它打开；不同意什么都不做', async () => {
@@ -78,7 +80,7 @@ describe('案件文件夹在云同步目录里（令 2043 第 3 条）', () => {
       caseOpen: async (r: { path: string; template: unknown }) => { opened.push(r); return r.path.includes('OneDrive') ? { ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '该文件夹在云同步目录中，请移到本机普通文件夹后再打开' } } : { ok: true, value: { case_id: 'c-9', name: '李某合同纠纷', created: true, folders_created: [] } } },
       localCaseFolder: async (r: { name: string }) => ({ ok: true, value: { path: LOCAL + r.name } }),
     } as unknown as LawbenchApi)
-    const p = openCase(SYNCED, 'civil')
+    const p = openCase(SYNCED, 'civil', true, true, NONE)
     await new Promise((r) => setTimeout(r, 0))
     expect(lastDialog()).toMatchObject({ kind: 'confirm', title: SYNC_TITLE, ok: SYNC_OK })
     expect((lastDialog() as unknown as { text: string }).text).toBe(syncText('李某合同纠纷'))
@@ -87,8 +89,8 @@ describe('案件文件夹在云同步目录里（令 2043 第 3 条）', () => {
     const c = await p
     expect(c).toMatchObject({ case_id: 'c-9', root: LOCAL + '李某合同纠纷' })
     expect(opened).toEqual([
-      { path: SYNCED, template: 'civil' },
-      { path: LOCAL + '李某合同纠纷', template: 'civil' },
+      { path: SYNCED, template: null },
+      { path: LOCAL + '李某合同纠纷', template: null },
     ])
     const q = openCase(SYNCED, null)
     await new Promise((r) => setTimeout(r, 0))
@@ -103,7 +105,7 @@ describe('案件文件夹在云同步目录里（令 2043 第 3 条）', () => {
       caseOpen: async () => ({ ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '该文件夹在云同步目录中，请移到本机普通文件夹后再打开' } }),
       localCaseFolder: async (r: unknown) => { made.push(r); return { ok: true, value: { path: LOCAL + 'x' } } },
     } as unknown as LawbenchApi)
-    expect(await openCase(String.raw`D:\案件\Dropbox公司诉某某案`, 'civil')).toBeUndefined()
+    expect(await openCase(String.raw`D:\案件\Dropbox公司诉某某案`, 'civil', true, true, NONE)).toBeUndefined()
     expect(lastDialog()).toMatchObject({ kind: 'notice', title: SYNC_NAME_TITLE })
     expect((lastDialog() as unknown as { text: string }).text).toContain('Dropbox')
     expect(made).toEqual([])
@@ -116,7 +118,7 @@ describe('案件文件夹在云同步目录里（令 2043 第 3 条）', () => {
       caseOpen: async () => ({ ok: false, error: { code: 'CASE_IN_SYNC_FOLDER', message: '该文件夹在云同步目录中，请移到本机普通文件夹后再打开' } }),
       localCaseFolder: async (r: { name: string }) => { made.push(r); return { ok: true, value: { path: LOCAL + r.name } } },
     } as unknown as LawbenchApi)
-    const p = openCase(SYNCED, 'civil')
+    const p = openCase(SYNCED, 'civil', true, true, NONE)
     await new Promise((r) => setTimeout(r, 0))
     lastDialog()!.resolve!(true)
     expect(await p).toBeUndefined()

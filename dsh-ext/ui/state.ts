@@ -1,6 +1,7 @@
 // 界面插件的共享状态：已登记的案件、会话 → 案件的对应、每个会话当前选的胶囊 / Skill / 参数 / 前序成果、
 // 首页和成果区留给案件的"待带入意向"、弹框队列。
 // 案件 = DSH 的工作区（Spec 1.2）：会话的工作目录就是案件文件夹。界面不接受、也不保存案件文件内容。
+import type { CaseKind, FolderChoice } from '../shared/case-folders.ts'
 import { REMOTE_METHODS } from '../shared/remote-methods.ts'
 import type { ApiResult } from '../host/index.ts'
 import { createStore } from './store.ts'
@@ -26,6 +27,8 @@ export type Dialog =
   | { kind: 'unsaved'; title: string; text: string; resolve: (choice: 'save' | 'discard' | 'cancel') => void }
   /** 运行前有材料还没识别：去识别 / 仍然开始 / 取消（令 1257 第 1 条）。 */
   | { kind: 'ocrFirst'; title: string; text: string; resolve: (choice: 'ocr' | 'go' | 'cancel') => void }
+  /** 新建案件选好文件夹后：要建哪些子文件夹（令 1852 第 17 条）；取消为 null（不新建）。 */
+  | { kind: 'folders'; caseName: string; template: CaseKind; resolve: (choice: FolderChoice | null) => void }
 
 export interface AppState {
   cases: CaseRef[]
@@ -156,6 +159,11 @@ export function popDialog(d: Dialog): void { app.set((s) => ({ ...s, dialogs: s.
 /** 弹确认框，律师点确定返回 true。所有发往服务器的操作都先经这里（工单第 3 步）。 */
 export function confirm(title: string, text: string, ok = '确定'): Promise<boolean> {
   return new Promise((resolve) => pushDialog({ kind: 'confirm', title, text, ok, resolve }))
+}
+
+/** 新建案件时问要建哪些子文件夹（默认全不勾）；取消为 null。 */
+export function askFolders(caseName: string, template: CaseKind): Promise<FolderChoice | null> {
+  return new Promise((resolve) => pushDialog({ kind: 'folders', caseName, template, resolve }))
 }
 
 export function notice(title: string, text: string, lines?: string[]): void { pushDialog({ kind: 'notice', title, text, lines }) }

@@ -24,7 +24,7 @@ export interface TaskAnswer {
 type Result = { ok: true; value: TaskAnswer } | { ok: false; error: { code: string; message: string } }
 
 /** 读案件根里的一个文件：自身和所在目录都不能是链接，实际位置在案件根里。 */
-function readInCase(root: string, rel: string, max = MAX_DRAFT_BYTES): { text: string; truncated: boolean } | undefined {
+export function readInCase(root: string, rel: string, max = MAX_DRAFT_BYTES): { text: string; truncated: boolean } | undefined {
   const file = join(root, ...rel.split('/'))
   try {
     for (let dir = file; dir.length > root.length; dir = join(dir, '..')) if (lstatSync(dir).isSymbolicLink()) return undefined
