@@ -133,10 +133,19 @@ index 151eeba4bf..41b6a03907 100644
      if (cordis === undefined) throw new Error('desktop runtime: missing shared Cordis package')
      writeFileSync(join(plugin, 'package.json'), JSON.stringify({
 diff --git a/apps/desktop/src/client/WelcomePage.tsx b/apps/desktop/src/client/WelcomePage.tsx
-index 6ac9c9c324..f556e27384 100644
+index 6ac9c9c324..fa64481c88 100644
 --- a/apps/desktop/src/client/WelcomePage.tsx
 +++ b/apps/desktop/src/client/WelcomePage.tsx
-@@ -52,13 +52,30 @@ export function Welcome({ api }: { api: WelcomeApi }) {
+@@ -22,6 +22,8 @@ const S: Record<string, CSSProperties> = {
+ 
+ /** Vendor line at the page foot (owner order 2026-10-04 11:56 item 2); the logo is P-4's renderer/assets/vendor-logo.png. */
+ export const VENDOR_LINE = '技术支持：上海莫来特智能科技有限公司'
++/** 读设置本身出错（不是服务回的失败）时的说法（复核 rv-A51 NOTE）。 */
++export const SETUP_READ_FAILED = '没能读取设置，请关闭后重新打开律师工作台；多次出现请联系技术支持'
+ 
+ const toServers = (f: Fields): ServerAddresses => ({
+   llm_base_url: f.llm.trim(),
+@@ -52,13 +54,35 @@ export function Welcome({ api }: { api: WelcomeApi }) {
    useEffect(() => {
      document.documentElement.lang = api.id
      document.title = '首次配置'
@@ -167,6 +176,11 @@ index 6ac9c9c324..f556e27384 100644
 +        const s = r.value.servers
 +        setFields(f => ({ ...f, llm: s.llm_base_url, llmAlt: s.llm_alt_base_url ?? '', prep: s.prep_base_url, prepAlt: s.prep_alt_base_url ?? '', lawyer: r.value?.lawyerName ?? '' }))
 +        setHasKey(r.value.hasKey)
++      }).catch(() => {
++        // 复核 rv-A51 NOTE：getSetup 本身抛错（预加载桥断了等）时不停在不可填，放开表单并给通用说法
++        if (stopped) return
++        setLoading(false)
++        setError(SETUP_READ_FAILED)
 +      })
 +    }
 +    load()
@@ -241,17 +255,17 @@ index 8bee2728cd..e31886ab6d 100644
      const src = readFileSync(join(__dirname, '..', 'scripts', 'macos-runtime.ts'), 'utf8')
 diff --git a/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
 new file mode 100644
-index 0000000000..cda99af726
+index 0000000000..615ee1de37
 --- /dev/null
 +++ b/apps/desktop/tests/lawbench-welcome-retry.client.spec.tsx
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,98 @@
 +// @vitest-environment jsdom
 +// lawbench（令 1556 第 2 条）：首次配置页读不到设置时每 3 秒再读；服务起来就填好地址，Host 说出起不来的原因
 +// （"本机服务未能启动：…"）就停在原因上，最多读 5 分钟。
 +import { act } from 'react'
 +import { createRoot } from 'react-dom/client'
 +import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-+import { Welcome } from '../src/client/WelcomePage.tsx'
++import { SETUP_READ_FAILED, Welcome } from '../src/client/WelcomePage.tsx'
 +import type { WelcomeApi } from '../src/welcome-api.ts'
 +
 +const WHY = '本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试'
@@ -321,11 +335,27 @@ index 0000000000..cda99af726
 +  expect(box.textContent).toContain(WHY)
 +})
 +
-+it('一直只说"未启动"：最多读 100 次（约 5 分钟）', async () => {
++it('一直只说"未启动"：最多读 100 次（约 5 分钟），读满后放开表单、停在"未启动"，不再读', async () => {
 +  const getSetup = vi.fn(async () => NOT_YET)
 +  render(getSetup)
-+  await flush(600_000)
++  await flush(3000 * 98)
++  expect(getSetup).toHaveBeenCalledTimes(99)
++  expect((box.querySelector('#lawyer') as HTMLInputElement).disabled).toBe(true) // 还在读：不可填
++  await flush(3000)
 +  expect(getSetup).toHaveBeenCalledTimes(100)
++  // 复核 rv-A51 NOTE：读满后的状态也要断言
++  expect((box.querySelector('#lawyer') as HTMLInputElement).disabled).toBe(false)
++  expect(box.textContent).toContain('工作台服务未启动')
++  await flush(60_000)
++  expect(getSetup).toHaveBeenCalledTimes(100)
++})
++
++it('getSetup 本身抛错：放开表单，显示通用说法（复核 rv-A51 NOTE）', async () => {
++  render(vi.fn(async () => { throw new Error('preload bridge gone') }))
++  await flush()
++  expect((box.querySelector('#lawyer') as HTMLInputElement).disabled).toBe(false)
++  expect(box.textContent).toContain(SETUP_READ_FAILED)
++  expect(box.textContent).not.toContain('preload')
 +})
 diff --git a/apps/desktop/tests/lawbench-windows-payload.spec.ts b/apps/desktop/tests/lawbench-windows-payload.spec.ts
 new file mode 100644

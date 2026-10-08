@@ -241,3 +241,4 @@ Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支
 | P-23 | `tests/lawbench-windows-payload.spec.ts` 第 3 例（加载 electron-builder 配置）超时放到 30 秒（复核 P3-1） | 全量满载时超过默认 5 秒 | 单独重跑见 `docs\plan\evidence\T20\1337\desktop-单独重跑.txt` |
 | P-23 | `apps/desktop/src/client/WelcomePage.tsx`：读不到设置时每 3 秒再读，读到 Host 给的原因（"本机服务未能启动：…"）就停在原因上，最多 100 次（约 5 分钟；Host 判定起不来要一分多钟）；读到了就填好地址、清掉提示；新用例 `tests/lawbench-welcome-retry.client.spec.tsx` 3 例（令 1556 第 2 条） | 首次启动时服务常还在起；原来只读一次，停在"工作台服务未启动"，端口被占等原因永远显示不出来（第五版重打后冒烟发现） | 用例 3 例；首次配置页相关 3 个文件 17 过 |
 | P-23 | `WelcomePage.tsx` 再改（复核 rv-A50 P3-1，令 1759 第 2 条）：重读期间表单保持不可填（`loading`），读到设置、读到原因或读满 5 分钟才放开；用例 2 例（`lawbench-welcome-retry.client.spec.tsx` 共 5 例） | 原来第一次读失败就放开表单，之后读到时整体填入，会把律师已填的地址、姓名盖成服务给的值，并清掉校验提示 | 首次配置页相关 3 个文件 19 过 |
+| P-23 | `WelcomePage.tsx` 再改（令 1257 第 4 条，复核 rv-A51 NOTE）：`getSetup` 本身抛错时 `catch`，放开表单并显示通用说法（`SETUP_READ_FAILED`）；"最多读 100 次"用例补读满后的断言，新用例"getSetup 抛错" | 原来抛错时表单一直不可填 | 首次配置页相关 3 个文件 20 过 |
