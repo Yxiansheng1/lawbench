@@ -1,0 +1,80 @@
+{
+ "skill": "criminal-reading-notes",
+ "capsule": "case-analysis",
+ "case_id": "a9f3e391-b948-409d-979c-57c1ed57dcfe",
+ "root": "D:\\lawbench-T18\\cases\\rc-noocr",
+ "task_id": "T-20261008133313-32e5",
+ "status": "budget_stopped",
+ "drafts": [
+  {
+   "title": "刑事阅卷笔录",
+   "path": "工作区/任务/T-20261008133313-32e5/草稿/刑事阅卷笔录-v1.md",
+   "version": 1
+  },
+  {
+   "title": "刑事阅卷笔录",
+   "path": "工作区/任务/T-20261008133313-32e5/草稿/刑事阅卷笔录-v2.md",
+   "version": 2
+  },
+  {
+   "title": "刑事阅卷笔录",
+   "path": "工作区/任务/T-20261008133313-32e5/草稿/刑事阅卷笔录-v3.md",
+   "version": 3
+  },
+  {
+   "title": "刑事阅卷笔录",
+   "path": "工作区/任务/T-20261008133313-32e5/草稿/刑事阅卷笔录-v4.md",
+   "version": 4
+  }
+ ],
+ "citation_check": {
+  "passed": true,
+  "problems": [
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "3. 微信图片_20260301——待识别",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "| 微信图片_20260301 | 未读（待识别） |",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "1. 讯问笔录识别后，重点核对张某甲对事实单元2（8万元）和单元3（1.65万元）的供述原文，特别是其关于1.65万元系\"自愿借款\"的辩解细节。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   },
+   {
+    "class": "F",
+    "severity": "hint",
+    "excerpt": "2. 转账截图识别后，核对三笔转账的金额、时间、收款账户（尾号0417）是否与起诉意见书指控一致。",
+    "citation": null,
+    "message": "含金额或日期但没有出处，确认是否需要补出处"
+   }
+  ],
+  "stats": {
+   "citations": 38,
+   "must_fix": 0,
+   "hints": 4
+  }
+ },
+ "answers": [
+  "Q[本次阅卷笔录的阅读范围如下（共10份材料），请确认：] radio:1 全部10份（如所列） 委托代理合同、对账单、微信图片_20260301、授权委托书、现场勘验图文"
+ ],
+ "wall_s": 212,
+ "log": [
+  "9s case opened",
+  "11s capsule 案卷分析",
+  "11s skill criminal-reading-notes",
+  "13s sent",
+  "24s answered Q[本次阅卷笔录的阅读范围如下（共10份材料），请确认：] radio:1 全部10份（如所列） 委托代理合同、对账单、微信图片_20260301、授权委托书、现场勘验图文",
+  "212s done budget_stopped"
+ ]
+}

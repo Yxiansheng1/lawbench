@@ -1,0 +1,36 @@
+{
+ "skill": "criminal-reading-notes",
+ "capsule": "case-analysis",
+ "case_id": "32770b38-ce8a-49c3-9d93-867692db8048",
+ "root": "D:\\lawbench-T18\\cases\\rc-allscan",
+ "task_id": "T-20261008133221-a667",
+ "status": "completed",
+ "drafts": [
+  {
+   "title": "阅卷笔录",
+   "path": "工作区/任务/T-20261008133221-a667/草稿/阅卷笔录-v1.md",
+   "version": 1
+  }
+ ],
+ "citation_check": {
+  "passed": true,
+  "problems": [],
+  "stats": {
+   "citations": 0,
+   "must_fix": 0,
+   "hints": 0
+  }
+ },
+ "answers": [
+  "Q[本次阅卷笔录覆盖全部 10 份材料，逐份如下：微信图片1、微信图片2、微信图片3、讯问笔录（第1次）（3页）、讯问笔录（第2次）（3页）、讯问笔录（第3次）（3页）、讯问笔录（第4次）（3页）、转账截图1、转账截图2、转账截图3。请确认。] radio:1 确认，全部读完 逐份读完 10 份材料后出阅卷笔录。"
+ ],
+ "wall_s": 52,
+ "log": [
+  "9s case opened",
+  "11s capsule 案卷分析",
+  "11s skill criminal-reading-notes",
+  "13s sent",
+  "24s answered Q[本次阅卷笔录覆盖全部 10 份材料，逐份如下：微信图片1、微信图片2、微信图片3、讯问笔录（第1次）（3页）、讯问笔录（第2次）（3页）、讯问笔录（第3次）（3页）、讯问笔录（第4次）（3页）、转账截图1、转账截图2、转账截图3。请确认。] radio:1 确认，全部读完 逐份读完 10 份材料后出阅卷笔录。",
+  "52s done completed"
+ ]
+}
