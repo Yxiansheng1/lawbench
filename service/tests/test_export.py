@@ -410,3 +410,45 @@ def test_find_pandoc_env_first(tmp_path, monkeypatch):
     expected = P.find_pandoc()
     monkeypatch.setenv("LAWBENCH_PANDOC", str(tmp_path / "没有" / "pandoc.exe"))
     assert P.find_pandoc() == expected
+
+
+# ---------- 第七版待办 12：条内换行不合并、表格按标准写法 ----------
+
+LOAN = """# 借款合同
+
+甲方（出借人）：张某甲
+乙方（借款人）：李某乙
+
+第一条 借款金额：人民币捌万元整（¥80,000.00）。
+
+第二条 借款期限：自2026年3月10日起至2026年9月9日止。
+
+第四条 放款
+甲方应于本合同签订之日起三日内将借款转入乙方下列账户：
+户名：李某乙
+开户行：【待补充：开户行】
+账号：【待补充：账号】
+
+| 项目 | 现状 | 需要谁提供 |
+|---|---|---|
+| 乙方身份证号 | 材料未载明 | 委托人 |
+"""
+
+
+@needs_pandoc
+def test_single_newline_kept_as_line_break(env, tid):
+    """律师借款合同反馈（2026-10-08）：条内单换行原来被 pandoc 并成一段，"户名…开户行…账号…"挤在一行。
+    现在 -f markdown+hard_line_breaks：每个空行隔开的块是一段，块内每行之间是换行；标准表格转成 Word 表格。"""
+    rel = draft(env, tid, "借款合同", LOAN)
+    v = ok(confirm(env, tid, rel, formats=["docx"], template="合同"), "api/outputs_confirm.schema.json")
+    doc = etree.fromstring(zipfile.ZipFile(env.root / v["outputs"][0]["path"]).read("word/document.xml"))
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    body = doc.find(f"{w}body")
+    paras = [p for p in body.findall(f"{w}p") if "".join(p.itertext()).strip()]
+    texts = ["".join(p.itertext()) for p in paras]
+    assert len(paras) == 5                                 # 标题、甲乙方、第一条、第二条、第四条
+    clause4 = paras[4]
+    assert texts[4].startswith("第四条 放款") and len(clause4.findall(f".//{w}br")) == 4   # 5 行 → 4 个换行
+    assert len(paras[1].findall(f".//{w}br")) == 1         # 甲方、乙方两行
+    tables = body.findall(f"{w}tbl")
+    assert len(tables) == 1 and len(tables[0].findall(f"{w}tr")) == 2 and len(tables[0].findall(f"{w}tr")[0].findall(f"{w}tc")) == 3

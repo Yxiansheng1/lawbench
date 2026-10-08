@@ -1,6 +1,6 @@
 """草稿 Markdown → Word / Markdown 成果（Spec 12.1、14.3）。
 
-- Word：`pandoc --sandbox -f markdown -t docx --reference-doc=<模板>`，草稿从标准输入进、docx 从标准输出出，
+- Word：`pandoc --sandbox -f markdown+hard_line_breaks -t docx --reference-doc=<模板>`，草稿从标准输入进、docx 从标准输出出，
   不落临时文件。`--sandbox` 每次都带（T19 复核：pandoc 会按草稿里的远程图片链接去取图；sandbox 下只读命令行
   给出的文件，不联网、不读本机其他文件）。
 - 两种格式都先去掉指向工作区的链接（只留链接文字），出处 〔〕 本来就是纯文本、原样保留。
@@ -150,7 +150,7 @@ def to_docx(md: str, reference_doc: pathlib.Path, pandoc: str | None = None) -> 
     if not exe:
         raise ApiError("INTERNAL", "pandoc_not_found")
     # 关掉原始 OpenXML / HTML / TeX 透传：草稿里的 ```{=openxml} 块不原样写进 docx（复核 NOTE-1）
-    args = [exe, "--sandbox", "-f", "markdown-raw_attribute-raw_html-raw_tex", "-t", "docx", f"--reference-doc={reference_doc}", "-o", "-"]
+    args = [exe, "--sandbox", "-f", "markdown+hard_line_breaks-raw_attribute-raw_html-raw_tex", "-t", "docx", f"--reference-doc={reference_doc}", "-o", "-"]
     try:
         proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
