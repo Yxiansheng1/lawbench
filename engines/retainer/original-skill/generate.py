@@ -1050,7 +1050,7 @@ def create_case_folder(params, output_base, files):
             "06二审/庭审准备",
             "06二审/法院文书",
             "07申诉与再审",
-            "08执行（财产刑/民事赔偿）",
+            "08执行（财产刑、民事赔偿）",
         ]
     else:
         plaintiff = params["plaintiff"]

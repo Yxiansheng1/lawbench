@@ -110,6 +110,18 @@ def test_case_open_new(client, case_root, appdata):
     assert v2["case_id"] == v["case_id"] and v2["created"] is False
 
 
+def test_template_folder_names_have_no_separator(client, case_root):
+    """刑事模板原名"08执行（财产刑/民事赔偿）"里的 / 会建成两级目录（2026-10-09 改为顿号）：每一级名字都不含路径分隔符，
+    建出来的"08执行（财产刑、民事赔偿）"是一级目录、下面没有子目录。"""
+    for tpl in TEMPLATES.values():
+        for rel in tpl:
+            assert all(seg and "\\" not in seg for seg in rel.split("/")) and rel.count("/") <= 1, rel
+    root = case_root
+    ok(client.post("/api/case/open", json={"path": str(root), "template": "criminal"}), "case_open")
+    d = root / "08执行（财产刑、民事赔偿）"
+    assert d.is_dir() and not any(d.iterdir()) and not (root / "08执行（财产刑").exists()
+
+
 @pytest.mark.parametrize("template", ["civil", "criminal"])
 def test_case_open_template(client, case_root, template):
     v = ok(client.post("/api/case/open", json={"path": str(case_root), "template": template}), "case_open")

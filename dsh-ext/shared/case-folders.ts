@@ -32,7 +32,7 @@ export const CASE_TEMPLATES: Readonly<Record<CaseKind, readonly TemplateFolder[]
     { name: '06二审', subs: TRIAL6 },
     { name: '07申诉与再审', subs: [] },
     // 名字里的"/"与服务、委托材料工具（engines\retainer\data\config.json）一致：实际建成"08执行（财产刑"下的"民事赔偿）"两级
-    { name: '08执行（财产刑/民事赔偿）', subs: [] },
+    { name: '08执行（财产刑、民事赔偿）', subs: [] },
   ],
 }
 

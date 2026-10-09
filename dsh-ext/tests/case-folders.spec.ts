@@ -113,7 +113,7 @@ describe('Host：按名单建子文件夹（真文件系统）', () => {
   it('chosenFolders：不收数组以外的东西、自填超过 20 项', () => {
     expect(chosenFolders('civil', '01委托手续', []).ok).toBe(false)
     expect(chosenFolders('civil', [], Array.from({ length: 21 }, (_, i) => `自填${i}`)).ok).toBe(false)
-    expect(chosenFolders('criminal', ['08执行（财产刑/民事赔偿）'], [])).toEqual({ ok: true, value: ['08执行（财产刑/民事赔偿）'] })
+    expect(chosenFolders('criminal', ['08执行（财产刑、民事赔偿）'], [])).toEqual({ ok: true, value: ['08执行（财产刑、民事赔偿）'] })
   })
 })
 
