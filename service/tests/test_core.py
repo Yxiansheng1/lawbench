@@ -25,7 +25,7 @@ def env(tmp_path_factory):
 def test_begin_default_task(env):
     v = env.begin("sess-default")
     assert re.fullmatch(r"T-\d{14}-[0-9a-f]{4}", v["task_id"]) and v["case_id"] == env.case_id
-    assert v["skill"] is None and v["budget"] == {"model_calls": 16, "tool_calls": 24, "minutes": 45}
+    assert v["skill"] is None and v["budget"] == {"model_calls": 32, "tool_calls": 48, "minutes": 45}
     assert v["params"]["window"] == "64K" and v["params"]["thinking"] == "中"   # 设置里的默认参数
     task = env.read_json(v["task_id"], "task.json", "files/task.schema.json")
     assert task["state"] == "running" and task["session_id"] == "sess-default" and task["entry"] is None
