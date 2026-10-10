@@ -647,7 +647,8 @@ export function unavailableText(s: Pick<Supervisor, 'state' | 'lastFailure'>): s
   if (s.state !== 'failed') return UNAVAILABLE
   const why = startFailureText(s.lastFailure).replace(/[。.]+$/, '')
   // 律师自己能处理的（端口被占：关掉占用的程序再试）不再叫他找技术支持
-  return /重试$/.test(why) ? `本机服务未能启动：${why}` : `本机服务未能启动：${why}，请联系技术支持`
+  // 原因里已经说了找谁的（保留端口段、系统拒绝）也不再接一句
+  return /重试$|请联系技术支持$/.test(why) ? `本机服务未能启动：${why}` : `本机服务未能启动：${why}，请联系技术支持`
 }
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 

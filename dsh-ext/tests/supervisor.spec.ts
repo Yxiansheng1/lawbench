@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import { Supervisor, startFailureText, type ChildHandle } from '../host/supervisor.ts'
+import { existsSync, readFileSync } from 'node:fs'
+import { PORT_CATEGORIES, portFailure, portText, Supervisor, startFailureText, type ChildHandle } from '../host/supervisor.ts'
 import { unavailableText } from '../host/index.ts'
 import { CONTRACT_VERSION } from '../shared/contracts.ts'
 
@@ -144,6 +145,96 @@ describe('看护：策略（模拟进程）', () => {
     expect(spawns).toBe(6) // 首次 + 换端口重试 5 次
     expect(logged).toEqual([{ reason: 'exited', exitCode: 2, port: 18765 }])
     expect(unavailableText(s)).toBe('本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试')
+  })
+
+  // —— 第七版待办 10：服务在标准错误第一行写"<类别> <端口> <一句话>"（service\lawbench\portdiag.py），退出码仍是 2 ——
+  /** 每次拉起都以退出码 2 结束、标准错误是给定内容的假进程。 */
+  function portDeps(stderr: string) {
+    const spawned: number[] = []
+    const logged: Array<[string, Record<string, unknown> | undefined]> = []
+    const deps = {
+      spawn(port: number): ChildHandle {
+        spawned.push(port)
+        return { pid: spawned.length, exited: new Promise<number | null>((r) => setTimeout(() => r(2), 5)), kill: () => undefined, errorText: () => stderr.replace('<主端口>', String(port)) }
+      },
+      probe: async () => undefined,
+      pickPort: async () => 18500 + spawned.length,
+      newToken: () => 't'.repeat(32),
+      expectedVersion: '1.1',
+      forwardPort: 18765,
+      log: (_l: string, e: string, m?: Record<string, unknown>) => { if (e === 'service.start_failed' || e === 'service.port_failed') logged.push([e, m]) },
+    }
+    return { deps, spawned, logged }
+  }
+
+  it('标准错误第一行的类别和端口：只看去空行后的第一行；后面跟回溯、第二个端口的行都不影响；不合格式的取不到', () => {
+    expect(portFailure('PORT_RESERVED 18765 18765 在 Windows 保留端口段内，请在设置里换一个端口\n')).toEqual({ category: 'PORT_RESERVED', port: 18765 })
+    expect(portFailure('\r\n\r\nPORT_IN_USE 18503 18503 端口被其他程序占用，请关闭占用程序后重试\r\nPORT_DENIED 18765 18765 端口无法监听\r\n')).toEqual({ category: 'PORT_IN_USE', port: 18503 })
+    expect(portFailure('PORT_DENIED 18765 x\nTraceback (most recent call last):\n  File "x.py", line 1\nOSError: [WinError 10013] \ufffd\ufffd\ufffd\n')).toEqual({ category: 'PORT_DENIED', port: 18765 })
+    // 第一行不是分类行（老服务、别的输出在前、头部被截掉）：取不到，按老办法
+    for (const t of ['', 'OSError: x\nPORT_IN_USE 18765 x', 'PORT_BUSY 18765 x', 'PORT_IN_USE abc x', 'PORT_IN_USE 0 x', 'PORT_IN_USE 70000 x', 'PORT_IN_USE 18765', 'xPORT_IN_USE 18765 x']) {
+      expect(portFailure(t), t).toBeUndefined()
+    }
+  })
+
+  it('三类说法不同：被占用请关程序重试；保留端口段说明不是被占、关程序没用、找技术支持换端口；系统拒绝找技术支持——都不重复接"请联系技术支持"', () => {
+    const text = (portCategory: 'PORT_IN_USE' | 'PORT_RESERVED' | 'PORT_DENIED') =>
+      unavailableText({ state: 'failed', lastFailure: { reason: 'exited', exitCode: 2, port: 18765, portCategory } })
+    expect(text('PORT_IN_USE')).toBe('本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试')
+    expect(text('PORT_RESERVED')).toBe('本机服务未能启动：本机 18765 端口在 Windows 的保留端口段里（装了 Hyper-V、WSL、Docker 的电脑上常见），不是被别的程序占用，关掉别的程序也没有用；需要换端口，请联系技术支持')
+    expect(text('PORT_DENIED')).toBe('本机服务未能启动：本机 18765 端口被系统拒绝使用（可能被安全软件或系统策略拦住），请联系技术支持')
+    expect(new Set(PORT_CATEGORIES.map((c) => portText(18765, c))).size).toBe(3)
+    for (const c of PORT_CATEGORIES) expect(text(c).match(/请联系技术支持/g)?.length ?? 0, c).toBeLessThanOrEqual(1)
+    // 没有类别（老服务）：同以前
+    expect(portText(18765)).toBe('本机 18765 端口被其他程序占用，请关闭占用程序后重试')
+  })
+
+  it('绑不上的是固定的转发端口：不白换工作台端口重试，第一次退出就 failed，类别和端口照服务说的记', async () => {
+    const { deps, spawned, logged } = portDeps('PORT_RESERVED 18765 18765 在 Windows 保留端口段内，请在设置里换一个端口\n')
+    const s = new Supervisor(deps)
+    await s.start()
+    await waitFor(() => s.state === 'failed', 5000)
+    expect(spawned).toHaveLength(1)
+    expect(s.lastFailure).toEqual({ reason: 'exited', exitCode: 2, port: 18765, portCategory: 'PORT_RESERVED' })
+    expect(logged).toEqual([
+      ['service.port_failed', { category: 'PORT_RESERVED', port: 18765 }],
+      ['service.start_failed', { reason: 'exited', exitCode: 2, port: 18765, portCategory: 'PORT_RESERVED' }],
+    ])
+    expect(unavailableText(s)).toContain('保留端口段')
+  })
+
+  it('不再重启之后，原因不会在 30 秒后被改写成"30 秒内没有就绪"（等 /health 的循环随即停下）', async () => {
+    let clock = 0
+    const { deps } = portDeps('PORT_DENIED 18765 18765 端口无法监听（系统拒绝），请换一个端口或联系技术支持\n')
+    const s = new Supervisor({ ...deps, now: () => clock })
+    await s.start()
+    expect(s.state).toBe('failed')
+    clock += 60_000 // 过了启动时限
+    await new Promise((r) => setTimeout(r, 700)) // 等过一次循环的间隔
+    expect(s.state).toBe('failed')
+    expect(s.lastFailure).toEqual({ reason: 'exited', exitCode: 2, port: 18765, portCategory: 'PORT_DENIED' })
+  })
+
+  it('绑不上的是工作台端口（每次新挑的）：照旧换端口重试；用完后说的是最后那个工作台端口，不再误报成转发端口', async () => {
+    const { deps, spawned } = portDeps('PORT_IN_USE <主端口> x 端口被其他程序占用，请关闭占用程序后重试\n')
+    const s = new Supervisor(deps)
+    await s.start()
+    await waitFor(() => s.state === 'failed', 10000)
+    expect(spawned).toHaveLength(6) // 首次 + 换端口重试 5 次
+    expect(s.lastFailure).toMatchObject({ port: spawned[5], portCategory: 'PORT_IN_USE' })
+    expect(s.lastFailure?.port).not.toBe(18765)
+    expect(unavailableText(s)).toBe(`本机服务未能启动：本机 ${spawned[5]} 端口被其他程序占用，请关闭占用程序后重试`)
+  })
+
+  const PORTDIAG = join(__dirname, '..', '..', 'service', 'lawbench', 'portdiag.py')
+  it.skipIf(!existsSync(PORTDIAG))('类别字面与服务 portdiag.py 一致，它写出的那一行客户端解析得出（线 B 的提交合进来后这条才跑）', () => {
+    const py = readFileSync(PORTDIAG, 'utf8')
+    const names = [...py.matchAll(/^(PORT_[A-Z_]+) = "(PORT_[A-Z_]+)"$/gm)].map((m) => m[2]!)
+    expect(names.sort()).toEqual([...PORT_CATEGORIES].sort())
+    expect(py).toContain('return f"{category} {port} {MESSAGES[category].format(port=port)}"')
+    for (const m of py.matchAll(/^\s+(PORT_[A-Z_]+): "([^"]+)",$/gm)) {
+      expect(portFailure(`${m[1]} 18765 ${m[2]!.replace('{port}', '18765')}\n`), m[1]).toEqual({ category: m[1], port: 18765 })
+    }
   })
 
   it('程序拉不起来（找不到内置 Python、被拦截）：原因按类别说清楚', async () => {

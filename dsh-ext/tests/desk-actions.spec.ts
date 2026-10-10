@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { insideCase, localCaseFolder, localRoot, openableFolder, removableMaterial, safeFolderName, sameFolder, toolExe, type DeskDeps } from '../host/desk-actions.ts'
 import { MATERIAL_REMOVE_ENABLED } from '../shared/feature-flags.ts'
+import { explorerArg } from '../host/desk-node.ts'
 import { LawbenchRemote } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
 
@@ -38,6 +39,16 @@ describe('路径判断', () => {
     expect(toolExe('E:\\law', 'toString').ok).toBe(false) // 复核 P3：不认原型链上的名字
     const taken = new Set([join('C:\\Users\\x', '连越律师工作台', '甲案')])
     expect(localCaseFolder('C:\\Users\\x', '甲案', (p) => taken.has(p))).toBe(join('C:\\Users\\x', '连越律师工作台', '甲案') + '(2)')
+  })
+})
+
+describe('交给资源管理器的路径（第七版待办 16：名字里有逗号、等号的文件和文件夹打不开）', () => {
+  it('一律用双引号包起来（没有空格的也包）；末尾反斜杠去掉；盘根原样', () => {
+    expect(explorerArg('D:\\案件\\甲,乙')).toBe('"D:\\案件\\甲,乙"')
+    expect(explorerArg('D:\\案件\\甲\\成果\\借款合同,补充协议-v1.docx')).toBe('"D:\\案件\\甲\\成果\\借款合同,补充协议-v1.docx"')
+    expect(explorerArg('D:\\案件\\证据=原件\\')).toBe('"D:\\案件\\证据=原件"')
+    expect(explorerArg('D:\\案件\\张某 诈骗案')).toBe('"D:\\案件\\张某 诈骗案"')
+    expect(explorerArg('D:\\')).toBe('D:\\')
   })
 })
 

@@ -46,7 +46,28 @@ export type SupervisorState = 'stopped' | 'starting' | 'running' | 'failed' | 'v
  * - exited：进程退出（还没就绪或运行中）；
  * - startup_timeout：30 秒内 /health 没通过。
  */
-export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null; error?: string; port?: number }
+export interface StartFailure { reason: 'launch_error' | 'exited' | 'startup_timeout'; detail?: string; exitCode?: number | null; error?: string; port?: number; portCategory?: PortCategory }
+
+/**
+ * 端口绑不上的类别（第七版待办 10）：服务 service\lawbench\portdiag.py 在标准错误第一行写"<类别> <端口> <一句话>"，退出码仍是 2。
+ * 不是契约面，字面以 portdiag.py 为准（tests\supervisor.spec.ts 读它的源码对照）。
+ * - PORT_IN_USE：被别的程序占着；PORT_RESERVED：落在 Windows 的保留端口段里（Hyper-V、WSL 常见），不是被占；PORT_DENIED：系统拒绝，原因不明。
+ */
+export const PORT_CATEGORIES = ['PORT_IN_USE', 'PORT_RESERVED', 'PORT_DENIED'] as const
+export type PortCategory = typeof PORT_CATEGORIES[number]
+
+/**
+ * 从服务的标准错误里取端口绑不上的类别和端口：只看去掉空行后的第一行（两个端口都绑不上时有两行，第一行是先失败的）。
+ * 后面若跟着回溯，不影响第一行。Host 只留标准错误的尾部 64 KB：输出超过这个量时第一行已不在，取不到就按老办法（只知道退出码 2）。
+ * 那句给律师看的话不采用（客户端按类别自己说），所以只取类别和端口。
+ */
+export function portFailure(text: string): { category: PortCategory; port: number } | undefined {
+  const first = text.split(/\r?\n/).map((l) => l.trim()).find(Boolean)
+  const m = first ? /^(PORT_IN_USE|PORT_RESERVED|PORT_DENIED) (\d{1,5}) (.*)$/.exec(first) : null
+  if (!m) return undefined
+  const port = Number(m[2])
+  return port >= 1 && port <= 65535 ? { category: m[1] as PortCategory, port } : undefined
+}
 
 export const PROBE_INTERVAL_MS = 5_000
 export const MAX_MISSED_PROBES = 3
@@ -207,35 +228,52 @@ export class Supervisor {
   private onExit(gen: number, code: number | null, portRetries: number, child?: ChildHandle): void {
     if (gen !== this.generation) return
     this.exitingChild = child
+    let diag: ReturnType<typeof portFailure>
     this.clearTimer(this.timer)
     this.timer = undefined
     this.child = undefined
     this.deps.log(code === 0 || this.stopping ? 'info' : 'warn', 'service.exit', { code })
     if (this.stopping || this.state === 'version_mismatch') return
     if (this.timedOutGen !== gen) {
-      const error = lastErrorLine(this.exitingChild?.errorText?.() ?? '', this.deps.scrubPaths)
-      const port = code === EXIT_PORT_IN_USE && this.deps.forwardPort !== undefined ? { port: this.deps.forwardPort } : {}
+      const stderr = this.exitingChild?.errorText?.() ?? ''
+      const error = lastErrorLine(stderr, this.deps.scrubPaths)
+      // 待办 10：服务说了是哪个端口、哪一类就以它为准（主端口失败时不再误报成转发端口）；老服务没有这一行，照旧只知道退出码 2、按转发端口说
+      diag = code === EXIT_PORT_IN_USE ? portFailure(stderr) : undefined
+      const port = diag ? { port: diag.port, portCategory: diag.category }
+        : code === EXIT_PORT_IN_USE && this.deps.forwardPort !== undefined ? { port: this.deps.forwardPort } : {}
       this.lastFailure = { reason: 'exited', exitCode: code, ...(error ? { error } : {}), ...port }
+      if (diag) this.deps.log('warn', 'service.port_failed', { category: diag.category, port: diag.port })
     }
     if (code === EXIT_PORT_IN_USE) {
-      if (portRetries < MAX_PORT_RETRIES) {
+      // 绑不上的是固定的转发端口：换工作台端口再起也一样，不白试 MAX_PORT_RETRIES 次，直接 failed，原因马上出来
+      const fixedPort = diag !== undefined && diag.port === this.deps.forwardPort
+      if (!fixedPort && portRetries < MAX_PORT_RETRIES) {
         this.relaunch(portRetries + 1)
         return
       }
       // 换了 MAX_PORT_RETRIES 次工作台端口仍绑不上：固定的转发端口被占，再重启也一样，直接 failed（复核 rv-A50 P2-1：
       // 原来交给"1 分钟内 3 次"的通用重启限额，每次拉起超过约 3.3 秒就永远攒不满、一直循环，原因永远出不来）
-      this.setState('failed')
+      this.giveUp()
       return
     }
     const t = this.now()
     this.restarts = this.restarts.filter((x) => t - x < RESTART_WINDOW_MS)
     if (this.restarts.length >= MAX_RESTARTS_IN_WINDOW) {
-      this.setState('failed')
+      this.giveUp()
       return
     }
     this.restarts.push(t)
     this.deps.log('info', 'service.restart', { attempt: this.restarts.length })
     this.relaunch(0)
+  }
+
+  /**
+   * 进程退出后不再重启：换代再记 failed。不换代的话，这一代等 /health 的循环还在转，30 秒后会把刚记下的退出原因
+   * 改写成"30 秒内没有就绪"（待办 10 加用例时核出）。
+   */
+  private giveUp(): void {
+    this.generation++
+    this.setState('failed')
   }
 
   /** 重启：launch 自己按代次处理异常（见 launch）。 */
@@ -256,12 +294,22 @@ export function startFailureText(f: StartFailure | undefined): string {
   if (!f) return '原因不明'
   if (f.reason === 'startup_timeout') return '30 秒内没有就绪'
   // 服务把 uvicorn 的出错日志关了（不记全文），绑定失败时标准错误里没有"address already in use"，只有退出码 2
-  if (f.reason === 'exited' && f.exitCode === EXIT_PORT_IN_USE && f.port !== undefined) return `本机 ${f.port} 端口被其他程序占用，请关闭占用程序后重试`
+  if (f.reason === 'exited' && f.exitCode === EXIT_PORT_IN_USE && f.port !== undefined) return portText(f.port, f.portCategory)
   if (f.reason === 'exited') return f.error ?? `服务启动后退出（代码 ${f.exitCode ?? '无'}）`
   if (f.detail === 'PYTHON_MISSING') return '找不到内置的 Python'
   if (f.detail === 'EACCES' || f.detail === 'EPERM') return '程序被拒绝运行（可能被安全软件拦截）'
   if (f.detail === 'ENOENT') return '找不到要运行的程序'
   return `程序没能运行（${f.detail ?? '未知错误'}）`
+}
+
+/**
+ * 端口绑不上时给律师看的话，三类说法不同（第七版待办 10）。没有类别（老服务）按"被占用"说，同以前。
+ * 保留端口段、系统拒绝两类律师自己处理不了（转发端口是固定的，界面里没有换端口的地方），请他联系技术支持并把端口号带上。
+ */
+export function portText(port: number, category?: PortCategory): string {
+  if (category === 'PORT_RESERVED') return `本机 ${port} 端口在 Windows 的保留端口段里（装了 Hyper-V、WSL、Docker 的电脑上常见），不是被别的程序占用，关掉别的程序也没有用；需要换端口，请联系技术支持`
+  if (category === 'PORT_DENIED') return `本机 ${port} 端口被系统拒绝使用（可能被安全软件或系统策略拦住），请联系技术支持`
+  return `本机 ${port} 端口被其他程序占用，请关闭占用程序后重试`
 }
 
 /**
