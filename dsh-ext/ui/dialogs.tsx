@@ -8,6 +8,7 @@ import { DEFAULT_TARGET, loadRecent, openCase, runImport } from './cases.ts'
 import { KEEP_LABEL } from './settings-draft.ts'
 import { OCR_FIRST, OCR_GO } from './estimate.ts'
 import { ASK_OK, ASK_TEXT, askTitle, DROP_KINDS, type DropKind } from './drop-case.ts'
+import { visibleCases } from './hidden-cases.ts'
 import { CASE_TEMPLATES, customFolderProblem, KIND_WORD, MAX_CUSTOM, type FolderChoice } from '../shared/case-folders.ts'
 
 export function DialogHost() {
@@ -109,7 +110,9 @@ function ImportDialog({ d, close }: { d: Extract<Dialog, { kind: 'import' }>; cl
 
 /** 选择或新建案件（F-ENT-01、F-CASE-01）。 */
 function CasePickDialog({ then, close }: { then?: (c: CaseRef) => void; close: () => void }) {
-  const cases = useStore(app, (s) => s.cases)
+  const all = useStore(app, (s) => s.cases)
+  const hidden = useStore(app, (s) => s.hiddenCases)
+  const cases = visibleCases(all, hidden) // 令 2125：已从左栏列表移除的不列
   const [loading, setLoading] = useState(true)
   useEffect(() => { void loadRecent().finally(() => setLoading(false)) }, [])
   const done = (c: CaseRef | undefined) => { if (c) { close(); then?.(c) } }

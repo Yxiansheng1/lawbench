@@ -16,6 +16,7 @@ import { PRODUCT_NAME } from '../shared/product.ts'
 import { materialCounts, shortTime } from './overview.tsx'
 import { loadSettingsIntoState } from './settings.tsx'
 import { BLANK_HINT, BLANK_IDLE, cardHint, dropOnBlank } from './drop-case.ts'
+import { visibleCases } from './hidden-cases.ts'
 
 /** 首页最多列这么多个案件（日常事务另算）；其余在"打开案件…"里。 */
 export const HOME_MAX_CASES = 12
@@ -52,9 +53,10 @@ export function HomeLanding({ banner }: { banner?: ReactNode }) {
   const ready = recent.state === 'ok'
   useEffect(() => { if (ready) { void reloadCaps(); void loadSettingsIntoState() } }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
   const cases = useStore(app, (s) => s.cases)
+  const hidden = useStore(app, (s) => s.hiddenCases)
   const dailyRoot = useStore(app, (s) => s.dailyRoot)
   const lawyer = useStore(app, (s) => s.lawyerName)
-  const { daily, others } = homeCases(cases, dailyRoot)
+  const { daily, others } = homeCases(visibleCases(cases, hidden), dailyRoot) // 令 2125：已从左栏列表移除的不列
   // 令 1422：空白处（案件卡片之外）拖进文件夹 = 建案件。卡片自己接住拖放并停止冒泡，所以到这里的一定不在卡片上；
   // 拖到卡片上时由卡片把这里的高亮关掉（onOver），两种高亮不同时亮
   const [blankOver, setBlankOverRaw] = useState(false)

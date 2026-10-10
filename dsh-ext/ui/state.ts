@@ -34,6 +34,8 @@ export type Dialog =
 
 export interface AppState {
   cases: CaseRef[]
+  /** 已从左栏列表移除的案件（令 2125，Host 记着）：首页、"切换案件"、"先选择案件"不列；cases 里仍留着，开着的会话照样认得出案件。 */
+  hiddenCases: string[]
   /** 按会话 id（契约 1.2：服务的"当前选择"按会话存，界面同口径，T13 返修 P2-2）。 */
   selections: Record<string, Selection>
   /** 按案件 id：首页点胶囊、成果区"选用"留下的改动，由该案件当前会话的输入区读回服务的选择后取走一次。 */
@@ -64,7 +66,7 @@ export interface AppState {
   lawyerName: string | null
 }
 
-export const app = createStore<AppState>({ cases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null, lawyerName: null })
+export const app = createStore<AppState>({ cases: [], hiddenCases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null, lawyerName: null })
 
 /** 在某会话的输入区上方显示某任务的结果（T14 派修 2）。 */
 export function showTaskAnswer(sessionId: string, taskId: string): void {
@@ -95,7 +97,8 @@ export const caseForRoot = (root: string | undefined): CaseRef | undefined =>
   root ? app.get().cases.find((c) => samePath(c.root, root)) : undefined
 
 export function rememberCase(c: CaseRef): void {
-  app.set((s) => ({ ...s, cases: [c, ...s.cases.filter((x) => x.case_id !== c.case_id && !samePath(x.root, c.root))] }))
+  // 打开成功的案件不再算"已从列表移除"（令 2125；Host 那边在 case_open 成功时已去掉记录）
+  app.set((s) => ({ ...s, cases: [c, ...s.cases.filter((x) => x.case_id !== c.case_id && !samePath(x.root, c.root))], hiddenCases: s.hiddenCases.filter((id) => id !== c.case_id) }))
 }
 
 const EMPTY_SELECTION: Selection = { capsuleId: null, skill: null, params: null, inputs: [], saved: false }

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { openCase } from './cases.ts'
 import { C, getNav } from './kit.tsx'
+import { visibleCases } from './hidden-cases.ts'
 import { app, currentCase, samePath, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
 
@@ -34,6 +35,7 @@ export function menuAt(btn: { right: number; bottom: number }, viewportWidth: nu
 export function CaseSwitcher() {
   const current = useStore(app, currentCase)
   const cases = useStore(app, (s) => s.cases)
+  const hidden = useStore(app, (s) => s.hiddenCases)
   const [open, setOpen] = useState(false)
   const [at, setAt] = useState<{ top: number; left: number } | null>(null)
   const box = useRef<HTMLSpanElement>(null)
@@ -55,7 +57,7 @@ export function CaseSwitcher() {
         style={{ font: 'inherit', fontSize: 12, color: C.sub, background: 'none', border: `1px solid ${C.border}`, borderRadius: 999, padding: '1px 10px', cursor: 'pointer' }}>切换案件 ▾</button>
       {open ? (
         <div role="menu" aria-label="切换案件" style={{ position: 'fixed', top: at?.top ?? 0, left: at?.left ?? 0, width: MENU_WIDTH, zIndex: 1000, background: 'var(--dsw-alias-bg-layer-1, Canvas)', border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.12)', padding: '4px 0' }}>
-          {switchTargets(cases, current).map((c) => (
+          {switchTargets(visibleCases(cases, hidden), current).map((c) => (
             <button key={c.case_id} type="button" role="menuitem" style={item} onClick={() => go(c)} title={c.root}>
               {c.name}
               {c.exists === false ? <span style={{ color: C.faint }}>（不在）</span> : null}

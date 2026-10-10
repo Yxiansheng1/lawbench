@@ -52,7 +52,11 @@ export async function landOnDailyCase(open: (root: string) => Promise<void>, wai
 }
 
 export async function loadRecent(): Promise<CaseRef[] | { code: string; message: string }> {
-  const r = await call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean; last_opened?: string }> }>('caseRecent', {})
+  // 令 2125：一并读"已从列表移除的案件"（Host 记着）；读不到时沿用上次的
+  const [r, hidden] = await Promise.all([
+    call<{ cases: Array<{ case_id: string; name: string; root: string; exists: boolean; last_opened?: string }> }>('caseRecent', {}),
+    call<{ case_ids: string[] }>('caseHidden'),
+  ])
   if (!r.ok) return r.error
   const cases = r.value.cases.map((c) => ({ case_id: c.case_id, name: folderName(c.root) || c.name, root: c.root, exists: c.exists, last_opened: c.last_opened }))
   // 同一案件换了位置（改名或搬走后在新位置重新打开，服务已替换登记）：侧栏里旧位置那一项一并移除（令 1515 第 3 条）
@@ -63,7 +67,7 @@ export async function loadRecent(): Promise<CaseRef[] | { code: string; message:
   app.set((s) => {
     const known = new Map(s.cases.map((c) => [c.case_id, c]))
     for (const c of cases) known.set(c.case_id, c)
-    return { ...s, cases: [...known.values()] }
+    return { ...s, cases: [...known.values()], hiddenCases: hidden.ok && Array.isArray(hidden.value?.case_ids) ? hidden.value.case_ids : s.hiddenCases }
   })
   for (const root of moved) { try { void getNav().forgetCaseWorkspace?.(root).catch(() => undefined) } catch { /* 界面还没准备好：下次再移除 */ } }
   return cases

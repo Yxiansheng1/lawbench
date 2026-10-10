@@ -21,6 +21,7 @@ import { TurnNotices } from '../shared/turn-notices.ts'
 import { requestJson } from './http-json.ts'
 import { readArchivePlan } from './archive-plan.ts'
 import { readTaskAnswer } from './task-answer.ts'
+import { addHidden, dropHidden, HIDDEN_FILE, readHidden } from './hidden-cases.ts'
 import { ensureDailyCase, type DailyResult } from './daily-case.ts'
 import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
@@ -338,6 +339,47 @@ export class LawbenchRemote {
     if (!r.ok) return r
     this.log('info', 'drop.info', { dirs: r.value.filter((x) => x.kind === 'dir').length, files: r.value.filter((x) => x.kind === 'file').length, other: r.value.filter((x) => x.kind === 'other').length })
     return { ok: true, value: { items: r.value } }
+  }
+
+  /**
+   * 左栏"从列表移除案件"后首页和"切换案件"也不再列它（令 2125），见 hidden-cases.ts。
+   * 界面只给被移除那一项的位置；这里按服务登记找到对应的案件再记，没有对应登记的忽略（没登记过的文件夹、已换了位置的旧位置）。
+   * 日志只记结果和个数，不记路径。
+   * @param request - { root }：左栏被移除那一项的文件夹。
+   * @returns hidden：这次有没有记下；case_ids：现在记着的全部案件。
+   */
+  async caseHide(request: unknown): Promise<{ ok: true; value: { hidden: boolean; case_ids: string[] } } | ApiFail> {
+    const root = (request as { root?: unknown } | null)?.root
+    if (typeof root !== 'string' || !root) return { ok: false, error: { code: 'INVALID_ARGUMENT', message: '请求参数有误' } }
+    const recent = await this.callApi(API_ROUTES.find((x) => x.method === 'caseRecent')!, {})
+    if (!recent.ok) return recent
+    const cases = (recent.value as { cases?: Array<{ case_id: string; root: string }> }).cases ?? []
+    const known = cases.find((c) => sameFolder(c.root, root, this.desk.realpath))
+    const file = join(this.appData, HIDDEN_FILE)
+    try {
+      const all = known ? addHidden(file, { case_id: known.case_id, root: known.root }) : readHidden(file)
+      this.log('info', 'case.hide', { hidden: !!known, total: all.length })
+      return { ok: true, value: { hidden: !!known, case_ids: all.map((c) => c.case_id) } }
+    } catch {
+      this.log('warn', 'case.hide', { ok: false })
+      return { ok: false, error: { code: 'INTERNAL', message: '没能记下，请重试' } }
+    }
+  }
+
+  /** 现在记着的"已从列表移除的案件"（令 2125）；记录读不出来按没有。 */
+  async caseHidden(): Promise<{ ok: true; value: { case_ids: string[] } }> {
+    return { ok: true, value: { case_ids: readHidden(join(this.appData, HIDDEN_FILE)).map((c) => c.case_id) } }
+  }
+
+  /** 案件打开成功：它不再算"已从列表移除"（令 2125）。记录写不了不影响打开。 */
+  unhide(request: unknown, value: unknown): void {
+    const caseId = (value as { case_id?: unknown } | null)?.case_id
+    const path = (request as { path?: unknown } | null)?.path
+    if (typeof caseId !== 'string') return
+    try {
+      const n = dropHidden(join(this.appData, HIDDEN_FILE), caseId, typeof path === 'string' ? path : undefined)
+      if (n) this.log('info', 'case.unhide', { dropped: n })
+    } catch { this.log('warn', 'case.unhide', { ok: false }) }
   }
 
   private dailyQueue: Promise<unknown> = Promise.resolve()
@@ -676,7 +718,7 @@ for (const route of API_ROUTES) {
       // 接下来界面打开工作区、挂回会话、律师续写都按新名单走（T17 第四轮复核 B-F1）
       ? async function (this: LawbenchRemote, request: unknown) {
         const r = await this.callApi(route, request)
-        if (r.ok) await this.refreshCaseRoots()
+        if (r.ok) { this.unhide(request, r.value); await this.refreshCaseRoots() }
         return r
       }
       : function (this: LawbenchRemote, request: unknown) { return this.callApi(route, request) },

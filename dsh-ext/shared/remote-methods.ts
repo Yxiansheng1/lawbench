@@ -56,6 +56,9 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'caseWiki', params: ['request'] },
   // 令 1422（第七版待办 20）：首页空白处拖进文件夹建案件，Host 看拖进来的是文件还是文件夹、是不是已经当过案件
   { method: 'dropInfo', params: ['request'] },
+  // 令 2125：左栏"从列表移除案件"后首页和"切换案件"也不再列它——Host 本机记（服务没有删除登记的接口，候契约 1.4 的 case_forget）
+  { method: 'caseHide', params: ['request'] },
+  { method: 'caseHidden', params: [] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

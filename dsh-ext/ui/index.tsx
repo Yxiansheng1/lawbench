@@ -17,6 +17,7 @@ import { CaseSwitcher } from './case-switcher.tsx'
 import { createRightbarSeeder, forgetIfGone, loadSeeded, RIGHTBAR_TABS, saveSeeded, seedTabsCollapsed } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
 import { addCaseFromPicked } from './drop-case.ts'
+import { watchRemovedCases } from './hidden-cases.ts'
 import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
@@ -50,7 +51,7 @@ type Ctx = {
   workspaces: {
     create(req: { path: string }): Promise<{ workspaceId: string }>
     delete(workspaceId: string): Promise<void>
-    list?: Observable<{ items: Array<{ workspaceId: string; path: string; title?: string }> }>
+    list?: Observable<{ items: Array<{ workspaceId: string; path: string; title?: string }>; state?: string }>
   }
   sidebarRight: { openTab(kind: string, opts?: { params?: Record<string, string> }): unknown; mounted: Observable<string | undefined>; isExpanded?(): boolean; toggleExpanded?(): void }
   /** DSH ui-conversation：按会话事件收每轮数据（成果卡片用，令 1321 C）。 */
@@ -164,8 +165,11 @@ function registerWorkspace(ctx: Ctx): void {
   // 1612 复核 P1：不撤刚打开的那一项；移除前问 Host 旧位置是不是确实不在了（在就不撤：多半是同一位置换了写法）
   navImpl.forgetCaseWorkspace = async (root, except) => {
     const items = ctx.workspaces.list?.getSnapshot().items ?? []
-    await forgetIfGone(items, root, except ?? lastOpenedWorkspace, samePath, (path) => call<{ exists: boolean }>('pathState', { path }), (id) => ctx.workspaces.delete(id))
+    await forgetIfGone(items, root, except ?? lastOpenedWorkspace, samePath, (path) => call<{ exists: boolean }>('pathState', { path }), (id) => { ownRemoved.add(id); return ctx.workspaces.delete(id) })
   }
+  // 令 2125：律师在左栏"从列表移除案件"后，首页和"切换案件"也不再列它（程序自己撤掉的旧位置那一项不算）
+  const ownRemoved = new Set<string>()
+  if (ctx.workspaces.list) { const list = ctx.workspaces.list; ctx.effect(() => watchRemovedCases(list, ownRemoved), '律师工作台界面：从列表移除案件') }
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
   ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined; navImpl.forgetCaseWorkspace = undefined }, '律师工作台界面：打开案件')
