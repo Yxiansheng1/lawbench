@@ -1,4 +1,4 @@
-﻿T20 Authenticode signatures of shipped binaries (packaging\build.ps1 signcheck, 2026-10-10 16:15)
+﻿T20 Authenticode signatures of shipped binaries (packaging\build.ps1 signcheck, 2026-10-10 17:21)
 stage: 339 binaries (.exe/.dll/.pyd, LibreOffice excluded: its own release is signed by The Document Foundation), 210 not validly signed
 
 == Python interpreter (python\*.exe, python\*.dll, python\DLLs\*)

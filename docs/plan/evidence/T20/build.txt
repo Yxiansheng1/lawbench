@@ -273,3 +273,36 @@ versions.lock 由 lock 步重生成，变一行：retainer 3.4.1 → 3.4.1-lawbe
   卸载 /S，退出 0，11 s，各项同上
   还原：删掉冒烟写的 settings.json、cases.json、daily-case.json、案件根名单.json 和两个 marker 目录；测试时打开的 Word 文档、资源管理器窗口都已关
   <用户目录>\连越律师工作台\日常事务 是冒烟前就有的（10-07 21:21 建），没有删
+
+
+==== 第七版候选包·重打（一行令 致A-ORCH-一行令-重打第七版-20261010-1716）· 2026-10-10 ====
+上一个第七版包（67a10102…，戳 202610101611）不发：拖文件夹建成后"材料 0 份"。修法 b7e64c3 复核 PASS 合入后重打。
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库；out\ 只有这一版）
+  大小 655957418 B（626 MB；上一个第七版包 655955124 B，+2294 B）
+  sha256 33626f745e744f2ae97db68f168e4aa9e60aeb7c880a099e924cbe6df79799c2
+  未签名
+基座 main 47f4ad0（rebase 后 HEAD 与 main 一致）。LAWBENCH_BUILD_STAMP=202610101718，界面版本号 0.1.0+202610101718。
+17:18 起，17:38 完成。打法同前。
+各步耗时：brand 2 s · dsh 75 s · python 26 s · tools 20 s · smalltools 85 s · skills 0 s · engines 1 s · lock 2 s · signcheck 13 s · package 985 s
+运行时 npm 锁 323/323；electron 缓存未新增；签名 339 个 210 个无有效签名（同前）；DSH 打包后冒烟通过。打包前严格补丁链 158/0。
+
+冒烟（按令只跑五项；端口被占、开始菜单等其余项引用上一节的结果——两个包之间的代码差只有 b7e64c3 改的四个界面文件）
+一、全新安装：/S /D=D:\lawbench-smoke7，退出 0，55 s；布局全在；24726 个文件、2108 MB；无 primary-runtime；installer-cache 不在；
+    两个模拟原版 marker 不变；开始菜单三项指向正确；python -I stderr utf-8、3.12.10
+    启动：服务 running，自检 python/tokenizer/libreoffice/pandoc ok；首次配置填"测试律师"→ 首页，版本号 0.1.0+202610101718
+    （smoke-第七版重打-首页-版本号.png）；卸载 /S 退出 0、10 s，各项干净，marker 仍在
+二、第六版覆盖装：装第六版（058648…，app.asar 38c2d847…）→ 首次配置填"测试律师"、"打开案件…"打开"甲,乙买卖合同纠纷（虚构）"，版本号 0.1.0
+    → 不卸载装本包（退出 0，63 s）→ 不出首次配置页，律师姓名、两个案件都在，版本号 0.1.0+202610101718
+    （smoke-第七版重打-覆盖第六版后.png）；装上的 app.asar 9809d2a2…3dfb9d 等于构建出的那份
+三、拖文件夹建成后概览份数：真实拖放把虚构文件夹"钱某合同纠纷（虚构）"（3 个文件）拖到空白处 → 确认框 →"建成案件"
+    → 弹"扫描完成：新增 3、变化 0、移除 0、失败 0"（smoke-第七版重打-拖文件夹-扫描完成新增3.png）
+    → 进入案件，概览"材料 3 份"（smoke-第七版重打-拖文件夹-概览材料3份.png）
+    Host 日志：drop.info → caseOpen → materialsScan 各一次；原有 3 个文件原样在
+四、卡片拖动高亮稳定：真实拖放把文件停在"甲,乙…"卡片上方，逐个事件记卡片是否亮着：
+    dragenter:off , dragover:ON , dragenter:ON , dragleave:ON , dragover:ON ×4 , drop
+    中间那次 dragenter/dragleave（指针下换成卡片里的另一个元素）没有把高亮关掉；松手即弹加材料确认框（已取消，没有复制）
+    （smoke-第七版重打-卡片高亮.png）
+五、含逗号打开：在"甲,乙买卖合同纠纷（虚构）"里，"打开所在文件夹"开的是 …\甲,乙买卖合同纠纷（虚构）\成果，没有别的窗口；
+    点"借款合同,补充协议-v1.docx"由 Word 打开了这份文件
+收尾：卸载 /S 退出 0、8 s；删掉冒烟写的 settings.json 等四个文件和两个 marker 目录；测试时开的 Word、资源管理器窗口已关；
+    <用户目录>\连越律师工作台\日常事务（冒烟前就有）没有动
