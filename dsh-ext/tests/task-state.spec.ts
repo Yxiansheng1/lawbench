@@ -36,7 +36,7 @@ describe('工具预算（Spec 9.2，Q10）', () => {
 })
 
 describe('模型调用预算与立即收尾', () => {
-  it('8 次后拒绝；第 8 次前要求注入立即收尾，且只注一次', () => {
+  it('8 次后拒绝；还剩两次时（第 7 次前）要求注入立即收尾，且只注一次（令 0321：比原来提前一次）', () => {
     const s = mk()
     const wraps: boolean[] = []
     for (let i = 0; i < 8; i++) {
@@ -44,7 +44,7 @@ describe('模型调用预算与立即收尾', () => {
       expect(d.kind).toBe('continue')
       wraps.push(d.kind === 'continue' && d.wrapUp)
     }
-    expect(wraps).toEqual([false, false, false, false, false, false, false, true])
+    expect(wraps).toEqual([false, false, false, false, false, false, true, false])
     expect(s.beforeModelCall(1000)).toEqual({ kind: 'reject', reason: 'model_calls' })
     expect(s.modelCalls).toBe(8)
   })

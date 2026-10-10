@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { TOOL_NAMES, toolDescription, toolId, toolParameters, validate } from '../shared/contracts.ts'
 import { CoreClient, type Endpoint, type Logger } from '../shared/core-client.ts'
 import { defaultAppData, makeLogger } from '../shared/file-log.ts'
-import { ALLOWED_OTHER_TOOLS, ASK_USER_TOOL, TaskState, WRAP_UP_TEXT, reasoningEffort, type Budget, type Params } from './task-state.ts'
+import { ALLOWED_OTHER_TOOLS, ASK_USER_TOOL, BUDGET_EXEMPT_TOOL, TaskState, UNFINISHED_TITLE, reasoningEffort, type Budget, type Params } from './task-state.ts'
 
 export const name = 'lawbench-agent'
 export const inject = ['tools', 'lawbenchCore']
@@ -36,6 +36,8 @@ const snapshot = (sections: Array<{ name: string; text: string }>): UserMessage 
 
 export const DENY_NOT_ALLOWED = '该工具在律师工作台不可用'
 export const DENY_BUDGET = '已达到本次任务的上限，已保存草稿'
+/** 最后一次模型调用发起了存草稿以外的案件工具（令 0321）。 */
+export const DENY_WRAP_UP = '这是本次任务的最后一次调用：只能用 case_save_draft 保存草稿，或直接写出回答'
 /** 到达用量上限（模型调用次数或时间）整轮收尾时记的提示码，见 shared/turn-notices.ts。 */
 export const BUDGET_STOPPED = 'BUDGET_STOPPED'
 /** 输入区写任务单明确失败、还没重写成（T14 第二次实跑派修 2）：整轮拒绝，不拿上一张任务单发。 */
@@ -113,13 +115,31 @@ export class LegalAgent {
     const d = state.beforeModelCall()
     if (d.kind === 'reject') {
       this.log('info', 'agent.model_budget', { reason: d.reason, model_calls: state.modelCalls })
+      // 令 0321：到顶时这个任务还没有草稿，就把最后一条回复的文字代存成"未完成"的草稿，律师不至于一无所有
+      await this.saveUnfinished(state)
       // 到达用量上限：模型这时往往刚存完草稿、没写文字回答（T14 实跑）。记下任务编号，输入区据此在对话区显示
       // 提示和刚存的草稿（出处可点；T14 派修 2，用户选"对话区显示草稿"）
       this.noteBlocked(agent.id, BUDGET_STOPPED, state.taskId)
       return { kind: 'reject' }
     }
-    if (d.wrapUp) added.push(notice('lawbench-budget', '立即收尾', WRAP_UP_TEXT))
+    if (d.wrapUp) added.push(notice('lawbench-budget', '立即收尾', state.wrapUpNotice))
     return added.length ? { ...decision, messages: [...decision.messages, ...added] } : decision
+  }
+
+  /**
+   * 预算到顶、这个任务还没有草稿：把最后一条回复的文字按存草稿的口径存一次（经 /core/tool 的 case_save_draft，标题以"（未完成）"结尾）。
+   * 没有文字可存、存不成都不拦收尾（界面照旧说"没有存下草稿"）。日志只记结果，不记标题和正文。
+   * @returns 存成了为 true。
+   */
+  async saveUnfinished(state: TaskState): Promise<boolean> {
+    if (state.draftSaved) return false
+    const text = state.lastReply()?.trim()
+    if (!text) return false
+    const r = await this.core.call('tool', { task_id: state.taskId, tool: BUDGET_EXEMPT_TOOL, args: { title: UNFINISHED_TITLE, content: text } }).catch(() => undefined)
+    const ok = r?.ok === true
+    if (ok) state.draftSaved = true
+    this.log(ok ? 'info' : 'warn', 'agent.unfinished_draft', { saved: ok, code: r && !r.ok ? r.error.code : undefined })
+    return ok
   }
 
   /** agent/request：按任务单设思考档、最大生成量、温度。Q5：不切换 model。 */
@@ -149,6 +169,7 @@ export class LegalAgent {
     const d = state.beforeTool(toolName)
     if (d.allow) return { kind: 'allow' }
     if (d.reason === 'tool_budget') this.log('info', 'agent.tool_budget', { tool_calls: state.toolCalls })
+    if (d.reason === 'wrap_up_only') { this.log('info', 'agent.wrap_up_only', { tool: toolName }); return { kind: 'deny', reason: DENY_WRAP_UP } }
     return { kind: 'deny', reason: d.reason === 'tool_budget' ? DENY_BUDGET : DENY_NOT_ALLOWED }
   }
 
@@ -163,6 +184,7 @@ export class LegalAgent {
       this.log('error', 'agent.tool_result_contract', { tool, errors: errs })
       throw new Error('内部错误，请重试；多次出现请联系技术支持')
     }
+    if (tool === BUDGET_EXEMPT_TOOL) state.draftSaved = true
     return r.value
   }
 

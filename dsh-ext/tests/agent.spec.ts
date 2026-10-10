@@ -107,7 +107,7 @@ describe('预算（验收：第 25 次被拒绝，case_save_draft 仍可调用�
     expect(a.tasks.get('s-3')!.endReason('completed')).toBe('budget')
   })
 
-  it('模型调用第 8 次前注入立即收尾，第 9 次拒绝', async () => {
+  it('模型调用还剩两次时（第 7 次前）注入立即收尾，只注一次；第 9 次拒绝', async () => {
     const a = mk()
     const texts: string[] = []
     for (let step = 1; step <= 8; step++) {

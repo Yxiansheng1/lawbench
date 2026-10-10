@@ -7,6 +7,7 @@ import { useMemo } from 'react'
 import { citationInlineMarks } from './citation.ts'
 import { citationDeps } from './citation-deps.ts'
 import { Button, C, Loading, useLoad } from './kit.tsx'
+import { ResultCard } from './result-cards.tsx'
 import { app, call, hideTaskAnswer, type CaseRef } from './state.ts'
 import { useStore } from './store.ts'
 
@@ -27,8 +28,12 @@ export function answerNotice(v: Pick<TaskAnswerView, 'used' | 'limit' | 'draft'>
   const known = v.used !== null && v.limit !== null
   const head = known && v.used! >= v.limit! ? `已用完本次运行的模型调用次数（${v.used}/${v.limit}）`
     : known ? `已到本次运行的用量上限（模型调用 ${v.used}/${v.limit}）` : '已到本次运行的用量上限'
-  return v.draft ? `${head}，结果已保存到成果` : `${head}，没有存下草稿；做到哪里请看成果里的"未完成"`
+  // 令 0321：有草稿（模型自己存的，或到顶时代存的"未完成"草稿）说"已把做到的部分存为草稿"；没有任何文字可存时照旧
+  return v.draft ? `${head}，已把做到的部分存为草稿` : `${head}，没有存下草稿；做到哪里请看成果里的"未完成"`
 }
+
+/** 到顶时由 Agent 插件代存的草稿（标题以"（未完成）"结尾，同 agent\task-state.ts 的 UNFINISHED_SUFFIX）。 */
+export const isUnfinished = (title: string): boolean => title.endsWith('（未完成）')
 
 const LABELS = { code: { copyLabel: '复制', copiedLabel: '已复制' }, footnotes: '注释' }
 
@@ -55,6 +60,8 @@ function TaskAnswerPanel({ caseRef, sessionId, taskId }: { caseRef: CaseRef; ses
               <div style={{ color: C.sub, fontSize: 12, margin: '4px 0' }}>草稿"{v.draft.title}"（第 {v.draft.version} 版）。点出处打开原文；到"成果"里确认保存、导出。</div>
               <MarkdownText text={v.draft.text} labels={LABELS} inlineMarks={marks} />
               {v.draft.truncated ? <div style={{ color: C.sub, fontSize: 12 }}>草稿较长，这里只显示前一部分。</div> : null}
+              {/* 到顶时代存的草稿不是模型调工具存的，聊天流里没有它的卡片：在这里放一张，可以确认保存、选作下一步输入 */}
+              {isUnfinished(v.draft.title) ? <ResultCard caseRef={caseRef} sessionId={sessionId} draft={{ seq: 0, title: v.draft.title, path: v.draft.path, version: v.draft.version, coverage: null, citation_check: null }} /> : null}
             </>
           ) : null}
         </>

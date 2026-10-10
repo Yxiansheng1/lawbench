@@ -109,13 +109,13 @@ describe('Host 读任务结果（host/task-answer.ts）', () => {
 describe('提示文字（answerNotice）', () => {
   const d = { title: 'x', version: 1, path: 'p', text: '', truncated: false }
   it('用完模型调用次数、有草稿：执行令原文；不看 status（result.json 还是 running 也按到顶说，复核 F2）', () => {
-    expect(answerNotice({ used: 8, limit: 8, draft: d })).toBe('已用完本次运行的模型调用次数（8/8），结果已保存到成果')
-    expect(answerNotice({ status: 'running', used: 8, limit: 8, draft: d } as never)).toBe('已用完本次运行的模型调用次数（8/8），结果已保存到成果')
+    expect(answerNotice({ used: 8, limit: 8, draft: d })).toBe('已用完本次运行的模型调用次数（8/8），已把做到的部分存为草稿')
+    expect(answerNotice({ status: 'running', used: 8, limit: 8, draft: d } as never)).toBe('已用完本次运行的模型调用次数（8/8），已把做到的部分存为草稿')
   })
   it('没用满（5/8：时间到或用量没写完）写已用/上限，写反能测出来（复核 F3）；没存草稿；次数读不到不写括号', () => {
-    expect(answerNotice({ used: 5, limit: 8, draft: d })).toBe('已到本次运行的用量上限（模型调用 5/8），结果已保存到成果')
+    expect(answerNotice({ used: 5, limit: 8, draft: d })).toBe('已到本次运行的用量上限（模型调用 5/8），已把做到的部分存为草稿')
     expect(answerNotice({ used: 8, limit: 8, draft: null })).toBe('已用完本次运行的模型调用次数（8/8），没有存下草稿；做到哪里请看成果里的"未完成"')
-    expect(answerNotice({ used: null, limit: null, draft: d })).toBe('已到本次运行的用量上限，结果已保存到成果')
+    expect(answerNotice({ used: null, limit: null, draft: d })).toBe('已到本次运行的用量上限，已把做到的部分存为草稿')
   })
 })
 
@@ -168,13 +168,33 @@ describe('输入区上方显示草稿（dock）', () => {
     withApi(BUDGET_STOPPED)
     await mount('S1'); await flush(800)
     const text = h.container.textContent ?? ''
-    expect(text).toContain('已用完本次运行的模型调用次数（8/8），结果已保存到成果')
+    expect(text).toContain('已用完本次运行的模型调用次数（8/8），已把做到的部分存为草稿')
     expect(text).toContain('草稿"刑事阅卷笔录"（第 1 版）')
     const cites = [...h.container.querySelectorAll('button[aria-label^="打开原文："]')].map((b) => b.textContent)
     expect(cites).toEqual(['起诉意见书 第2页', '讯问笔录 第2页', '转账截图 第1页'])
     await act(async () => { (h.container.querySelector('button[aria-label="打开原文：讯问笔录 第2页"]') as HTMLButtonElement).click() })
     await flush(50)
     expect(opened).toEqual([['lawbench-source', { material_id: 'M2', citation: '〔讯问笔录 第2页〕' }]])
+  })
+  it('令 0321：到顶时代存的"（未完成）"草稿——提示下面多一张草稿卡片（聊天流里没有它的卡片）；模型自己存的草稿不多这张', async () => {
+    withApi(BUDGET_STOPPED)
+    await mount('S1'); await flush(800)
+    const panel = () => h.container.querySelector('[aria-label="本次运行的结果"]')!
+    expect(panel().querySelector('[data-result-state]')).toBeNull() // 模型自己存的"刑事阅卷笔录"
+    setApi({
+      ...api(),
+      turnNotice: async () => ({ ok: true, value: { code: BUDGET_STOPPED, task_id: T } }),
+      taskAnswer: async () => ({ ok: true, value: { status: 'budget', session_id: 'S3', used: 16, limit: 16,
+        draft: { title: '本次回答（未完成）', version: 1, path: `工作区/任务/${T}/草稿/本次回答（未完成）-v1.md`, text: '初步意见：数额待核。', truncated: false } } }),
+      tasksList: async () => ({ ok: true, value: { tasks: [{ task_id: T, skill: 'sentence-calc', status: 'budget', drafts: [{ title: '本次回答（未完成）', path: `工作区/任务/${T}/草稿/本次回答（未完成）-v1.md`, version: 1 }] }] } }),
+      outputsList: async () => ({ ok: true, value: { outputs: [] } }),
+    } as never)
+    await mount('S3'); await flush(800)
+    expect(panel().textContent).toContain('已用完本次运行的模型调用次数（16/16），已把做到的部分存为草稿')
+    const card = panel().querySelector('[data-result-state="draft"]')!
+    expect(card).toBeTruthy()
+    expect(card.textContent).toContain('本次回答（未完成）')
+    expect([...card.querySelectorAll('button')].some((b) => b.textContent === '确认保存…' && !b.disabled)).toBe(true)
   })
   it('别的码（或没有）不显示；"收起"后消失', async () => {
     withApi('CASE_MOVED')
