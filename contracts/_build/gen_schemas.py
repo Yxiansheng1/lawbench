@@ -336,6 +336,11 @@ api = [
      opt(obj({"case_id": ref("case_id"), "name": s("文件夹名"), "created": b("本次新建了 工作区/"),
               "folders_created": arr(s(), description="本次按目录模板新建的子文件夹")}),
          kind=nullable(ref("case_kind")))),
+    ("case_forget", "POST /api/case/forget",
+     "从最近案件里移除一个案件（1.4 起）：只删 cases.json 里的这条登记，case_recent 不再列出；案件文件夹和里面的一切都不动，"
+     "以后再打开同一个文件夹仍是原来的案件。没有登记的不报错（幂等）",
+     obj({"case_id": ref("case_id")}),
+     obj({"already_forgotten": b("本来就没有登记（包括已经移除过）")})),
     ("case_recent", "GET /api/case/recent", "最近案件（按最近打开时间倒序）", obj({}),
      obj({"cases": arr(opt(obj({"case_id": ref("case_id"), "name": s(), "root": s(), "last_opened": ref("time"),
                                 "exists": b("文件夹是否还在")}),

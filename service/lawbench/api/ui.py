@@ -88,6 +88,9 @@ def routes(st) -> list[Route]:
         return src.view(st.cases.root_of(d["case_id"]), d["case_id"], st.materials.index(d["case_id"]),
                         d["material_id"], d["citation"], d.get("task_id"))
 
+    def case_forget(d: dict) -> dict:        # 契约 1.4：从最近案件里移除（只删登记，不动案件文件夹）
+        return st.cases.forget(d["case_id"])
+
     def case_recent(d: dict) -> dict:
         return {"cases": st.cases.recent()}
 
@@ -171,6 +174,7 @@ def routes(st) -> list[Route]:
     return [
         Route("/api/case/open", E("case_open", case_open), methods=["POST"]),
         Route("/api/case/recent", E("case_recent", case_recent, query=True), methods=["GET"]),
+        Route("/api/case/forget", E("case_forget", case_forget), methods=["POST"]),
         Route("/api/settings", E("settings", settings_get, query=True, no_input=True), methods=["GET"]),
         Route("/api/settings", E("settings", settings_put), methods=["PUT"]),
         Route("/api/capsules", E("capsules", capsules_get, query=True, no_input=True), methods=["GET"]),

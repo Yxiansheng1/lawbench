@@ -110,6 +110,9 @@ ex("api_materials_import.res_bad_reason.json", "api/materials_import.schema.json
                           "scan": {"added": 0, "changed": 0, "removed": 0, "failed": 0, "review_needed": False}}},
    "#/$defs/response", expect="invalid")
 
+ex("api_case_forget.req.json", "api/case_forget.schema.json", {"case_id": CASE}, "#/$defs/request")
+ex("api_case_forget.res.json", "api/case_forget.schema.json", {"ok": True, "value": {"already_forgotten": False}},
+   "#/$defs/response")
 ex("api_case_open.req_kind.json", "api/case_open.schema.json",
    {"path": "D:\\案件\\张某甲诈骗案", "template": "criminal", "kind": "criminal"}, "#/$defs/request")
 ex("api_case_open.req_bad_kind.json", "api/case_open.schema.json",

@@ -159,7 +159,7 @@ def test_no_recycle_bin_location_is_not_removed(env):
 
 
 @pytest.mark.skipif(not IS_WIN, reason="盘类型判断只在 Windows 上有")
-def test_has_recycle_bin_only_on_fixed_local_drive(monkeypatch):
+def test_has_recycle_bin_only_on_fixed_local_drive(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(trash, "drive_type", lambda root: calls.append(root) or 3)
     assert trash.has_recycle_bin("C:\\案件\\a.pdf") is True and calls == ["C:\\"]
@@ -176,9 +176,13 @@ def test_has_recycle_bin_only_on_fixed_local_drive(monkeypatch):
     monkeypatch.setattr(trash, "drive_type", boom)
     assert trash.has_recycle_bin("C:\\a.pdf") is False                              # 查不出来按没有
     monkeypatch.setattr(trash, "drive_type", lambda root: 4)
-    with pytest.raises(OSError):                                                    # recycle 自己也兜一道
-        trash.recycle(__file__)
-    assert os.path.isfile(__file__)
+    called = []
+    monkeypatch.setattr(trash, "_recycle_windows", lambda p: called.append(p))      # 真回收函数换掉：这一例不碰系统回收站
+    f = tmp_path / "临时文件.txt"
+    f.write_text("x", encoding="utf-8")
+    with pytest.raises(OSError):                                                    # recycle 自己也兜一道：没有回收站就不往下走
+        trash.recycle(f)
+    assert called == [] and f.is_file()
 
 
 @pytest.mark.skipif(not IS_WIN, reason="junction 只在 Windows 上有")
@@ -215,6 +219,7 @@ def test_index_rel_path_tampered_fails_that_one_not_500(env):
     body = r.json()
     if body["ok"]:
         assert body["value"]["removed"] == [] and body["value"]["failed"][0]["material_id"] == mid
+        assert body["value"]["failed"][0]["reason"] == "材料索引已损坏，未移除；请联系技术支持"   # 不引导重扫（scan/list 同样读不了）
     else:
         assert body["error"]["code"] != "INTERNAL"
     assert env.recycled == []

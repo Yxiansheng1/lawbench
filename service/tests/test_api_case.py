@@ -142,6 +142,24 @@ def test_case_open_kind_travels_with_case(make_client, case_root, tmp_path):
     assert ok(c.post("/api/case/open", json={"path": str(case_root), "kind": "daily"}), "case_open")["kind"] == "daily"
 
 
+def test_case_forget_only_drops_registration(client, case_root):
+    """契约 1.4 候项 17：case_forget 只删 cases.json 的登记，最近案件不再列出；案件文件夹里的东西一个不动；
+    再来一次返回 already_forgotten；重新打开同一个文件夹还是原来的 case_id。"""
+    v = ok(client.post("/api/case/open", json={"path": str(case_root), "kind": "civil"}), "case_open")
+    cid = v["case_id"]
+    before = sorted((str(p.relative_to(case_root)), p.stat().st_size) for p in case_root.rglob("*") if p.is_file())
+    assert ok(client.post("/api/case/forget", json={"case_id": cid}), "case_forget") == {"already_forgotten": False}
+    assert ok(client.get("/api/case/recent"), "case_recent")["cases"] == []
+    assert sorted((str(p.relative_to(case_root)), p.stat().st_size) for p in case_root.rglob("*") if p.is_file()) == before
+    fail(client.get("/api/materials", params={"case_id": cid}), "materials_list", "CASE_NOT_FOUND")   # 登记没了，接口不认这个编号
+    assert ok(client.post("/api/case/forget", json={"case_id": cid}), "case_forget") == {"already_forgotten": True}
+    assert ok(client.post("/api/case/forget", json={"case_id": "00000000-0000-4000-8000-000000000000"}),
+              "case_forget") == {"already_forgotten": True}
+    fail(client.post("/api/case/forget", json={"case_id": "不是编号"}), "case_forget", "INVALID_ARGUMENT")
+    again = ok(client.post("/api/case/open", json={"path": str(case_root)}), "case_open")
+    assert again["case_id"] == cid and again["created"] is False and again["kind"] == "civil"
+
+
 def test_case_open_chosen_folders(client, case_root):
     """契约 1.4：folders 给了就只建勾选的（按标准目录表顺序），不在表里或没给 template 的整个拒绝、什么都不建。"""
     fail(client.post("/api/case/open", json={"path": str(case_root), "template": "criminal",

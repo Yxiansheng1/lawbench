@@ -93,6 +93,19 @@ class CaseRegistry:
                     return c["root"]
         raise ApiError("CASE_NOT_FOUND", "unknown_case_id")
 
+    def forget(self, case_id: str) -> dict:
+        """从 cases.json 删掉这条登记（契约 1.4 case_forget）。只动登记：案件文件夹、工作区、case.db 一概不碰，
+        以后再打开同一个文件夹还是原来的 case_id。没有登记的返回 already_forgotten（幂等）。"""
+        with self._lock:
+            data = self._load()
+            kept = [c for c in data["cases"] if c["case_id"] != case_id]
+            gone = len(kept) != len(data["cases"])
+            if gone:
+                data["cases"] = kept
+                self._save(data)
+        logs.event("case", "forget", case_id=case_id)
+        return {"already_forgotten": not gone}
+
     def find_by_root(self, cwd: str) -> tuple[str, str]:
         """会话头的 cwd → (case_id, 注册表里的 root)。cwd 不在注册表中一律 CASE_NOT_FOUND（Spec 4.3）。"""
         if not isinstance(cwd, str) or not cwd or "\x00" in cwd:

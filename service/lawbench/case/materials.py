@@ -515,10 +515,11 @@ class Materials:
             with self._lock(case_id):
                 known = {m["material_id"] for m in self._load_index(root, case_id)["materials"]}
         except contracts.ContractError:
-            # index.json 不合契约（如某条路径被改到案件外）：不敢按它去动文件，也没法安全改写，全部记为没移除（1.4 复核 NOTE 2）
+            # index.json 不合契约（如某条路径被改到案件外）：不敢按它去动文件，也没法安全改写，全部记为没移除（1.4 复核 NOTE 2）。
+            # 不引导重新扫描：scan、list 遇到坏索引同样读不了（那两处的 500 转业务码另记后续）
             logs.event("materials", "remove", status="fail", case_id=case_id, error="INDEX_INVALID")
             return {"removed": [], "already_removed": [], "wiki_needs_update": False,
-                    "failed": [{"material_id": mid, "reason": "材料索引已损坏，未移除；请先重新扫描"} for mid in material_ids]}
+                    "failed": [{"material_id": mid, "reason": "材料索引已损坏，未移除；请联系技术支持"} for mid in material_ids]}
         if any(mid not in known for mid in material_ids):
             raise ApiError("MATERIAL_NOT_FOUND", "remove_unknown")
         if self.before_remove is not None:               # 识别队列：先停掉这些材料还在跑的识别（它自己要拿案件锁）

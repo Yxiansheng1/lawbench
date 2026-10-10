@@ -1068,7 +1068,7 @@ li{margin:3px 0}
 <li>每次执行（识别、流水线、抽取、Agent 任务）创建时分配 <code>task_id</code>（识别为 <code>job_id</code>），同时固定所属案件、输入材料的版本和律师确认过的发送范围；之后的进度查询、取消都按 <code>task_id</code>，与界面当前显示哪个案件无关。</li>
 <li>插件调用 <code>/core/*</code> 时，由会话头的 <code>cwd</code> 查出 <code>case_id</code>；<code>cwd</code> 不在注册表中的会话，工具一律拒绝。</li>
 </ul>
-<p>共 27 个接口（1.4 加 <code>materials_remove</code>、<code>wiki_review</code>），请求和返回的字段见第 20.5 节和 <a href="../contracts/api/"><code>contracts/api/</code></a>，下表只说作用。</p>
+<p>共 28 个接口（1.4 加 <code>materials_remove</code>、<code>wiki_review</code>、<code>case_forget</code>），请求和返回的字段见第 20.5 节和 <a href="../contracts/api/"><code>contracts/api/</code></a>，下表只说作用。</p>
 <table>
 <thead>
 <tr>
@@ -1086,6 +1086,11 @@ li{margin:3px 0}
 <tr>
 <td><code>GET /api/case/recent</code></td>
 <td>最近案件</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/case/forget</code></td>
+<td>从最近案件里移除（1.4 起）：只删登记，案件文件夹不动；幂等</td>
 <td>否</td>
 </tr>
 <tr>
@@ -3198,7 +3203,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <tr>
 <td>1.4</td>
 <td>2026-10-10</td>
-<td>攒下的候项一批（<code>D:\lawbench-coord\ORCH-契约1.4候项.md</code>，用户 10-10 定）：①出处正则允许材料名里带成对的〔…〕（N45）；②错误码加 <code>ORIGINAL_HAS_REVISIONS</code>、<code>CASE_CARD_INVALID</code>；③<code>pipeline_status</code> 加可选 <code>notice</code>（395 抽取被跳过的提示）；④<code>/api/source</code> 请求加可选 <code>task_id</code>；⑤新接口 <code>materials_remove</code>，<code>material_status</code> 加 <code>removed</code>（SEC-08 口径：原件移到回收站）；⑥<code>materials_list</code> 每项加可选 <code>chars</code>；⑦<code>case_read_material</code> 加可选 <code>more_names</code>、返回加可选 <code>parts</code>；⑧<code>成果/索引.json</code> 每条加可选 <code>draft</code>（来源草稿路径）；⑨<code>materials_import</code> 跳过原因去掉&quot;云同步目录&quot;（N80 后不再出现）；⑩<code>case_open</code> 加可选 <code>folders</code>（律师勾选的子文件夹）；⑪新接口 <code>wiki_review</code>，<code>case.json</code> 加可选 <code>review</code>；⑫395 <code>/health</code> 加可选 <code>ocr_model</code>（395 侧实现归线 C）。⑬<code>case_open</code> 加可选 <code>kind</code>（civil / criminal / daily，记在案件的 case.db 里），<code>case_open</code> 返回、<code>case_recent</code>、<code>cases.json</code> 带回。新字段全部可选（字段兼容）；客户端与服务同包升级，不做 1.3 客户端配 1.4 服务的混装；N66（图片材料返回原图）不在本版。</td>
+<td>攒下的候项一批（<code>D:\lawbench-coord\ORCH-契约1.4候项.md</code>，用户 10-10 定）：①出处正则允许材料名里带成对的〔…〕（N45）；②错误码加 <code>ORIGINAL_HAS_REVISIONS</code>、<code>CASE_CARD_INVALID</code>；③<code>pipeline_status</code> 加可选 <code>notice</code>（395 抽取被跳过的提示）；④<code>/api/source</code> 请求加可选 <code>task_id</code>；⑤新接口 <code>materials_remove</code>，<code>material_status</code> 加 <code>removed</code>（SEC-08 口径：原件移到回收站）；⑥<code>materials_list</code> 每项加可选 <code>chars</code>；⑦<code>case_read_material</code> 加可选 <code>more_names</code>、返回加可选 <code>parts</code>；⑧<code>成果/索引.json</code> 每条加可选 <code>draft</code>（来源草稿路径）；⑨<code>materials_import</code> 跳过原因去掉&quot;云同步目录&quot;（N80 后不再出现）；⑩<code>case_open</code> 加可选 <code>folders</code>（律师勾选的子文件夹）；⑪新接口 <code>wiki_review</code>，<code>case.json</code> 加可选 <code>review</code>；⑫395 <code>/health</code> 加可选 <code>ocr_model</code>（395 侧实现归线 C）。⑭新接口 <code>case_forget</code>（只从 <code>cases.json</code> 删登记，案件文件夹不动，幂等；2026-10-11 补）。⑬<code>case_open</code> 加可选 <code>kind</code>（civil / criminal / daily，记在案件的 case.db 里），<code>case_open</code> 返回、<code>case_recent</code>、<code>cases.json</code> 带回。新字段全部可选（字段兼容）；客户端与服务同包升级，不做 1.3 客户端配 1.4 服务的混装；N66（图片材料返回原图）不在本版。</td>
 </tr>
 </tbody>
 </table>

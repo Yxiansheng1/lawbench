@@ -222,6 +222,18 @@
   "expect": "invalid"
  },
  {
+  "file": "api_case_forget.req.json",
+  "schema": "api/case_forget.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_case_forget.res.json",
+  "schema": "api/case_forget.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
   "file": "api_case_open.req_kind.json",
   "schema": "api/case_open.schema.json",
   "pointer": "#/$defs/request",
