@@ -6,3 +6,7 @@
 改坏：xiaomi 模板不做转换 → 红｜1 failed, 8 passed in 8.76s
 改坏：default 模板也转 → 红｜1 failed, 8 passed in 8.83s
 复原 → prep395 全部用例｜97 passed, 1 warning in 50.46s
+
+# 契约 1.4：/health 带 ocr_model 红绿（2026-10-11）
+改坏：/health 不带 ocr_model → 红｜1 failed, 39 passed, 1 warning in 11.58s
+复原 → prep395 全部用例｜98 passed

@@ -34,6 +34,25 @@ def test_health_contract(client):
     assert r.json()["status"] == "degraded"         # 测试后端（fake）不能报 ok，防部署漏配
 
 
+def test_health_reports_ocr_model_contract_1_4(settings):
+    """契约 1.4：/health 多一个可选的 ocr_model（取 PREP395_OCR_MODEL）；1.3 的六个字段名字和取值不变，
+    只认这六个字段的旧客户端照常读；395 上读不到仓库 VERSION 时回落的版本也是 1.4。"""
+    import dataclasses
+
+    from fastapi.testclient import TestClient
+
+    import prep395
+    s = dataclasses.replace(settings, ocr_model="Xiaomi-OCR-0.BF16.gguf")
+    with TestClient(create_app(s, FakeBackend())) as c:
+        body = c.get("/health").json()
+    assert_valid(validator("prep395/health.schema.json"), body)
+    assert body["ocr_model"] == "Xiaomi-OCR-0.BF16.gguf"
+    old = {k: body[k] for k in ("status", "ocr", "llm9b", "queue", "version", "contract_version")}   # 1.3 客户端读到的
+    assert old == {"status": "degraded", "ocr": "ok", "llm9b": "ok", "queue": 0, "version": prep395.__version__,
+                   "contract_version": "1.4"}
+    assert prep395.CONTRACT_VERSION_FALLBACK == "1.4"
+
+
 def test_default_backend_is_llama(tmp_path):
     assert Settings(home=tmp_path).backend == "llama"
 

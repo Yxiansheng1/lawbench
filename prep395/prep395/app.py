@@ -242,6 +242,7 @@ def create_app(settings: Settings | None = None, backend: Backend | None = None,
             "queue": ocr_slots.waiting + llm_slots.waiting,
             "version": __version__,
             "contract_version": CONTRACT_VERSION,
+            "ocr_model": settings.ocr_model,          # 契约 1.4：当前识别模型（PREP395_OCR_MODEL），可选字段
         }
 
     @app.post("/v1/ocr/page")
