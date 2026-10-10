@@ -13,7 +13,7 @@ import sys
 
 import uvicorn
 
-from . import logs
+from . import logs, portdiag
 from .app import create_app
 from .config import Config
 from .net import LOOPBACK, forward_app
@@ -36,12 +36,23 @@ def _server(app, port: int) -> uvicorn.Server:
 EXIT_LISTEN_FAILED = 2
 
 
+def _report_port(port: int) -> None:
+    """绑不上的端口：标准错误写一行"<类别> <端口> <一句话>"（portdiag；Host 按类别给律师看）。按 UTF-8 写，不随控制台代码页。"""
+    text = portdiag.line(port, portdiag.classify(port, portdiag.bind_error(LOOPBACK, port)))
+    try:
+        sys.stderr.buffer.write((text + "\n").encode("utf-8"))
+        sys.stderr.flush()
+    except (AttributeError, OSError, ValueError):
+        pass
+
+
 async def _serve(config: Config) -> int:
     """两个监听任一绑定失败：另一个也停下，进程以非零码退出，交给 Host 按 Spec 1.3 处理。"""
     _silence_uvicorn()
     app = create_app(config)
     servers = {"main": _server(app, config.port),
                "forward": _server(forward_app(app.state.lb.net), config.forward_port)}
+    ports = {"main": config.port, "forward": config.forward_port}
     failed: list[str] = []
 
     async def run(name: str) -> None:
@@ -50,6 +61,7 @@ async def _serve(config: Config) -> int:
         except (OSError, SystemExit) as e:  # uvicorn 绑定失败时 sys.exit(1)
             failed.append(name)
             logs.event(name, "listen", status="fail", error=type(e).__name__)
+            _report_port(ports[name])
         for s in servers.values():
             s.should_exit = True
 
