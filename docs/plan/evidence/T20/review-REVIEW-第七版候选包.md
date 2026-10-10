@@ -23,3 +23,17 @@
 
 ### 跑过的命令
 `Get-FileHash`；`git log/diff 47f4ad0..736e2d3`、`bed589f~1..bed589f -- packaging/versions.lock`、`bed589f..47f4ad0 -- . ':!docs'`；7za `l -slt`/`l -ba -sccUTF-8`/`e`/`x`（electron-builder 缓存里的 7za）；PowerShell 正则扫描与源文件哈希对照；Read 5 张截图。解包内容已删，`rv-A58` 干净，约 20 分钟。
+
+---
+
+# 第七版候选包·第四次（最终发出版）· 独立复核记录（PASS）
+
+- 复核时刻：2026-10-10 19:58–20:18 (+08:00)；复核员：一名 Opus 只读复核员（克隆 `rv-A58` 检出 `65d1886`，包副本 `rv-A58-pkg`，实验目录 `rv-A58-exp`）
+- target：line-A `65d1886`；基座 main `993c43e`
+- 包：`lawbench-0.1.0-win-x64-unsigned.exe` 655,954,753 B，sha256 `ae0ca6e07cab49ecbc693500a5ffa44f9f820ab457a7986513b71dc4627c6c73`，`LAWBENCH_BUILD_STAMP=202610101921`（复核员与主编排一致）。**第七版 = 律所第三批试用版（覆盖第六版）。** 此前三个第七版包 `67a10102…`（材料 0 份）、`33626f74…`（侧栏版本号挤掉名字）均作废未发；第三次重打未产出。
+- 裁决（主编排）：**PASS**，cherry-pick `65d1886` 进 main，发包。NOTE 1"未归入案件"菜单项用户定第八版藏（待办 22）。
+
+## 复核员报告（原文摘要）
+1. 大小/哈希一致。2. 列包 27,165 条：`primary-runtime` 零；`libreoffice-kit` 仅 koffi 6 条；无 `.env.local`/`testsixtures`；63 个 Office/PDF 为引擎模板样本与导出模板。3. `app.asar` 127,378,564 B，sha256 `ECDA0F4B…334F55` 与 build.txt 一致；`setDirectoryAdopter` 4、`lawbench-adopter` 2、`registerAddCaseAdopter` 4；`data-lawbench-brand-name` 子节点只有 `PRODUCT_NAME`，`versionLabel` 仅定义 + 设置"关于"一处调用；`PRODUCT_BUILD = true ? "202610101921" : ""`（esbuild 形态），旧戳零命中；此前逻辑计数同上一包。4. `contracts\VERSION` 1.3；`portdiag.py` 与源同哈希 `D4C76365…E993`。5. `<用户名>` 真实零命中（数字碰巧出现在哈希串/词表 id）；`sk-`/`Bearer` 零；`AKIA` 1 处为 wasm base64 片段；四地址只在 settings/examples。6. `993c43e..65d1886` 8 文件全在 `evidence\T20\`，数字一致，5 截图路径 `<用户名>`、案件名"（虚构）"。7. 未装未运行。
+- NOTE 1：线 A 自报"未归入案件"菜单项（未验证，转告）。NOTE 2：Ctrl+O 冒烟用系统级 `keybd_event`，建议用户亲手按一次。
+- 命令：`Get-FileHash`；`git diff 993c43e..65d1886`；7za `l -slt -sccUTF-8`/`x`；PowerShell 字节串正则计数与 IndexOf（一条前置 `.{0,90}` 正则超时已停改法）。实验目录已清空，克隆干净，未进 A 目录。
