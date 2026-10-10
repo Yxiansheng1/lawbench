@@ -8,9 +8,14 @@ export class TurnNotices {
   private readonly codes = new Map<string, string>()
   /** 到达用量上限（BUDGET_STOPPED）时一并记下任务编号，界面据此取草稿显示在对话区（T14 派修 2）。 */
   private readonly tasks = new Map<string, string>()
+  /** 到顶提示后面还排着一条 TASK_END_FAILED 的会话。 */
+  private readonly after = new Set<string>()
 
   /** 记下某会话这一轮被拦下的错误码（同一会话只留最新的；超过上限丢最早的）。 */
   note(sessionId: string, code: string, taskId?: string): void {
+    // 到顶提示还没被取走时又来了"结束状态没登记上"（复核 rv-A62 P3-1）：不盖掉到顶提示（界面靠它显示草稿），排在它后面，下一次取到
+    if (code === 'TASK_END_FAILED' && this.codes.get(sessionId) === 'BUDGET_STOPPED') { this.after.add(sessionId); return }
+    this.after.delete(sessionId)
     this.codes.delete(sessionId)
     this.codes.set(sessionId, code)
     this.tasks.delete(sessionId)
@@ -24,6 +29,7 @@ export class TurnNotices {
 
   /** 某会话这一轮顺利开始（取任务、取上下文都成功）：清掉之前没被取走的记录，免得之后误报。 */
   clear(sessionId: string): void {
+    this.after.delete(sessionId)
     this.codes.delete(sessionId)
     this.tasks.delete(sessionId)
   }
@@ -53,6 +59,7 @@ export class TurnNotices {
     const taskId = this.tasks.get(sessionId) ?? null
     this.codes.delete(sessionId)
     this.tasks.delete(sessionId)
+    if (this.after.delete(sessionId)) this.codes.set(sessionId, 'TASK_END_FAILED')
     return { code, task_id: taskId }
   }
 }

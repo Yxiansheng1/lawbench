@@ -14,7 +14,7 @@ import { BUDGET_STOPPED, DENY_SKILL_RELOAD, LegalAgent } from '../agent/index.ts
 import { MAX_COMPACTIONS, MAX_SKILL_LOADS, TaskState, UNFINISHED_TITLE } from '../agent/task-state.ts'
 import type { CoreClient } from '../shared/core-client.ts'
 
-const YML = readFileSync(join(__dirname, '..', 'cordis.patch.yml'), 'utf8')
+const YML = readFileSync(join(__dirname, '..', 'cordis.patch.yml'), 'utf8').replace(/\r\n/g, '\n')
 /** 组合包里某一行插件的 config 块里的数字项（按缩进取紧跟着的 config）。 */
 function configOf(id: string): Record<string, number> {
   const at = YML.indexOf(`- id: ${id}\n`)
@@ -52,20 +52,23 @@ describe('压缩触发点（用 DSH 的 compaction-basic 源码算）', () => {
     for (const s of skills) expect(threshold({}, Math.max(s.maxTokens, 16384)) / WINDOW, s.name).toBeLessThan(0.4)
   })
 
-  it('改后：组合包的配置下，每个 Skill 的触发点都过窗口的一半；max_tokens 不超过 16384 的在八成', () => {
+  it('改后：组合包的配置下，每个 Skill 的触发点都不低于窗口的一半；max_tokens 为 16384 的在 75%', () => {
     const cfg = configOf('compaction-basic')
-    expect(cfg).toEqual({ thresholdRatio: 0.8, headroomTokens: 8192, maxTokens: 8192 })
+    // 预留 16384 而不是 8192（复核 rv-A62 P2-2）：DSH 按 4 个字符 1 个 token 估，中文少算，并发读回几份材料要留得住
+    expect(cfg).toEqual({ thresholdRatio: 0.8, headroomTokens: 16384, maxTokens: 8192 })
     expect(skills.length).toBeGreaterThanOrEqual(18)
     for (const s of skills) {
       expect(s.maxTokens, s.name).toBeGreaterThan(0)
       const t = threshold(cfg, s.maxTokens)
-      expect(t / WINDOW, `${s.name} max_tokens=${s.maxTokens}`).toBeGreaterThan(0.55)
+      expect(t / WINDOW, `${s.name} max_tokens=${s.maxTokens}`).toBeGreaterThanOrEqual(0.5)
       expect(t, s.name).toBeGreaterThanOrEqual(threshold({}, s.maxTokens) * 1.5)
-      if (s.maxTokens <= 16384) expect(t, s.name).toBe(Math.floor(WINDOW * 0.8))
+      // 触发点 + 输出预留 + 压缩预留不超过窗口，且留着估算误差的余量
+      expect(t + s.maxTokens + cfg.headroomTokens!, s.name).toBeLessThanOrEqual(WINDOW)
+      if (s.maxTokens === 16384) expect(t, s.name).toBe(WINDOW - 16384 - 16384)
     }
-    expect([16384, 32768, 49152].map((m) => threshold(cfg, m))).toEqual([104857, 90112, 73728])
-    // 真机那一幕（52K）离新的触发点还有一倍
-    expect(52_000).toBeLessThan(threshold(cfg, 16384) / 2 + 1)
+    expect([16384, 32768, 49152].map((m) => threshold(cfg, m))).toEqual([98304, 81920, 65536])
+    // 真机那一幕（52K）离新的触发点还远
+    expect(52_000).toBeLessThan(threshold(cfg, 16384) * 0.6)
   })
 })
 
@@ -139,7 +142,7 @@ describe('防循环兜底（Agent 插件）', () => {
     expect(a.preTool('nobody', 'skill', { name: 'sentence-calc' })).toEqual({ kind: 'allow' })
   })
 
-  it('重放真机上的循环（每圈：模型调用 → 加载技能 → 压缩）：不会转到 16 次用完——第 4 次加载被拒，压缩第 4 次后存稿收尾', async () => {
+  it('重放真机上的循环（每圈：模型调用 → 加载技能 → 压缩，中间没有读任何材料）：不会转到 16 次用完——连续 3 次没有进展的压缩后存稿收尾', async () => {
     expect(MAX_COMPACTIONS).toBe(3)
     const logs: Array<[string, string, Record<string, unknown> | undefined]> = []
     const noted: Array<[string, string, string | undefined]> = []
@@ -158,30 +161,45 @@ describe('防循环兜底（Agent 插件）', () => {
       // DSH：上下文已压缩
       await a.onSessionEvent('s', { type: 'compaction/summary' })
     }
-    expect(loads).toEqual(['allow', 'allow', 'allow', 'deny'])
-    expect(rounds).toBe(4) // 原来是 16 圈
+    expect(loads).toEqual(['allow', 'allow', 'allow'])
+    expect(rounds).toBe(3) // 原来是 16 圈
     expect(noted).toEqual([['s', BUDGET_STOPPED, T]])
     // 收尾时把最后一条回复代存为未完成草稿（令 0321），律师不至于一无所有
     const saves = f.calls.filter((c) => c.cmd === 'tool')
     expect(saves.map((c) => (c.body.args as { title: string }).title)).toEqual([UNFINISHED_TITLE])
     const loop = logs.filter((l) => l[1] === 'agent.compaction_loop')
-    expect(loop.length).toBe(2) // 超过上限时一条，收尾时一条
-    expect(loop.at(-1)![2]).toMatchObject({ compactions: 4, stopped: true })
+    expect(loop.length).toBe(2) // 到上限时一条，收尾时一条
+    expect(loop.at(-1)![2]).toMatchObject({ compactions: 3, stalled: 3, stopped: true })
     expect(a.tasks.get('s')!.endReason('completed')).toBe('budget')
     // 日志只有次数
     expect(JSON.stringify(logs)).not.toMatch(/126,500|量刑|sentence-calc/)
   })
 
-  it('正常的任务（压缩不超过 3 次、技能加载不超过 3 次）不受影响', async () => {
-    const f = fakeCore(16)
+  it('正常的长任务（复核 rv-A62 P2-3）：每两次压缩之间都读了材料，压缩 6 次也不收尾；存草稿也算进展', async () => {
+    const f = fakeCore(40)
     const a = new LegalAgent(f.core, (() => {}) as never)
-    for (let step = 1; step <= 16; step++) {
-      expect((await a.preStep(agentObj('s'), step, enter())).kind).toBe('enter')
-      if (step === 1) expect(a.preTool('s', 'skill', { name: 'contract-review' }).kind).toBe('allow')
-      if (step === 5 || step === 9 || step === 13) await a.onSessionEvent('s', { type: 'compaction/summary' })
+    for (let step = 1; step <= 30; step++) {
+      expect((await a.preStep(agentObj('s'), step, enter())).kind, `step ${step}`).toBe('enter')
+      if (step % 5 === 0) await a.onSessionEvent('s', { type: 'compaction/summary' }) // 第 5、10、…、30 步后各压缩一次
+      else if (step === 29) expect(a.preTool('s', 'case_save_draft').kind).toBe('allow')
+      else if (step < 24) expect(a.preTool('s', 'case_read_material').kind).toBe('allow')
     }
-    expect(a.tasks.get('s')!.compactions).toBe(3)
-    expect(a.tasks.get('s')!.compactionLoop).toBe(false)
+    const state = a.tasks.get('s')!
+    expect(state.compactions).toBe(6)
+    expect(state.compactionLoop).toBe(false)
+  })
+
+  it('只数连续没有进展的压缩：两次没进展后读了一次材料，计数清零；再连续三次没进展才收尾', () => {
+    const s = new TaskState(T, { model_calls: 40, tool_calls: 24, minutes: 45 }, { thinking: '低', window: '64K', max_tokens: 16384 })
+    expect([s.noteCompaction(), s.noteCompaction()]).toEqual([false, false])
+    expect(s.stalledCompactions).toBe(2)
+    s.beforeTool('case_read_material')
+    expect(s.noteCompaction()).toBe(false)
+    expect(s.stalledCompactions).toBe(0)
+    // 被拒的工具调用、加载技能、提问都不算进展
+    s.beforeTool('bash'); s.beforeSkillLoad('sentence-calc'); s.beforeTool('ask_user_question')
+    expect([s.noteCompaction(), s.noteCompaction(), s.noteCompaction()]).toEqual([false, false, true])
+    expect(s.compactions).toBe(6)
   })
 })
 
@@ -214,6 +232,13 @@ describe('压缩之后发新消息：模型该答新消息（注记 0342）', ()
     expect(preamble).toContain('The current request is the latest user message after this checkpoint')
     expect(preamble).toContain('do not resume an earlier request from the checkpoint unless that message asks for it')
     expect(src).toContain('list only work the MOST RECENT user message asks for')
+    // 一轮中途压缩（复核 rv-A62 P2-1）：DSH 选压缩范围时不保护本轮的用户消息，律师这句话可能进了摘要、检查点后面没有用户消息了。
+    // 这时开头语要让模型把"待办"里最近的那条请求当成当前请求接着做，不能当历史丢开
+    expect(preamble).toContain('If no user message follows this checkpoint, the most recent request under "Pending Jobs" is the current request — continue it.')
+    // 两种情形的先后：先说"有后续用户消息时答它"，再说"没有时接着办待办里最近的请求"
+    expect(preamble.indexOf('The current request is the latest user message after this checkpoint')).toBeLessThan(preamble.indexOf('If no user message follows this checkpoint'))
+    // 写摘要的那条规则正好保证本轮这句话会出现在"待办"里（它就是最近一条用户消息）
+    expect(src).toContain('Under "Pending Jobs" and "Next Step" list only work the MOST RECENT user message asks for')
     // 补丁文件登记在案
     const ledger = readFileSync(join(__dirname, '..', '..', 'dsh-patches', 'PATCHES.md'), 'utf8')
     expect(ledger).toContain('P-25-checkpoint-is-history.patch')

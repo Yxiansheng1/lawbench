@@ -214,6 +214,8 @@ export const NO_TASK_TIP = '找不到这份草稿的运行记录，不能在这�
 
 /** 上一轮没有正常登记结束（服务的任务记录还停在"进行中"，而这一轮其实已经不在跑了）：不挡确认保存，只说明一句。 */
 export const STALE_RUNNING_NOTE = '（上一轮未正常登记结束）'
+/** 任务记录看着像没登记结束时，隔多久再读一次确认。 */
+export const STALE_RECHECK_MS = 2000
 
 /** @param inProgress - 产生这张草稿的那一轮还在进行（见 turnInProgress）；不给按已结束。 */
 export function ResultCard({ caseRef, sessionId, draft, inProgress = false }: { caseRef: CaseRef; sessionId: string; draft: SavedDraft; inProgress?: boolean }) {
@@ -223,6 +225,16 @@ export function ResultCard({ caseRef, sessionId, draft, inProgress = false }: { 
   const inputs = useStore(app, (s) => s.intents[caseRef.case_id]?.inputs ?? s.selections[sessionId]?.inputs) ?? NO_INPUTS
   const [confirming, setConfirming] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  // 这一轮已经不在进行，任务记录却还是"进行中"：多半是读得比任务结束的登记早了一步（一轮结束时两边几乎同时）。
+  // 过一会儿再读一次任务；再读之后仍是"进行中"才说"上一轮未正常登记结束"（真机 2026-10-11 05:04 见到误报）
+  const looksStale = !inProgress && task?.status === 'running'
+  const [rechecked, setRechecked] = useState(false)
+  useEffect(() => {
+    if (!looksStale) { setRechecked(false); return }
+    const t = setTimeout(() => { void refreshCaseResults(caseRef.case_id).finally(() => setRechecked(true)) }, STALE_RECHECK_MS)
+    return () => clearTimeout(t)
+  }, [looksStale, caseRef.case_id])
+  const staleRunning = looksStale && rechecked
   const card = { border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: '10px 12px', display: 'flex', flexDirection: 'column' as const, gap: 6, fontSize: 14, maxWidth: 560 }
 
   if (output) {
@@ -242,7 +254,6 @@ export function ResultCard({ caseRef, sessionId, draft, inProgress = false }: { 
     )
   }
   const running = inProgress
-  const staleRunning = !inProgress && task?.status === 'running'
   const picked = inputs.includes(draft.path)
   const toggleInput = () => setIntent(caseRef.case_id, { inputs: picked ? inputs.filter((x) => x !== draft.path) : [...inputs, draft.path] })
   return (

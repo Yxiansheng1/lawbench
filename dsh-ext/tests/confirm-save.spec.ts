@@ -8,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { BUDGET_STOPPED, LegalAgent, TASK_END_FAILED } from '../agent/index.ts'
 import type { CoreClient } from '../shared/core-client.ts'
 import { TASK_END_FAILED as UI_TASK_END_FAILED, TASK_END_FAILED_TITLE } from '../ui/dock.tsx'
-import { resetCaseResults, STALE_RUNNING_NOTE, TURN_DATA_KEY, turnInProgress, TurnResultCards, type SavedDraft } from '../ui/result-cards.tsx'
+import { resetCaseResults, STALE_RECHECK_MS, STALE_RUNNING_NOTE, TURN_DATA_KEY, turnInProgress, TurnResultCards, type SavedDraft } from '../ui/result-cards.tsx'
 import { app, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -84,15 +84,23 @@ describe('只在产生这张草稿的那一轮还在进行时灰', () => {
     expect(save().disabled).toBe(false)
   })
 
-  it('已经卡在"进行中"的旧任务：不再灰，只多一句"（上一轮未正常登记结束）"；任务记录正常结束的没有这句', async () => {
+  it('已经卡在"进行中"的旧任务：不再灰；隔一会儿再读一次任务，仍是"进行中"才多一句"（上一轮未正常登记结束）"', async () => {
     await render('closed')
     expect(save().disabled).toBe(false)
+    expect(box.textContent).not.toContain(STALE_RUNNING_NOTE) // 还没再读确认之前不说
+    await act(async () => { await new Promise((r) => setTimeout(r, STALE_RECHECK_MS + 100)) })
+    await flush()
     expect(box.textContent).toContain(STALE_RUNNING_NOTE)
-    await act(async () => { root!.unmount() }); root = undefined
-    taskStatus = 'completed'; resetCaseResults()
-    await render('closed')
     expect(save().disabled).toBe(false)
+  })
+
+  it('读得比任务结束的登记早了一步（真机见到的误报）：再读时任务已结束，不出那句话', async () => {
+    await render('closed')
+    taskStatus = 'completed' // 登记随后落了地
+    await act(async () => { await new Promise((r) => setTimeout(r, STALE_RECHECK_MS + 100)) })
+    await flush()
     expect(box.textContent).not.toContain(STALE_RUNNING_NOTE)
+    expect(save().disabled).toBe(false)
   })
 
   it('别的会话在跑不影响这个会话的卡片', async () => {

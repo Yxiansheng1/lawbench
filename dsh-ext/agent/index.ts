@@ -121,10 +121,10 @@ export class LegalAgent {
       }
       lead.push(snapshot(sections))
     }
-    // 令 0329 P0：这个任务里上下文已经压缩了太多次（模型在"读 → 压缩 → 再读"里打转）：不再继续，存稿收尾（同到顶的处理）
+    // 令 0329 P0：这个任务里连续几次压缩之间都没有进展（模型在"想 → 加载技能 → 压缩"里打转）：不再继续，存稿收尾（同到顶的处理）
     if (state.compactionLoop) {
       state.budgetHit = true
-      this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, model_calls: state.modelCalls, stopped: true })
+      this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, stalled: state.stalledCompactions, model_calls: state.modelCalls, stopped: true })
       await this.saveUnfinished(state)
       this.noteBlocked(agent.id, BUDGET_STOPPED, state.taskId)
       return { kind: 'reject' }
@@ -253,7 +253,7 @@ export class LegalAgent {
       await this.core.call('progress', { task_id: state.taskId, text: all, model_calls: state.modelCalls, tool_calls: state.toolCalls })
     } else if (event.type === 'compaction/summary') {
       // 上下文被压缩了一次（令 0329 P0）：记数；超过上限时记一条，下一步收尾
-      if (state.noteCompaction()) this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, model_calls: state.modelCalls })
+      if (state.noteCompaction()) this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, stalled: state.stalledCompactions, model_calls: state.modelCalls })
     } else if (event.type === 'turn/end') {
       await this.endTask(sessionId, state, event.data?.reason?.kind ?? 'error')
     }

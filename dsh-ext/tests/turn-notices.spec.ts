@@ -69,3 +69,26 @@ describe('任务单没写成的会话（执行令 1751 必修 2）', () => {
     expect(n.held('s1')).toBe(false)
   })
 })
+
+describe('到顶提示不被"结束状态没登记上"盖掉（复核 rv-A62 P3-1）', () => {
+  it('BUDGET_STOPPED 还没被取走时又记 TASK_END_FAILED：先取到到顶提示和任务编号（界面靠它显示草稿），下一次取到 TASK_END_FAILED', () => {
+    const n = new TurnNotices()
+    n.note('S1', 'BUDGET_STOPPED', 'T-20261011045200-ab12')
+    n.note('S1', 'TASK_END_FAILED')
+    expect(n.takeWithTask('S1')).toEqual({ code: 'BUDGET_STOPPED', task_id: 'T-20261011045200-ab12' })
+    expect(n.takeWithTask('S1')).toEqual({ code: 'TASK_END_FAILED', task_id: null })
+    expect(n.takeWithTask('S1')).toEqual({ code: null, task_id: null })
+  })
+
+  it('没有到顶提示时 TASK_END_FAILED 照常记；别的码照旧只留最新的；新一轮顺利开始时两条都清', () => {
+    const n = new TurnNotices()
+    n.note('S1', 'TASK_END_FAILED')
+    expect(n.take('S1')).toBe('TASK_END_FAILED')
+    n.note('S1', 'BUDGET_STOPPED', 'T-20261011045200-ab12'); n.note('S1', 'TASK_END_FAILED'); n.note('S1', 'CASE_MOVED')
+    expect(n.takeWithTask('S1')).toEqual({ code: 'CASE_MOVED', task_id: null })
+    expect(n.take('S1')).toBeNull()
+    n.note('S1', 'BUDGET_STOPPED', 'T-20261011045200-ab12'); n.note('S1', 'TASK_END_FAILED')
+    n.clear('S1')
+    expect(n.take('S1')).toBeNull()
+  })
+})

@@ -25,7 +25,8 @@ export const UNFINISHED_TITLE = `本次回答${UNFINISHED_SUFFIX}`
 export const SKILL_TOOL = 'skill'
 /**
  * 防"加载技能 → 压缩 → 又加载"的循环（令 0329 P0）：同一个任务里同一个技能最多加载这么多次（压缩把它摘要掉后允许再加载，但不能没完没了）；
- * 一个任务里上下文压缩超过这么多次就收尾（存稿、结束），不再让模型一圈一圈地转。
+ * 两次压缩之间没有新的案件工具调用（没读新东西、没存稿——真循环的特征）的压缩连续到这么多次就收尾（存稿、结束）；
+ * 有进展的压缩不计，正常的长任务压缩多少次都不受影响（复核 rv-A62 P2-3）。
  */
 export const MAX_SKILL_LOADS = 3
 export const MAX_COMPACTIONS = 3
@@ -51,8 +52,12 @@ export class TaskState {
   draftSaved = false
   /** 各技能在这个任务里加载过几次。 */
   private readonly skillLoads = new Map<string, number>()
-  /** 这个任务里上下文被压缩（摘要）过几次。 */
+  /** 这个任务里上下文被压缩（摘要）过几次（只作日志）。 */
   compactions = 0
+  /** 连续几次压缩之间没有进展。 */
+  stalledCompactions = 0
+  /** 上一次压缩之后有没有放行过案件工具。 */
+  private progressed = false
 
   constructor(
     readonly taskId: string,
@@ -119,14 +124,19 @@ export class TaskState {
     return { allow: true }
   }
 
-  /** 上下文被压缩了一次（会话事件 compaction/summary）。@returns 这个任务里压缩是不是已经超过上限。 */
+  /**
+   * 上下文被压缩了一次（会话事件 compaction/summary）。上一次压缩之后放行过案件工具的算有进展，连续计数清零；否则加一。
+   * @returns 没有进展的压缩是不是已经连续到了上限。
+   */
   noteCompaction(): boolean {
     this.compactions += 1
+    this.stalledCompactions = this.progressed ? 0 : this.stalledCompactions + 1
+    this.progressed = false
     return this.compactionLoop
   }
 
-  /** 压缩次数超过上限：下一步收尾（存稿、结束任务）。 */
-  get compactionLoop(): boolean { return this.compactions > MAX_COMPACTIONS }
+  /** 没有进展的压缩连续到了上限：下一步收尾（存稿、结束任务）。 */
+  get compactionLoop(): boolean { return this.stalledCompactions >= MAX_COMPACTIONS }
 
   /** 现在是不是最后一次模型调用之后（它发起的工具只许存草稿，令 0321）。 */
   get lastCall(): boolean { return this.modelCalls >= this.budget.model_calls }
@@ -143,13 +153,14 @@ export class TaskState {
     if (name === ASK_USER_TOOL) this.pause(now)
     if (ALLOWED_OTHER_TOOLS.has(name)) return { allow: true }
     if (!/^case_[a-z_]+$/.test(name)) return { allow: false, reason: 'not_allowed' }
-    if (name === BUDGET_EXEMPT_TOOL) return { allow: true }
+    if (name === BUDGET_EXEMPT_TOOL) { this.progressed = true; return { allow: true } }
     if (this.lastCall) return { allow: false, reason: 'wrap_up_only' }
     if (this.toolCalls >= this.budget.tool_calls) {
       this.budgetHit = true
       return { allow: false, reason: 'tool_budget' }
     }
     this.toolCalls += 1
+    this.progressed = true
     return { allow: true }
   }
 
