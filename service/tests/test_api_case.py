@@ -122,6 +122,21 @@ def test_template_folder_names_have_no_separator(client, case_root):
     assert d.is_dir() and not any(d.iterdir()) and not (root / "08执行（财产刑").exists()
 
 
+def test_case_open_chosen_folders(client, case_root):
+    """契约 1.4：folders 给了就只建勾选的（按标准目录表顺序），不在表里或没给 template 的整个拒绝、什么都不建。"""
+    fail(client.post("/api/case/open", json={"path": str(case_root), "template": "criminal",
+                                             "folders": ["01委托手续", "不在表里"]}), "case_open", "INVALID_ARGUMENT")
+    fail(client.post("/api/case/open", json={"path": str(case_root), "folders": ["01委托手续"]}), "case_open", "INVALID_ARGUMENT")
+    assert not (case_root / "工作区").exists() and not (case_root / "01委托手续").exists()   # 拒绝时什么都没建
+    v = ok(client.post("/api/case/open", json={"path": str(case_root), "template": "criminal",
+                                               "folders": ["05一审/我方证据", "01委托手续"]}), "case_open")
+    assert v["folders_created"] == ["01委托手续", "05一审/我方证据"]
+    assert (case_root / "01委托手续").is_dir() and not (case_root / "02案件材料").exists() and not (case_root / "06二审").exists()
+    assert [p.name for p in (case_root / "05一审").iterdir()] == ["我方证据"]
+    v = ok(client.post("/api/case/open", json={"path": str(case_root), "template": "criminal", "folders": []}), "case_open")
+    assert v["folders_created"] == []                                        # 一个都不勾：不建
+
+
 @pytest.mark.parametrize("template", ["civil", "criminal"])
 def test_case_open_template(client, case_root, template):
     v = ok(client.post("/api/case/open", json={"path": str(case_root), "template": template}), "case_open")

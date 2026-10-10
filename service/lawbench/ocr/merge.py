@@ -133,7 +133,7 @@ def merge_text(text: str, results: dict[int, str]) -> tuple[str, dict]:
 def merge_entry(root: str, entry: dict, active: bool | None = None) -> bool:
     """把识别结果合并进这份材料的文本、改它的 index 条目（就地改 entry）。调用方持有该案件材料锁、负责保存 index。
     没有可合并的结果、且没有进行中的任务时不动。返回是否改过。"""
-    if entry.get("type") not in OCR_TYPES or entry.get("status") in ("failed", "source_deleted"):
+    if entry.get("type") not in OCR_TYPES or entry.get("status") in ("failed", "source_deleted", "removed"):
         return False
     results = ocr_results(root, entry["material_id"], entry["sha256"])
     if active is None:                       # 任务收尾时调用方传 False：先合并、再把任务标完成，列表上见到"完成"时文本已就绪

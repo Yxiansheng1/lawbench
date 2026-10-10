@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "value": {
+    "copied": [],
+    "skipped": [
+      {
+        "path": "C:\\Users\\li\\OneDrive\\a.pdf",
+        "reason": "云同步目录"
+      }
+    ],
+    "scan": {
+      "added": 0,
+      "changed": 0,
+      "removed": 0,
+      "failed": 0,
+      "review_needed": false
+    }
+  }
+}

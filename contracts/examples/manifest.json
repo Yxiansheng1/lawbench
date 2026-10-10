@@ -54,6 +54,30 @@
   "expect": "invalid"
  },
  {
+  "file": "citation_9.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_10.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "valid"
+ },
+ {
+  "file": "citation_11.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "invalid"
+ },
+ {
+  "file": "citation_12.json",
+  "schema": "common.schema.json",
+  "pointer": "#/$defs/citation_text",
+  "expect": "invalid"
+ },
+ {
   "file": "core_task_begin.req.json",
   "schema": "core/task_begin.schema.json",
   "pointer": "#/$defs/request",
@@ -154,6 +178,48 @@
   "schema": "api/wiki_suggestions.schema.json",
   "pointer": "#/$defs/response",
   "expect": "valid"
+ },
+ {
+  "file": "api_materials_remove.req.json",
+  "schema": "api/materials_remove.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_materials_remove.res.json",
+  "schema": "api/materials_remove.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_wiki_review.res.json",
+  "schema": "api/wiki_review.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "valid"
+ },
+ {
+  "file": "api_source.req_task.json",
+  "schema": "api/source.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_case_open.req_folders.json",
+  "schema": "api/case_open.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "tool_read_material.args_more.json",
+  "schema": "tools/case_read_material.schema.json",
+  "pointer": "#/$defs/args",
+  "expect": "valid"
+ },
+ {
+  "file": "api_materials_import.res_bad_reason.json",
+  "schema": "api/materials_import.schema.json",
+  "pointer": "#/$defs/response",
+  "expect": "invalid"
  },
  {
   "file": "prep_ocr.res.json",

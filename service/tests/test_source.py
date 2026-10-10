@@ -156,6 +156,22 @@ def test_source_changed_by_recorded_version(world):
     assert ok(get(world, m["material_id"], "〔起诉意见书 第4页〕"), SCHEMA)["source_changed"] is False
 
 
+def test_source_changed_with_task_id(world):
+    """契约 1.4：请求带 task_id 时只按那个任务记的版本判断；旧任务记旧版本、新任务记新版本，各判各的；
+    位置写法不同（记第2-3页、点第2页）也认；任务不存在报 TASK_NOT_FOUND。"""
+    m = world.material("起诉意见书")
+    rec = lambda ver, loc: {"material_id": m["material_id"], "material_version": ver, "name": m["name"], "loc": loc}  # noqa: E731
+    _result(world, "T-20261010000001-aaaa", [rec("0" * 64, {"unit": "page", "from": 2, "to": 3})])
+    _result(world, "T-20261010000002-bbbb", [rec(m["sha256"], {"unit": "page", "from": 2})])
+    q = lambda tid: world.client.get("/api/source", params={"case_id": world.case_id, "material_id": m["material_id"],  # noqa: E731
+                                                            "citation": "〔起诉意见书 第2页〕", "task_id": tid})
+    assert ok(q("T-20261010000001-aaaa"), SCHEMA)["source_changed"] is True
+    assert ok(q("T-20261010000002-bbbb"), SCHEMA)["source_changed"] is False
+    assert ok(get(world, m["material_id"], "〔起诉意见书 第2页〕"), SCHEMA)["source_changed"] is False   # 不带：照旧（有一条是现在的版本）
+    fail(q("T-20261010000009-ffff"), "TASK_NOT_FOUND")
+    fail(q("../x"), "INVALID_ARGUMENT")
+
+
 def test_log_only_material_id_and_unit(world, caplog):
     m = world.material("借条")
     with caplog.at_level("INFO", logger="lawbench.events"):

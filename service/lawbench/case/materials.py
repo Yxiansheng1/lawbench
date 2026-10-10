@@ -30,7 +30,7 @@ from ..ingest import MAX_BYTES, REASONS, RETRY_MESSAGES, Parsed, ParseError
 from ..ingest import detect, docx, image, links, pdf, text, xlsx
 from ..ingest.libreoffice import Converter, remove_tree
 from ..search import fts as search_fts
-from . import gate
+from . import gate, texts, trash
 from .registry import TEMPLATES, CaseRegistry
 
 INDEX_REL = "工作区/材料/index.json"
@@ -164,6 +164,9 @@ class Materials:
         self._guard = threading.Lock()
         # 识别队列（T12）挂上：重新生成文本后把已有识别结果合并回去，签名 (root, index, material_ids)；持锁调用
         self.after_render = None
+        self.before_remove = None                # 识别队列挂上：移除材料前取消它还没做完的识别任务，签名 (case_id, material_id)
+        self.recycle = trash.recycle             # 原件移到系统回收站；测试里可以换掉
+        self._chars_cache: dict[tuple, tuple] = {}   # 材料文本字数（materials_list.chars），按文本文件 mtime+大小缓存
 
     def _lock(self, case_id: str) -> threading.Lock:
         with self._guard:
@@ -300,7 +303,7 @@ class Materials:
             gate.mkdir_work(root, rel, op="materials_scan")
         self._clean_temp(root)
         index = self._load_index(root, case_id)
-        by_key = {_key(m["rel_path"]): m for m in index["materials"]}
+        by_key = {_key(m["rel_path"]): m for m in index["materials"] if m["status"] != "removed"}
         found, unreadable_dirs = self.walk_all(root)
         conv = Converter(gate.resolve_internal(root, TEMP_REL), lo_base=self.lo_base)
         stale_format = self._text_format(root) < TEXT_FORMAT_VERSION
@@ -385,7 +388,7 @@ class Materials:
 
         seen = {_key(r) for r in found}
         for m in index["materials"]:
-            if _key(m["rel_path"]) in seen or m["status"] == "source_deleted":
+            if m["status"] == "removed" or _key(m["rel_path"]) in seen or m["status"] == "source_deleted":
                 continue
             if any(m["rel_path"].startswith(d) for d in unreadable_dirs):
                 continue  # 所在文件夹这次读不了：不知道原件还在不在，不标"原件已删除"（X8）
@@ -394,9 +397,11 @@ class Materials:
             removed += 1
 
         # 材料名：新材料导致重名时，已有材料的名字也改长
-        names = assign_names([m["rel_path"] for m in index["materials"]])
+        names = assign_names([m["rel_path"] for m in index["materials"] if m["status"] != "removed"])
         renamed = []
         for m in index["materials"]:
+            if m["status"] == "removed":
+                continue                   # 已移除的不占名字（同一路径可能已有新材料）
             new = names[m["rel_path"]]
             if m["name"] and m["name"] != new and m["material_id"] not in parsed_now:
                 renamed.append(m)
@@ -421,7 +426,8 @@ class Materials:
 
         self._save_index(root, index)
         self._write_status(root, index, unreadable_dirs)
-        search_fts.refresh_after_scan(root, case_id, index)  # T9：扫描完就建检索索引（自己兜住异常）
+        live = {**index, "materials": [m for m in index["materials"] if m["status"] != "removed"]}
+        search_fts.refresh_after_scan(root, case_id, live)  # T9：扫描完就建检索索引（自己兜住异常）
         return {"added": added, "changed": changed, "removed": removed, "failed": failed,
                 "review_needed": bool(added or changed or removed or recovered)}
 
@@ -492,7 +498,81 @@ class Materials:
         """材料索引（只读，给工具和覆盖清单用）。不拿案件锁（T8 返修 P2-5）：扫描、导入要持锁很久，
         index.json 是原子替换写入的，不加锁读到的一定是完整的旧版或新版。"""
         root = self.cases.root_of(case_id)
-        return self._load_index(root, case_id)
+        index = self._load_index(root, case_id)
+        # 已移除的材料（契约 1.4）只在 index.json 里留编号：工具、检索、覆盖清单、wiki、归档、识别都当它不存在
+        return {**index, "materials": [m for m in index["materials"] if m["status"] != "removed"]}
+
+    # ---------- 移除（契约 1.4 materials_remove） ----------
+
+    def remove(self, case_id: str, material_ids: list[str]) -> dict:
+        """律师移除材料：原件移到系统回收站（不永久删除，SEC-08 放宽口径），删掉材料文本、公式文本、识别页，
+        检索记录随之清掉；index.json 里这一条留着、状态 removed（编号不复用，旧草稿里的出处能说清"已移除"）。
+        编号不在本案的：整个请求拒绝、什么都不做。已移除的再来一次算 already_removed。原件移不进回收站的那一份不动。"""
+        root = self.cases.root_of(case_id)
+        t0 = time.monotonic()
+        with self._lock(case_id):
+            known = {m["material_id"] for m in self._load_index(root, case_id)["materials"]}
+        if any(mid not in known for mid in material_ids):
+            raise ApiError("MATERIAL_NOT_FOUND", "remove_unknown")
+        if self.before_remove is not None:               # 识别队列：先停掉这些材料还在跑的识别（它自己要拿案件锁）
+            for mid in material_ids:
+                self.before_remove(case_id, mid)
+        removed, already, failed = [], [], []
+        with self._lock(case_id):
+            index = self._load_index(root, case_id)
+            by_id = {m["material_id"]: m for m in index["materials"]}
+            for mid in material_ids:
+                m = by_id[mid]
+                if m["status"] == "removed":
+                    already.append(mid)
+                    continue
+                try:
+                    if m["status"] != "source_deleted":
+                        src = gate.resolve_read(root, m["rel_path"], op="materials_remove")
+                        if src.is_file():
+                            self.recycle(src)
+                except (OSError, ApiError) as e:
+                    failed.append({"material_id": mid, "reason": "原件移不进回收站（可能正被其他程序打开），这份没有移除"})
+                    logs.event("materials", "remove", status="fail", case_id=case_id, material_id=mid,
+                               error=getattr(e, "code", None) or type(e).__name__)
+                    continue
+                self._drop_derived(root, m)
+                m.update(status="removed", pages_need_ocr=[], pages_mixed=[], error=None, updated_at=now_iso())
+                removed.append(mid)
+            if removed:
+                self._save_index(root, index)
+                live = {**index, "materials": [x for x in index["materials"] if x["status"] != "removed"]}
+                self._write_status(root, live)
+                search_fts.refresh_after_scan(root, case_id, live)
+        logs.event("materials", "remove", case_id=case_id, duration_ms=(time.monotonic() - t0) * 1000)
+        return {"removed": removed, "already_removed": already, "failed": failed,
+                "wiki_needs_update": bool(removed) and self._in_wiki(root, set(removed))}
+
+    def _drop_derived(self, root: str, m: dict) -> None:
+        """材料文本、Excel 公式文本、识别页。都在 工作区/ 里，经闸门删；删不掉的不拦移除（文件名只是编号或同名路径）。"""
+        for rel in (m["text_path"], f"{FORMULA_DIR}/{m['rel_path']}.txt"):
+            try:
+                if rel.startswith(gate.WORK + "/"):
+                    gate.delete_work_file(root, rel, op="materials_remove")
+            except (ApiError, OSError):
+                pass
+        try:
+            pages = gate.resolve_internal(root, f"工作区/材料/识别页/{m['material_id']}", op="materials_remove")
+            if pages.is_dir():
+                for f in list(pages.iterdir()):
+                    gate.delete_work_file(root, f"工作区/材料/识别页/{m['material_id']}/{f.name}", op="materials_remove")
+                pages.rmdir()
+        except (ApiError, OSError):
+            pass
+
+    @staticmethod
+    def _in_wiki(root: str, ids: set[str]) -> bool:
+        """被移除的材料在 wiki 生成时用过没有（case.json 的 materials_at_generation）；读不了按没有。"""
+        try:
+            card = json.loads(gate.resolve_internal(root, "工作区/wiki/case.json", op="materials_remove").read_text(encoding="utf-8"))
+            return any(x.get("material_id") in ids for x in card.get("materials_at_generation", []))
+        except (ApiError, OSError, ValueError, AttributeError):
+            return False
 
     # ---------- 列表 ----------
 
@@ -505,7 +585,30 @@ class Materials:
             "material_id": m["material_id"], "name": m["name"], "rel_path": m["rel_path"], "type": m["type"],
             "status": m["status"], "unit": m["unit"], "unit_count": m["unit_count"], "is_ocr": m["is_ocr"],
             "stale_ocr": m["material_id"] in stale, "error": m["error"], "pages_need_ocr": m["pages_need_ocr"],
-            "pages_mixed": m["pages_mixed"]} for m in index["materials"]]}
+            "pages_mixed": m["pages_mixed"], "chars": self._chars(root, m)}
+            for m in index["materials"] if m["status"] != "removed"]}     # 已移除的（契约 1.4）不列
+
+    def _chars(self, root: str, m: dict) -> int | None:
+        """材料文本的字数（契约 1.4 materials_list.chars）：各单元正文之和，不含位置标记、"本页需识别"占位。
+        按文本文件的修改时间和大小缓存，文本没变不重读。没有文本（失败、文本缺失）为 None。"""
+        if m["status"] == "failed":
+            return None
+        try:
+            path = gate.resolve_internal(root, texts.text_rel(m), op="material_text")
+            st = path.stat()
+        except (ApiError, OSError):
+            return None
+        key = (str(path), m["unit"])
+        hit = self._chars_cache.get(key)
+        if hit and hit[0] == (st.st_mtime_ns, st.st_size):
+            return hit[1]
+        try:
+            units = texts.split_units(path.read_text(encoding="utf-8"), m["unit"])
+        except (OSError, ValueError):
+            return None
+        n = sum(len(u.text) for u in units if u.text.strip() != texts.PENDING_OCR)
+        self._chars_cache[key] = ((st.st_mtime_ns, st.st_size), n)
+        return n
 
     @staticmethod
     def _stale_ocr(root: str, index: dict) -> set[str]:

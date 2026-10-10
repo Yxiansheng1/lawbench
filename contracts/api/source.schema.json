@@ -15,6 +15,10 @@
         },
         "citation": {
           "$ref": "lawbench://contracts/common.schema.json#/$defs/citation_text"
+        },
+        "task_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/task_id",
+          "description": "这条出处所在的任务（1.4 起，可选）：给了就只按这个任务记下的出处版本判断 source_changed"
         }
       },
       "additionalProperties": false,

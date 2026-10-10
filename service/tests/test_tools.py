@@ -356,3 +356,33 @@ def test_unrecognized_scan_is_unreadable_not_unread(tmp_path_factory):
         assert [u["name"] for u in cov["unreadable"]] == ["讯问笔录"] and "还没识别" in cov["unreadable"][0]["reason"]
     finally:
         e.close()
+
+
+
+def test_read_many_materials_in_one_call(tmp_path_factory):
+    """契约 1.4 more_names：一次读几份小材料，各份前一行【材料：名】；放不下、未识别、不存在的在 parts 里写明，不让整次失败；
+    读到的都进读取记录（覆盖清单认）；与 start 同用被拒。"""
+    from t8_helpers import FIXTURES
+    d = tmp_path_factory.mktemp("many-src")
+    (d / "甲.txt").write_text("甲一\n甲二\n", encoding="utf-8")
+    (d / "乙.txt").write_text("乙一\n", encoding="utf-8")
+    (d / "大.txt").write_text("".join(f"第{i}行内容内容内容内容\n" for i in range(400)), encoding="utf-8")
+    e = Env(tmp_path_factory.mktemp("t14many"), {"甲.txt": d / "甲.txt", "乙.txt": d / "乙.txt", "大.txt": d / "大.txt",
+                                                 "讯问笔录.pdf": FIXTURES / "criminal-01" / "讯问笔录.pdf"})
+    try:
+        t = e.begin()["task_id"]
+        v = e.tool_ok(t, "case_read_material", {"name": "甲", "more_names": ["乙", "讯问笔录", "没有的", "大"], "max_chars": 600})
+        assert v["text"].startswith("【材料：甲】\n【第1行】\n甲一\n【第2行】\n甲二\n\n【材料：乙】\n【第1行】\n乙一")
+        assert "【材料：乙】\n【第1行】\n乙一" in v["text"] and len(v["text"]) <= 600
+        by = {p["name"]: p for p in v["parts"]}
+        assert [p["name"] for p in v["parts"]] == ["甲", "乙", "讯问笔录", "没有的", "大"]
+        assert by["甲"]["read"] and by["乙"]["read"] and (by["乙"]["start"], by["乙"]["end"], by["乙"]["has_more"]) == (1, 1, False)
+        assert not by["讯问笔录"]["read"] and "还不能读取" in by["讯问笔录"]["error"]
+        assert not by["没有的"]["read"] and by["没有的"]["error"] == "没有这份材料" and by["没有的"]["material_id"] is None
+        assert by["大"]["read"] and by["大"]["has_more"] and by["大"]["next_start"] == by["大"]["end"] + 1   # 放得下一部分：读到哪算哪
+        cov = e.tool_ok(t, "case_save_draft", {"title": "a", "content": "x"})["coverage"]
+        assert sorted(cov["fully_read"]) == ["乙", "甲"] and [p["name"] for p in cov["partially_read"]] == ["大"]
+        fail(e.tool(t, "case_read_material", {"name": "甲", "more_names": ["乙"], "start": 2}), "INVALID_ARGUMENT")
+        fail(e.tool(t, "case_read_material", {"name": "讯问笔录", "more_names": ["甲"]}), "MATERIAL_NOT_READY")   # 第一份照单份的规矩
+    finally:
+        e.close()

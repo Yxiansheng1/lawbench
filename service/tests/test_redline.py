@@ -183,7 +183,7 @@ def test_original_untouched_and_version_increments(env, tid):
 
 def test_revised_original_rejected_whole(env, tid):
     p = save_list(env, tid, "采购合同-含未处理修订", [dict(id=1, comment="理由", **IN_SCOPE[0])])
-    fail(redline(env, tid, p), "INVALID_ARGUMENT")
+    fail(redline(env, tid, p), "ORIGINAL_HAS_REVISIONS")
     assert not (env.task_dir(tid) / "草稿").exists() or \
         not list((env.task_dir(tid) / "草稿").glob("*修订版*"))
     with pytest.raises(R.Revised):

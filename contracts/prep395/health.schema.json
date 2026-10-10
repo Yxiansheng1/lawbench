@@ -32,6 +32,10 @@
     },
     "contract_version": {
       "type": "string"
+    },
+    "ocr_model": {
+      "type": "string",
+      "description": "当前识别模型（模板）名，如 xiaomi-ocr-0（1.4 起，可选）"
     }
   },
   "additionalProperties": false,

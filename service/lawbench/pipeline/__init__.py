@@ -148,7 +148,15 @@ class Pipelines:
             raise ApiError("TASK_NOT_FOUND", "not_pipeline")
         res = self.tasks.result(root, task_id)
         return {"status": STATUS_OF_RESULT.get(res["status"], "failed"), "step_index": 0, "step_total": 0,
-                "current": None, "queue_wait_ms": None}
+                "current": None, "queue_wait_ms": None, "notice": self._recorded_notice(root, task_id)}
+
+    def _recorded_notice(self, root: str, task_id: str) -> str | None:
+        """结束后的任务：提示从运行记录里取（只有 395 抽取被跳过时有）。"""
+        try:
+            rec = json.loads(gate.resolve_internal(root, self.tasks.rel(task_id, RECORD), op="pipeline").read_text(encoding="utf-8"))
+            return (rec.get("395") or {}).get("提示")
+        except (OSError, ValueError, ApiError):
+            return None
 
     def cancel(self, task_id: str) -> dict:
         with self._lock:

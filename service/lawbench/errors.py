@@ -29,6 +29,8 @@ MESSAGES: dict[str, str] = {
     "ENGINE_FAILED": "发票整理未完成，请查看下方的输出信息",
     "ENGINE_BUSY": "发票整理正在进行中，请等它完成再操作",
     "PLAN_NOT_CONFIRMED": "请先确认办案结果",
+    "ORIGINAL_HAS_REVISIONS": "原文件含未处理的修订，请先接受或拒绝后再生成",
+    "CASE_CARD_INVALID": "案件卡片（工作区/wiki/case.json）已损坏，请重新生成 wiki",
 }
 
 

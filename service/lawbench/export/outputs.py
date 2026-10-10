@@ -135,7 +135,7 @@ class Exporter:
                     "title": title, "version": version,
                     "files": [{"format": f, "path": p} for f, p in zip(formats, written)],
                     "task_id": d["task_id"], "inputs": task["inputs"], "citation_passed": passed,
-                    "confirmed_at": now_iso()})
+                    "confirmed_at": now_iso(), "draft": d["draft"]})   # draft：来源草稿（契约 1.4），界面按它对应草稿与成果
         except Exception:
             remove_outputs(root, written)
             raise
@@ -195,8 +195,7 @@ class Exporter:
         try:
             data, applied, manual = redline.generate(src.read_bytes(), edits["edits"])
         except redline.Revised:
-            # 契约 1.4 加专用码 ORIGINAL_HAS_REVISIONS（主编排 2259 定）；1.4 之前过渡用 INVALID_ARGUMENT
-            raise ApiError("INVALID_ARGUMENT", "original_has_revisions")
+            raise ApiError("ORIGINAL_HAS_REVISIONS", "original_has_revisions")   # 契约 1.4 专用码（Spec 12.2 原句）
         except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError, ParseError):
             raise ApiError("MATERIAL_NOT_READY", "docx_unreadable")
 

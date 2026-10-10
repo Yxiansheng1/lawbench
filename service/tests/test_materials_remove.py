@@ -1,0 +1,149 @@
+"""契约 1.4：POST /api/materials/remove —— 原件移到回收站、清掉文本 / 识别页 / 检索，index.json 留编号（status removed）。
+
+测试里把"移到回收站"换成移到临时目录（不往本机回收站里放测试文件）；真回收站只在设了 LB_TEST_RECYCLE=1 时跑一例。
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+
+import pytest
+
+from lawbench.case import trash
+
+from t8_helpers import FIXTURES, Env, fail, ok
+
+SCHEMA = "api/materials_remove.schema.json"
+
+
+@pytest.fixture
+def env(tmp_path):
+    e = Env(tmp_path / "c", {"说明.txt": FIXTURES / "civil-01" / "情况说明.txt",
+                             "摘要.md": FIXTURES / "civil-01" / "案情摘要.md",
+                             "讯问笔录.pdf": FIXTURES / "criminal-01" / "讯问笔录.pdf"})
+    e.bin = tmp_path / "假回收站"
+    e.bin.mkdir()
+    e.client.app.state.lb.materials.recycle = lambda p: shutil.move(str(p), str(e.bin / os.path.basename(p)))
+    yield e
+    e.close()
+
+
+def mats(env) -> dict:
+    v = ok(env.client.get("/api/materials", params={"case_id": env.case_id}), "api/materials_list.schema.json")
+    return {m["name"]: m for m in v["materials"]}
+
+
+def index(env) -> dict:
+    return json.loads((env.root / "工作区" / "材料" / "index.json").read_text(encoding="utf-8"))
+
+
+def remove(env, ids):
+    return env.client.post("/api/materials/remove", json={"case_id": env.case_id, "material_ids": ids})
+
+
+def search(env, q) -> list[str]:
+    """命中的材料编号。"""
+    v = ok(env.client.get("/api/search", params={"case_id": env.case_id, "q": q}), "api/search.schema.json")
+    return [h["material_id"] for h in v["hits"]]
+
+
+def test_remove_moves_original_and_clears_derived(env):
+    mid = mats(env)["说明"]["material_id"]
+    text = env.root / "工作区" / "材料" / "文本" / "说明.txt.md"
+    word = text.read_text(encoding="utf-8").splitlines()[-1][:6]
+    assert text.is_file() and mid in search(env, word)
+    v = ok(remove(env, [mid]), SCHEMA)
+    assert v == {"removed": [mid], "already_removed": [], "failed": [], "wiki_needs_update": False}
+    assert not (env.root / "说明.txt").exists() and (env.bin / "说明.txt").is_file()      # 原件进了回收站，不是删掉
+    assert not text.exists()                                                             # 材料文本清掉
+    assert "说明" not in mats(env) and len(mats(env)) == 2                                # 列表里没有了
+    entry = next(m for m in index(env)["materials"] if m["material_id"] == mid)
+    assert entry["status"] == "removed"                                                  # 索引里留着编号
+    assert mid not in search(env, word)                                                  # 检索不到这份了
+    t = env.begin()["task_id"]
+    fail(env.tool(t, "case_read_material", {"name": "说明"}), "MATERIAL_NOT_FOUND")       # AI 读不到
+    assert sorted(m["name"] for m in env.tool_ok(t, "case_list_materials", {})["materials"]) == ["摘要", "讯问笔录"]
+    assert env.tool_ok(t, "case_save_draft", {"title": "a", "content": "x"})["coverage"]["total"] == 2
+    fail(env.client.get("/api/source", params={"case_id": env.case_id, "material_id": mid, "citation": "〔说明 第1行〕"}),
+         "MATERIAL_NOT_FOUND")
+    assert ok(remove(env, [mid]), SCHEMA) == {"removed": [], "already_removed": [mid], "failed": [],     # 幂等
+                                              "wiki_needs_update": False}
+
+
+def test_unknown_id_rejects_whole_request(env):
+    mid = mats(env)["说明"]["material_id"]
+    fail(remove(env, [mid, "M0999"]), "MATERIAL_NOT_FOUND")
+    assert (env.root / "说明.txt").is_file() and "说明" in mats(env)                       # 什么都没动
+    fail(remove(env, []), "INVALID_ARGUMENT")
+
+
+def test_recycle_failure_keeps_material(env):
+    def boom(p):
+        raise PermissionError("in use")
+    env.client.app.state.lb.materials.recycle = boom
+    a, b = mats(env)["说明"]["material_id"], mats(env)["摘要"]["material_id"]
+    v = ok(remove(env, [a, b]), SCHEMA)
+    assert v["removed"] == [] and [f["material_id"] for f in v["failed"]] == [a, b] and "回收站" in v["failed"][0]["reason"]
+    assert (env.root / "说明.txt").is_file() and mats(env)["说明"]["status"] == "parsed"
+    assert (env.root / "工作区" / "材料" / "文本" / "说明.txt.md").is_file()               # 移不走原件：派生数据也不动
+
+
+def test_rescan_keeps_removed_and_reimport_gets_new_id(env):
+    mid = mats(env)["说明"]["material_id"]
+    ok(remove(env, [mid]), SCHEMA)
+    v = ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+    assert v["removed"] == 0 and v["added"] == 0                                         # 不改标成"原件已删除"
+    assert next(m for m in index(env)["materials"] if m["material_id"] == mid)["status"] == "removed"
+    shutil.copy(env.bin / "说明.txt", env.root / "说明.txt")                               # 律师又把同一个文件放回来
+    v = ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+    assert v["added"] == 1
+    new = mats(env)["说明"]
+    assert new["material_id"] != mid and new["status"] == "parsed"                       # 是新材料、新编号
+    statuses = sorted(m["status"] for m in index(env)["materials"] if m["rel_path"] == "说明.txt")
+    assert statuses == ["parsed", "removed"]
+    assert (env.root / "工作区" / "材料" / "文本" / "说明.txt.md").is_file()
+
+
+def test_ocr_pages_dropped_and_wiki_flag(env):
+    mid = mats(env)["讯问笔录"]["material_id"]
+    pages = env.root / "工作区" / "材料" / "识别页" / mid
+    pages.mkdir(parents=True)
+    (pages / "1.md").write_text("识别出来的文字", encoding="utf-8")
+    card = {"v": 1, "case_id": env.case_id, "case_type": "criminal", "stance": None, "parties": [], "issues": [],
+            "key_facts": [], "generated_by": None, "generated_at": "2026-10-10T09:00:00+08:00",
+            "materials_at_generation": [{"material_id": mid, "sha256": "a" * 64}]}
+    w = env.root / "工作区" / "wiki" / "case.json"
+    w.parent.mkdir(parents=True, exist_ok=True)
+    w.write_text(json.dumps(card, ensure_ascii=False), encoding="utf-8")
+    v = ok(remove(env, [mid]), SCHEMA)
+    assert v["removed"] == [mid] and v["wiki_needs_update"] is True
+    assert not pages.exists() and (env.bin / "讯问笔录.pdf").is_file()
+
+
+def test_source_deleted_material_can_be_removed(env):
+    """原件已经被律师自己删掉的（source_deleted，文本还在、还能被检索）：移除时不用再动原件，文本和检索照样清掉（N61）。"""
+    mid = mats(env)["说明"]["material_id"]
+    (env.root / "说明.txt").unlink()
+    ok(env.client.post("/api/materials/scan", json={"case_id": env.case_id}), "api/materials_scan.schema.json")
+    assert mats(env)["说明"]["status"] == "source_deleted"
+    assert ok(remove(env, [mid]), SCHEMA)["removed"] == [mid]
+    assert "说明" not in mats(env) and not (env.root / "工作区" / "材料" / "文本" / "说明.txt.md").exists()
+
+
+def test_logs_have_no_names(env, caplog):
+    mid = mats(env)["说明"]["material_id"]
+    with caplog.at_level("INFO", logger="lawbench.events"):
+        ok(remove(env, [mid]), SCHEMA)
+    log = "\n".join(r.getMessage() for r in caplog.records if r.name == "lawbench.events")
+    assert '"op": "remove"' in log and "说明" not in log and "txt" not in log
+
+
+@pytest.mark.skipif(os.environ.get("LB_TEST_RECYCLE") != "1", reason="真回收站：设 LB_TEST_RECYCLE=1 才跑（会往本机回收站放一个小文件）")
+def test_real_recycle_bin(tmp_path):
+    f = tmp_path / "lawbench-测试文件-可以删除.txt"
+    f.write_text("x", encoding="utf-8")
+    trash.recycle(f)
+    assert not f.exists()
+    with pytest.raises(OSError):
+        trash.recycle(f)                       # 已经不在了

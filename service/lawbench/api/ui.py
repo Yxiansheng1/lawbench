@@ -62,7 +62,7 @@ def routes(st) -> list[Route]:
     """st：app.state（带 config、cases、settings、capsules、net、key_getter）。"""
 
     def case_open(d: dict) -> dict:
-        value = st.cases.open(d["path"], d.get("template"))
+        value = st.cases.open(d["path"], d.get("template"), d.get("folders"))
         st.tasks.mark_abnormal(value["case_id"])  # 上次硬退出时仍在执行的任务标"异常中断"（Spec 9.2）
         st.ocr.resume_case(value["case_id"])      # 案件文件夹拔掉又插回等：接着做它未完成的识别任务（T12 复核）
         return value
@@ -86,7 +86,7 @@ def routes(st) -> list[Route]:
     def source(d: dict) -> dict:  # T9（T14 派修）：原文查看
         from ..case import source as src
         return src.view(st.cases.root_of(d["case_id"]), d["case_id"], st.materials.index(d["case_id"]),
-                        d["material_id"], d["citation"])
+                        d["material_id"], d["citation"], d.get("task_id"))
 
     def case_recent(d: dict) -> dict:
         return {"cases": st.cases.recent()}
@@ -116,6 +116,9 @@ def routes(st) -> list[Route]:
     def materials_import(d: dict) -> dict:
         return st.materials.import_(d["case_id"], d["paths"], d["target"], d["unzip"])
 
+    def materials_remove(d: dict) -> dict:    # 契约 1.4：律师移除材料（原件进回收站）
+        return st.materials.remove(d["case_id"], d["material_ids"])
+
     def connection_test(d: dict) -> dict:
         return probe_connection(st, d["server"])
 
@@ -132,6 +135,14 @@ def routes(st) -> list[Route]:
     def wiki_suggestions(d: dict) -> dict:
         from ..wiki import suggestions
         return suggestions.handle(st.cases.root_of(d["case_id"]), d.get("id"), d.get("accept"))
+    def wiki_review_get(d: dict) -> dict:     # 契约 1.4：wiki 核对状态（记在案件里）
+        from ..wiki import review
+        return review.get(st.cases.root_of(d["case_id"]), st.materials.index(d["case_id"]))
+
+    def wiki_review_mark(d: dict) -> dict:
+        from ..wiki import review
+        return review.mark(st.cases.root_of(d["case_id"]), d["case_id"], st.materials.index(d["case_id"]))
+
     def invoice_run(d: dict) -> dict:
         return st.invoice.run(d)
 
@@ -168,6 +179,7 @@ def routes(st) -> list[Route]:
         Route("/api/materials/scan", E("materials_scan", materials_scan), methods=["POST"]),
         Route("/api/materials", E("materials_list", materials_list, query=True), methods=["GET"]),
         Route("/api/materials/import", E("materials_import", materials_import), methods=["POST"]),
+        Route("/api/materials/remove", E("materials_remove", materials_remove), methods=["POST"]),
         Route("/api/connection/test", E("connection_test", connection_test), methods=["POST"]),
         Route("/api/task", E("task_create", task_create), methods=["POST"]),
         Route("/api/tasks", E("tasks_list", tasks_list, query=True), methods=["GET"]),
@@ -181,6 +193,8 @@ def routes(st) -> list[Route]:
         Route("/api/pipeline/run", E("pipeline_run", pipeline_run), methods=["POST"]),
         Route("/api/pipeline/{task_id}", E("pipeline_status", pipeline_status, query=True), methods=["GET"]),
         Route("/api/pipeline/{task_id}/cancel", E("pipeline_cancel", pipeline_cancel), methods=["POST"]),
+        Route("/api/wiki/review", E("wiki_review", wiki_review_get, query=True), methods=["GET"]),
+        Route("/api/wiki/review", E("wiki_review", wiki_review_mark), methods=["POST"]),
         Route("/api/wiki/suggestions", E("wiki_suggestions", wiki_suggestions, query=True), methods=["GET"]),
         Route("/api/wiki/suggestions/{id}", E("wiki_suggestions", wiki_suggestions), methods=["POST"]),
         Route("/api/invoice/run", E("invoice_run", invoice_run), methods=["POST"]),

@@ -39,6 +39,8 @@ TRUNC_TAIL = "\n…（本单元没读完，用 offset 接着读）"
 def read_material(ctx: ToolContext, a: dict) -> dict:
     """offset（契约 1.2，N31）：单元本身超过 max_chars 时分段读同一单元，返回 next_offset；只有整个单元都读到了
     才记进 reads.json（P1-1）——分段读时按"从 0 起连续读到了第几个字"累计，读到单元末尾才算读完。"""
+    if "more_names" in a:
+        return _read_many(ctx, a)
     m = ctx.material_by_name(a["name"])
     units = _units_of(ctx, m)
     start = a.get("start", 1)
@@ -61,6 +63,52 @@ def read_material(ctx: ToolContext, a: dict) -> dict:
     _record(ctx, m, picked[0].no, picked[-1].no)
     return {"name": m["name"], "material_id": m["material_id"], "unit": m["unit"], "start": picked[0].no,
             "end": picked[-1].no, "text": text, "has_more": nxt is not None, "next_start": nxt, "next_offset": None}
+
+
+SEP = "【材料：{name}】"
+
+
+def _read_many(ctx: ToolContext, a: dict) -> dict:
+    """一次读几份（契约 1.4 more_names）：name 和 more_names 各从头读，按顺序接起来，各份前面一行【材料：<材料名>】，
+    合计不超过 max_chars。第一份照单份的规矩（读不了、不存在照常报错）；后面的放不下、读不了、不存在都不让整次失败，
+    在 parts 里写明。只把整单元读到的记进 reads.json。"""
+    if "start" in a or "offset" in a or a["name"] in a["more_names"]:
+        raise ApiError("INVALID_ARGUMENT", "more_names_with_start")
+    limit = a.get("max_chars", MAX_CHARS)
+    first = ctx.material_by_name(a["name"])
+    head = SEP.format(name=first["name"]) + "\n"
+    r = read_material(ctx, {"name": a["name"], "max_chars": max(500, limit - len(head))})
+    texts_out = [head + r["text"]]
+    parts = [{"name": r["name"], "material_id": r["material_id"], "unit": r["unit"], "read": True, "start": r["start"],
+              "end": r["end"], "has_more": r["has_more"], "next_start": r["next_start"], "error": None}]
+    used = len(texts_out[0])
+    for name in a["more_names"]:
+        skip = {"name": name, "material_id": None, "unit": None, "read": False, "start": None, "end": None,
+                "has_more": False, "next_start": None}
+        try:
+            m = ctx.material_by_name(name)
+            units = _units_of(ctx, m)
+        except ApiError as e:
+            parts.append({**skip, "error": "没有这份材料" if e.code == "MATERIAL_NOT_FOUND" else "还不能读取（待识别或处理失败）"})
+            continue
+        skip.update(material_id=m["material_id"], unit=m["unit"])
+        head = "\n\n" + SEP.format(name=m["name"]) + "\n"
+        picked: list[texts.Unit] = []
+        for u in units:
+            if used + len(head) + len(texts.render(picked + [u], m["unit"])) > limit:
+                break
+            picked.append(u)
+        if not picked:
+            parts.append({**skip, "has_more": True, "next_start": units[0].no, "error": "放不下，请单独读这份"})
+            continue
+        body = head + texts.render(picked, m["unit"])
+        texts_out.append(body)
+        used += len(body)
+        nxt = next((u.no for u in units if u.no > picked[-1].no), None)
+        _record(ctx, m, picked[0].no, picked[-1].no)
+        parts.append({**skip, "read": True, "start": picked[0].no, "end": picked[-1].no, "has_more": nxt is not None,
+                      "next_start": nxt, "error": None})
+    return {**r, "text": "".join(texts_out), "parts": parts}
 
 
 def _record(ctx: ToolContext, m: dict, frm: int, to: int) -> None:

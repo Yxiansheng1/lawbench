@@ -1056,7 +1056,7 @@ li{margin:3px 0}
 </li>
 <li><strong>不跟随链接</strong>：对拼接后的路径及其每一级父目录执行 <code>lstat</code>；只要有一级是符号链接或 reparse point（Windows 下判断 <code>st_file_attributes &amp; FILE_ATTRIBUTE_REPARSE_POINT</code>，junction 在此范围内），就拒绝。</li>
 <li><strong>最终校验</strong>：<code>realpath</code> 必须以 <code>ROOT + 分隔符</code> 开头；Windows 下比较前统一大小写。</li>
-<li><strong>写权限</strong>：只允许写 <code>工作区/</code> 和 <code>成果/</code>。原件区只有两种写入，都由律师在界面上操作触发、AI 的工具里没有：<code>/api/materials/import</code> 复制新文件（目标已存在同名文件时改名为&quot;原名(2)&quot;，从不覆盖）；<code>/api/case/open</code> 按标准目录新建空文件夹。已有原件在任何情况下都不改动、不删除。写文件时先写临时文件再原子替换（<code>os.replace</code>）。</li>
+<li><strong>写权限</strong>：只允许写 <code>工作区/</code> 和 <code>成果/</code>。原件区只有两种写入，都由律师在界面上操作触发、AI 的工具里没有：<code>/api/materials/import</code> 复制新文件（目标已存在同名文件时改名为&quot;原名(2)&quot;，从不覆盖）；<code>/api/case/open</code> 按标准目录新建空文件夹。已有原件在任何情况下都不改动、不永久删除；唯一的例外是律师在界面上逐份确认&quot;移除此材料&quot;后，<code>/api/materials/remove</code> 把原件移到系统回收站（可还原），同时清掉它的材料文本、识别页和检索记录，<code>index.json</code> 里留编号、状态 <code>removed</code>（契约 1.4，2026-10-10 用户定 SEC-08 口径：移到回收站，不永久删）。写文件时先写临时文件再原子替换（<code>os.replace</code>）。</li>
 <li><strong>拒绝时</strong>：返回中文错误&quot;超出当前案件范围&quot;，本机日志记一条（只记工具名和原因，不记参数内容）。</li>
 </ol>
 <h3 id="4-3-给界面的接口-api-仅限界面调用">4.3 给界面的接口（<code>/api/*</code>，仅限界面调用）</h3>
@@ -1068,7 +1068,7 @@ li{margin:3px 0}
 <li>每次执行（识别、流水线、抽取、Agent 任务）创建时分配 <code>task_id</code>（识别为 <code>job_id</code>），同时固定所属案件、输入材料的版本和律师确认过的发送范围；之后的进度查询、取消都按 <code>task_id</code>，与界面当前显示哪个案件无关。</li>
 <li>插件调用 <code>/core/*</code> 时，由会话头的 <code>cwd</code> 查出 <code>case_id</code>；<code>cwd</code> 不在注册表中的会话，工具一律拒绝。</li>
 </ul>
-<p>共 25 个接口，请求和返回的字段见第 20.5 节和 <a href="../contracts/api/"><code>contracts/api/</code></a>，下表只说作用。</p>
+<p>共 27 个接口（1.4 加 <code>materials_remove</code>、<code>wiki_review</code>），请求和返回的字段见第 20.5 节和 <a href="../contracts/api/"><code>contracts/api/</code></a>，下表只说作用。</p>
 <table>
 <thead>
 <tr>
@@ -1096,6 +1096,11 @@ li{margin:3px 0}
 <tr>
 <td><code>POST /api/materials/import</code></td>
 <td>拖入或选择的文件、文件夹复制进案件文件夹，然后同 scan（第 5.1 节）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST /api/materials/remove</code></td>
+<td>律师移除材料（1.4 起）：原件移到系统回收站，清掉材料文本、识别页、检索记录；编号保留不复用；幂等</td>
 <td>否</td>
 </tr>
 <tr>
@@ -1146,6 +1151,11 @@ li{margin:3px 0}
 <tr>
 <td><code>GET /api/wiki/suggestions</code>；<code>POST /api/wiki/suggestions/{id}</code></td>
 <td>列出、处理 AI 提出的 wiki 修改建议</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET /api/wiki/review</code>；<code>POST /api/wiki/review</code></td>
+<td>读、标记案件 wiki 的核对状态（1.4 起；记在 <code>工作区/wiki/case.json</code>，换电脑一致；重新生成或材料变化后回到未核对）</td>
 <td>否</td>
 </tr>
 <tr>
@@ -1212,9 +1222,9 @@ li{margin:3px 0}
 </tr>
 <tr>
 <td><code>case_read_material</code></td>
-<td><code>name, start?, max_chars?</code></td>
-<td>带位置标记的原文、<code>start</code>、<code>end</code>、<code>has_more</code>、<code>next_start</code></td>
-<td>读 <code>工作区/材料/文本/</code> 下的解析结果；<code>start</code> 是页号、段号或行号；每次读取记入 <code>reads.json</code>，用于计算覆盖清单</td>
+<td><code>name, start?, offset?, max_chars?, more_names?</code></td>
+<td>带位置标记的原文、<code>start</code>、<code>end</code>、<code>has_more</code>、<code>next_start</code>；传了 <code>more_names</code> 另有 <code>parts</code></td>
+<td>读 <code>工作区/材料/文本/</code> 下的解析结果；<code>start</code> 是页号、段号或行号；每次读取记入 <code>reads.json</code>，用于计算覆盖清单。<code>more_names</code>（1.4 起）：同一次再读几份小材料，各从头读，合计不超过 <code>max_chars</code>，各份之间一行<code>【材料：&lt;材料名&gt;】</code>；放不下、读不了的在 <code>parts</code> 里说明</td>
 </tr>
 <tr>
 <td><code>case_search</code></td>
@@ -2441,7 +2451,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 </tr>
 <tr>
 <td>SEC-08</td>
-<td>已有原件没有改写接口；原件区只有律师触发的导入（只新增、不覆盖）和标准目录建文件夹（第 4.2 节）；<code>材料/index.json</code> 记录哈希；归档、Word 转换只读原件副本</td>
+<td>已有原件没有改写接口；原件区只有律师触发的导入（只新增、不覆盖）、标准目录建文件夹（第 4.2 节）和律师逐份确认的&quot;移除此材料&quot;（原件移到系统回收站、不永久删，1.4）；<code>材料/index.json</code> 记录哈希；归档、Word 转换只读原件副本</td>
 <td>验收前后比对原件哈希（含导入同名文件、归档之后）</td>
 </tr>
 <tr>
@@ -2828,6 +2838,16 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <td>归档方案的办案结果为空</td>
 <td>请先确认办案结果</td>
 </tr>
+<tr>
+<td><code>ORIGINAL_HAS_REVISIONS</code>（1.4）</td>
+<td>生成修订版时原文件已含未处理的修订</td>
+<td>原文件含未处理的修订，请先接受或拒绝后再生成</td>
+</tr>
+<tr>
+<td><code>CASE_CARD_INVALID</code>（1.4）</td>
+<td><code>工作区/wiki/case.json</code> 不合契约（被改坏或损坏）</td>
+<td>案件卡片（工作区/wiki/case.json）已损坏，请重新生成 wiki</td>
+</tr>
 </tbody>
 </table>
 <ul>
@@ -3174,6 +3194,11 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 <td>1.3</td>
 <td>2026-09-30</td>
 <td>T25 调研（线 C）发现契约与发票引擎不一致，随 T25 开工前一并改：①<code>invoice_run</code> plan 的 <code>history_numbers</code> 票号改 18–20 位（引擎 <code>[0-9]{18,20}</code>）；②<code>batch</code> 加正则 <code>^[A-Za-z0-9_\u4e00-\u9fff-]{1,40}$</code>（引擎 <code>[\w-]{1,80}</code>）；③plan 加可缺省的 <code>start</code>/<code>end</code>（YYYY-MM-DD），<code>channel=eml</code> 时必填（引擎 <code>period_plan</code> 要求邮件来源必须给起止日期）；④<code>cancel</code> 的 <code>apply=false</code> 说明：引擎不支持取消预览，服务忽略、界面先展示批次再确认。⑤<code>exclude</code> 动作加入白名单（线 C 17:34 给出引擎参数）：<code>{action, period, item ^[0-9a-f]{64}$, reason 1–200, reviewer 1–40, confirm: true}</code>，服务一律带 <code>--confirm</code>。⑦（2026-10-01 T25 复核后）错误码加 <code>ENGINE_BUSY</code>（等锁超 2 秒）；<code>failed</code> 描述改为&quot;任一行以 [BLOCKED] 开头&quot;。⑥（2026-10-01）<code>invoice_run</code> 返回加 <code>failed</code>：引擎自己报失败（<code>[BLOCKED]</code> 或退出码非 0/2）时返回成功体、<code>failed: true</code>、原因在 <code>output</code>，不再用 <code>ENGINE_FAILED</code> 吞掉原因（T25 1711 注记 A）。<strong>未纳入</strong>：N45（出处正则允许材料名含 <code>〔〕</code>）——材料名内含括号会让出处解析二义，要先定解析规则，留待 1.4。<code>contract_version</code> 升 1.3；395 与工作台服务的 <code>/health</code> 读 <code>contracts\VERSION</code></td>
+</tr>
+<tr>
+<td>1.4</td>
+<td>2026-10-10</td>
+<td>攒下的候项一批（<code>D:\lawbench-coord\ORCH-契约1.4候项.md</code>，用户 10-10 定）：①出处正则允许材料名里带成对的〔…〕（N45）；②错误码加 <code>ORIGINAL_HAS_REVISIONS</code>、<code>CASE_CARD_INVALID</code>；③<code>pipeline_status</code> 加可选 <code>notice</code>（395 抽取被跳过的提示）；④<code>/api/source</code> 请求加可选 <code>task_id</code>；⑤新接口 <code>materials_remove</code>，<code>material_status</code> 加 <code>removed</code>（SEC-08 口径：原件移到回收站）；⑥<code>materials_list</code> 每项加可选 <code>chars</code>；⑦<code>case_read_material</code> 加可选 <code>more_names</code>、返回加可选 <code>parts</code>；⑧<code>成果/索引.json</code> 每条加可选 <code>draft</code>（来源草稿路径）；⑨<code>materials_import</code> 跳过原因去掉&quot;云同步目录&quot;（N80 后不再出现）；⑩<code>case_open</code> 加可选 <code>folders</code>（律师勾选的子文件夹）；⑪新接口 <code>wiki_review</code>，<code>case.json</code> 加可选 <code>review</code>；⑫395 <code>/health</code> 加可选 <code>ocr_model</code>（395 侧实现归线 C）。新字段全部可选，1.3 的客户端照常；N66（图片材料返回原图）不在本版。</td>
 </tr>
 </tbody>
 </table>

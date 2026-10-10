@@ -84,6 +84,18 @@
                           "type": "integer",
                           "minimum": 1
                         }
+                      },
+                      "chars": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "材料文本的字数（不含位置标记；1.4 起），没有文本为 null；界面用它估一次能读全多少"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false,
@@ -181,6 +193,18 @@
                   "type": "integer",
                   "minimum": 1
                 }
+              },
+              "chars": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "材料文本的字数（不含位置标记；1.4 起），没有文本为 null；界面用它估一次能读全多少"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "additionalProperties": false,

@@ -296,3 +296,22 @@ def test_logs_no_material_names(env, appdata):
         assert bad not in text, bad
     for line in text.splitlines():
         assert set(json.loads(line)) <= {"t", "module", "op", "status", "case_id", "ms", "error"}
+
+
+def test_materials_list_chars(make_client, cases_dir):
+    """契约 1.4：materials_list 每份带 chars = 材料文本字数（不含位置标记）；未识别的扫描件占位页不算；文本变了跟着变。"""
+    client = make_client()
+    root = cases_dir / "字数"
+    root.mkdir()
+    (root / "说明.txt").write_text("一二三四五\n六七八\n", encoding="utf-8")
+    shutil.copy(FIXTURES / "criminal-01" / "讯问笔录.pdf", root / "讯问笔录.pdf")
+    cid = ok(client.post("/api/case/open", json={"path": str(root)}), "case_open")["case_id"]
+    ok(client.post("/api/materials/scan", json={"case_id": cid}), "materials_scan")
+    by = {m["name"]: m for m in ok(client.get("/api/materials", params={"case_id": cid}), "materials_list")["materials"]}
+    assert by["说明"]["chars"] == 8                    # 两行 5 + 3 个字，不含【第1行】标记和换行
+    assert by["讯问笔录"]["chars"] == 0                # 3 页都是"本页需识别"占位
+    (root / "说明.txt").write_text("一二三四五\n六七八\n九十\n", encoding="utf-8")
+    ok(client.post("/api/materials/scan", json={"case_id": cid}), "materials_scan")
+    by = {m["name"]: m for m in ok(client.get("/api/materials", params={"case_id": cid}), "materials_list")["materials"]}
+    assert by["说明"]["chars"] == 10
+

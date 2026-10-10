@@ -169,12 +169,34 @@ def test_d_undeclared_material():
     ("转账60000元〔流水 流水!Z2〕。", "超出工作表范围"),
     ("转账60000元〔流水 流水!B3:B2〕。", "区域写反了"),
     ("转账60000元〔流水 流水!C2:B3〕。", "区域写反了"),
-    ("每人5000元〔京政发〔2024〕1号 第1段〕。", "契约 1.4 前无法引用"),     # P2-2：材料名带〔年份〕
 ])
 def test_e_bad_format(text, msg):
     check, _ = run(text)
     e = [p for p in check["problems"] if p["class"] == "E"]
     assert e and msg in e[0]["message"] and not check["passed"], check["problems"]
+
+
+# ---------- 契约 1.4（N45）：材料名里带成对的〔…〕 ----------
+
+N45 = MaterialSet.from_texts([
+    {"name": "京政发〔2024〕1号", "material_id": "M0001", "sha256": "a" * 64, "unit": "para",
+     "text": "【第1段】\n每人补助5000元。\n\n【第2段】\n自2024年3月1日起施行。\n"},
+    {"name": "借条", "material_id": "M0002", "sha256": "b" * 64, "unit": "para", "text": "【第1段】\n今借到人民币80,000元整。\n"},
+])
+
+
+def test_n45_material_name_with_brackets():
+    check, cites = check_text("每人5000元〔京政发〔2024〕1号 第1段〕，另借款80,000元〔借条 第1段〕。", N45, "analysis")
+    assert check["passed"] and not check["problems"], check["problems"]
+    assert [c["name"] for c in cites] == ["京政发〔2024〕1号", "借条"]
+    check, _ = check_text("每人5000元〔京政发〔2024〕1号 第2段〕。", N45, "analysis")        # 标错位置照常报 B
+    assert [p["class"] for p in check["problems"]] == ["B"]
+    check, cites = check_text("每人5000元〔借条 第1段、京政发〔2024〕1号 第1段〕。", N45, "analysis")   # 一个括号里两处
+    assert [c["name"] for c in cites] == ["借条", "京政发〔2024〕1号"]
+    check, _ = check_text("据京政发〔2024〕1号文，每人5000元〔京政发〔2024〕1号 第1段〕。", N45, "analysis")  # 正文里的文号不算出处
+    assert check["passed"]
+    check, _ = check_text("每人5000元〔京政发〔20 24〕1号 第1段〕。", N45, "analysis")        # 括号里有空格：不合契约，E
+    assert "E" in [p["class"] for p in check["problems"]]
 
 
 # ---------- F：含金额日期但没有出处（提示） ----------
@@ -214,7 +236,7 @@ def test_g_quotes_and_flagged_lines():
 
 
 def test_material_name_with_year_bracket():
-    """材料名带〔年份〕（"京政发〔2024〕1号"）：整条报 E，不消失、不被当文号跳过（P2-2）。"""
+    """材料名带〔年份〕（"京政发〔2024〕1号"）：1.4 起是合格出处；这里材料集合里没有这份材料，整条报 E（材料名不存在），不消失、不被当文号跳过（P2-2）。"""
     for text in ("每人3000元〔京政发〔2024〕1号 第1段〕。", "每人5000元〔京政发〔2024〕1号 第1段〕，另见〔借条 第2段〕。"):
         check, cites = run(text)
         e = [p for p in check["problems"] if p["class"] == "E"]

@@ -29,7 +29,10 @@ def ex(file, schema, data, pointer="", expect="valid"):
 for n, (txt, ok) in enumerate([
         ("〔借条 第2页〕", 1), ("〔证据/借条 第3-4页〕", 1), ("〔银行流水 Sheet1!B12〕", 1),
         ("〔起诉书 第5段、讯问笔录1 第12行〕", 1), ("〔未找到依据〕", 1), ("〔推断〕", 1),
-        ("【借条 第2页】", 0), ("〔借条 第2页、第3页〕", 0), ("〔借条〕", 0)]):
+        ("【借条 第2页】", 0), ("〔借条 第2页、第3页〕", 0), ("〔借条〕", 0),
+        # 1.4（N45）：材料名里带成对的〔…〕
+        ("〔京政发〔2024〕1号 第3页〕", 1), ("〔借条 第1页、京政发〔2024〕1号 第2-3页〕", 1),
+        ("〔京政发〔2024 1号 第3页〕", 0), ("〔京政发〔20 24〕1号 第3页〕", 0)]):
     ex(f"citation_{n}.json", "common.schema.json", txt, "#/$defs/citation_text", "valid" if ok else "invalid")
 
 # /core
@@ -85,6 +88,27 @@ ex("api_source.res.json", "api/source.schema.json",
 ex("api_wiki_suggestions.res.json", "api/wiki_suggestions.schema.json",
    {"ok": True, "value": {"suggestions": [{"id": "S0001", "field": "当事人", "value": "李某（出借人）",
     "source": "〔借条 第1页〕", "reason": None, "task_id": T, "created_at": NOW, "status": "pending"}]}}, "#/$defs/response")
+
+# 1.4 新增
+ex("api_materials_remove.req.json", "api/materials_remove.schema.json",
+   {"case_id": CASE, "material_ids": ["M0003", "M0004"]}, "#/$defs/request")
+ex("api_materials_remove.res.json", "api/materials_remove.schema.json",
+   {"ok": True, "value": {"removed": ["M0003"], "already_removed": [],
+                          "failed": [{"material_id": "M0004", "reason": "原件正在被其他程序占用"}],
+                          "wiki_needs_update": True}}, "#/$defs/response")
+ex("api_wiki_review.res.json", "api/wiki_review.schema.json",
+   {"ok": True, "value": {"exists": True, "reviewed": True, "reviewed_at": NOW,
+                          "changes": {"added": 0, "changed": 0, "removed": 0}}}, "#/$defs/response")
+ex("api_source.req_task.json", "api/source.schema.json",
+   {"case_id": CASE, "material_id": "M0001", "citation": "〔借条 第2页〕", "task_id": T}, "#/$defs/request")
+ex("api_case_open.req_folders.json", "api/case_open.schema.json",
+   {"path": "D:\\案件\\张某甲诈骗案", "template": "criminal", "folders": ["01委托手续", "05一审/我方证据"]}, "#/$defs/request")
+ex("tool_read_material.args_more.json", "tools/case_read_material.schema.json",
+   {"name": "借条", "more_names": ["收条", "情况说明"]}, "#/$defs/args")
+ex("api_materials_import.res_bad_reason.json", "api/materials_import.schema.json",
+   {"ok": True, "value": {"copied": [], "skipped": [{"path": "C:\\Users\\li\\OneDrive\\a.pdf", "reason": "云同步目录"}],
+                          "scan": {"added": 0, "changed": 0, "removed": 0, "failed": 0, "review_needed": False}}},
+   "#/$defs/response", expect="invalid")
 
 # 395
 ex("prep_ocr.res.json", "prep395/ocr_page.schema.json",
@@ -148,7 +172,7 @@ ex("api_materials_import.req.json", "api/materials_import.schema.json",
     "target": "02案件材料", "unzip": False}, "#/$defs/request")
 ex("api_materials_import.res.json", "api/materials_import.schema.json",
    {"ok": True, "value": {"copied": [{"from": "C:\\Users\\li\\Desktop\\借条.pdf", "to": "02案件材料/借条.pdf"}],
-                          "skipped": [{"path": "C:\\Users\\li\\OneDrive\\a.pdf", "reason": "云同步目录"}],
+                          "skipped": [{"path": "C:\\Users\\li\\Desktop\\快捷方式.lnk", "reason": "链接或快捷方式"}],
                           "scan": {"added": 1, "changed": 0, "removed": 0, "failed": 0, "review_needed": True}}},
    "#/$defs/response")
 ex("tool_calc_sentence.args.json", "tools/case_calc_sentence.schema.json",

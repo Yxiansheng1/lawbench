@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "value": {
+    "removed": [
+      "M0003"
+    ],
+    "already_removed": [],
+    "failed": [
+      {
+        "material_id": "M0004",
+        "reason": "原件正在被其他程序占用"
+      }
+    ],
+    "wiki_needs_update": true
+  }
+}

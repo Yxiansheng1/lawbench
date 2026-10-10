@@ -79,9 +79,10 @@
         "ocr_running",
         "partial",
         "failed",
-        "source_deleted"
+        "source_deleted",
+        "removed"
       ],
-      "description": "parsed=已解析可读；needs_ocr=有页待识别；ocr_running=识别中；partial=部分页识别失败或未识别；failed=无法处理；source_deleted=原件已删除（保留文本）"
+      "description": "parsed=已解析可读；needs_ocr=有页待识别；ocr_running=识别中；partial=部分页识别失败或未识别；failed=无法处理；source_deleted=原件已删除（保留文本）；removed=律师移除（1.4 起：原件已移到回收站，文本、识别页、检索都已清掉，只留编号）"
     },
     "ocr_state": {
       "enum": [
@@ -119,7 +120,9 @@
         "TEMPLATE_MISSING",
         "ENGINE_FAILED",
         "ENGINE_BUSY",
-        "PLAN_NOT_CONFIRMED"
+        "PLAN_NOT_CONFIRMED",
+        "ORIGINAL_HAS_REVISIONS",
+        "CASE_CARD_INVALID"
       ],
       "description": "错误码；含义与对应的中文提示见 Spec 20.1"
     },
@@ -211,8 +214,8 @@
     },
     "citation_text": {
       "type": "string",
-      "pattern": "^〔(未找到依据|推断|[^〔〕、 ]+ (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?)(、[^〔〕、 ]+ (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?))*)〕$",
-      "description": "出处文本写法：〔材料名 位置〕。位置为 第N页 / 第N-M页 / 第N段 / 第N-M段 / 第N行 / 第N-M行 / 工作表名!B12 / 工作表名!B12:D12；同一括号内多处用顿号分隔，每处都写材料名；另有 〔未找到依据〕、〔推断〕 两种固定写法"
+      "pattern": "^〔(未找到依据|推断|(?:[^〔〕、 ]|〔[^〔〕、 ]*〕)+ (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?)(、(?:[^〔〕、 ]|〔[^〔〕、 ]*〕)+ (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?))*)〕$",
+      "description": "出处文本写法：〔材料名 位置〕。位置为 第N页 / 第N-M页 / 第N段 / 第N-M段 / 第N行 / 第N-M行 / 工作表名!B12 / 工作表名!B12:D12；同一括号内多处用顿号分隔，每处都写材料名；另有 〔未找到依据〕、〔推断〕 两种固定写法。材料名里可以带成对的〔…〕（如 京政发〔2024〕1号，1.4 起，N45），括号里不能有空格、顿号"
     },
     "citation": {
       "type": "object",

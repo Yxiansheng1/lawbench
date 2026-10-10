@@ -358,7 +358,7 @@ class WikiRun:
             contracts.validate("files/case_card.schema.json", "", data)
             return data
         except (ValueError, contracts.ContractError):
-            raise ApiError("INVALID_ARGUMENT", "case_card_invalid") from None
+            raise ApiError("CASE_CARD_INVALID", "case_card_invalid") from None   # 契约 1.4 专用码
 
     # ---- 主流程 ----
 
@@ -391,6 +391,7 @@ class WikiRun:
         if self.prep is not None:
             p.current = "395 抽取"
             self.prep_refs, self.prep_cats = self.prep.run([m for m in redo if not m.table])
+            p.notice = self.prep.note                 # 被跳过时界面提示一次（契约 1.4 pipeline_status.notice）
         items = [(m, i, c) for m in redo if not m.table for i, c in enumerate(m.chunks)]
         for m in redo:
             if m.table:

@@ -87,6 +87,7 @@ class OcrQueue:
         self._prep_resume_left = False          # 395 恢复后有任务没放回排队（库被占），下个探测周期再放
         self._threads: list[threading.Thread] = []
         materials.after_render = merge.remerge_after_scan    # T5 重新生成文本后把识别结果合并回去
+        materials.before_remove = self.cancel_material        # 移除材料（契约 1.4）前先取消它没做完的识别
 
     # ================================================================ 启停
 
@@ -234,6 +235,18 @@ class OcrQueue:
         self._apply(case_id, root, mid)                                # 已完成的页保留并合并
         logs.event("ocr", "cancel", case_id=case_id)
         return {"job_id": job_id, "status": "cancelled"}
+
+    def cancel_material(self, case_id: str, material_id: str) -> None:
+        """这份材料还没做完的识别任务全部取消（移除材料前调用）。出错不拦移除，只记元数据。"""
+        try:
+            root = self.cases.root_of(case_id)
+            with merge.connect(root) as con:
+                ids = [r[0] for r in con.execute(
+                    "SELECT job_id FROM ocr_jobs WHERE material_id = ? AND status IN (?, ?, ?)", (material_id, *UNFINISHED))]
+            for job_id in ids:
+                self.cancel(job_id)
+        except Exception as e:  # noqa: BLE001
+            logs.event("ocr", "cancel_material", status="fail", case_id=case_id, error=type(e).__name__)
 
     def _locate(self, job_id: str):
         job = self._jobs.get(job_id)

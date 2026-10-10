@@ -423,7 +423,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
    - 任何一级不能是 Windows 设备名（`CON`、`PRN`、`AUX`、`NUL`、`COM0`–`COM9`、`LPT0`–`LPT9`、`CONIN$`、`CONOUT$`，不分大小写，带扩展名的如 `NUL.txt` 同样拒绝）。
 3. **不跟随链接**：对拼接后的路径及其每一级父目录执行 `lstat`；只要有一级是符号链接或 reparse point（Windows 下判断 `st_file_attributes & FILE_ATTRIBUTE_REPARSE_POINT`，junction 在此范围内），就拒绝。
 4. **最终校验**：`realpath` 必须以 `ROOT + 分隔符` 开头；Windows 下比较前统一大小写。
-5. **写权限**：只允许写 `工作区/` 和 `成果/`。原件区只有两种写入，都由律师在界面上操作触发、AI 的工具里没有：`/api/materials/import` 复制新文件（目标已存在同名文件时改名为"原名(2)"，从不覆盖）；`/api/case/open` 按标准目录新建空文件夹。已有原件在任何情况下都不改动、不删除。写文件时先写临时文件再原子替换（`os.replace`）。
+5. **写权限**：只允许写 `工作区/` 和 `成果/`。原件区只有两种写入，都由律师在界面上操作触发、AI 的工具里没有：`/api/materials/import` 复制新文件（目标已存在同名文件时改名为"原名(2)"，从不覆盖）；`/api/case/open` 按标准目录新建空文件夹。已有原件在任何情况下都不改动、不永久删除；唯一的例外是律师在界面上逐份确认"移除此材料"后，`/api/materials/remove` 把原件移到系统回收站（可还原），同时清掉它的材料文本、识别页和检索记录，`index.json` 里留编号、状态 `removed`（契约 1.4，2026-10-10 用户定 SEC-08 口径：移到回收站，不永久删）。写文件时先写临时文件再原子替换（`os.replace`）。
 6. **拒绝时**：返回中文错误"超出当前案件范围"，本机日志记一条（只记工具名和原因，不记参数内容）。
 
 ### 4.3 给界面的接口（`/api/*`，仅限界面调用）
@@ -436,7 +436,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 - 每次执行（识别、流水线、抽取、Agent 任务）创建时分配 `task_id`（识别为 `job_id`），同时固定所属案件、输入材料的版本和律师确认过的发送范围；之后的进度查询、取消都按 `task_id`，与界面当前显示哪个案件无关。
 - 插件调用 `/core/*` 时，由会话头的 `cwd` 查出 `case_id`；`cwd` 不在注册表中的会话，工具一律拒绝。
 
-共 25 个接口，请求和返回的字段见第 20.5 节和 `contracts/api/`，下表只说作用。
+共 27 个接口（1.4 加 `materials_remove`、`wiki_review`），请求和返回的字段见第 20.5 节和 `contracts/api/`，下表只说作用。
 
 | 接口 | 作用 | 发往服务器 |
 |---|---|---|
@@ -444,6 +444,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | `GET /api/case/recent` | 最近案件 | 否 |
 | `POST /api/materials/scan` | 扫描原件区，在本机解析新增或变化的材料 | 否 |
 | `POST /api/materials/import` | 拖入或选择的文件、文件夹复制进案件文件夹，然后同 scan（第 5.1 节） | 否 |
+| `POST /api/materials/remove` | 律师移除材料（1.4 起）：原件移到系统回收站，清掉材料文本、识别页、检索记录；编号保留不复用；幂等 | 否 |
 | `GET /api/materials` | 材料列表、状态、失败原因、需识别的页 | 否 |
 | `POST /api/ocr/jobs` | 提交识别 | 395 |
 | `GET /api/ocr/jobs`；`POST /api/ocr/jobs/{job_id}/cancel` | 识别进度；取消 | — |
@@ -454,6 +455,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | `GET /api/outputs` | 本案已确认的成果列表（成果区；1.2 起） | 否 |
 | `POST /api/redline` | 生成修订版 Word（第 12.2 节） | 否，本机生成 |
 | `GET /api/wiki/suggestions`；`POST /api/wiki/suggestions/{id}` | 列出、处理 AI 提出的 wiki 修改建议 | 否 |
+| `GET /api/wiki/review`；`POST /api/wiki/review` | 读、标记案件 wiki 的核对状态（1.4 起；记在 `工作区/wiki/case.json`，换电脑一致；重新生成或材料变化后回到未核对） | 否 |
 | `POST /api/outputs/confirm` | 草稿确认进成果目录并导出 | 否 |
 | `GET /api/source` | 原文查看：按出处返回定位单元的文本；PDF 另返回该页的页面图片（定位到页，不做文字高亮） | 否 |
 | `GET /api/search` | 律师检索 | 否 |
@@ -474,7 +476,7 @@ DSH 默认把以下数据写在 `$DSH_HOME` 或系统临时目录，其中几项
 | 工具 | 参数 | 返回 | 说明 |
 |---|---|---|---|
 | `case_list_materials` | — | 材料清单：材料名、编号、类型、状态、位置单位和数量、是否识别所得、失败原因 | 材料名在案件内唯一（第 20.2 节），AI 引用时照抄 |
-| `case_read_material` | `name, start?, max_chars?` | 带位置标记的原文、`start`、`end`、`has_more`、`next_start` | 读 `工作区/材料/文本/` 下的解析结果；`start` 是页号、段号或行号；每次读取记入 `reads.json`，用于计算覆盖清单 |
+| `case_read_material` | `name, start?, offset?, max_chars?, more_names?` | 带位置标记的原文、`start`、`end`、`has_more`、`next_start`；传了 `more_names` 另有 `parts` | 读 `工作区/材料/文本/` 下的解析结果；`start` 是页号、段号或行号；每次读取记入 `reads.json`，用于计算覆盖清单。`more_names`（1.4 起）：同一次再读几份小材料，各从头读，合计不超过 `max_chars`，各份之间一行`【材料：<材料名>】`；放不下、读不了的在 `parts` 里说明 |
 | `case_search` | `query, max_hits?` | 命中列表：材料名、出处文本、片段、是否识别所得 | 第 11 节的全文检索 |
 | `case_read_input` | `index, start?, max_chars?` | 任务单里选用的第 `index` 个前序成果（按行分段） | L1 放不下的输入用它读 |
 | `case_read_wiki` | `section, name?` | wiki 分节全文、是否过期 | 分节：卡片、概览、当事人、时间线、材料清单、争议焦点、材料摘要（需给材料名） |
@@ -1263,7 +1265,7 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | SEC-05 | D3、D4；第 4.2 节路径闸门 | 自动测试：`../`、绝对路径、符号链接、junction、大小写变体、超长名字 |
 | SEC-06 | 第 6.3 节；第 8.1 节 Key 存 Windows 凭据管理器 | 用无 Key、停用的 Key 分别调用两台服务器；换 Windows 账号读不到 Key |
 | SEC-07 | 第 3.1 节（律师工作台 preset 不挂 agent-instructions，官方 preset 全部关掉，Skill 不扫默认目录）；第 10.1 节 | 测试案件内放 AGENTS.md、`.dsh/skills/<恶意 Skill>`、含越权指令的材料，确认都不起作用 |
-| SEC-08 | 已有原件没有改写接口；原件区只有律师触发的导入（只新增、不覆盖）和标准目录建文件夹（第 4.2 节）；`材料/index.json` 记录哈希；归档、Word 转换只读原件副本 | 验收前后比对原件哈希（含导入同名文件、归档之后） |
+| SEC-08 | 已有原件没有改写接口；原件区只有律师触发的导入（只新增、不覆盖）、标准目录建文件夹（第 4.2 节）和律师逐份确认的"移除此材料"（原件移到系统回收站、不永久删，1.4）；`材料/index.json` 记录哈希；归档、Word 转换只读原件副本 | 验收前后比对原件哈希（含导入同名文件、归档之后） |
 | SEC-09 | 甲方网关现状（不记正文）；第 8.6 节 | 检查网关的 `usage.db` 和日志 |
 | SEC-10 | 第 14.3 节地址白名单；代码中不存在其他模型地址 | 代码审查 + 抓包 |
 | SEC-11 | 第 4.5 节日志；LibreOffice 配置目录放在案件临时目录；临时文件都在 `工作区/临时/` | 同 SEC-01 的全盘搜索 |
@@ -1389,6 +1391,8 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | `ENGINE_FAILED` | 发票引擎起不来（解释器或入口缺失）、超时、识别驱动模型哈希不符（2026-10-01 改：引擎自己报失败不再用本码，走 `invoice_run` 返回的 `failed:true`） | 发票整理未完成，请查看下方的输出信息 |
 | `ENGINE_BUSY`（1.3，2026-10-01 加） | 发票引擎正在执行另一个动作，排队等待超过 2 秒 | 发票整理正在进行中，请等它完成再操作 |
 | `PLAN_NOT_CONFIRMED` | 归档方案的办案结果为空 | 请先确认办案结果 |
+| `ORIGINAL_HAS_REVISIONS`（1.4） | 生成修订版时原文件已含未处理的修订 | 原文件含未处理的修订，请先接受或拒绝后再生成 |
+| `CASE_CARD_INVALID`（1.4） | `工作区/wiki/case.json` 不合契约（被改坏或损坏） | 案件卡片（工作区/wiki/case.json）已损坏，请重新生成 wiki |
 
 - **编号**（`common.schema.json`）：`case_id` 为 UUID v4；`material_id` 为 `M` + 4 位序号；`task_id` 为 `T-`（Agent）或 `P-`（流水线）+ `YYYYMMDDHHMMSS` + `-` + 4 位小写十六进制；`job_id` 为 `J-` + 同样格式；wiki 事实 `F` + 4 位、wiki 建议 `S` + 4 位。
 - **时间**：ISO 8601 带时区（如 `2026-09-28T09:30:00+08:00`）。
@@ -1508,3 +1512,4 @@ inputs: [materials, wiki] # 需要哪些输入：materials 材料 / wiki / prior
 | 1.1 | 2026-09-28 | 甲方需求变更：新增工具 `case_calc_sentence`、`case_archive_match`、`case_save_archive_plan`；新增接口 `materials_import`、`capsules`、`capsules_reset`、`archive_build`、`invoice_run`、`retainer_driver`；`case_open` 增加 `template`；`settings` 增加 `profile`、`office`、`converter`；新增 `skill/capsules`、`skill/archive_catalog`，删除 `skill/entry`；frontmatter 删除 `entry`、`order`；错误码增加 5 个；`formats.md` 增加标准案件目录、日常办公文件夹、归档文件夹；`settings.servers` 增加所外地址 `llm_alt_base_url`、`prep_alt_base_url`，`connection_test` 返回增加 `route`（2026-09-29） |
 | 1.2 | 2026-09-30 | 用户当日拍板的一批（候 owner 清单 N37、N21、N26、N28、N31、N32、N35）：①任务单改为"管到律师改掉为止"——`POST /api/task` 改为设置该会话当前的选择，同一会话只保留最新一张，执行时不消耗；新增 `GET /api/task/current?session_id=`；`/core/task/begin` 按当前选择新建执行中的任务；②`case_read_material` 加可选参数 `offset`、返回加 `next_offset`，单元超过 `max_chars` 时能接着读同一单元；`start`/`end` 的 Excel 编号改为整份材料连续（`formats.md` 第 2 节）；③`tasks_list` 任务项加 `coverage`、`citation_check`，并写明不列待执行的任务单；④新增 `GET /api/outputs?case_id=` 成果列表；⑤胶囊项加可缺省字段 `new`（升级新补进来的胶囊，首页据此提示"有新功能"）；⑥材料索引 `note` 枚举加"有外部链接，未重算公式"；⑦材料文本 Source 行加取值"待识别"；⑧`unit_count` 写明 cell 时为工作表个数；⑨`case_db.sql` 新增 `material_ids` 表（材料编号留底，schema_version 仍为 1）。`contract_version` 升 1.2 |
 | 1.3 | 2026-09-30 | T25 调研（线 C）发现契约与发票引擎不一致，随 T25 开工前一并改：①`invoice_run` plan 的 `history_numbers` 票号改 18–20 位（引擎 `[0-9]{18,20}`）；②`batch` 加正则 `^[A-Za-z0-9_\u4e00-\u9fff-]{1,40}$`（引擎 `[\w-]{1,80}`）；③plan 加可缺省的 `start`/`end`（YYYY-MM-DD），`channel=eml` 时必填（引擎 `period_plan` 要求邮件来源必须给起止日期）；④`cancel` 的 `apply=false` 说明：引擎不支持取消预览，服务忽略、界面先展示批次再确认。⑤`exclude` 动作加入白名单（线 C 17:34 给出引擎参数）：`{action, period, item ^[0-9a-f]{64}$, reason 1–200, reviewer 1–40, confirm: true}`，服务一律带 `--confirm`。⑦（2026-10-01 T25 复核后）错误码加 `ENGINE_BUSY`（等锁超 2 秒）；`failed` 描述改为"任一行以 [BLOCKED] 开头"。⑥（2026-10-01）`invoice_run` 返回加 `failed`：引擎自己报失败（`[BLOCKED]` 或退出码非 0/2）时返回成功体、`failed: true`、原因在 `output`，不再用 `ENGINE_FAILED` 吞掉原因（T25 1711 注记 A）。**未纳入**：N45（出处正则允许材料名含 `〔〕`）——材料名内含括号会让出处解析二义，要先定解析规则，留待 1.4。`contract_version` 升 1.3；395 与工作台服务的 `/health` 读 `contracts\VERSION` |
+| 1.4 | 2026-10-10 | 攒下的候项一批（`D:\lawbench-coord\ORCH-契约1.4候项.md`，用户 10-10 定）：①出处正则允许材料名里带成对的〔…〕（N45）；②错误码加 `ORIGINAL_HAS_REVISIONS`、`CASE_CARD_INVALID`；③`pipeline_status` 加可选 `notice`（395 抽取被跳过的提示）；④`/api/source` 请求加可选 `task_id`；⑤新接口 `materials_remove`，`material_status` 加 `removed`（SEC-08 口径：原件移到回收站）；⑥`materials_list` 每项加可选 `chars`；⑦`case_read_material` 加可选 `more_names`、返回加可选 `parts`；⑧`成果/索引.json` 每条加可选 `draft`（来源草稿路径）；⑨`materials_import` 跳过原因去掉"云同步目录"（N80 后不再出现）；⑩`case_open` 加可选 `folders`（律师勾选的子文件夹）；⑪新接口 `wiki_review`，`case.json` 加可选 `review`；⑫395 `/health` 加可选 `ocr_model`（395 侧实现归线 C）。新字段全部可选，1.3 的客户端照常；N66（图片材料返回原图）不在本版。 |

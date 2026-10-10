@@ -26,12 +26,13 @@ FIXED = ("未找到依据", "推断")
 UNIT_OF = {"页": "page", "段": "para", "行": "line"}
 WORD_OF = {v: k for k, v in UNIT_OF.items()}
 
-_BRACKET = re.compile(r"〔([^〔〕\n]*)〕")
+# 一对〔…〕，里面可以再套一层成对的〔…〕（契约 1.4，N45：材料名如"京政发〔2024〕1号"）
+_BRACKET = re.compile(r"〔((?:[^〔〕\n]|〔[^〔〕\n]*〕)*)〕")
 _YEAR = re.compile(r"^[0-9]{4}$")
 _YEAR_BRACKET = re.compile(r"〔[0-9]{4}〕")
 QUOTE = re.compile(r"“[^”\n]*”|\"[^\"\n]*\"|「[^」\n]*」|‘[^’\n]*’|＂[^＂\n]*＂")
 _LENTICULAR = re.compile(r"【[^【】\n]+? (?:第[0-9]+(?:-[0-9]+)?[页段行]|[^【】!\n]+![A-Z]{1,3}[0-9]+(?::[A-Z]{1,3}[0-9]+)?)】")
-_ITEM = re.compile(r"^(?P<name>[^〔〕、 ]+) (?:第(?P<a>[0-9]+)(?:-(?P<b>[0-9]+))?(?P<u>[页段行])"
+_ITEM = re.compile(r"^(?P<name>(?:[^〔〕、 ]|〔[^〔〕、 ]*〕)+) (?:第(?P<a>[0-9]+)(?:-(?P<b>[0-9]+))?(?P<u>[页段行])"
                    r"|(?P<sheet>[^〔〕、!]+)!(?P<ref>[A-Z]{1,3}[0-9]+(?::[A-Z]{1,3}[0-9]+)?))$")
 _REF = re.compile(r"^([A-Z]{1,3})([0-9]+)$")
 _CELL_SEP = re.compile(r"(?<!\\)\|")
@@ -88,23 +89,9 @@ def find_cites(line: str) -> list[Cite]:
     quotes = quote_spans(line)
     pat = citation_re()
     out: list[Cite] = []
-    # 〔四位数字〕前面同一行有没闭合的〔：是材料名里带〔年份〕（"京政发〔2024〕1号"），契约 1.4 前写不成合格出处，
-    # 整段报 E（复核 P2-2；N45）。不能当文号年份跳过，否则整条出处消失、值也不核
-    nested: list[tuple[int, int]] = []
-    for y in _YEAR_BRACKET.finditer(line):
-        if _inside(y.start(), quotes) or any(a <= y.start() < b for a, b in nested):
-            continue
-        before = line[:y.start()]
-        i = before.rfind("〔")
-        if i < 0 or "〕" in before[i:]:
-            continue
-        j = line.find("〕", y.end())
-        end = j + 1 if j >= 0 and "〔" not in line[y.end():j] else y.end()
-        nested.append((i, end))
-        out.append(Cite(i, end, line[i:end], ok=False, reason="材料名含〔〕，契约 1.4 前无法引用（N45）"))
     for m in _BRACKET.finditer(line):
         body = m.group(1)
-        if _inside(m.start(), quotes) or _YEAR.match(body) or any(a <= m.start() < b for a, b in nested):
+        if _inside(m.start(), quotes) or _YEAR.match(body):
             continue
         raw = m.group(0)
         if not pat.match(raw):
@@ -114,7 +101,7 @@ def find_cites(line: str) -> list[Cite]:
             out.append(Cite(m.start(), m.end(), raw, ok=True, fixed=body))
             continue
         items = []
-        for part in body.split("、"):
+        for part in _split_items(body):
             g = _ITEM.match(part)
             if g["sheet"] is not None:
                 loc = {"unit": "cell", "sheet": g["sheet"], "ref": g["ref"]}
@@ -125,6 +112,11 @@ def find_cites(line: str) -> list[Cite]:
             items.append(Item(g["name"], loc))
         out.append(Cite(m.start(), m.end(), raw, ok=True, items=items))
     return sorted(out, key=lambda c: c.start)
+
+
+def _split_items(body: str) -> list[str]:
+    """按顿号分开一个出处里的几处；材料名里成对〔…〕内不会有顿号（契约正则不允许），直接分。"""
+    return body.split("、")
 
 
 def find_lenticular(line: str) -> list[str]:

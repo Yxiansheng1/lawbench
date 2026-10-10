@@ -24,6 +24,13 @@ def obj(props, required=None, extra=False, desc=None):
     return o
 
 
+def opt(o, **props):
+    """在已有对象上加可选属性（不进 required）。1.4 起新字段都这样加，旧客户端照常。"""
+    o = dict(o)
+    o["properties"] = {**o["properties"], **props}
+    return o
+
+
 def arr(items, **kw):
     return {"type": "array", "items": items, **kw}
 
@@ -73,6 +80,9 @@ def put(path, title, desc, defs=None, root=None):
 
 
 # ---------------------------------------------------------------- C0 / C1 通用
+# 出处里的一处：材料名 + 空格 + 位置。材料名 = 不含〔〕、顿号、空格的字符，或一对〔…〕（1.4，N45）
+CITE_NAME = "(?:[^〔〕、 ]|〔[^〔〕、 ]*〕)+"
+CITE_ITEM = CITE_NAME + " (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?)"
 common = {
     "case_id": s("案件编号：UUID v4，首次打开案件时生成，写入 case.db 的 meta 表",
                  pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"),
@@ -89,8 +99,8 @@ common = {
                   pattern="^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$"),
     "material_type": enum("pdf", "docx", "doc", "wps", "xlsx", "xls", "csv", "md", "txt", "image"),
     "unit": enum("page", "para", "cell", "line", desc="位置单位：PDF / 图片按页，Word 按段，Excel 按单元格，csv / md / txt 按行"),
-    "material_status": enum("parsed", "needs_ocr", "ocr_running", "partial", "failed", "source_deleted",
-                            desc="parsed=已解析可读；needs_ocr=有页待识别；ocr_running=识别中；partial=部分页识别失败或未识别；failed=无法处理；source_deleted=原件已删除（保留文本）"),
+    "material_status": enum("parsed", "needs_ocr", "ocr_running", "partial", "failed", "source_deleted", "removed",
+                            desc="parsed=已解析可读；needs_ocr=有页待识别；ocr_running=识别中；partial=部分页识别失败或未识别；failed=无法处理；source_deleted=原件已删除（保留文本）；removed=律师移除（1.4 起：原件已移到回收站，文本、识别页、检索都已清掉，只留编号）"),
     "ocr_state": enum("none", "partial", "full", desc="文本中识别所得的比例"),
     "error_code": enum(
         "INVALID_ARGUMENT", "OUT_OF_CASE", "CASE_NOT_FOUND", "CASE_ROOT_IS_LINK", "CASE_IN_SYNC_FOLDER",
@@ -98,6 +108,7 @@ common = {
         "SERVER_UNREACHABLE", "KEY_INVALID", "SERVER_BUSY", "CONTEXT_TOO_LONG", "OUTPUT_TRUNCATED",
         "TIMEOUT", "HOST_NOT_ALLOWED", "PREP_UNAVAILABLE", "CANCELLED", "SERVICE_UNAVAILABLE", "INTERNAL",
         "OFFICE_DIR_NOT_SET", "CONVERTER_UNAVAILABLE", "TEMPLATE_MISSING", "ENGINE_FAILED", "ENGINE_BUSY", "PLAN_NOT_CONFIRMED",
+        "ORIGINAL_HAS_REVISIONS", "CASE_CARD_INVALID",
         desc="错误码；含义与对应的中文提示见 Spec 20.1"),
     "error": obj({"code": ref("error_code"),
                   "message": s("给律师看的中文提示；不含材料名、检索词、正文")}),
@@ -112,8 +123,9 @@ common = {
         ]},
     "citation_text": s(
         "出处文本写法：〔材料名 位置〕。位置为 第N页 / 第N-M页 / 第N段 / 第N-M段 / 第N行 / 第N-M行 / 工作表名!B12 / 工作表名!B12:D12；"
-        "同一括号内多处用顿号分隔，每处都写材料名；另有 〔未找到依据〕、〔推断〕 两种固定写法",
-        pattern="^〔(未找到依据|推断|[^〔〕、 ]+ (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?)(、[^〔〕、 ]+ (第[0-9]+(-[0-9]+)?[页段行]|[^〔〕、!]+![A-Z]{1,3}[0-9]+(:[A-Z]{1,3}[0-9]+)?))*)〕$"),
+        "同一括号内多处用顿号分隔，每处都写材料名；另有 〔未找到依据〕、〔推断〕 两种固定写法。"
+        "材料名里可以带成对的〔…〕（如 京政发〔2024〕1号，1.4 起，N45），括号里不能有空格、顿号",
+        pattern="^〔(未找到依据|推断|" + CITE_ITEM + "(、" + CITE_ITEM + ")*)〕$"),
     "citation": obj({"material_id": ref("material_id"), "material_version": ref("sha256"),
                      "name": s("材料名，与 case_list_materials 返回的 name 相同"), "loc": ref("loc")},
                     desc="解析后的出处，由程序从出处文本解析得出并写入结果清单"),
@@ -205,12 +217,21 @@ tool("case_list_materials", "列出当前案件的材料。name 在案件内唯�
 tool("case_read_material", "读一份材料的解析文本（带位置标记）。每次读取记入 reads.json",
      obj({"name": s(), "start": i("起始位置号（页 / 段 / 行；Excel 为整份材料里表格行的顺序号，跨工作表连续，1.2 起），默认 1", minimum=1),
           "offset": i("从起始位置号那个单元内的第几个字开始读（0 起），默认 0；单元本身超过 max_chars 时用它接着读同一单元（1.2 起）", minimum=0),
-          "max_chars": MAXC},
+          "max_chars": MAXC,
+          "more_names": arr(s(), minItems=1, maxItems=9, uniqueItems=True,
+                            description="同一次再读这几份材料（各从头读；1.4 起）：按顺序接在 name 后面，合计不超过 max_chars，"
+                                        "放不下的不读、在 parts 里标 read=false。给了它就不能再给 start、offset")},
          required=["name"]),
-     obj({"name": s(), "material_id": ref("material_id"), "unit": ref("unit"),
-          "start": i(minimum=1), "end": i(minimum=1), "text": s(),
-          "has_more": b(), "next_start": nullable(i(minimum=1)),
-          "next_offset": nullable(i("同一单元没读完时给出：下次传 start=end、offset=next_offset 接着读；读到单元末尾为 null（1.2 起）", minimum=0))}))
+     opt(obj({"name": s(), "material_id": ref("material_id"), "unit": ref("unit"),
+              "start": i(minimum=1), "end": i(minimum=1), "text": s(),
+              "has_more": b(), "next_start": nullable(i(minimum=1)),
+              "next_offset": nullable(i("同一单元没读完时给出：下次传 start=end、offset=next_offset 接着读；读到单元末尾为 null（1.2 起）", minimum=0))}),
+         parts=arr(obj({"name": s(), "material_id": nullable(ref("material_id")), "unit": nullable(ref("unit")),
+                        "read": b("这次读到了没有"), "start": nullable(i(minimum=1)), "end": nullable(i(minimum=1)),
+                        "has_more": b(), "next_start": nullable(i(minimum=1)),
+                        "error": nullable(s("没读的原因：放不下 / 还不能读取 / 没有这份材料"))}),
+                   description="传了 more_names 时给出（1.4 起）：name 和 more_names 每份一条，按请求顺序。text 里各份之间用一行"
+                               "【材料：<材料名>】隔开；顶层的 name、start、end 等是第一份（name）的")))
 tool("case_search", "全文检索（Spec 第 11 节）",
      obj({"query": s(minLength=1, maxLength=100), "max_hits": i("默认 20", minimum=1, maximum=50)}, required=["query"]),
      obj({"hits": arr(obj({"name": s(), "material_id": ref("material_id"),
@@ -304,7 +325,9 @@ job_row = obj({"job_id": ref("job_id"), "material_id": ref("material_id"), "name
 api = [
     ("case_open", "POST /api/case/open", "打开或新建案件；登记到 cases.json。云同步目录报 CASE_IN_SYNC_FOLDER，链接或 junction 报 CASE_ROOT_IS_LINK",
      obj({"path": s("律师选的文件夹绝对路径"),
-          "template": nullable(enum("civil", "criminal", desc="新建案件时按标准目录建子文件夹（formats.md 第 1.1 节）；只补缺，不改已有文件夹"))},
+          "template": nullable(enum("civil", "criminal", desc="新建案件时按标准目录建子文件夹（formats.md 第 1.1 节）；只补缺，不改已有文件夹")),
+          "folders": arr(ref("rel_path"), maxItems=200, uniqueItems=True,
+                         description="律师勾选要建的子文件夹（1.4 起）：给了就只建这些（必须都在 template 对应的标准目录表里），不给按 template 全建；只补缺")},
          required=["path"]),
      obj({"case_id": ref("case_id"), "name": s("文件夹名"), "created": b("本次新建了 工作区/"),
           "folders_created": arr(s(), description="本次按目录模板新建的子文件夹")})),
@@ -321,7 +344,10 @@ api = [
          "material_id": ref("material_id"), "name": s(), "rel_path": ref("rel_path"), "type": ref("material_type"),
          "status": ref("material_status"), "unit": ref("unit"), "unit_count": i("位置单位的数量；unit 为 cell 时是工作表的个数（1.2 写明）", minimum=0),
          "is_ocr": ref("ocr_state"), "stale_ocr": b(), "error": nullable(s()),
-         "pages_need_ocr": arr(i(minimum=1)), "pages_mixed": arr(i(minimum=1))}))})),
+         "pages_need_ocr": arr(i(minimum=1)), "pages_mixed": arr(i(minimum=1)),
+         "chars": nullable(i("材料文本的字数（不含位置标记；1.4 起），没有文本为 null；界面用它估一次能读全多少", minimum=0))},
+         required=["material_id", "name", "rel_path", "type", "status", "unit", "unit_count", "is_ocr", "stale_ocr",
+                   "error", "pages_need_ocr", "pages_mixed"]))})),
     ("ocr_submit", "POST /api/ocr/jobs", "提交识别（调用前界面已弹确认框，写明页数和发往 395）",
      obj({"case_id": ref("case_id"), "material_id": ref("material_id"), "pages": arr(i(minimum=1), minItems=1),
           "dewatermark": b()}),
@@ -348,7 +374,9 @@ api = [
      obj({"task_id": ref("task_id")}),
      obj({"status": enum("running", "completed", "cancelled", "budget_stopped", "failed", "interrupted"),
           "step_index": i(minimum=0), "step_total": i(minimum=0), "current": nullable(s("当前处理的材料名")),
-          "queue_wait_ms": nullable(i(minimum=0))})),
+          "queue_wait_ms": nullable(i(minimum=0)),
+          "notice": nullable(s("给律师看一次的提示（1.4 起），如勾了 395 抽取但被跳过的原因；没有为 null"))},
+         required=["status", "step_index", "step_total", "current", "queue_wait_ms"])),
     ("pipeline_cancel", "POST /api/pipeline/{task_id}/cancel", "取消流水线；已完成的步骤存为草稿",
      obj({"task_id": ref("task_id")}), obj({})),
     ("tasks_list", "GET /api/tasks?case_id=", "本案任务列表（成果区用），数据来自各任务的 result.json；只列已开始执行的任务，还没执行的选择（待执行任务单）不列（1.2 写明）",
@@ -373,7 +401,9 @@ api = [
           "template": nullable(enum("文书", "合同"))}),
      obj({"outputs": arr(obj({"format": enum("md", "docx"), "path": ref("rel_path"), "version": i(minimum=1)}))})),
     ("source", "GET /api/source?case_id=&material_id=&loc=", "原文查看：返回定位单元的文本；PDF 另返回该页图片",
-     obj({"case_id": ref("case_id"), "material_id": ref("material_id"), "citation": ref("citation_text")}),
+     obj({"case_id": ref("case_id"), "material_id": ref("material_id"), "citation": ref("citation_text"),
+          "task_id": {**ref("task_id"), "description": "这条出处所在的任务（1.4 起，可选）：给了就只按这个任务记下的出处版本判断 source_changed"}},
+         required=["case_id", "material_id", "citation"]),
      obj({"name": s(), "loc": ref("loc"), "text": s(), "page_png_base64": nullable(s()),
           "source_changed": b("原件哈希已与出处记录不同")})),
     ("search", "GET /api/search?case_id=&q=", "律师检索；返回结构同 case_search",
@@ -387,8 +417,23 @@ api = [
          required=["case_id", "paths", "target", "unzip"]),
      obj({"copied": arr(obj({"from": ref("abs_path"), "to": ref("rel_path")})),
           "skipped": arr(obj({"path": ref("abs_path"),
-                              "reason": enum("云同步目录", "链接或快捷方式", "同名同内容已存在", "无法读取", "超过大小上限")})),
+                              "reason": enum("链接或快捷方式", "同名同内容已存在", "无法读取", "超过大小上限")})),
           "scan": {"$ref": BASE + "api/materials_scan.schema.json#/$defs/value"}})),
+    ("materials_remove", "POST /api/materials/remove",
+     "律师移除材料（1.4 起）：原件移到系统回收站（不永久删除），清掉材料文本、识别页、检索记录；index.json 里保留这一条、状态 removed，编号不复用。"
+     "已移除的再移除不报错（幂等）",
+     obj({"case_id": ref("case_id"), "material_ids": arr(ref("material_id"), minItems=1, maxItems=100, uniqueItems=True)}),
+     obj({"removed": arr(ref("material_id")), "already_removed": arr(ref("material_id")),
+          "failed": arr(obj({"material_id": ref("material_id"), "reason": s("中文原因，不含路径")})),
+          "wiki_needs_update": b("被移除的材料在 wiki 生成时用过，请律师更新 wiki")})),
+    ("wiki_review", "GET /api/wiki/review?case_id= ；POST /api/wiki/review",
+     "案件 wiki 的核对状态（1.4 起，记在案件里，换电脑也一致）。GET 读；POST 把当前这一版 wiki 记为已核对。"
+     "重新生成、更新 wiki 或材料有变化后，状态回到未核对",
+     obj({"case_id": ref("case_id")}),
+     obj({"exists": b("有没有生成过 wiki"), "reviewed": b("当前这一版 wiki 和此刻的材料，律师核对过"),
+          "reviewed_at": nullable(ref("time")),
+          "changes": nullable(obj({"added": i(minimum=0), "changed": i(minimum=0), "removed": i(minimum=0)},
+                                  desc="wiki 生成之后材料的变化；没有 wiki 为 null"))})),
     ("capsules", "GET / PUT /api/capsules", "读写本机胶囊配置 <应用数据>/capsules.json；PUT 传完整对象，服务端校验 Skill 和工具是否存在",
      {"$ref": BASE + "skill/capsules.schema.json"}, {"$ref": BASE + "skill/capsules.schema.json"}),
     ("capsules_reset", "POST /api/capsules/reset", "恢复默认胶囊（用安装目录里的 capsules.default.json 覆盖本机配置）",
@@ -449,8 +494,9 @@ perr = obj({"error": obj({"code": enum("BAD_IMAGE", "KEY_INVALID", "TOO_LARGE", 
                                         "KEY_CHECK_UNAVAILABLE", "BAD_REQUEST", "INTERNAL"),
                           "message": s()})}, desc="395 的错误体；HTTP 状态见 Spec 20.5")
 put("prep395/health.schema.json", "GET /health（395）", "不需要 Key，不含任何内容",
-    root=obj({"status": enum("ok", "degraded"), "ocr": enum("ok", "down"), "llm9b": enum("ok", "down"),
-              "queue": i(minimum=0), "version": s(), "contract_version": s()}))
+    root=opt(obj({"status": enum("ok", "degraded"), "ocr": enum("ok", "down"), "llm9b": enum("ok", "down"),
+                  "queue": i(minimum=0), "version": s(), "contract_version": s()}),
+             ocr_model=s("当前识别模型（模板）名，如 xiaomi-ocr-0（1.4 起，可选）")))
 put("prep395/ocr_page.schema.json", "POST /v1/ocr/page", "请求体是单页图片的原始字节（Content-Type: image/png 或 image/jpeg，≤10MB，长边≤2480 像素）；选项放在查询参数",
     defs={"query": obj({"dewatermark": b(), "deskew": b(), "return_image": b("仅验收去水印时用")},
                        required=[]),
@@ -514,7 +560,12 @@ ffile("case_card", "工作区/wiki/case.json", "案件卡片（L0 的来源）",
            "parties": arr(ref("fact")), "issues": arr(ref("fact")), "key_facts": arr(ref("fact")),
            "generated_by": nullable(ref("task_id")), "generated_at": nullable(ref("time")),
            "materials_at_generation": arr(obj({"material_id": ref("material_id"), "sha256": ref("sha256")}),
-                                          description="用来判断 wiki 生成后哪些材料新增或变化")}))
+                                          description="用来判断 wiki 生成后哪些材料新增或变化"),
+           "review": nullable(obj({"signature": ref("sha256"), "at": ref("time")},
+                                  desc="律师点「核对完成」时记下的指纹（这一版 wiki 的生成时间 + 当时各材料的哈希）和时间（1.4 起）；"
+                                       "指纹与现在算出来的不同就是未核对"))},
+          required=["case_id", "case_type", "stance", "parties", "issues", "key_facts", "generated_by", "generated_at",
+                    "materials_at_generation"]))
 sug = obj({"id": s(pattern="^S[0-9]{4}$"), "field": s(), "value": s(), "source": ref("citation_text"),
            "reason": nullable(s()), "task_id": ref("task_id"), "created_at": ref("time"),
            "status": enum("pending", "accepted", "rejected")})
@@ -525,7 +576,10 @@ ffile("outputs_index", "成果/索引.json", "律师确认后的成果登记",
       obj({"outputs": arr(obj({"title": s(), "version": i(minimum=1),
                                "files": arr(obj({"format": enum("md", "docx"), "path": ref("rel_path")}), minItems=1),
                                "task_id": ref("task_id"), "inputs": arr(ref("input_ref")),
-                               "citation_passed": b(), "confirmed_at": ref("time")}))}))
+                               "citation_passed": b(), "confirmed_at": ref("time"),
+                               "draft": {**ref("rel_path"), "description": "这份成果来自哪份草稿（确认时写；1.4 起，旧记录没有）"}},
+                              required=["title", "version", "files", "task_id", "inputs", "citation_passed",
+                                        "confirmed_at"]))}))
 ffile("cases", "<应用数据>/cases.json", "案件注册表：只有编号和路径，没有内容",
       obj({"cases": arr(obj({"case_id": ref("case_id"), "root": s("realpath，Windows 反斜杠原样保存"),
                              "name": s(), "last_opened": ref("time")}))}))
@@ -588,7 +642,7 @@ def main():
         p = OUT / path
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(sch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (OUT / "VERSION").write_text("1.3\n", encoding="utf-8")
+    (OUT / "VERSION").write_text("1.4\n", encoding="utf-8")
     print(len(FILES), "schemas")
 
 

@@ -100,6 +100,30 @@
         ]
       },
       "description": "用来判断 wiki 生成后哪些材料新增或变化"
+    },
+    "review": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "signature": {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/sha256"
+            },
+            "at": {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "signature",
+            "at"
+          ],
+          "description": "律师点「核对完成」时记下的指纹（这一版 wiki 的生成时间 + 当时各材料的哈希）和时间（1.4 起）；指纹与现在算出来的不同就是未核对"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "additionalProperties": false,

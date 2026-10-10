@@ -117,6 +117,7 @@ def test_confirm_md_and_docx_versions_and_index(env, tid):
     task = env.read_json(tid, "task.json", "files/task.schema.json")
     assert all(o["task_id"] == tid and o["inputs"] == task["inputs"] for o in entries)
     assert entries[0]["citation_passed"] is True
+    assert all(o["draft"] == rel for o in entries)                           # 契约 1.4：记下来源草稿路径
     # GET /api/outputs 返回同一份索引
     assert ok(env.client.get("/api/outputs", params={"case_id": env.case_id}),
               "api/outputs_list.schema.json") == index(env)

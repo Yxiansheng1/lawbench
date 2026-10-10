@@ -498,7 +498,8 @@ def test_ranges_and_failed_reason(world):
 def test_prep_good_fields_go_to_summary(world):
     w = world
     tid = start(w, use_prep=True)
-    assert finish(w, tid)["status"] == "completed"
+    v = finish(w, tid)
+    assert v["status"] == "completed" and v["notice"] is None             # 395 抽取正常用上：没有提示
     ex = w["fake"].extract
     assert {e["body"]["task"] for e in ex} == {"classify", "fields"}
     assert all(e["headers"]["authorization"] == f"Bearer {KEY}" for e in ex)
@@ -515,7 +516,8 @@ def test_prep_skipped(world, mode, note):
     w = world
     w["fake"].prep_mode = mode
     tid = start(w, use_prep=True)
-    assert finish(w, tid)["status"] == "completed"
+    v = finish(w, tid)
+    assert v["status"] == "completed" and note in v["notice"]              # 契约 1.4：status 带一次性提示
     assert not any("395 抽取的参考字段" in r["user"] for r in w["fake"].requests)
     assert note in task_json(w, tid, "运行记录.json")["395"]["提示"] and note in wiki_file(w, "log.md")
 
@@ -994,7 +996,7 @@ def test_bad_old_card_not_overwritten(world):
     p.write_text(bad, encoding="utf-8")
     tid = start(w)
     assert finish(w, tid)["status"] == "failed"
-    assert task_json(w, tid, "运行记录.json")["错误"] == "INVALID_ARGUMENT" and not w["fake"].requests
+    assert task_json(w, tid, "运行记录.json")["错误"] == "CASE_CARD_INVALID" and not w["fake"].requests   # 契约 1.4 专用码
     assert p.read_text(encoding="utf-8") == bad
     assert "case.json 不合契约" in wiki_file(w, "log.md")                # 主编排答复：日志写明是哪个文件坏了
 

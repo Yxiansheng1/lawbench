@@ -57,6 +57,10 @@
           },
           "confirmed_at": {
             "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          },
+          "draft": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path",
+            "description": "这份成果来自哪份草稿（确认时写；1.4 起，旧记录没有）"
           }
         },
         "additionalProperties": false,

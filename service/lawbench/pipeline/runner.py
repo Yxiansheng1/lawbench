@@ -101,10 +101,11 @@ class Progress:
     step_total: int = 0
     current: str | None = None
     queue_wait_ms: int | None = None
+    notice: str | None = None     # 给律师看一次的提示（契约 1.4）：勾了 395 抽取但被跳过的原因
 
     def value(self) -> dict:
         return {"status": self.status, "step_index": self.step_index, "step_total": self.step_total,
-                "current": self.current, "queue_wait_ms": self.queue_wait_ms}
+                "current": self.current, "queue_wait_ms": self.queue_wait_ms, "notice": self.notice}
 
 
 @dataclass

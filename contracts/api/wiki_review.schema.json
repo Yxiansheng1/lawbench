@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lawbench://contracts/api/wiki_review.schema.json",
+  "title": "GET /api/wiki/review?case_id= ；POST /api/wiki/review",
+  "description": "案件 wiki 的核对状态（1.4 起，记在案件里，换电脑也一致）。GET 读；POST 把当前这一版 wiki 记为已核对。重新生成、更新 wiki 或材料有变化后，状态回到未核对",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "case_id": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_id"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "case_id"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "exists": {
+                  "type": "boolean",
+                  "description": "有没有生成过 wiki"
+                },
+                "reviewed": {
+                  "type": "boolean",
+                  "description": "当前这一版 wiki 和此刻的材料，律师核对过"
+                },
+                "reviewed_at": {
+                  "anyOf": [
+                    {
+                      "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "changes": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "added": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "changed": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "removed": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "added",
+                        "changed",
+                        "removed"
+                      ],
+                      "description": "wiki 生成之后材料的变化；没有 wiki 为 null"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "exists",
+                "reviewed",
+                "reviewed_at",
+                "changes"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "ok",
+            "value"
+          ]
+        },
+        {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/fail"
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "exists": {
+          "type": "boolean",
+          "description": "有没有生成过 wiki"
+        },
+        "reviewed": {
+          "type": "boolean",
+          "description": "当前这一版 wiki 和此刻的材料，律师核对过"
+        },
+        "reviewed_at": {
+          "anyOf": [
+            {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changes": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "added": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "changed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "removed": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "added",
+                "changed",
+                "removed"
+              ],
+              "description": "wiki 生成之后材料的变化；没有 wiki 为 null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "exists",
+        "reviewed",
+        "reviewed_at",
+        "changes"
+      ]
+    }
+  }
+}

@@ -118,7 +118,14 @@ class CaseRegistry:
 
     # ---------- 打开案件 ----------
 
-    def open(self, path: str, template: str | None) -> dict:
+    def open(self, path: str, template: str | None, folders: list[str] | None = None) -> dict:
+        """folders（契约 1.4）：律师勾选要建的子文件夹。给了就只建这些，必须都在 template 的标准目录表里
+        （没给 template 或有不在表里的，整个请求拒绝、什么都不建）；不给按 template 全建。只补缺。"""
+        wanted = None
+        if folders is not None:
+            if not template or any(f not in TEMPLATES[template] for f in folders):
+                raise ApiError("INVALID_ARGUMENT", "folders_not_in_template")
+            wanted = [rel for rel in TEMPLATES[template] if rel in set(folders)]     # 按标准目录表的顺序
         root = gate.check_root(path, appdata=self.path.parent)
         with self._lock:
             created = not os.path.isdir(os.path.join(root, gate.WORK))
@@ -127,7 +134,7 @@ class CaseRegistry:
             case_id = self._init_db(root)
             folders_created: list[str] = []
             if template:
-                for rel in TEMPLATES[template]:
+                for rel in (TEMPLATES[template] if wanted is None else wanted):
                     if gate.mkdir_original(root, rel, op="case_template"):
                         folders_created.append(rel)
             name = os.path.basename(root.rstrip("\\/")) or root

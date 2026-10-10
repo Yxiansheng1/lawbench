@@ -24,6 +24,15 @@
               "type": "null"
             }
           ]
+        },
+        "folders": {
+          "type": "array",
+          "items": {
+            "$ref": "lawbench://contracts/common.schema.json#/$defs/rel_path"
+          },
+          "maxItems": 200,
+          "uniqueItems": true,
+          "description": "律师勾选要建的子文件夹（1.4 起）：给了就只建这些（必须都在 template 对应的标准目录表里），不给按 template 全建；只补缺"
         }
       },
       "additionalProperties": false,
