@@ -181,17 +181,29 @@ export function outputOfDraft(outputs: readonly Output[] | null | undefined, tas
 
 // —— 卡片 ——
 
-type TurnTailProps = SessionProps & { turn: { data: { get(key: string): unknown } }; seq: number }
+/** status：这一轮在会话记录里结束了没有（DSH ui-conversation 的 TurnLocation：open 还没有结束事件，closed 已结束）。 */
+type TurnTailProps = SessionProps & { turn: { status?: 'open' | 'closed' | 'unknown'; data: { get(key: string): unknown } }; seq: number }
+
+/**
+ * 产生这张草稿的那一轮是不是还在进行（令 0405，用户 2026-10-11 真机："确认保存"在一轮结束后、新一轮开始后、停止后都是灰的）：
+ * 只看这一轮自己——它在会话记录里还没结束、而且这个会话此刻确实有一轮在跑。
+ * 不看服务那边任务记录的状态（任务结束没登记上时它永远是"进行中"），也不看会话里别的轮：新一轮在跑时旧草稿照样可以确认保存。
+ */
+export function turnInProgress(turn: { status?: string } | undefined, sessionRunning: boolean): boolean {
+  return sessionRunning && turn?.status === 'open'
+}
 
 /** 登记在 conversation.chat.turnTail：这一轮存过草稿才出现，一份草稿一张卡片。 */
 export function TurnResultCards(props: TurnTailProps) {
   const data = props.turn.data.get(TURN_DATA_KEY) as { drafts?: readonly SavedDraft[] } | undefined
   const drafts = draftsForClosing(data?.drafts, props.seq)
   const { caseRef } = useSessionCase(props)
+  const sessionRunning = useStore(app, (s) => s.runningSessions.includes(props.sessionId))
   if (!drafts.length || !caseRef) return null
+  const inProgress = turnInProgress(props.turn, sessionRunning)
   return (
     <div data-lawbench-result-cards="" style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '8px 0' }}>
-      {drafts.map((d) => <ResultCard key={d.path} caseRef={caseRef} sessionId={props.sessionId} draft={d} />)}
+      {drafts.map((d) => <ResultCard key={d.path} caseRef={caseRef} sessionId={props.sessionId} draft={d} inProgress={inProgress} />)}
     </div>
   )
 }
@@ -200,7 +212,11 @@ const NO_INPUTS: string[] = []
 /** 任务列表读到了、却没有这份草稿的任务（运行记录已不在）。 */
 export const NO_TASK_TIP = '找不到这份草稿的运行记录，不能在这里确认保存'
 
-export function ResultCard({ caseRef, sessionId, draft }: { caseRef: CaseRef; sessionId: string; draft: SavedDraft }) {
+/** 上一轮没有正常登记结束（服务的任务记录还停在"进行中"，而这一轮其实已经不在跑了）：不挡确认保存，只说明一句。 */
+export const STALE_RUNNING_NOTE = '（上一轮未正常登记结束）'
+
+/** @param inProgress - 产生这张草稿的那一轮还在进行（见 turnInProgress）；不给按已结束。 */
+export function ResultCard({ caseRef, sessionId, draft, inProgress = false }: { caseRef: CaseRef; sessionId: string; draft: SavedDraft; inProgress?: boolean }) {
   const data = useCaseResults(caseRef.case_id)
   const task = taskOfDraft(data?.tasks, draft.path)
   const output = outputOfDraft(data?.outputs, task, draft, data?.confirmed)
@@ -225,7 +241,8 @@ export function ResultCard({ caseRef, sessionId, draft }: { caseRef: CaseRef; se
       </section>
     )
   }
-  const running = task?.status === 'running'
+  const running = inProgress
+  const staleRunning = !inProgress && task?.status === 'running'
   const picked = inputs.includes(draft.path)
   const toggleInput = () => setIntent(caseRef.case_id, { inputs: picked ? inputs.filter((x) => x !== draft.path) : [...inputs, draft.path] })
   return (
@@ -236,6 +253,7 @@ export function ResultCard({ caseRef, sessionId, draft }: { caseRef: CaseRef; se
         <Button size="sm" variant={picked ? 'primary' : 'ghost'} aria-pressed={picked} onClick={toggleInput}>{picked ? '已选作下一步输入' : '选作下一步输入'}</Button>
         {task?.skill === ARCHIVE_SKILL ? <Button size="sm" variant="outline" disabled={running} onClick={() => setArchiving(true)}>核对归档方案并生成归档文件…</Button> : null}
       </div>
+      {staleRunning ? <div style={S.sub}>{STALE_RUNNING_NOTE}</div> : null}
       <Checks draft={draft} />
       {confirming && task ? <ConfirmDialog caseRef={caseRef} taskId={task.task_id} draft={draft} onClose={() => setConfirming(false)} onDone={(outs) => { setConfirming(false); recordConfirmed(caseRef.case_id, draft.path, outs); void refreshCaseResults(caseRef.case_id) }} /> : null}
       {archiving && task ? <ArchiveDialog caseRef={caseRef} taskId={task.task_id} onClose={() => { setArchiving(false); void refreshCaseResults(caseRef.case_id) }} /> : null}

@@ -44,6 +44,8 @@ export const DENY_WRAP_UP = '这是本次任务的最后一次调用：只能用
 export const BUDGET_STOPPED = 'BUDGET_STOPPED'
 /** 输入区写任务单明确失败、还没重写成（T14 第二次实跑派修 2）：整轮拒绝，不拿上一张任务单发。 */
 export const TASK_SHEET_FAILED = 'TASK_SHEET_FAILED'
+/** 一轮结束了但 /core/task/end 重试一次仍没成（令 0405 追加）：界面提示"任务结束状态未能登记"。 */
+export const TASK_END_FAILED = 'TASK_END_FAILED'
 export const DENY_NO_TASK = '工作台服务未启动，请稍后重试'
 
 type ContextValue = { l0: { text: string }; l1: { text: string; truncated: boolean; toc: Array<{ index: number; title: string; tokens: number }> } }
@@ -90,6 +92,8 @@ export class LegalAgent {
       return { kind: 'reject' }
     }
     if (step === 1 || !state) {
+      // 上一轮的任务还挂着（它的结束事件没收到）：先登记结束再开新的，不让它在服务里永远是"进行中"（令 0405 追加）
+      if (state) await this.endTask(agent.id, state, 'interrupted')
       const begin = await this.core.call<{ task_id: string; params: Params; budget: Budget }>('task/begin', {
         session_id: agent.id, cwd: agent.session?.header?.cwd ?? '',
       })
@@ -210,6 +214,34 @@ export class LegalAgent {
     return r.value
   }
 
+  /**
+   * 登记任务结束（/core/task/end）。所有结束路径都走这里（令 0405 追加）：正常结束、律师停止、到顶、出错、中断、压缩循环收尾；
+   * 没成重试一次，仍没成记日志并记 TASK_END_FAILED 让界面提示——否则服务里这个任务永远是"进行中"。
+   * @param kind - DSH turn/end 的 reason.kind；任务碰到过上限的一律报 budget（见 TaskState.endReason）。
+   */
+  async endTask(sessionId: string, state: TaskState, kind: string): Promise<boolean> {
+    if (this.tasks.get(sessionId) === state) this.tasks.delete(sessionId)
+    const body = { task_id: state.taskId, reason: state.endReason(kind), model_calls: state.modelCalls, tool_calls: state.toolCalls, elapsed_s: state.elapsedSeconds() }
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const r = await this.core.call('task/end', body).catch(() => undefined)
+      if (r?.ok) return true
+      this.log('warn', 'agent.task_end_failed', { attempt, code: r && !r.ok ? r.error.code : undefined, reason: body.reason })
+    }
+    this.noteBlocked(sessionId, TASK_END_FAILED)
+    return false
+  }
+
+  /**
+   * 会话的 Agent 空闲了（agent/status idle）：这一轮已经不在跑。任务还挂着说明没收到它的结束事件——按中断登记结束（令 0405 追加，兜底）。
+   */
+  async onIdle(sessionId: string, expected?: TaskState): Promise<void> {
+    const state = this.tasks.get(sessionId)
+    // expected：空闲那一刻挂着的任务；这期间已经换成新一轮的任务就不动它
+    if (!state || (expected !== undefined && state !== expected)) return
+    this.log('warn', 'agent.task_left_open', {})
+    await this.endTask(sessionId, state, 'interrupted')
+  }
+
   /** session/event：assistant/message → /core/progress；turn/end → /core/task/end。 */
   async onSessionEvent(sessionId: string, event: SessionEvent): Promise<void> {
     const state = this.tasks.get(sessionId)
@@ -223,14 +255,7 @@ export class LegalAgent {
       // 上下文被压缩了一次（令 0329 P0）：记数；超过上限时记一条，下一步收尾
       if (state.noteCompaction()) this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, model_calls: state.modelCalls })
     } else if (event.type === 'turn/end') {
-      this.tasks.delete(sessionId)
-      await this.core.call('task/end', {
-        task_id: state.taskId,
-        reason: state.endReason(event.data?.reason?.kind ?? 'error'),
-        model_calls: state.modelCalls,
-        tool_calls: state.toolCalls,
-        elapsed_s: state.elapsedSeconds(),
-      })
+      await this.endTask(sessionId, state, event.data?.reason?.kind ?? 'error')
     }
   }
 }
@@ -287,6 +312,14 @@ export function apply(ctx: Ctx, config: Config = {}): void {
     const mine = agent.preTool(exec.agent?.id, exec.name, exec.arguments)
     return mine.kind === 'allow' ? next() : mine
   }) as never, { prepend: true })
+
+  // 兜底：Agent 空闲时任务还挂着（没收到 turn/end）就登记结束。排在 turn/end 的处理之后：正常结束时任务已经摘掉，这里什么都不做
+  ctx.on('agent/status', ((payload: { agent: AgentLike; status: string }) => {
+    if (payload.status !== 'idle') return
+    const left = agent.tasks.get(payload.agent.id)
+    if (!left) return
+    setTimeout(() => { void agent.onIdle(payload.agent.id, left).catch((e: unknown) => log('error', 'agent.idle_end_failed', { error: String((e as Error)?.message ?? e) })) }, 2000)
+  }) as never)
 
   ctx.on('session/event', ((session: { id: string }, event: SessionEvent) => {
     void agent.onSessionEvent(session.id, event).catch((e: unknown) => log('error', 'agent.session_event_failed', { error: String((e as Error)?.message ?? e) }))

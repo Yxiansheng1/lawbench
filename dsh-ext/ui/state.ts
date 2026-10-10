@@ -34,6 +34,8 @@ export type Dialog =
 
 export interface AppState {
   cases: CaseRef[]
+  /** 正有一轮在跑的会话（DSH 会话列表的 running；草稿卡片据此判断"产生这张草稿的那一轮"是不是还在进行，令 0405）。 */
+  runningSessions: string[]
   /** 已从左栏列表移除的案件（令 2125，Host 记着）：首页、"切换案件"、"先选择案件"不列；cases 里仍留着，开着的会话照样认得出案件。 */
   hiddenCases: string[]
   /** 按会话 id（契约 1.2：服务的"当前选择"按会话存，界面同口径，T13 返修 P2-2）。 */
@@ -66,7 +68,7 @@ export interface AppState {
   lawyerName: string | null
 }
 
-export const app = createStore<AppState>({ cases: [], hiddenCases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null, lawyerName: null })
+export const app = createStore<AppState>({ cases: [], runningSessions: [], hiddenCases: [], selections: {}, intents: {}, inputChanged: {}, staleServer: {}, dialogs: [], defaults: null, presets: {}, currentRoot: null, answers: {}, dailyRoot: null, dailyError: null, lawyerName: null })
 
 /** 在某会话的输入区上方显示某任务的结果（T14 派修 2）。 */
 export function showTaskAnswer(sessionId: string, taskId: string): void {

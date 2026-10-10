@@ -32,6 +32,10 @@ export const CASE_MOVED_TEXT = '这个对话所在的案件文件夹已经不在
 export const CASE_NOT_FOUND_TEXT = '没有找到这个对话所在的案件。请回到首页重新打开案件；如果案件文件夹刚挪过位置，请重启软件后在这个对话里继续，或新开一个对话。'
 /** 写任务单（POST /api/task）明确失败时状态行的话（T14 第二次实跑派修 2，执行令 1751）；此时发送被 Agent 插件拦下。 */
 export const SHEET_FAILED_TEXT = '任务单没有写成，请重试'
+/** 一轮结束了，但任务的结束状态没能登记到服务（Agent 插件重试一次仍失败，记 TASK_END_FAILED；令 0405 追加）。 */
+export const TASK_END_FAILED = 'TASK_END_FAILED'
+export const TASK_END_FAILED_TITLE = '任务结束状态未能登记'
+export const TASK_END_FAILED_TEXT = '刚才这一轮已经结束，但结束状态没能记到本机服务里。已存的草稿和成果不受影响，可以照常确认保存；多次出现请联系技术支持。'
 /** 任务单没写成时律师仍点了发送：这一轮被拒（Agent 插件记 TASK_SHEET_FAILED）。 */
 export const SHEET_FAILED_SEND_TEXT = '输入区的任务单没有写成，刚才这句没有发出。请先点输入区的"重试"，写成之后再发送。'
 export const TASK_SHEET_FAILED = 'TASK_SHEET_FAILED'
@@ -190,6 +194,7 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
         if (r.ok && r.value?.code === 'CASE_MOVED') showNotice(CASE_MOVED_TITLE, CASE_MOVED_TEXT)
         if (r.ok && r.value?.code === 'CASE_NOT_FOUND') showNotice(CASE_MOVED_TITLE, CASE_NOT_FOUND_TEXT)
         if (r.ok && r.value?.code === TASK_SHEET_FAILED) showNotice(CASE_MOVED_TITLE, SHEET_FAILED_SEND_TEXT)
+        if (r.ok && r.value?.code === TASK_END_FAILED) showNotice(TASK_END_FAILED_TITLE, TASK_END_FAILED_TEXT)
         // 到达用量上限：对话区（输入区上方）显示提示和刚存的草稿（T14 派修 2）
         if (r.ok && r.value?.code === BUDGET_STOPPED && typeof r.value.task_id === 'string') showTaskAnswer(sid, r.value.task_id)
       } catch { /* 当没有提示 */ }

@@ -204,7 +204,11 @@ function registerSessionTracking(ctx: Ctx): void {
   // 一轮结束（会话的 running 由真变假）：通知输入区重新读服务的当前选择（契约 1.2，界面不在本地记）
   const running = new Map<string, boolean>()
   const watchTurns = () => {
-    for (const id of turnEnds(running, ctx.sessions.list.getSnapshot().byId)) window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: id }))
+    const byId = ctx.sessions.list.getSnapshot().byId
+    for (const id of turnEnds(running, byId)) window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: id }))
+    // 哪些会话有一轮在跑：记进界面状态，草稿卡片每次渲染按它重算能不能点"确认保存"（令 0405）
+    const now = Object.keys(byId).filter((id) => byId[id]?.running === true).sort()
+    if (now.join('\n') !== app.get().runningSessions.join('\n')) app.set((s) => ({ ...s, runningSessions: now }))
   }
   update()
   watchTurns()
