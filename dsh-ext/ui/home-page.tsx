@@ -159,7 +159,9 @@ export function CaseCard({ c, daily = false, onOver }: { c: CaseRef; daily?: boo
     <div role="button" tabIndex={missing ? -1 : 0} aria-label={`进入${c.name}`} data-case-card={daily ? 'daily' : 'case'} data-lawbench-drop=''
       onClick={enter} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter() } }}
       onDragEnter={(e) => { e.stopPropagation(); onOver?.() }} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); onOver?.(); if (missing) e.dataTransfer.dropEffect = 'none'; else setOver(true) }}
-      onDragLeave={(e) => { e.stopPropagation(); setOver(false) }} onDrop={drop}
+      // 令 1651：只在离开卡片本身时关高亮。移到卡片里的子元素上（或卡片亮起后重排、指针下换了元素）也会发 dragleave，
+      // 那时关掉会让高亮来回翻、松手可能不生效
+      onDragLeave={(e) => { e.stopPropagation(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false) }} onDrop={drop}
       style={{
         border: `${over ? 2 : 1}px solid ${over ? C.brand : C.border}`, borderRadius: 14, padding: '18px 18px 14px', minHeight: 150, boxShadow: SHADOW,
         background: daily ? 'rgba(47,107,255,0.05)' : 'transparent', cursor: missing ? 'not-allowed' : 'pointer', opacity: missing ? 0.7 : 1,

@@ -76,10 +76,11 @@ export async function loadRecent(): Promise<CaseRef[] | { code: string; message:
  * @param offerLocal - 在云同步目录里被拒时是否提议"为我在本机建一个文件夹"；打开本机建好的文件夹时为 false（只给一次）。
  * @param picked - 已经选好的子文件夹（换到本机文件夹再开时沿用，不再问）。
  * @param hooks - onSync：在云同步目录里被拒时改走这里（首页拖文件夹建案件：只给"复制到本机建案件"，令 1422），给了就不走 offerLocal；
- *   onOpened：登记成功后、转到案件之前调一次（要随案件记下的东西在这里记，不等打开工作区）。
+ *   onOpened：登记成功后、转到案件之前调一次并等它做完（要随案件记下的东西在这里记；拖文件夹建成案件后的那次扫描也在这里，
+ *   扫完再转进案件，概览上的材料份数才是对的）。
  */
 export async function openCase(path: string | null, template: CaseKind | null, navigate = true, offerLocal = true, picked?: FolderChoice,
-  hooks: { onSync?: (dir: string) => Promise<CaseRef | undefined>; onOpened?: (c: CaseRef) => void } = {}): Promise<CaseRef | undefined> {
+  hooks: { onSync?: (dir: string) => Promise<CaseRef | undefined>; onOpened?: (c: CaseRef) => void | Promise<void> } = {}): Promise<CaseRef | undefined> {
   const nav = getNav()
   const dir = path ?? await nav.pickDirectory()
   if (!dir) return undefined
@@ -101,7 +102,7 @@ export async function openCase(path: string | null, template: CaseKind | null, n
   // 服务的登记已替换成新位置；界面这边也只留新的一条，打开后把侧栏里旧位置那一项移除
   const prev = app.get().cases.find((x) => x.case_id === c.case_id && !samePath(x.root, dir))
   rememberCase(c)
-  hooks.onOpened?.(c)
+  await hooks.onOpened?.(c)
   if (template && choice) await makeFolders(c, template, choice)
   if (navigate) {
     const opened = await nav.openCaseWorkspace(dir)
@@ -171,6 +172,19 @@ export async function runImport(caseRef: CaseRef, paths: string[], target: strin
   const r = await call<ImportResult>('materialsImport', { case_id: caseRef.case_id, paths, target, unzip })
   if (!r.ok) { notice('导入没有完成', errorText(r.error)); return }
   reportImport(caseRef, r.value, '导入结果')
+}
+
+/**
+ * 重新扫描案件文件夹里的材料（/api/materials/scan），按同一句话说明结果，并让材料列表刷新。
+ * 材料页"重新扫描"和"拖文件夹建成案件后"共用（令 1651：建成后原有的文件要扫一次才认得出来）。
+ * @returns 扫描成了为 true。
+ */
+export async function scanMaterials(caseRef: CaseRef): Promise<boolean> {
+  const r = await call<{ added: number; changed: number; removed: number; failed: number; review_needed: boolean }>('materialsScan', { case_id: caseRef.case_id })
+  if (!r.ok) { notice('扫描没有完成', errorText(r.error)); return false }
+  notice('扫描完成', `新增 ${r.value.added}、变化 ${r.value.changed}、移除 ${r.value.removed}、失败 ${r.value.failed}。${r.value.review_needed ? '材料有变化，案件 wiki 和已有成果需要复核。' : ''}`)
+  window.dispatchEvent(new CustomEvent('lawbench:materials-changed', { detail: caseRef.case_id }))
+  return true
 }
 
 /** 说明复制了几个、跳过了几个和解析结果，并让材料列表刷新（导入、"复制到本机建案件"共用）。 */

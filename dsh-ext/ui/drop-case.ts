@@ -4,7 +4,7 @@
 // 文件夹在云同步目录里（服务拒 CASE_IN_SYNC_FOLDER）：只给"复制到本机建案件"——在 <用户目录>\连越律师工作台\<文件夹名> 建案件，
 // 再把原文件夹顶层各项经 /api/materials/import 复制到案件根（保持原来的结构）。
 import { app, askNewCase, call, confirm, folderName, notice, samePath, type CaseRef } from './state.ts'
-import { openCase, reportImport, SYNC_NAME_TITLE, syncNameText, syncWordIn, type ImportResult } from './cases.ts'
+import { openCase, reportImport, scanMaterials, SYNC_NAME_TITLE, syncNameText, syncWordIn, type ImportResult } from './cases.ts'
 import { errorText } from './format.ts'
 import { isDeviceName, RESERVED_TOPS } from '../shared/case-folders.ts'
 
@@ -84,8 +84,13 @@ export async function caseFromFolder(d: DroppedItem, navigate: boolean): Promise
   if (badCaseName(name)) { notice(NAME_TITLE, nameText(name)); return undefined }
   const kind = await askNewCase(name)
   if (!kind) return undefined
-  // 类型在登记成功时就记下（不等转到案件里）
-  return openCase(d.path, null, navigate, false, undefined, { onSync: () => copyToLocal(d, name, navigate, kind), onOpened: (c) => recordKind(c.case_id, kind) })
+  // 类型在登记成功时就记下（不等转到案件里）。
+  // 令 1651：服务登记案件时不扫描，文件夹里原有的文件要扫一次才成为材料——建成后立刻扫（同材料页"重新扫描"），扫完再转进案件。
+  // 云同步退到"复制到本机"的那条路不在这里扫：复制（/api/materials/import）本身带一次扫描
+  return openCase(d.path, null, navigate, false, undefined, {
+    onSync: () => copyToLocal(d, name, navigate, kind),
+    onOpened: async (c) => { recordKind(c.case_id, kind); await scanMaterials(c) },
+  })
 }
 
 /** 第 2 条：云同步目录里的文件夹，只给"复制到本机建案件"。 */

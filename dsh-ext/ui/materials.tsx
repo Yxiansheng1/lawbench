@@ -2,7 +2,7 @@
 // 发往服务器的操作（提交识别、生成 wiki、勾选 395 抽取）都先弹确认框（工单第 3 步、Q10）。不显示"去水印"（第 5a 步）。
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { DEFAULT_TARGET, startImport, TABS } from './cases.ts'
+import { DEFAULT_TARGET, scanMaterials, startImport, TABS } from './cases.ts'
 import { WikiCard } from './wiki-card.tsx'
 import { citationTargets, errorText, shouldNotifyWikiDone, ocrConfirmText, pageRanges, parsePageRanges, STATUS_WORD, TYPE_WORD, UNIT_WORD, wikiConfirmText, type Material } from './format.ts'
 import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoad } from './kit.tsx'
@@ -78,12 +78,8 @@ function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: str
   // 拦在这里、不再冒泡：DSH 在 document 上监听拖入，放过去会被当成聊天附件收下（D13 不允许）
   const onDrop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setOver(false); importPaths([...e.dataTransfer.files].map((f) => getNav().pathFor(f))) }
   const pickFolder = async () => { const d = await getNav().pickDirectory(); if (d) importPaths([d]) }
-  const rescan = async () => {
-    const r = await call<{ added: number; changed: number; removed: number; failed: number; review_needed: boolean }>('materialsScan', { case_id: id })
-    if (!r.ok) { notice('扫描没有完成', errorText(r.error)); return }
-    notice('扫描完成', `新增 ${r.value.added}、变化 ${r.value.changed}、移除 ${r.value.removed}、失败 ${r.value.failed}。${r.value.review_needed ? '材料有变化，案件 wiki 和已有成果需要复核。' : ''}`)
-    void reloadMats()
-  }
+  // 扫描、说明结果、刷新列表都在 scanMaterials 里（拖文件夹建成案件后也用它，令 1651）
+  const rescan = () => scanMaterials(caseRef)
 
   return (
     <div style={{ ...S.pane, outline: over ? `2px dashed ${C.brand}` : 'none', outlineOffset: -4 }}

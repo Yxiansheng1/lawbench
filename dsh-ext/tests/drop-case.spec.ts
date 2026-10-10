@@ -9,7 +9,7 @@ import { droppedItems } from '../host/desk-actions.ts'
 import { BLANK_OVER_MS, HomeLanding } from '../ui/home-page.tsx'
 import { DialogHost } from '../ui/dialogs.tsx'
 import { ASK_OK, askTitle, badCaseName, BLANK_HINT, cardHint, dropOnBlank, FILE_TEXT, NAME_TITLE, readKind, ROOT_TEXT, SYNC_DROP_OK, SYNC_DROP_TITLE, type DroppedItem } from '../ui/drop-case.ts'
-import { app, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
+import { app, lb, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -19,6 +19,7 @@ beforeEach(() => { box = document.createElement('div'); document.body.appendChil
 afterEach(async () => {
   await act(async () => { root?.unmount() }); root = undefined; box.remove(); setApi(undefined); setNav(undefined)
   app.set((s) => ({ ...s, cases: [], dailyRoot: null, lawyerName: null, dialogs: [] }))
+  scanFails = false
 })
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
@@ -30,6 +31,7 @@ const dir = (path: string, more: Partial<DroppedItem> = {}): DroppedItem => ({ p
 const file = (path: string): DroppedItem => ({ path, name: path.split('\\').pop()!, kind: 'file', has_case: false, children: [] })
 
 /** 假 Host / 服务：记下每次调用；云同步目录（路径含 OneDrive）拒。 */
+let scanFails = false
 function setup(items: DroppedItem[], recent: CaseRef[] = []) {
   const calls: Array<[string, unknown]> = []
   setNav({ openCaseWorkspace: async () => {}, openTab: () => {}, seedTabs: () => {}, pathFor: (f: File) => (f as unknown as { path: string }).path } as unknown as Nav)
@@ -42,6 +44,7 @@ function setup(items: DroppedItem[], recent: CaseRef[] = []) {
         : { ok: true, value: { case_id: `id-${r.path.split('\\').pop()}`, name: 'x', created: true, folders_created: [] } }
     },
     localCaseFolder: async (r: { name: string }) => { calls.push(['localCaseFolder', r]); return { ok: true, value: { path: `C:\\Users\\x\\连越律师工作台\\${r.name}` } } },
+    materialsScan: async (r: unknown) => { calls.push(['materialsScan', r]); return scanFails ? { ok: false, error: { code: 'INTERNAL', message: '内部错误，请重试' } } : { ok: true, value: { added: 2, changed: 0, removed: 0, failed: 0, review_needed: true } } },
     materialsImport: async (r: unknown) => { calls.push(['materialsImport', r]); return { ok: true, value: { copied: [{ from: 'a', to: '合同.pdf' }], skipped: [], scan: { added: 1, changed: 0, removed: 0, failed: 0, review_needed: false } } } },
     caseRecent: async () => ({ ok: true, value: { cases: recent } }),
     getCapsules: async () => ({ ok: true, value: { v: 1, hint: '', shared: [], groups: [] } }),
@@ -102,6 +105,30 @@ describe('空白处松手', () => {
     expect(only(calls, 'materialsImport')).toEqual([])
     expect(dialogs().some((d) => d.kind === 'folders')).toBe(false)
     expect(readKind('id-李某合同纠纷')).toBe('criminal')
+    // 令 1651：建成后立刻扫一次（服务登记时不扫描，不扫的话显示"材料 0 份"），结果按材料页"重新扫描"同一句话说
+    expect(calls.map((c) => c[0])).toEqual(['dropInfo', 'caseOpen', 'materialsScan'])
+    expect(only(calls, 'materialsScan')).toEqual([{ case_id: 'id-李某合同纠纷' }])
+    expect(dialogs().filter((d) => d.kind === 'notice').map((d) => [d.title, d.text])).toEqual([['扫描完成', '新增 2、变化 0、移除 0、失败 0。材料有变化，案件 wiki 和已有成果需要复核。']])
+  })
+
+  it('令 1651：扫描在转进案件之前做完（概览上的材料份数才对）；扫描失败照样建成、说明没扫成', async () => {
+    const order: string[] = []
+    const calls = setup([dir(DIR)])
+    setNav({ openCaseWorkspace: async () => { order.push('enter') }, openTab: () => {}, seedTabs: () => {}, pathFor: () => '' } as unknown as Nav)
+    const api = lb() as unknown as Record<string, (r: unknown) => Promise<unknown>>
+    const scan = api.materialsScan!
+    setApi({ ...api, materialsScan: async (r: unknown) => { await tick(); order.push('scan'); return scan(r) } } as unknown as LawbenchApi)
+    let p = dropOnBlank([DIR])
+    await tick(); last()!.resolve!('civil'); app.set((s) => ({ ...s, dialogs: [] }))
+    expect((await p).map((c) => c.root)).toEqual([DIR])
+    expect(order).toEqual(['scan', 'enter'])
+    app.set((s) => ({ ...s, dialogs: [], cases: [] }))
+    scanFails = true
+    p = dropOnBlank([DIR])
+    await tick(); last()!.resolve!('civil'); app.set((s) => ({ ...s, dialogs: [] }))
+    expect((await p).map((c) => c.root)).toEqual([DIR])
+    expect(dialogs().filter((d) => d.kind === 'notice').map((d) => d.title)).toEqual(['扫描没有完成'])
+    expect(only(calls, 'materialsScan')).toHaveLength(2)
   })
 
   it('取消：什么都不发生', async () => {
@@ -112,6 +139,7 @@ describe('空白处松手', () => {
     app.set((s) => ({ ...s, dialogs: s.dialogs.filter((d) => d.kind !== 'newCase') }))
     expect(await p).toEqual([])
     expect(only(calls, 'caseOpen')).toEqual([])
+    expect(only(calls, 'materialsScan')).toEqual([])
     // 复核 rv-A55 P3-2：取消就是取消，不弹任何说明（取消被当成出错时这里会多一个 notice）
     expect(dialogs()).toEqual([])
   })
@@ -154,6 +182,7 @@ describe('空白处松手', () => {
     expect(made.map((c) => c.root)).toEqual([DIR, OLD])
     expect(dialogs().some((d) => d.kind === 'newCase')).toBe(false)
     expect(only(calls, 'caseOpen')).toEqual([{ path: DIR, template: null }, { path: OLD, template: null }])
+    expect(only(calls, 'materialsScan')).toEqual([]) // 打开已有的案件不扫（材料页自己有"重新扫描"）
   })
 
   it('里面只有一个"工作区"子文件夹（Host 回 has_case 为 false）：照样弹确认框，不直接登记（复核 rv-A55 P2-1）；盘根不问、直接说明', async () => {
@@ -191,6 +220,7 @@ describe('空白处松手', () => {
     const made = await p
     const LOCAL = 'C:\\Users\\x\\连越律师工作台\\李某合同纠纷'
     expect(made).toMatchObject([{ root: LOCAL }])
+    // 令 1651：这条路不另扫——复制（materials_import）本身带一次扫描
     expect(calls.map((c) => c[0])).toEqual(['dropInfo', 'caseOpen', 'localCaseFolder', 'caseOpen', 'materialsImport'])
     expect(only(calls, 'materialsImport')).toEqual([{ case_id: 'id-李某合同纠纷', paths: [`${SYNCED}\\合同.pdf`, `${SYNCED}\\证据`], target: null, unzip: false }])
     expect(last()).toMatchObject({ kind: 'notice', title: '复制结果' })
@@ -202,6 +232,7 @@ describe('空白处松手', () => {
     last()!.resolve!(false)
     expect(await p).toEqual([])
     expect(only(calls, 'localCaseFolder')).toEqual([])
+    expect(only(calls, 'materialsScan')).toEqual([])
   })
 })
 
@@ -235,6 +266,28 @@ describe('首页：两种落点', () => {
     expect(card().textContent).toContain('松开：加入 张某诈骗案 的材料')
   })
 
+  it('令 1651：在卡片里的子元素之间移动（dragleave 的去向还在卡片里）不关高亮；离开卡片才关', async () => {
+    await render([])
+    await fire(card(), 'dragover')
+    expect(card().textContent).toContain(cardHint(CASE.name))
+    const leave = (related: Element | null) => act(async () => {
+      const ev = new Event('dragleave', { bubbles: true, cancelable: true }) as Event & { relatedTarget: unknown; dataTransfer: unknown }
+      Object.defineProperty(ev, 'relatedTarget', { value: related })
+      ev.dataTransfer = { types: ['Files'], files: [] }
+      card().firstElementChild!.dispatchEvent(ev)
+      await tick()
+    })
+    await leave(card().lastElementChild) // 从卡片里的一个子元素移到另一个
+    expect(card().textContent).toContain(cardHint(CASE.name))
+    await leave(card()) // 移到卡片自己身上
+    expect(card().textContent).toContain(cardHint(CASE.name))
+    await leave(box.querySelector('h1')) // 离开卡片
+    expect(card().textContent).not.toContain(cardHint(CASE.name))
+    await fire(card(), 'dragover')
+    await leave(null) // 拖出窗口
+    expect(card().textContent).not.toContain(cardHint(CASE.name))
+  })
+
   it('拖动被取消而没有发 dragleave：空白处的高亮过一会儿自己关掉，不卡在亮着', async () => {
     await render([])
     await fire(box.querySelector('h1')!, 'dragover')
@@ -263,6 +316,7 @@ describe('首页：两种落点', () => {
     await act(async () => { [...document.querySelectorAll('button')].find((b) => b.textContent === ASK_OK)!.click(); await tick(); await tick() })
     expect(only(calls, 'caseOpen')).toEqual([{ path: DIR, template: null }])
     expect(readKind('id-李某合同纠纷')).toBe('criminal')
+    expect(only(calls, 'materialsScan')).toEqual([{ case_id: 'id-李某合同纠纷' }])
   })
 })
 
