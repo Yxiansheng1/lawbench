@@ -56,6 +56,10 @@ Select-String -Path C:\prep395\src\prep395\prep395\backends.py -Pattern "XIAOMI_
 其余参数从现有服务定义里读，不用手抄，也不用重新输入口令。
 
 ```powershell
+# 自检：第 2 步的新源码必须已经拷到位。旧的 install.ps1 也能跑成，但只换模型、不换提示词（2026-10-10 第一遍就这样漏了）
+if (-not (Select-String -Path C:\prep395\src\prep395\deploy\install.ps1 -Pattern 'PREP395_OCR_MODEL = ' -Quiet)) {
+  throw "install.ps1 是旧的：先做第 2 步（把新的 prep395 源码拷到 C:\prep395\src\prep395），再回来做第 3 步"
+}
 $svc = "C:\prep395\services"
 $e = @{}; ([xml](Get-Content "$svc\prep395.xml")).service.env | ForEach-Object { $e[$_.name] = $_.value }
 $llm = [regex]::Match(([xml](Get-Content "$svc\prep395-llm9b.xml")).service.arguments, 'models\\([^"]+\.gguf)').Groups[1].Value
