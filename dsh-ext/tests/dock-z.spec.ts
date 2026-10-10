@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { pickCapsule, shownCapsule } from './helpers/capsule-pick.ts'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, forgetDockSyncs, TURN_ENDED } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockSyncs, TURN_ENDED, TURN_STARTED } from '../ui/dock.tsx'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
 
@@ -86,7 +86,7 @@ const button = (text: string) => [...container.querySelectorAll('button')].find(
 async function click(text: string) { const b = button(text); if (!b) throw new Error('no button ' + text); await act(async () => { b.click() }) }
 async function turnEnded(s: string) { await act(async () => { window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: s })) }); await flush() }
 let seen = { shown: '', status: '' }
-const begin = (s: string) => { seen = { shown: shown(), status: status() }; return svc.run(s) }
+const begin = (s: string) => { seen = { shown: shown(), status: status() }; window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: s })); return svc.run(s) }
 async function send(s: string) { const r = begin(s); await turnEnded(s); return r }
 
 

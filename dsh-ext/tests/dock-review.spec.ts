@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { pickCapsule, shownCapsule } from './helpers/capsule-pick.ts'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, forgetDockSyncs, INPUT_CHANGED_TEXT, TURN_ENDED } from '../ui/dock.tsx'
+import { ComposerDock, forgetDockSyncs, INPUT_CHANGED_TEXT, TURN_ENDED, TURN_STARTED } from '../ui/dock.tsx'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 import { TurnNotices } from '../shared/turn-notices.ts'
 
@@ -87,7 +87,7 @@ const button = (text: string) => [...container.querySelectorAll('button')].find(
 async function click(text: string) { const b = button(text); if (!b) throw new Error('no button ' + text); await act(async () => { b.click() }) }
 async function turnEnded(s: string) { await act(async () => { window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: s })) }); await flush() }
 let seen = { shown: '', status: '' }
-const begin = (s: string) => { seen = { shown: shown(), status: status() }; return svc.run(s) }
+const begin = (s: string) => { seen = { shown: shown(), status: status() }; window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: s })); return svc.run(s) }
 async function send(s: string) { const r = begin(s); await turnEnded(s); return r }
 
 const rows: string[] = []
@@ -130,7 +130,7 @@ for (const remount of [false, true]) {
     it('X2 不合契约但已建 B，改回 A', async () => { await pick(A); await flush(600); svc.mode = 'bad-after-write'; await pick(B); await flush(600); svc.mode = 'ok'; await pick(A); await flush(600); expect(row(`${M}|X2`, await send('S1'))).toBe('一致') })
     it('X3 改过选择、别处改 B、一轮结束读失败', async () => { await pick(A); await flush(600); svc.create({ case_id: CASE.case_id, session_id: 'S1', entry: B, skill: B, inputs: [], params: null }); svc.failRead = true; row(`${M}|X3-别处改B后发`, begin('S1')); await turnEnded('S1'); expect(row(`${M}|X3-读失败后发`, begin('S1'))).not.toBe('不一致') })
     it('X4 切 S2 读回 2 秒，读回前发', async () => { await pick(A); await flush(600); svc.readDelay = 2000; await go('S2'); expect(row(`${M}|X4-读回前`, begin('S2'))).not.toBe('不一致'); await flush(2100); expect(row(`${M}|X4-读回后`, begin('S2'))).toBe('一致') })
-    it('X5 S1 改 B 未到防抖切 S2', async () => { await pick(A); await flush(600); await pick(B); await flush(100); await go('S2'); await flush(1000); expect(svc.cur('S2')).toBeUndefined(); expect(row(`${M}|X5-S2`, begin('S2'))).toBe('一致'); await go('S1'); await flush(600); expect(row(`${M}|X5-回S1`, await send('S1'))).toBe('一致'); expect(svc.cur('S1')?.entry).toBe(B) })
+    it('X5 S1 改 B 未到防抖切 S2', async () => { await pick(A); await flush(600); await pick(B); await flush(100); await go('S2'); await flush(1000); expect(svc.cur('S2')).toBeUndefined(); expect(row(`${M}|X5-S2`, begin('S2'))).toBe('一致'); await go('S1'); await flush(600); expect(row(`${M}|X5-回S1`, await send('S1'))).toBe('一致'); /* 那一轮按 B 跑完，任务结束后选择清回自由对话（注记 0329 第 1 条） */ expect(svc.cur('S1')?.entry ?? null).toBeNull() })
     it('X6 S1 写 B 失败后切 S2', async () => { await pick(A); await flush(600); svc.mode = 'unavailable'; await pick(B); await flush(600); svc.mode = 'ok'; await go('S2'); await flush(1000); expect(svc.cur('S2')).toBeUndefined(); expect(row(`${M}|X6-S2`, begin('S2'))).toBe('一致') })
     it('X7 另一窗口改成 B（已知限制）', async () => { await pick(A); await flush(600); svc.create({ case_id: CASE.case_id, session_id: 'S1', entry: B, skill: B, inputs: [], params: null }); row(`${M}|X7-本窗口发`, begin('S1')); await turnEnded('S1'); expect(row(`${M}|X7-一轮后`, begin('S1'))).toBe('一致') })
     it('X8 改 B 未到防抖就重载', async () => { await pick(A); await flush(600); await pick(B); await flush(100); await restart('S1'); await flush(600); expect(row(`${M}|X8`, await send('S1'))).toBe('一致') })

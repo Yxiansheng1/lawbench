@@ -18,7 +18,7 @@ import { CaseOverview, type SessionBrief } from './overview.tsx'
 import { homeView } from './invoice-logic.ts'
 import { openRetainer } from './retainer.ts'
 import { confirmScope } from './estimate.ts'
-import { fromServer, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
+import { choiceKey, fromServer, isFree, SelectionSync, selectionKey, statusOf, statusText, type ApiError, type CurrentResult, type ServerSelection, type UiSelection, type WriteResult } from './tasksheet.ts'
 
 const THINKING: Params['thinking'][] = ['关闭', '低', '中', '高']
 const WINDOWS: Params['window'][] = ['32K', '64K', '128K']
@@ -43,6 +43,34 @@ export const TASK_SHEET_FAILED = 'TASK_SHEET_FAILED'
 /** Agent 插件到达用量上限时记的提示码（agent/index.ts 的 BUDGET_STOPPED；界面不引 Agent 插件，照写一份）。 */
 export const BUDGET_STOPPED = 'BUDGET_STOPPED'
 export const TURN_ENDED = 'lawbench:turn-ended'
+export const TURN_STARTED = 'lawbench:turn-started'
+
+// —— 任务结束后把选择清回"自由对话"（注记 0329 第 1 条，用户 2026-10-11 改定：选择"管到任务结束"，原 N37 是"管到律师改掉为止"） ——
+// 一轮开始时记下这个会话当时选的是什么；这一轮结束、任务确实跑了，而且此刻选的还是那一份（律师这期间没改），就清掉：
+// 选的 Skill、选用的成果、单独调的参数都回到默认，写给服务（entry、skill 为 null）。律师一轮进行中改选的（给下一条用的）不动。
+/** 各会话这一轮开始时的选择；没记到（如程序刚启动、会话还没读过选择）就不清。 */
+const turnChoice = new Map<string, string>()
+/** 一轮已经结束、还没处理的会话（结束时它的输入区可能不在眼前，等下一次读取时处理）。 */
+const endedTurns = new Map<string, string>()
+if (typeof window !== 'undefined') {
+  window.addEventListener(TURN_STARTED, (e) => {
+    const id = (e as CustomEvent<string>).detail
+    const cur = typeof id === 'string' ? app.get().selections[id] : undefined
+    if (cur && cur.saved) turnChoice.set(id, choiceKey(cur)); else turnChoice.delete(id)
+  })
+  window.addEventListener(TURN_ENDED, (e) => {
+    const id = (e as CustomEvent<string>).detail
+    const started = typeof id === 'string' ? turnChoice.get(id) : undefined
+    if (started !== undefined) { endedTurns.set(id, started); turnChoice.delete(id) }
+  })
+}
+/**
+ * 一轮结束后要不要清选择：任务真的跑过才清——没有提示码，或提示码是到顶、结束状态没登记上。
+ * 被拦下没跑的（输入变了、案件搬走、任务单没写成、取任务或取上下文失败的其他错误码）不清：律师处理完还要按原来的选择再发。
+ */
+export const clearsSelection = (code: string | null): boolean => code === null || code === BUDGET_STOPPED || code === TASK_END_FAILED
+/** 测试用。 */
+export const forgetTurnChoices = (): void => { turnChoice.clear(); endedTurns.clear() }
 
 let capsCache: Promise<Capsules | undefined> | undefined
 let skillsCache: Promise<SkillInfo[]> | undefined
@@ -187,7 +215,7 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
     // 问 Host 上一轮是否被拦下（取一次即删）；输入材料变了（INPUT_CHANGED）就记下提示，并退回"正在读取"
     // 提示按会话记进 store，取到了就记，不看 alive：Host 那边取一次即删，途中切走也不能丢（第三轮复核 P3-3）
     // 取提示出错（Host 方法抛错、返回不合形状）不挡读取：两处调用都是取完再读（第四轮复核 N1、N2）
-    const notice = async (): Promise<void> => {
+    const notice = async (): Promise<string | null | undefined> => {
       try {
         const r = await call<{ code: string | null; task_id?: string | null }>('turnNotice', { session_id: sid })
         if (r.ok && r.value?.code === 'INPUT_CHANGED') { markInputChanged(sid); if (alive) setLoadedFor(null) }
@@ -197,14 +225,33 @@ function Dock({ caseRef, sessionId, hero }: { caseRef: CaseRef; sessionId: strin
         if (r.ok && r.value?.code === TASK_END_FAILED) showNotice(TASK_END_FAILED_TITLE, TASK_END_FAILED_TEXT)
         // 到达用量上限：对话区（输入区上方）显示提示和刚存的草稿（T14 派修 2）
         if (r.ok && r.value?.code === BUDGET_STOPPED && typeof r.value.task_id === 'string') showTaskAnswer(sid, r.value.task_id)
-      } catch { /* 当没有提示 */ }
+        return r.ok ? r.value?.code ?? null : undefined
+      } catch { return undefined /* 当没有提示（也不据此清选择） */ }
+    }
+    // 这个会话有一轮结束了、任务确实跑过：服务此刻的选择还是那一轮开始时的那一份，就写回自由对话（见文件顶部的说明）。
+    // 排在读写队列里：先读服务此刻的选择来比，再写；随后的 load() 读到的就是清过的。律师有还没写成的改动时不动。
+    const clearAfterTurn = async (code: string | null | undefined): Promise<void> => {
+      const started = endedTurns.get(sid)
+      if (started === undefined) return
+      endedTurns.delete(sid)
+      if (code === undefined || !clearsSelection(code)) return
+      const local = app.get().selections[sid]
+      if (local && !local.saved) return
+      const now = await sync.current()
+      if (!now.ok) return
+      const server = fromServer(now.value.selection)
+      if (isFree(server) || choiceKey(server) !== started) return
+      const again = app.get().selections[sid]
+      if (again && !again.saved) return
+      // 参数回到全局默认（契约要求任务单必须带参数）
+      await sync.save({ capsuleId: null, skill: null, inputs: [], params: app.get().defaults ?? { thinking: '中', window: '128K', max_tokens: 16384 } })
     }
     setError(null)
     // 挂上、换会话时也取一次：被拦下的那一轮结束时律师可能正看着别的会话（返修 P3-C ②）。
     // 与一轮结束时一样先取提示再读：并行时提示晚到会把已读完的 loadedFor 清掉，状态行卡在"正在读取"（第三轮复核 P3-1）
-    void notice().then(() => { if (alive) load() })
+    void notice().then(clearAfterTurn).then(() => { if (alive) load() })
     // 一轮结束：先取提示再重读
-    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sid) void notice().then(() => { if (alive) load() }) }
+    const onTurn = (e: Event) => { if ((e as CustomEvent<string>).detail === sid) void notice().then(clearAfterTurn).then(() => { if (alive) load() }) }
     window.addEventListener(TURN_ENDED, onTurn)
     return () => { alive = false; window.removeEventListener(TURN_ENDED, onTurn) }
   }, [sync, sessionId, reload]) // eslint-disable-line react-hooks/exhaustive-deps

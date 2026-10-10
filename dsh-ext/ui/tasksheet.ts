@@ -61,7 +61,7 @@ export function statusText(st: SheetStatus): string {
     case 'saving': return '正在保存选择…'
     case 'error': return st.error.message
     case 'free': return '自由对话'
-    case 'ready': return `下一条消息按「${st.label}」运行（直到你改掉）`
+    case 'ready': return `下一条消息按「${st.label}」运行（任务结束后回到自由对话）`
     case 'notice': return st.text
   }
 }
@@ -72,6 +72,16 @@ export function statusText(st: SheetStatus): string {
  * 由输入区挂上、换会话时再取一次 turnNotice 兜住。
  * @param running - 上一次看到的各会话 running（原地更新）。
  */
+/**
+ * 哪些会话刚开始一轮（running 由假变真）。只读不改 running：与 turnEnds 配对时先调它。
+ */
+export function turnStarts(running: ReadonlyMap<string, boolean>, byId: Record<string, { running?: boolean } | undefined>): string[] {
+  return Object.entries(byId).filter(([id, s]) => s?.running === true && running.get(id) !== true).map(([id]) => id)
+}
+
+/** 选的是什么（不看参数）：一轮开始时记下，结束时据此判断律师这期间改没改过选择。 */
+export const choiceKey = (s: Pick<UiSelection, 'capsuleId' | 'skill' | 'inputs'>): string => JSON.stringify([s.capsuleId, s.skill, s.inputs])
+
 export function turnEnds(running: Map<string, boolean>, byId: Record<string, { running?: boolean } | undefined>): string[] {
   const ended: string[] = []
   for (const [id, s] of Object.entries(byId)) {

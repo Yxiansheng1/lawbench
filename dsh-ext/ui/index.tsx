@@ -8,8 +8,8 @@ import { HomePage } from './home.tsx'
 import { MaterialsTab } from './materials.tsx'
 import { draftsDefinition, OLD_RESULTS_TAB, OldResultsTab, refreshCaseResults, TurnResultCards } from './result-cards.tsx'
 import { SourceTab } from './source.tsx'
-import { ComposerDock, TURN_ENDED } from './dock.tsx'
-import { turnEnds } from './tasksheet.ts'
+import { ComposerDock, TURN_ENDED, TURN_STARTED } from './dock.tsx'
+import { turnEnds, turnStarts } from './tasksheet.ts'
 import { SettingsSection, loadSettingsIntoState } from './settings.tsx'
 import { BrandMark, BrandName, VendorCorner } from './brand.tsx'
 import { DailyErrorLine } from './daily-error.tsx'
@@ -205,6 +205,8 @@ function registerSessionTracking(ctx: Ctx): void {
   const running = new Map<string, boolean>()
   const watchTurns = () => {
     const byId = ctx.sessions.list.getSnapshot().byId
+    // 先报开始再报结束：输入区在一轮开始时记下当时的选择，结束时只清那一份（注记 0329 第 1 条）
+    for (const id of turnStarts(running, byId)) window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: id }))
     for (const id of turnEnds(running, byId)) window.dispatchEvent(new CustomEvent(TURN_ENDED, { detail: id }))
     // 哪些会话有一轮在跑：记进界面状态，草稿卡片每次渲染按它重算能不能点"确认保存"（令 0405）
     const now = Object.keys(byId).filter((id) => byId[id]?.running === true).sort()

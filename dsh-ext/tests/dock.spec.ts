@@ -8,8 +8,8 @@ import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { pickCapsule, shownCapsule } from './helpers/capsule-pick.ts'
 import { createRoot, type Root } from 'react-dom/client'
-import { ComposerDock, forgetDockSyncs, NO_CASE_TEXT, SHEET_FAILED_SEND_TEXT, SHEET_FAILED_TEXT, TURN_ENDED } from '../ui/dock.tsx'
-import { toRequest, turnEnds } from '../ui/tasksheet.ts'
+import { ComposerDock, forgetDockSyncs, NO_CASE_TEXT, SHEET_FAILED_SEND_TEXT, SHEET_FAILED_TEXT, TURN_ENDED, TURN_STARTED, clearsSelection, forgetTurnChoices } from '../ui/dock.tsx'
+import { choiceKey, toRequest, turnEnds, turnStarts } from '../ui/tasksheet.ts'
 import { app, setApi, setIntent, type LawbenchApi, type SkillInfo } from '../ui/state.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -131,6 +131,8 @@ async function turnEnded(sessionId: string): Promise<void> {
 
 /** 发一条消息并结束这一轮：返回这条实际按什么跑。 */
 async function send(sessionId: string): Promise<string> {
+  // 一轮开始（输入区在这时记下当时的选择，结束后只清那一份——注记 0329 第 1 条）
+  await act(async () => { window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: sessionId })) })
   const ran = svc.send(sessionId)
   await turnEnded(sessionId)
   return ran
@@ -138,7 +140,7 @@ async function send(sessionId: string): Promise<string> {
 
 /** 弹出过的提示框正文（showNotice 放进界面状态的）。 */
 const dialogs = () => app.get().dialogs.map((d) => (d as { text?: string }).text)
-const READY = (name: string) => `下一条消息按「${name}」运行（直到你改掉）`
+const READY = (name: string) => `下一条消息按「${name}」运行（任务结束后回到自由对话）`
 
 beforeEach(async () => {
   vi.useFakeTimers()
@@ -158,28 +160,60 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => {
+describe('输入区任务单：契约 1.2（选择管到任务结束——注记 0329 第 1 条，用户 2026-10-11 改定；原 N37 是"管到律师改掉为止"）', () => {
   it('刚挂上：从服务读当前选择；没设置过显示自由对话', async () => {
     expect(shown()).toBe('自由对话')
     expect(status()).toBe('自由对话')
   })
 
-  it('选 A 发两条（R1、原 W1）：两条都按 A 跑，状态行一直说按 A（不再有"只管这一条"和轮询空窗）', async () => {
+  it('选 A 发两条（R1、原 W1）：第一条按 A 跑；任务结束后选择自动回到"自由对话"（服务那边也清了），第二条按自由对话跑——要再按 A 跑得重新选', async () => {
     await pick(A.id)
     expect(status()).toBe('正在保存选择…')
     await flush(600)
     expect(status()).toBe(READY(A.name))
     expect(await send('S1')).toBe(A.id)
-    expect([shown(), status()]).toEqual([A.id, READY(A.name)])
+    expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+    expect(svc.selections.get('S1')).toMatchObject({ entry: null, skill: null, inputs: [] })
+    expect(await send('S1')).toBe('自由对话')
+    expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+    // 重新选了才又按 A
+    await pick(A.id); await flush(600)
     expect(await send('S1')).toBe(A.id)
-    expect([shown(), status()]).toEqual([A.id, READY(A.name)])
   })
 
-  it('选 A 改选 B 发两条（R2、原 W3）：都按 B 跑', async () => {
+  it('选 A 改选 B 发两条（R2、原 W3）：第一条按 B 跑，结束后回到自由对话', async () => {
     await pick(A.id); await flush(600)
     await pick(B.id); await flush(600)
     expect(status()).toBe(READY(B.name))
-    expect([await send('S1'), await send('S1')]).toEqual([B.id, B.id])
+    expect([await send('S1'), await send('S1')]).toEqual([B.id, '自由对话'])
+  })
+
+  it('一轮进行中律师改选了 B（给下一条用的）：这一轮结束时不清 B，下一条按 B 跑；B 那一轮结束后才清', async () => {
+    await pick(A.id); await flush(600)
+    await act(async () => { window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: 'S1' })) })
+    expect(svc.send('S1')).toBe(A.id)
+    await pick(B.id); await flush(600) // 这一轮还在跑时改的，已写给服务
+    await turnEnded('S1')
+    expect([shown(), status()]).toEqual([B.id, READY(B.name)])
+    expect(await send('S1')).toBe(B.id)
+    expect([shown(), status()]).toEqual(['自由对话', '自由对话'])
+  })
+
+  it('这一轮没真的跑任务就被拦下（如输入材料变了、任务单没写成）：选择留着，律师处理完按原来的选择再发', async () => {
+    await pick(A.id); await flush(600)
+    for (const code of ['INPUT_CHANGED', 'TASK_SHEET_FAILED', 'CASE_MOVED', 'CASE_NOT_FOUND', 'KEY_INVALID']) {
+      svc.blocked.set('S1', code)
+      await act(async () => { window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: 'S1' })) })
+      await turnEnded('S1')
+      expect(svc.selections.get('S1'), code).toMatchObject({ entry: A.id })
+    }
+    expect(clearsSelection('INPUT_CHANGED')).toBe(false)
+    expect([clearsSelection(null), clearsSelection('BUDGET_STOPPED'), clearsSelection('TASK_END_FAILED')]).toEqual([true, true, true])
+    // 到顶结束的那一轮任务是跑了的：清
+    svc.blocked.set('S1', 'BUDGET_STOPPED')
+    await act(async () => { window.dispatchEvent(new CustomEvent(TURN_STARTED, { detail: 'S1' })) })
+    await turnEnded('S1')
+    expect(svc.selections.get('S1')).toMatchObject({ entry: null, skill: null })
   })
 
   it('一秒内连改三次后立刻发（R3、R3b）：写成功之前状态行说"正在保存"，不说已就绪；写完后按最后一次跑', async () => {
@@ -217,11 +251,12 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
     expect(await send('S1')).toBe(B.id)
   })
 
-  it('重启后连发三条（R7、原 W4）：界面显示服务的选择，三条都按它跑', async () => {
+  it('重启后连发三条（R7、原 W4）：界面显示服务的选择，第一条按它跑；结束后回到自由对话，后两条按自由对话跑', async () => {
     await pick(A.id); await flush(600)
     await restart('S1')
-    expect([await send('S1'), await send('S1'), await send('S1')]).toEqual([A.id, A.id, A.id])
     expect(shown()).toBe(A.id)
+    expect([await send('S1'), await send('S1'), await send('S1')]).toEqual([A.id, '自由对话', '自由对话'])
+    expect(shown()).toBe('自由对话')
   })
 
   it('写失败（R8、R12：服务不可用）：红字"任务单没有写成，请重试"、保留下拉框的值，发送被拦下（不按上一张 A 发）；一轮结束的重读不盖掉错误；恢复后点重试写成', async () => {
@@ -527,5 +562,19 @@ describe('输入区任务单：契约 1.2（管到律师改掉为止）', () => 
       expect([shown(), status()]).toEqual([A.id, READY(A.name)])
       expect(await send('S1')).toBe(A.id)
     })
+  })
+})
+
+describe('一轮开始、结束的判定（会话列表的 running）', () => {
+  it('running 由假变真是开始，由真变假是结束；先看开始再看结束，同一次变化不会两样都报', () => {
+    const running = new Map<string, boolean>()
+    const step = (byId: Record<string, { running?: boolean }>) => { const started = turnStarts(running, byId); const ended = turnEnds(running, byId); return { started, ended } }
+    expect(step({ S1: { running: false }, S2: {} })).toEqual({ started: [], ended: [] })
+    expect(step({ S1: { running: true }, S2: {} })).toEqual({ started: ['S1'], ended: [] })
+    expect(step({ S1: { running: true }, S2: { running: true } })).toEqual({ started: ['S2'], ended: [] })
+    expect(step({ S1: { running: false }, S2: { running: true } })).toEqual({ started: [], ended: ['S1'] })
+    // 程序启动时就在跑的会话：算一次开始（之前没见过它）
+    expect(turnStarts(new Map(), { S9: { running: true } })).toEqual(['S9'])
+    expect(choiceKey({ capsuleId: 'a', skill: 's', inputs: ['x'] })).not.toBe(choiceKey({ capsuleId: 'a', skill: 's', inputs: [] }))
   })
 })
