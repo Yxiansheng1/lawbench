@@ -56,7 +56,7 @@ export function VendorCorner() {
   )
 }
 
-/** "技术支持：上海莫来特智能科技有限公司"，带小标志。侧栏收起（wide 为假）时只留标志，全称放在提示里。 */
+/** "技术支持：上海莫莱特智能科技有限公司"，带小标志。侧栏收起（wide 为假）时只留标志，全称放在提示里。 */
 export function VendorLine({ wide = true }: { wide?: boolean }) {
   return (
     <div title={VENDOR_LINE} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', fontSize: 11, color: C.faint, minWidth: 0 }}>

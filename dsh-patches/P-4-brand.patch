@@ -318,7 +318,7 @@ index b3f9e535c9..6413d619ac 100644
 + */
 +export const LAWBENCH_PRODUCT = '连越律师工作台'
 +export const LAWBENCH_FIRM = { zh: '广东连越（深圳）律师事务所', en: 'Guangdong Lianyue (Shenzhen) Law Firm' } as const
-+export const LAWBENCH_VENDOR = { zh: '上海莫来特智能科技有限公司', en: 'Shanghai Morelite Intelligent Technology Co., Ltd.' } as const
++export const LAWBENCH_VENDOR = { zh: '上海莫莱特智能科技有限公司', en: 'Shanghai Morelite Intelligent Technology Co., Ltd.' } as const
 +
  export const en = {
    application: 'Application',
@@ -859,7 +859,7 @@ index 07f5d6ec74..047949555b 100644
 +      type: 'info', title: zh ? '关于 连越律师工作台' : 'About 连越律师工作台', message: '连越律师工作台',
 +      // lawbench P-4：关于面板写律所；"技术支持"一行在技术公司 logo 旁边（用户 N58）
 +      detail: zh ? '版本 V1.0.0\n广东连越（深圳）律师事务所' : 'Version V1.0.0\nGuangdong Lianyue (Shenzhen) Law Firm',
-+      vendor: { label: zh ? '技术支持：上海莫来特智能科技有限公司' : 'Technical support: Shanghai Morelite Intelligent Technology Co., Ltd.',
++      vendor: { label: zh ? '技术支持：上海莫莱特智能科技有限公司' : 'Technical support: Shanghai Morelite Intelligent Technology Co., Ltd.',
 +        logo: 'assets/vendor-logo.png' },
 +      buttons: [zh ? '确定' : 'OK'], cancelId: 0,
      }))

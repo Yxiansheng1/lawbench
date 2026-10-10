@@ -139,7 +139,7 @@ index 6ac9c9c324..fa64481c88 100644
 @@ -22,6 +22,8 @@ const S: Record<string, CSSProperties> = {
  
  /** Vendor line at the page foot (owner order 2026-10-04 11:56 item 2); the logo is P-4's renderer/assets/vendor-logo.png. */
- export const VENDOR_LINE = '技术支持：上海莫来特智能科技有限公司'
+ export const VENDOR_LINE = '技术支持：上海莫莱特智能科技有限公司'
 +/** 读设置本身出错（不是服务回的失败）时的说法（复核 rv-A51 NOTE）。 */
 +export const SETUP_READ_FAILED = '没能读取设置，请关闭后重新打开律师工作台；多次出现请联系技术支持'
  

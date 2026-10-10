@@ -23,13 +23,13 @@ describe('品牌位与技术支持一行', () => {
     expect(box.querySelector('img.lb-logo-dark')!.getAttribute('src')).toBe(FIRM_LOGO_DARK)
     expect(document.getElementById('lb-logo-style')!.textContent).toContain('color-scheme: dark')
   })
-  it('技术支持一行（右下角用它）：小标志＋"技术支持：上海莫来特智能科技有限公司"；收起时只留标志，全称在提示里', async () => {
+  it('技术支持一行（右下角用它）：小标志＋"技术支持：上海莫莱特智能科技有限公司"；收起时只留标志，全称在提示里', async () => {
     await render(createElement(VendorLine, { wide: true }))
-    expect(box.textContent).toBe('技术支持：上海莫来特智能科技有限公司')
+    expect(box.textContent).toBe('技术支持：上海莫莱特智能科技有限公司')
     expect(box.querySelector('img')!.getAttribute('src')).toBe(VENDOR_MARK)
     await act(async () => { root!.render(createElement(VendorLine, { wide: false })) })
     expect(box.textContent).toBe('')
-    expect((box.firstElementChild as HTMLElement).title).toBe('技术支持：上海莫来特智能科技有限公司')
+    expect((box.firstElementChild as HTMLElement).title).toBe('技术支持：上海莫莱特智能科技有限公司')
   })
 
   it('令 1515：右下角常驻一行——固定定位在窗口右下角、不接鼠标（不挡下面的按钮）', async () => {
@@ -38,7 +38,7 @@ describe('品牌位与技术支持一行', () => {
     expect(el.style.position).toBe('fixed')
     expect([el.style.right, el.style.bottom]).toEqual(['12px', '6px'])
     expect(el.style.pointerEvents).toBe('none')
-    expect(el.textContent).toBe('技术支持：上海莫来特智能科技有限公司')
+    expect(el.textContent).toBe('技术支持：上海莫莱特智能科技有限公司')
   })
 })
 

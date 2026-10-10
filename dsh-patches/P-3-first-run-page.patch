@@ -34,7 +34,7 @@ index 8fcde7768a..55cf6fbb56 100644
 +}
 +
 +/** Vendor line at the page foot (owner order 2026-10-04 11:56 item 2); the logo is P-4's renderer/assets/vendor-logo.png. */
-+export const VENDOR_LINE = '技术支持：上海莫来特智能科技有限公司'
++export const VENDOR_LINE = '技术支持：上海莫莱特智能科技有限公司'
 +
 +const toServers = (f: Fields): ServerAddresses => ({
 +  llm_base_url: f.llm.trim(),
@@ -2253,8 +2253,8 @@ index 0000000000..7155984941
 +const page = (): string => renderToStaticMarkup(<Welcome api={{ id: 'zh-CN', getSetup: () => new Promise(() => {}) } as unknown as WelcomeApi} />)
 +
 +describe('首次配置页底部（执行令 2026-10-04 11:56 第 2 条）', () => {
-+  it('常驻"技术支持：上海莫来特智能科技有限公司"一行和技术公司 logo', () => {
-+    expect(VENDOR_LINE).toBe('技术支持：上海莫来特智能科技有限公司')
++  it('常驻"技术支持：上海莫莱特智能科技有限公司"一行和技术公司 logo', () => {
++    expect(VENDOR_LINE).toBe('技术支持：上海莫莱特智能科技有限公司')
 +    expect(page()).toContain(VENDOR_LINE)
 +    expect(page()).toContain('src="assets/vendor-logo.png"')
 +  })

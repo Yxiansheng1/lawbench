@@ -9,6 +9,6 @@ export const PRODUCT_BUILD: string = typeof __LAWBENCH_BUILD__ === 'string' ? __
 /** 界面上显示的版本：有构建号时为"0.1.0+202610081500"（语义化版本的构建元数据写法），覆盖安装后分得清新旧。 */
 export const versionLabel = (build: string = PRODUCT_BUILD): string => (build ? `${PRODUCT_VERSION}+${build}` : PRODUCT_VERSION)
 /** 技术公司全称（执行令 2026-10-04 11:56 第 2 条，用户定）：侧栏底部、首次配置页底部、关于里的"技术支持"一行。 */
-export const VENDOR_NAME = '上海莫来特智能科技有限公司'
+export const VENDOR_NAME = '上海莫莱特智能科技有限公司'
 /** 律所全称（packaging\brand\names.txt 第一行）。 */
 export const FIRM_NAME = '广东连越（深圳）律师事务所'
