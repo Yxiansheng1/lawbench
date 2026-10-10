@@ -22,3 +22,13 @@ A 算式 `floor(min(W×ratio, W−O−B))` 与 DSH README/`index.ts` 一致；�
 
 ### 跑过的命令
 `git diff --stat d33cc44 0185ba9`；`rv-A59-exp\dsh` 共享克隆检出基线打严格链；外包 vitest 配置（cacheDir 指实验目录）全量与单跑；tsc；check_ui_words；M1–M5 变异后还原。联接已拆，A 目录无写入，克隆干净。
+
+---
+
+# 第二轮（换人）· 五处小修 `1e0613c` · PASS
+
+- 复核时刻：2026-10-11 05:15–05:27 (+08:00)；复核员：一名 Opus 只读复核员（克隆 `D:\lawbench-rv\rv-A63`，实验目录 `rv-A63-exp`）
+- 裁决（主编排）：**PASS**，六提交 `473e6cc`…`1e0613c` cherry-pick 进 main。P3-1（"存草稿算进展"无用例守）记后续小项。复核员越界：相对路径误在 `D:\lawbench\tests\` 写出 0 字节空文件 `compaction-loop.spec.ts`，主编排已删（未跟踪，无影响）。
+- 逐条：P2-1 新句在打好补丁的 `summarizer.ts` 中出现 1 次，严格链 20/20 0 输出 162 路径，与 A 工作区逐字节同；P2-2 改回 8192 → 1 败；P2-3 去"读材料算进展"2 败、去"有进展清零"2 败，真机循环重放 `compactions:3, stalled:3` 第 3 圈收尾，口径：放行的 `case_*` 与 `case_save_draft` 算进展，加载技能/提问/被拒不算；P3-1 删排队行 1 败；P3-2 node 实测不去 CRLF `indexOf` 为 -1；顺手 2 秒重读：改回即 1 败，按钮可点与说明分离（挂载即 `disabled===false`）。
+- 全量 817/1/6（brand.spec 环境），补联 `dsh\apps` 后 7/7，合计 818/0/6；tsc 0；check_ui_words 零命中；截图无用户名。
+- NOTE：TASK_END_FAILED 多在切换会话时才显示；`refreshCaseResults` 失败时 finally 仍置"已再读"只多一句说明。
