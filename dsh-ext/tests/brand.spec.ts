@@ -59,6 +59,27 @@ describe('设置"通用"里的当前版本（注记 1706，P-4）', () => {
   })
 })
 
+describe('侧栏品牌位不带版本号（令 1818 第 1 条）', () => {
+  it('侧栏只有产品名（带构建号的版本太长，会把名字挤成"连越…"）；版本号在设置的"关于"里', async () => {
+    const { act, createElement } = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BrandName } = await import('../ui/brand.tsx')
+    const { PRODUCT_NAME, PRODUCT_VERSION } = await import('../shared/product.ts')
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const div = document.createElement('div')
+    const r = createRoot(div)
+    await act(async () => { r.render(createElement(BrandName)) })
+    expect(div.textContent).toBe(PRODUCT_NAME)
+    expect(div.textContent).not.toContain(PRODUCT_VERSION)
+    await act(async () => { r.unmount() })
+    const settings = readFileSync(join(__dirname, '..', 'ui', 'settings.tsx'), 'utf8')
+    expect(settings).toMatch(/<Block title="关于">[\s\S]{0,200}\{PRODUCT_NAME\} \{versionLabel\(\)\}/)
+    expect(readFileSync(join(__dirname, '..', 'ui', 'brand.tsx'), 'utf8')).not.toContain('versionLabel')
+  })
+})
+
 describe('构建号（注记 1432 第 6 条）', () => {
   it('有构建号时显示"0.1.0+<yyyymmddHHMM>"；测试里没经构建，构建号为空、只显示版本', async () => {
     const { PRODUCT_BUILD, PRODUCT_VERSION, versionLabel } = await import('../shared/product.ts')

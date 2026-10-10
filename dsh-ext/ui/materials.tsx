@@ -38,7 +38,8 @@ interface Suggestion { id: string; field: string; value: string; source: string;
 const JOB_WORD: Record<OcrJob['status'], string> = { queued: '排队中', running: '识别中', paused: '已暂停', done: '已完成', cancelled: '已取消', partial_failed: '部分页失败' }
 const PAUSE_WORD: Record<string, string> = { offline: '网络断开', prep_down: '识别服务器不可用', key_invalid: 'Key 无效', app_exit: '软件关闭' }
 
-function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: string }) {
+/** 材料页的内容（已知是哪个案件）；导出给界面用例直接渲染。 */
+export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: string }) {
   const id = caseRef.case_id
   const [mats, reloadMats] = useLoad(() => call<{ materials: Material[] }>('materialsList', { case_id: id }), [id])
   const [jobs, reloadJobs] = useLoad(() => call<{ jobs: OcrJob[] }>('ocrList', { case_id: id }), [id], POLL_MS)

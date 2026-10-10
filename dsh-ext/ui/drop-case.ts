@@ -89,7 +89,7 @@ export async function caseFromFolder(d: DroppedItem, navigate: boolean): Promise
   // 云同步退到"复制到本机"的那条路不在这里扫：复制（/api/materials/import）本身带一次扫描
   return openCase(d.path, null, navigate, false, undefined, {
     onSync: () => copyToLocal(d, name, navigate, kind),
-    onOpened: async (c) => { recordKind(c.case_id, kind); await scanMaterials(c) },
+    onOpened: async (c) => { recordKind(c.case_id, kind); await scanMaterials(c, true) },
   })
 }
 

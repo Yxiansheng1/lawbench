@@ -108,7 +108,7 @@ describe('空白处松手', () => {
     // 令 1651：建成后立刻扫一次（服务登记时不扫描，不扫的话显示"材料 0 份"），结果按材料页"重新扫描"同一句话说
     expect(calls.map((c) => c[0])).toEqual(['dropInfo', 'caseOpen', 'materialsScan'])
     expect(only(calls, 'materialsScan')).toEqual([{ case_id: 'id-李某合同纠纷' }])
-    expect(dialogs().filter((d) => d.kind === 'notice').map((d) => [d.title, d.text])).toEqual([['扫描完成', '新增 2、变化 0、移除 0、失败 0。材料有变化，案件 wiki 和已有成果需要复核。']])
+    expect(dialogs().filter((d) => d.kind === 'notice').map((d) => [d.title, d.text])).toEqual([['扫描完成', '新增 2、变化 0、移除 0、失败 0。']]) // 令 1818 第 2 条：刚建的案件不接"需要复核"那句
   })
 
   it('令 1651：扫描在转进案件之前做完（概览上的材料份数才对）；扫描失败照样建成、说明没扫成', async () => {

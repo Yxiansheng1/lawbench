@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { insideCase, localCaseFolder, localRoot, openableFolder, removableMaterial, safeFolderName, sameFolder, toolExe, type DeskDeps } from '../host/desk-actions.ts'
 import { MATERIAL_REMOVE_ENABLED } from '../shared/feature-flags.ts'
-import { explorerArg } from '../host/desk-node.ts'
+import { explorerArg, nodeDeskDeps, type SpawnFn } from '../host/desk-node.ts'
 import { LawbenchRemote } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
 
@@ -49,6 +49,23 @@ describe('交给资源管理器的路径（第七版待办 16：名字里有逗�
     expect(explorerArg('D:\\案件\\证据=原件\\')).toBe('"D:\\案件\\证据=原件"')
     expect(explorerArg('D:\\案件\\张某 诈骗案')).toBe('"D:\\案件\\张某 诈骗案"')
     expect(explorerArg('D:\\')).toBe('D:\\')
+  })
+
+  it('openPath 的接线（令 1818 第 3 条，rv-A56 P3）：Windows 上起 explorer.exe，参数是加了引号的那一个、按原样传（verbatim）；Mac 上起 open、照常传', async () => {
+    const seen: Array<{ file: string; args: string[]; verbatim: unknown; detached: unknown }> = []
+    const fake: SpawnFn = (file, args, options) => {
+      seen.push({ file, args, verbatim: options.windowsVerbatimArguments, detached: options.detached })
+      const child = { once: (ev: string, fn: () => void) => { if (ev === 'spawn') setTimeout(fn, 0); return child }, unref: () => undefined }
+      return child as unknown as ReturnType<SpawnFn>
+    }
+    await nodeDeskDeps(undefined, 'win32', fake).openPath('D:\\案件\\甲,乙\\成果')
+    await nodeDeskDeps(undefined, 'darwin', fake).openPath('/Users/x/案件/甲,乙')
+    expect(seen[0]!.file.toLowerCase().endsWith('\\explorer.exe')).toBe(true)
+    expect(seen[0]).toMatchObject({ args: ['"D:\\案件\\甲,乙\\成果"'], verbatim: true, detached: true })
+    expect(seen[1]).toMatchObject({ file: 'open', args: ['/Users/x/案件/甲,乙'], verbatim: false })
+    // 小工具照常传参，不走 verbatim
+    await nodeDeskDeps('E:\\law', 'win32', fake).launch('E:\\law\\tools\\splitter\\splitter.exe', [])
+    expect(seen[2]).toMatchObject({ args: [], verbatim: false })
   })
 })
 

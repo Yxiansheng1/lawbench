@@ -177,12 +177,13 @@ export async function runImport(caseRef: CaseRef, paths: string[], target: strin
 /**
  * 重新扫描案件文件夹里的材料（/api/materials/scan），按同一句话说明结果，并让材料列表刷新。
  * 材料页"重新扫描"和"拖文件夹建成案件后"共用（令 1651：建成后原有的文件要扫一次才认得出来）。
+ * @param fresh - 刚建成的案件（令 1818 第 2 条）：不接"案件 wiki 和已有成果需要复核"那句——刚建的案件没有 wiki 和成果。
  * @returns 扫描成了为 true。
  */
-export async function scanMaterials(caseRef: CaseRef): Promise<boolean> {
+export async function scanMaterials(caseRef: CaseRef, fresh = false): Promise<boolean> {
   const r = await call<{ added: number; changed: number; removed: number; failed: number; review_needed: boolean }>('materialsScan', { case_id: caseRef.case_id })
   if (!r.ok) { notice('扫描没有完成', errorText(r.error)); return false }
-  notice('扫描完成', `新增 ${r.value.added}、变化 ${r.value.changed}、移除 ${r.value.removed}、失败 ${r.value.failed}。${r.value.review_needed ? '材料有变化，案件 wiki 和已有成果需要复核。' : ''}`)
+  notice('扫描完成', `新增 ${r.value.added}、变化 ${r.value.changed}、移除 ${r.value.removed}、失败 ${r.value.failed}。${r.value.review_needed && !fresh ? '材料有变化，案件 wiki 和已有成果需要复核。' : ''}`)
   window.dispatchEvent(new CustomEvent('lawbench:materials-changed', { detail: caseRef.case_id }))
   return true
 }
