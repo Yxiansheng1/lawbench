@@ -24,6 +24,7 @@ git -C dsh apply ..\dsh-patches\P-21-home-above-new-session.patch
 git -C dsh apply ..\dsh-patches\P-22-macos.patch
 git -C dsh apply ..\dsh-patches\P-23-windows-payload.patch
 git -C dsh apply ..\dsh-patches\P-24-add-case-adopter.patch
+git -C dsh apply ..\dsh-patches\P-25-checkpoint-is-history.patch
 # P-4 的图片不放进补丁（与 packaging\brand\desktop\ 重复，且二进制补丁约 2MB）：由 packaging\brand\make_brand.py 从 logo\ 原件生成，打补丁后拷进去
 Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 ```
@@ -251,3 +252,11 @@ Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支
 | 补丁 | 改了什么 | 为什么 | 怎么验 |
 |---|---|---|---|
 | P-24 | `packages/client/ui-workspace/src/client/lawbench-adopter.ts`（新）：一个可设、可清的"接手人"（`setLawbenchDirectoryAdopter` / `lawbenchDirectoryAdopter`）。`WorkspacePicker.tsx` 的 `adoptDirectory`：选完文件夹时有接手人就把路径交给它（它做完后只收起选文件夹的流程，不建工作区、不选中），没有接手人照原样 `createWorkspace` 再选中；接手人抛错落在原有的"文件夹出错"框。`navigation.ts` 的 `UiWorkspaceService` 加 `setDirectoryAdopter(adopter)`（我方界面插件经 `ctx.uiWorkspace` 调）。`tests/workspace-picker.client.spec.tsx` 加两例（补丁 `P-24-add-case-adopter.patch`） | 左栏"添加案件"（"+"、Ctrl+O）和选案件菜单里的"添加案件…"是 DSH 原生的添加工作区，P-20 只改了名：直接把文件夹挂成工作区、不经案件登记，律师在里面新建对话被 `session-store` 拒（"这个文件夹还没有作为案件打开…"），按钮成了陷阱（用户 2026-10-10）。这三个入口在 DSH 里都走 `WorkspacePicker` 的 `adoptDirectory` 一处，在这里交给我方即可；DSH 没有现成的插槽能拦这一步 | DSH `ui-workspace` 12 个测试文件 384 项通过、3 项跳过（新两例：有接手人时路径交过去、不建不选；接手人出错进出错框、清掉接手人后恢复原行为）；`tsc -b tsconfig.client.json` 通过。我方 `tests\drop-case.spec.ts`"左栏添加案件"六例（含读 DSH 源码核口子在）。严格补丁链 19 个补丁、161 个路径与工作区逐字节一致。真机见 `docs\plan\evidence\T13\交付说明.md` |
+
+## P-25：上下文压缩的检查点是历史，不是当前要办的事（令 `致A-ORCH-执行令-P0-技能加载与上下文压缩死循环-20261011-0329.md`、注记 `致A-ORCH-注记-P0追加线索-压缩后老问题复活-20261011-0342.md`）
+
+用户真机：同一会话里只发"你好"，模型仍去答早先那句没答完的"那他至少需要判多久"、加载技能、再被压缩，新消息轮不到。DSH 的压缩摘要有"Pending Jobs""Next Step"两节，插回对话时前面那句话让模型"从后面的消息接着做"，没答完的老问题就成了每次压缩后的固定任务。
+
+| 补丁 | 改了什么 | 为什么 | 怎么核 |
+|---|---|---|---|
+| P-25 | `packages/compaction/compaction-basic/src/summarizer.ts` 两处加字，不改结构：① `CHECKPOINT_PREAMBLE`（摘要插回对话时的开头语）后面接一句——检查点里的内容（含 Pending Jobs、Next Step）都是此前各轮的历史，当前请求是检查点之后最新的那条用户消息，先答它，除非它要求否则不要接着做检查点里更早的请求；② `COMPACTION_INSTRUCTION`（写摘要的要求）加一条规则——Pending Jobs、Next Step 只列最近一条用户消息要求的事，更早的、没做完的请求写进 Critical Context 并标明是此前的请求 | 压缩后模型把老问题当成当前任务 | 我方 `dsh-ext/tests/compaction-loop.spec.ts`：读这个源文件，开头语里有"当前请求是最新一条用户消息"的意思、规则里有那一条；DSH 的 `packages/compaction/compaction-basic` 用例照常通过。触发点和剪枝门槛不在这个补丁里（在我方组合包 `dsh-ext/cordis.patch.yml`） |

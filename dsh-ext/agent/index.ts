@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { TOOL_NAMES, toolDescription, toolId, toolParameters, validate } from '../shared/contracts.ts'
 import { CoreClient, type Endpoint, type Logger } from '../shared/core-client.ts'
 import { defaultAppData, makeLogger } from '../shared/file-log.ts'
-import { ALLOWED_OTHER_TOOLS, ASK_USER_TOOL, BUDGET_EXEMPT_TOOL, TaskState, UNFINISHED_TITLE, reasoningEffort, type Budget, type Params } from './task-state.ts'
+import { ALLOWED_OTHER_TOOLS, ASK_USER_TOOL, BUDGET_EXEMPT_TOOL, SKILL_TOOL, TaskState, UNFINISHED_TITLE, reasoningEffort, type Budget, type Params } from './task-state.ts'
 
 export const name = 'lawbench-agent'
 export const inject = ['tools', 'lawbenchCore']
@@ -36,6 +36,8 @@ const snapshot = (sections: Array<{ name: string; text: string }>): UserMessage 
 
 export const DENY_NOT_ALLOWED = '该工具在律师工作台不可用'
 export const DENY_BUDGET = '已达到本次任务的上限，已保存草稿'
+/** 同一个任务里同一个技能加载次数到了上限（令 0329 P0，防"加载 → 压缩 → 又加载"）。 */
+export const DENY_SKILL_RELOAD = '这个技能在本次任务里已经加载过多次，内容没有变化。请不要再加载，直接按已知的步骤继续；内容记不全时用 case_save_draft 先保存已有成果'
 /** 最后一次模型调用发起了存草稿以外的案件工具（令 0321）。 */
 export const DENY_WRAP_UP = '这是本次任务的最后一次调用：只能用 case_save_draft 保存草稿，或直接写出回答'
 /** 到达用量上限（模型调用次数或时间）整轮收尾时记的提示码，见 shared/turn-notices.ts。 */
@@ -76,6 +78,9 @@ export class LegalAgent {
     if (decision.kind === 'reject') return decision
     let state = this.tasks.get(agent.id)
     const added: UserMessage[] = []
+    // 案件卡片和任务输入放在律师这条消息的前面（令 0329 P0 追加线索）：模型看到的最后一条用户消息应当是律师刚发的那句，
+    // 不是我方注入的背景——否则上下文一长，模型容易把背景或摘要里的旧事当成这一轮要办的
+    const lead: UserMessage[] = []
     if (step === 1 && this.caseMoved(agent.id)) return this.rejectMoved(agent.id)
     // 律师改了选择、写任务单明确失败还没重写成：服务那边还是上一张，整轮拒绝（不在第 2 步之后拦：一轮已按取到的任务单开始）
     if (step === 1 && this.sheetHeld(agent.id)) {
@@ -110,7 +115,15 @@ export class LegalAgent {
       if (l1.toc.length) {
         sections.push({ name: '未放入 L1 的输入（用 case_read_input 按序号读取）', text: l1.toc.map((t) => `${t.index}. ${t.title}（约 ${t.tokens} token）`).join('\n') })
       }
-      added.push(snapshot(sections))
+      lead.push(snapshot(sections))
+    }
+    // 令 0329 P0：这个任务里上下文已经压缩了太多次（模型在"读 → 压缩 → 再读"里打转）：不再继续，存稿收尾（同到顶的处理）
+    if (state.compactionLoop) {
+      state.budgetHit = true
+      this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, model_calls: state.modelCalls, stopped: true })
+      await this.saveUnfinished(state)
+      this.noteBlocked(agent.id, BUDGET_STOPPED, state.taskId)
+      return { kind: 'reject' }
     }
     const d = state.beforeModelCall()
     if (d.kind === 'reject') {
@@ -123,7 +136,7 @@ export class LegalAgent {
       return { kind: 'reject' }
     }
     if (d.wrapUp) added.push(notice('lawbench-budget', '立即收尾', state.wrapUpNotice))
-    return added.length ? { ...decision, messages: [...decision.messages, ...added] } : decision
+    return lead.length || added.length ? { ...decision, messages: [...lead, ...decision.messages, ...added] } : decision
   }
 
   /**
@@ -156,13 +169,22 @@ export class LegalAgent {
   }
 
   /** tools/pre-execute：白名单 + 工具预算（Spec 9.2、Q10）。 */
-  preTool(agentId: string | undefined, toolName: string): PreToolDecision {
+  preTool(agentId: string | undefined, toolName: string, args?: unknown): PreToolDecision {
     if (!ALLOWED_OTHER_TOOLS.has(toolName) && !/^case_[a-z_]+$/.test(toolName)) {
       this.log('warn', 'agent.tool_not_allowed', { tool: toolName }) // Spec 3.1：出现这条日志说明有工具漏进来
       return { kind: 'deny', reason: DENY_NOT_ALLOWED }
     }
     // 等律师回答必问问题：暂停本任务的时长计时，下一次模型调用时恢复（PRD F-RUN-05、Spec 9.2；令 1117 注记 11:28）
     if (toolName === ASK_USER_TOOL) { if (agentId) this.tasks.get(agentId)?.pause() }
+    // 令 0329 P0：同一个任务里反复加载同一个技能（压缩把它剪掉、摘要掉后模型又去加载）——到上限后拒绝，让模型往下走
+    if (toolName === SKILL_TOOL) {
+      const task = agentId ? this.tasks.get(agentId) : undefined
+      const skill = (args as { name?: unknown } | null | undefined)?.name
+      if (task && !task.beforeSkillLoad(typeof skill === 'string' ? skill : '').allow) {
+        this.log('warn', 'agent.skill_reload_loop', { model_calls: task.modelCalls, compactions: task.compactions })
+        return { kind: 'deny', reason: DENY_SKILL_RELOAD }
+      }
+    }
     if (ALLOWED_OTHER_TOOLS.has(toolName)) return { kind: 'allow' }
     const state = agentId ? this.tasks.get(agentId) : undefined
     if (!state) return { kind: 'deny', reason: DENY_NO_TASK }
@@ -197,6 +219,9 @@ export class LegalAgent {
       const all = state.addReply(text)
       if (all === undefined) return
       await this.core.call('progress', { task_id: state.taskId, text: all, model_calls: state.modelCalls, tool_calls: state.toolCalls })
+    } else if (event.type === 'compaction/summary') {
+      // 上下文被压缩了一次（令 0329 P0）：记数；超过上限时记一条，下一步收尾
+      if (state.noteCompaction()) this.log('warn', 'agent.compaction_loop', { compactions: state.compactions, model_calls: state.modelCalls })
     } else if (event.type === 'turn/end') {
       this.tasks.delete(sessionId)
       await this.core.call('task/end', {
@@ -258,8 +283,8 @@ export function apply(ctx: Ctx, config: Config = {}): void {
   ctx.on('agent/request', (async (payload: { agent: AgentLike }, next: () => Promise<LlmCallConfig>) =>
     agent.request(payload.agent.id, await next())) as never)
 
-  ctx.on('tools/pre-execute', (async (exec: { name: string; agent?: { id: string } }, next: () => Promise<PreToolDecision>) => {
-    const mine = agent.preTool(exec.agent?.id, exec.name)
+  ctx.on('tools/pre-execute', (async (exec: { name: string; arguments?: unknown; agent?: { id: string } }, next: () => Promise<PreToolDecision>) => {
+    const mine = agent.preTool(exec.agent?.id, exec.name, exec.arguments)
     return mine.kind === 'allow' ? next() : mine
   }) as never, { prepend: true })
 

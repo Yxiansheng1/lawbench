@@ -1,0 +1,22 @@
+diff --git a/packages/compaction/compaction-basic/src/summarizer.ts b/packages/compaction/compaction-basic/src/summarizer.ts
+index 2d258fa410..8f15a557fa 100644
+--- a/packages/compaction/compaction-basic/src/summarizer.ts
++++ b/packages/compaction/compaction-basic/src/summarizer.ts
+@@ -62,6 +62,8 @@ const COMPACTION_INSTRUCTION = [
+   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
+   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
+   '- Do NOT mention this summarization request or that the context was compacted.',
++  // lawbench P-25: an old unanswered question must not read as the standing task after every compaction.
++  '- Under "Pending Jobs" and "Next Step" list only work the MOST RECENT user message asks for. A request from an earlier user message that was not completed goes under "Critical Context", marked as an earlier request.',
+   '- Output only the checkpoint text: do not call any tool or take any other action.',
+   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
+ ].join('\n')
+@@ -69,6 +71,8 @@ const COMPACTION_INSTRUCTION = [
+ /** Framing that makes the replacement user message established context. */
+ const CHECKPOINT_PREAMBLE =
+   'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.'
++  // lawbench P-25: the checkpoint is history, not the current request (see dsh-patches/PATCHES.md).
++  + ' Everything inside this checkpoint is history from earlier turns, including its "Pending Jobs" and "Next Step" sections. The current request is the latest user message after this checkpoint: answer that message, and do not resume an earlier request from the checkpoint unless that message asks for it.'
+ 
+ /**
+  * The replayed conversation surface the summarizer condenses. Reproducing the

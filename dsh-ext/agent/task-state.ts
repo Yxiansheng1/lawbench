@@ -21,6 +21,15 @@ export const WRAP_UP_TWO_LEFT = `${WRAP_UP_TEXT}你只剩两次机会：先调�
 export const UNFINISHED_SUFFIX = '（未完成）'
 export const UNFINISHED_TITLE = `本次回答${UNFINISHED_SUFFIX}`
 
+/** 加载技能的 DSH 工具。 */
+export const SKILL_TOOL = 'skill'
+/**
+ * 防"加载技能 → 压缩 → 又加载"的循环（令 0329 P0）：同一个任务里同一个技能最多加载这么多次（压缩把它摘要掉后允许再加载，但不能没完没了）；
+ * 一个任务里上下文压缩超过这么多次就收尾（存稿、结束），不再让模型一圈一圈地转。
+ */
+export const MAX_SKILL_LOADS = 3
+export const MAX_COMPACTIONS = 3
+
 export type ToolDecision = { allow: true } | { allow: false; reason: string }
 export type StepDecision = { kind: 'continue'; wrapUp: boolean } | { kind: 'reject'; reason: string }
 
@@ -40,6 +49,10 @@ export class TaskState {
   wrapUpNotice: string = WRAP_UP_TEXT
   /** 这个任务存过草稿没有（模型自己存的，或到顶时代存的）。 */
   draftSaved = false
+  /** 各技能在这个任务里加载过几次。 */
+  private readonly skillLoads = new Map<string, number>()
+  /** 这个任务里上下文被压缩（摘要）过几次。 */
+  compactions = 0
 
   constructor(
     readonly taskId: string,
@@ -94,6 +107,26 @@ export class TaskState {
     }
     return { kind: 'continue', wrapUp: false }
   }
+
+  /**
+   * 模型要加载技能：同一个技能加载到上限后拒绝（不计数）。
+   * @param skill - 技能名；读不到名字的按同一个算。
+   */
+  beforeSkillLoad(skill: string): ToolDecision {
+    const n = this.skillLoads.get(skill) ?? 0
+    if (n >= MAX_SKILL_LOADS) return { allow: false, reason: 'skill_reload' }
+    this.skillLoads.set(skill, n + 1)
+    return { allow: true }
+  }
+
+  /** 上下文被压缩了一次（会话事件 compaction/summary）。@returns 这个任务里压缩是不是已经超过上限。 */
+  noteCompaction(): boolean {
+    this.compactions += 1
+    return this.compactionLoop
+  }
+
+  /** 压缩次数超过上限：下一步收尾（存稿、结束任务）。 */
+  get compactionLoop(): boolean { return this.compactions > MAX_COMPACTIONS }
 
   /** 现在是不是最后一次模型调用之后（它发起的工具只许存草稿，令 0321）。 */
   get lastCall(): boolean { return this.modelCalls >= this.budget.model_calls }
