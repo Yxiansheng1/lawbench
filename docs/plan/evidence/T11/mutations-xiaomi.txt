@@ -1,3 +1,8 @@
 # 换 Xiaomi-OCR-0：提示词模板红绿（2026-10-10）
 改坏：模板选择一律 default → 红｜1 failed, 5 passed in 7.77s
 复原 → prep395 全部用例｜94 passed, 1 warning in 53.18s
+
+# OTSL 转 Markdown 红绿（2026-10-10）
+改坏：xiaomi 模板不做转换 → 红｜1 failed, 8 passed in 8.76s
+改坏：default 模板也转 → 红｜1 failed, 8 passed in 8.83s
+复原 → prep395 全部用例｜97 passed, 1 warning in 50.46s

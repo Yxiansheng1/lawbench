@@ -70,3 +70,10 @@ $plain = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServi
 - **本版去水印未启用**：`dewatermark=true` 照常接受（契约不变），但图片原样送识别，`return_image=true` 返回的图与不勾选时逐像素相同。原因：扫描页上的浅灰手写（如铅笔批注）与水印靠像素统计分不开，启用会把手写一起抹掉。算法保留在 `prep395\dewatermark.py`（开关常量 `DEWATERMARK_ENABLED = False`，不做成配置项），测量数据见 `docs\plan\evidence\T6\p2a-measure.txt`。
 
 部署（WinSW 服务、专用账号、防火墙、llama-server 参数）在 T11 做。
+
+## 识别模型的已知限制（Xiaomi-OCR-0，2026-10-10 起）
+
+- **页眉页脚不识别**：模型卡规定的提示词让它忽略页眉页脚，页眉里的案号、法院名和页脚的页码不会出现在识别结果里（实测，`docs\plan\evidence\T11\g5-xiaomi.md`）。已定为已知限制，不做第二遍识别；引用的页号按 PDF 页序编，不受影响。
+- **表格**：模型输出 OTSL 标记，`backends.otsl_to_markdown` 转成 Markdown 表格后再返回；合并单元格按空单元格处理。
+- **"看不清"标注**：专用模型不按指令写 ■ / [看不清]，`unclear` 恒为 0。
+- 换回 PaddleOCR-VL：`PREP395_OCR_MODEL` 改回原文件名即用原提示词、不做 OTSL 转换（`deploy\操作单-换Xiaomi-OCR-0.md` 第 5 节）。

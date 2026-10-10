@@ -113,3 +113,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\prep395\src\prep395\deplo
 4. `C:\prep395\llama\llama-server.exe --help | Select-String "log-disable|no-webui|-np"`，确认这三个参数还在。少了哪个，照 README 第 51 行的说明从 `install.ps1` 里去掉哪个。
 5. 重跑第 3 步。
 - 回退：停服务，把 `llama-b11269` 改回 `llama`，重跑第 5 节。
+
+## 更新源码（不换模型，例如 2026-10-10 加的 OTSL 表格转 Markdown）
+
+只改了 prep395 的代码、模型和服务参数都不变时，不用重跑 `install.ps1`。在 395 上管理员 PowerShell：
+
+```powershell
+# 1) 把开发机仓库（main）的 prep395\ 目录覆盖到 C:\prep395\src\prep395\（scp 或 U 盘，同第 2 节）
+# 2) 重新装进服务用的 Python。只覆盖源码目录不会生效：服务跑的是装进 C:\prep395\python 里的那一份（install.ps1 也是这样装的）
+C:\prep395\python\python.exe -m pip install --no-warn-script-location --upgrade C:\prep395\src\prep395
+# 预期：最后一行 Successfully installed prep395-<版本>
+# 3) 重启识别服务（WinSW 的 restart 子命令；两个 llama-server 不用动）
+C:\prep395\services\prep395.exe restart
+```
+
+验证：
+
+```powershell
+Select-String -Path C:\prep395\python\Lib\site-packages\prep395\backends.py -Pattern "otsl_to_markdown" | Select-Object -First 1
+# 预期：有一行输出（装进去的是新代码；查的是 site-packages 里那份，不是源码目录）
+(Get-Service prep395).Status                                   # 预期 Running
+Invoke-RestMethod http://192.168.8.124:9000/health             # 预期 status ok、ocr ok、llm9b ok
+```
+
+- 回退：把上一版源码覆盖回 `C:\prep395\src\prep395\`，重做上面三步。
+- `prep395.exe restart` 报错时用 `Restart-Service prep395`，效果相同。

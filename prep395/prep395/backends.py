@@ -30,9 +30,57 @@ XIAOMI_OCR_PROMPT = (
 # 识别提示词模板，按 PREP395_OCR_MODEL（模型名或 GGUF 文件名）选：名字里带 xiaomi 的用模型卡的写法（图在前、提示词在后），
 # 其余用 default（PaddleOCR-VL 等通用视觉模型沿用的中文提示词）。换回原模型只要把 PREP395_OCR_MODEL 改回去。
 OCR_TEMPLATES = {
-    "default": {"prompt": OCR_PROMPT, "image_first": False},
-    "xiaomi-ocr-0": {"prompt": XIAOMI_OCR_PROMPT, "image_first": True},
+    "default": {"prompt": OCR_PROMPT, "image_first": False, "otsl": False},
+    "xiaomi-ocr-0": {"prompt": XIAOMI_OCR_PROMPT, "image_first": True, "otsl": True},
 }
+
+# Xiaomi-OCR-0 的表格是 OTSL 标记（2026-10-10 在 395 实测）：<fcel>内容 是一个单元格，<ecel> 空单元格，<nl> 一行结束，
+# <lcel>/<ucel>/<xcel> 是向左、向上、对角合并的占位，<ched>/<rhed>/<srow> 是表头类单元格；没有外层标签。
+_OTSL_CELL = re.compile(r"<(fcel|ecel|lcel|ucel|xcel|ched|rhed|srow)>")
+_OTSL_WITH_TEXT = ("fcel", "ched", "rhed", "srow")
+
+
+def otsl_to_markdown(md: str) -> str:
+    """把识别结果里连续的 OTSL 行转成 Markdown 表格：首行当表头；合并占位和空单元格留空；单元格里的 | 转义；
+    各行列数不齐按最长补空；表格前后各留一个空行。没有 OTSL 标记的文本原样返回。"""
+    if not _OTSL_CELL.search(md):
+        return md
+    out: list[str] = []
+    buf: list[str] = []
+    after_table = False
+
+    def flush() -> None:
+        nonlocal after_table
+        rows = []
+        for r in "".join(buf).split("<nl>"):
+            parts = _OTSL_CELL.split(r)[1:]            # [标记, 内容, 标记, 内容, …]
+            if parts:
+                rows.append([parts[i + 1].strip().replace("|", "\\|") if parts[i] in _OTSL_WITH_TEXT else ""
+                             for i in range(0, len(parts), 2)])
+        buf.clear()
+        if not rows:
+            return
+        n = max(len(r) for r in rows)
+        table = ["| " + " | ".join(r + [""] * (n - len(r))) + " |" for r in rows]
+        table.insert(1, "|" + "---|" * n)
+        if out and out[-1].strip():
+            out.append("")
+        out.extend(table)
+        after_table = True
+
+    for line in md.split("\n"):
+        if _OTSL_CELL.search(line):
+            buf.append(line.strip())
+            continue
+        if buf:
+            flush()
+        if after_table and line.strip():
+            out.append("")
+        after_table = False
+        out.append(line)
+    if buf:
+        flush()
+    return "\n".join(out)
 
 
 def ocr_template_name(model: str) -> str:
@@ -181,7 +229,8 @@ class LlamaServerBackend:
         t = OCR_TEMPLATES[self.ocr_template]
         text, image = {"type": "text", "text": t["prompt"]}, {"type": "image_url", "image_url": {"url": url}}
         content = [image, text] if t["image_first"] else [text, image]
-        return await self._chat(self.ocr_url, self.ocr_model, content, 4096)
+        md = await self._chat(self.ocr_url, self.ocr_model, content, 4096)
+        return otsl_to_markdown(md) if t["otsl"] else md
 
     async def extract_fields(self, text: str, fields: list[str]) -> list[dict]:
         out = await self._chat(self.llm9b_url, self.llm9b_model,

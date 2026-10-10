@@ -94,6 +94,49 @@ def test_ocr_template_xiaomi_uses_model_card_prompt():
     assert body["chat_template_kwargs"] == {"enable_thinking": False} and body["temperature"] == 0
 
 
+# 2026-10-10 在 395 上 Xiaomi-OCR-0 对一页虚构扣押清单的真实输出（evidence\T11\g5-xiaomi.md 第三节），原样
+REAL_OTSL = ("## 扣押物品清单\n\n被扣押人：张某甲 扣押时间：2026年3月12日\n\n下列物品已依法扣押，清单如下：\n\n"
+             "<fcel>序号<fcel>物品名称<fcel>数量<fcel>备注<nl><fcel>1<fcel>手机（黑色）<fcel>1部<fcel>已封存<nl>"
+             "<fcel>2<fcel>银行卡<fcel>3张<fcel>尾号4417、8802、0935<nl><fcel>3<fcel>现金<fcel>人民币86,420元<ecel><nl>"
+             "<fcel>4<fcel>笔记本电脑<fcel>1台<fcel>已封存<nl>\n\n以上物品经当场清点无误。\n\n见证人：李某丁")
+REAL_TABLE = ("| 序号 | 物品名称 | 数量 | 备注 |\n|---|---|---|---|\n| 1 | 手机（黑色） | 1部 | 已封存 |\n"
+              "| 2 | 银行卡 | 3张 | 尾号4417、8802、0935 |\n| 3 | 现金 | 人民币86,420元 |  |\n| 4 | 笔记本电脑 | 1台 | 已封存 |")
+
+
+def _ocr_reply(model: str, reply: str) -> str:
+    app = fake_llama(reply)
+    with ServerThread(app) as s:
+        be = LlamaServerBackend(s.url, s.url, ocr_model=model)
+
+        async def go():
+            md = await be.ocr(png_bytes(size=(20, 30)))
+            await be.aclose()
+            return md
+
+        return asyncio.run(go())
+
+
+def test_xiaomi_otsl_table_becomes_markdown():
+    """xiaomi 模板：真实 OTSL 片段转成 Markdown 表格（首行表头、<ecel> 留空），表格前后各一个空行，其余文字不动。"""
+    md = _ocr_reply("Xiaomi-OCR-0.BF16.gguf", REAL_OTSL)
+    assert md == ("## 扣押物品清单\n\n被扣押人：张某甲 扣押时间：2026年3月12日\n\n下列物品已依法扣押，清单如下：\n\n"
+                  + REAL_TABLE + "\n\n以上物品经当场清点无误。\n\n见证人：李某丁")
+    assert "<fcel>" not in md and "<nl>" not in md
+
+
+def test_text_without_table_unchanged_and_default_template_not_converted():
+    plain = "讯问笔录\n\n问：你是否认识吴某？\n答：认识。a < b，x|y"
+    assert _ocr_reply("Xiaomi-OCR-0.BF16.gguf", plain) == plain            # 没有 OTSL：一个字不动
+    assert _ocr_reply("PaddleOCR-VL-1.6.gguf", REAL_OTSL) == REAL_OTSL      # default 模板：不转
+
+
+def test_otsl_merge_marks_pipe_escape_and_ragged_rows():
+    """合并占位（<lcel>/<ucel>/<xcel>）按空单元格；单元格里的 | 转义；列数不齐按最长补空；紧挨文字时补空行。"""
+    from prep395.backends import otsl_to_markdown
+    got = otsl_to_markdown("前文\n<fcel>项目|说明<lcel><fcel>金额<nl><fcel>甲<ucel><xcel><nl><fcel>乙<nl>\n后文")
+    assert got == "前文\n\n| 项目\\|说明 |  | 金额 |\n|---|---|---|\n| 甲 |  |  |\n| 乙 |  |  |\n\n后文"
+
+
 def test_extract_parses_json_in_code_fence():
     app = fake_llama('```json\n[{"field": "金额", "value": "80,000", "loc": "第2页"}]\n```')
     with ServerThread(app) as s:
