@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 令 1422（第七版待办 20）：首页空白处拖入文件夹 = 建案件；拖到案件卡片仍是加进该案的材料。
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
@@ -8,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { droppedItems } from '../host/desk-actions.ts'
 import { BLANK_OVER_MS, HomeLanding } from '../ui/home-page.tsx'
 import { DialogHost } from '../ui/dialogs.tsx'
-import { ASK_OK, askTitle, badCaseName, BLANK_HINT, cardHint, dropOnBlank, FILE_TEXT, NAME_TITLE, readKind, SYNC_DROP_OK, SYNC_DROP_TITLE, type DroppedItem } from '../ui/drop-case.ts'
+import { ASK_OK, askTitle, badCaseName, BLANK_HINT, cardHint, dropOnBlank, FILE_TEXT, NAME_TITLE, readKind, ROOT_TEXT, SYNC_DROP_OK, SYNC_DROP_TITLE, type DroppedItem } from '../ui/drop-case.ts'
 import { app, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
 
@@ -61,6 +61,18 @@ describe('Host：看拖进来的是什么（真文件系统）', () => {
     const a = join(tmp, '甲案'); mkdirSync(join(a, '证据'), { recursive: true }); writeFileSync(join(a, '合同.pdf'), 'x'); writeFileSync(join(a, '.DS_Store'), 'x')
     const b = join(tmp, '乙案'); mkdirSync(join(b, '工作区', 'wiki'), { recursive: true }); mkdirSync(join(b, '成果')); writeFileSync(join(b, '起诉状.docx'), 'x')
     const f = join(tmp, '单个.pdf'); writeFileSync(f, 'x')
+    // 复核 rv-A55 P2-1：只有一个叫"工作区"的子文件夹不算当过案件；有 case.db 或 wiki 才算
+    const c = join(tmp, '丙案'); mkdirSync(join(c, '工作区', '草稿'), { recursive: true })
+    const d = join(tmp, '丁案'); mkdirSync(join(d, '工作区'), { recursive: true }); writeFileSync(join(d, '工作区', 'case.db'), 'x')
+    const more = droppedItems([c, d]) as { value: DroppedItem[] }
+    expect(more.value.map((x) => [x.kind, x.has_case])).toEqual([['dir', false], ['dir', true]])
+    // 复核 rv-A55 P3-1：真实存在的文件夹，换成设备路径、本机管理共享的写法也不收（没有 plainAbsolute 守卫时 lstat 会成功、判成文件夹）
+    const device = '\\\\?\\' + a
+    const share = '\\\\localhost\\' + a[0] + '$' + a.slice(2)
+    expect(existsSync(device)).toBe(true)
+    expect((droppedItems([device, share]) as { value: DroppedItem[] }).value.map((x) => x.kind)).toEqual(['other', 'other'])
+    const lnk = join(tmp, '甲案 - 快捷方式.lnk'); writeFileSync(lnk, 'x')
+    expect((droppedItems([lnk]) as { value: DroppedItem[] }).value[0]!.kind).toBe('other')
     const r = droppedItems([a, b, f, join(tmp, '没有'), '\\\\fs01\\案卷\\丙', '相对\\路径'])
     if (!r.ok) throw new Error('应当成功')
     expect(r.value.map((x) => x.kind)).toEqual(['dir', 'dir', 'file', 'other', 'other', 'other'])
@@ -97,8 +109,11 @@ describe('空白处松手', () => {
     const p = dropOnBlank([DIR])
     await tick()
     last()!.resolve!(null)
+    app.set((s) => ({ ...s, dialogs: s.dialogs.filter((d) => d.kind !== 'newCase') }))
     expect(await p).toEqual([])
     expect(only(calls, 'caseOpen')).toEqual([])
+    // 复核 rv-A55 P3-2：取消就是取消，不弹任何说明（取消被当成出错时这里会多一个 notice）
+    expect(dialogs()).toEqual([])
   })
 
   it('单个或多个文件：不建案件，提示拖到案件卡片或先新建；文件夹和文件混拖只处理文件夹', async () => {
@@ -139,6 +154,21 @@ describe('空白处松手', () => {
     expect(made.map((c) => c.root)).toEqual([DIR, OLD])
     expect(dialogs().some((d) => d.kind === 'newCase')).toBe(false)
     expect(only(calls, 'caseOpen')).toEqual([{ path: DIR, template: null }, { path: OLD, template: null }])
+  })
+
+  it('里面只有一个"工作区"子文件夹（Host 回 has_case 为 false）：照样弹确认框，不直接登记（复核 rv-A55 P2-1）；盘根不问、直接说明', async () => {
+    let calls = setup([dir(DIR, { has_case: false, children: [`${DIR}\\合同.pdf`] })])
+    const p = dropOnBlank([DIR])
+    await tick()
+    expect(last()).toMatchObject({ kind: 'newCase', name: '李某合同纠纷' })
+    expect(only(calls, 'caseOpen')).toEqual([])
+    last()!.resolve!(null)
+    await p
+    app.set((s) => ({ ...s, dialogs: [] }))
+    calls = setup([{ path: 'D:\\', name: '', kind: 'dir', has_case: false, children: [] }])
+    expect(await dropOnBlank(['D:\\'])).toEqual([])
+    expect(dialogs().map((d) => [d.kind, d.text])).toEqual([['notice', ROOT_TEXT]])
+    expect(only(calls, 'caseOpen')).toEqual([])
   })
 
   it('文件夹名是工作台自用的名字或 Windows 保留名：说明要改名，不建', async () => {

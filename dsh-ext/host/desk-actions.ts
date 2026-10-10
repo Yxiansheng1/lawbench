@@ -216,7 +216,7 @@ export interface DroppedItem {
   name: string
   /** dir：普通文件夹；file：文件；other：链接、联接、不存在、网络路径或相对路径（都不能建案件）。 */
   kind: 'dir' | 'file' | 'other'
-  /** 文件夹里已有 工作区\（以前当过案件）。 */
+  /** 以前当过案件：里面有 工作区\case.db（服务认的）或 工作区\wiki。只有一个叫"工作区"的子文件夹不算（复核 rv-A55 P2-1）。 */
   has_case: boolean
   /** 顶层各项的绝对路径（不含以 . 开头的和 工作区、成果）；"复制到本机建案件"时逐项交给 /api/materials/import。超过上限为 null。 */
   children: string[] | null
@@ -248,13 +248,17 @@ export function droppedItems(paths: unknown, fs: DropFs = nodeDropFs): { ok: tru
     if (!plainAbsolute(path)) return item
     const st = fs.lstat(path)
     if (!st || st.isSymbolicLink()) return item
-    if (st.isFile()) return { ...item, kind: 'file' }
+    // 快捷方式（.lnk，可能指向文件夹）按"其他"说明，不按普通文件说（复核 rv-A55 顺手项）
+    if (st.isFile()) return { ...item, kind: extname(path).toLowerCase() === '.lnk' ? 'other' : 'file' }
     if (!st.isDirectory()) return item
     let names: string[]
     try { names = fs.readdir(path) } catch { return item }
     const work = fs.lstat(join(path, '工作区'))
+    const plainDir = (s: ReturnType<DropFs['lstat']>) => !!s && s.isDirectory() && !s.isSymbolicLink()
+    const db = fs.lstat(join(path, '工作区', 'case.db'))
+    const wasCase = plainDir(work) && ((!!db && db.isFile() && !db.isSymbolicLink()) || plainDir(fs.lstat(join(path, '工作区', 'wiki'))))
     const kept = names.filter((n) => !n.startsWith('.') && !reserved.has(n)).sort()
-    return { ...item, kind: 'dir', has_case: !!work && work.isDirectory() && !work.isSymbolicLink(), children: kept.length > MAX_DROP_CHILDREN ? null : kept.map((n) => join(path, n)) }
+    return { ...item, kind: 'dir', has_case: wasCase, children: kept.length > MAX_DROP_CHILDREN ? null : kept.map((n) => join(path, n)) }
   })
   return { ok: true, value: out }
 }

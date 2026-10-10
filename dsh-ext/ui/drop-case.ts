@@ -29,6 +29,9 @@ export const NO_PATH_TEXT = '拖进来的内容没有本机路径，请从资源
 export const OTHER_TITLE = '这一项不能建成案件'
 export const OTHER_TEXT = '快捷方式、链接和网络位置上的文件夹不能建成案件，请拖本机上的文件夹本身。'
 export const NAME_TITLE = '这个文件夹名不能当案件名'
+export const ROOT_TEXT = '不能把整个盘当成案件。请拖盘里的某个文件夹进来。'
+/** 盘根（D:\\）：不问，直接说明（否则先问"把『D:』建成案件？"再被服务拒，复核 rv-A55 顺手项）。 */
+export const isDriveRoot = (path: string): boolean => /^[A-Za-z]:[\\/]*$/.test(path)
 export const nameText = (name: string): string => `"${name}"是工作台或 Windows 自己要用的名字。请给文件夹换个名字，再拖进来。`
 export const SYNC_DROP_TITLE = '这个文件夹在云同步目录里，不能直接当案件'
 export const syncDropText = (name: string): string =>
@@ -76,6 +79,7 @@ export async function caseFromFolder(d: DroppedItem, navigate: boolean): Promise
   // 第 6 条：已登记的、以前当过案件的直接打开，不问
   const known = app.get().cases.find((c) => samePath(c.root, d.path))
   if (known || d.has_case) return openCase(d.path, null, navigate, false)
+  if (isDriveRoot(d.path)) { notice(OTHER_TITLE, ROOT_TEXT); return undefined }
   const name = d.name || folderName(d.path)
   if (badCaseName(name)) { notice(NAME_TITLE, nameText(name)); return undefined }
   const kind = await askNewCase(name)
