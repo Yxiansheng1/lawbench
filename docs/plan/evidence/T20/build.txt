@@ -379,3 +379,36 @@ versions.lock 由 lock 步重生成，变一行：retainer 3.4.1 → 3.4.1-lawbe
     <用户目录>\连越律师工作台\日常事务（冒烟前就有）没有动
 说明：为了让对话顶上出现"切换案件"，在"日常事务"里发了一句"你好"。这一轮没有答成（SERVER_UNREACHABLE）：
     当时本机到 6000D 的所内、所外两个地址的 8000 端口都连不上（21:38 开发版里还答得出）。对话照样建成，下拉照常出现，不影响这项核对。
+
+
+==== 第八版候选包（令 致A-ORCH-执行令-打第八版并做律师走查-20261011-0522）· 2026-10-11 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库；out\ 只有这一版）
+  大小 655984879 B（626 MB）
+  sha256 75e592d590e20022bbd048541baccbcdd35be65d39c196bfff2e1c58f9251d30
+  未签名
+基座 main 75e65f9（rebase 后 HEAD 与 main 一致，没有加改动；第二批 line-A-batch2 没有进）。LAWBENCH_BUILD_STAMP=202610110524，界面版本号 0.1.0+202610110524。
+05:24 起，05:42 完成。打法同前。package 一步 890 s，smalltools 78 s，signcheck 13 s。
+运行时 npm 锁 323/323；electron 缓存 9 个文件、未新增；签名 339 个 210 个无有效签名（同前）；DSH 打包后冒烟通过（frontend and plugin route passed）。
+打包前严格补丁链：20 个补丁、162 个路径、0 处不同（普通和 --whitespace=error-all 两种）。
+
+冒烟
+一、全新安装：/S /D=D:\lawbench-smoke7，退出 0，50 s；布局全在（contracts\VERSION 为 1.4）；24746 个文件、2108 MB；无 primary-runtime；installer-cache 不在；
+    两个模拟原版 marker 不变；开始菜单三项指向正确；python -I stderr utf-8、3.12.10
+    首次配置页"测试连接"：模型服务器（6000D）已连接（所外），识别服务器（395）已连接（所外）
+    三处公司名都是"上海莫莱特智能科技有限公司"：
+      首次配置页（smoke-第八版-首次配置页-公司名.png）
+      首页右下角（smoke-第八版-首页-右下角公司名.png）
+      设置"关于"，同处版本号 0.1.0+202610110524（smoke-第八版-设置关于-公司名与版本号.png）
+    卸载 /S 退出 0、9 s，各项干净，marker 仍在
+二、第七版覆盖装：装第七版（5bd02f55…，app.asar e1def883…f54ed8，contracts\VERSION 1.3）→ 填"测试律师"、打开"甲,乙买卖合同纠纷（虚构）"
+    → 不卸载装本包（退出 0，56 s）→ 不出首次配置页，律师姓名、案件都在（材料 3 份、成果 1 份照旧）；contracts\VERSION 变 1.4；
+    服务起来（service.state running，自检各项 ok），没有"组件版本不一致"的提示；装上的 app.asar 6e4c6db8…d54936 等于构建出的那份；
+    设置"关于"版本号 0.1.0+202610110524（smoke-第八版-覆盖第七版后-关于.png）
+    卸载 /S 退出 0、10 s
+    第七版安装包取自 D:\连越律所Ai工作台使用教程和安装包\（只读取、核过 sha256），复制到 D:\lawbench-smoke-old\lawbench-v7.exe 用
+三、律师走查（冒烟清单"发包前律师走查"8 项）：在全新安装的包上做，真服务，6000D、395 都走所外地址；案件是 tests\fixtures\criminal-01 复制到桌面的"刑事走查（虚构）"。
+    截图 走查-202610110524\（共 20 张，无用户名）。结果：7 项过，第 3 项生成 wiki 用了 8 分 19 秒，超过 2 分钟。逐项见 交付说明.md。
+    没有任何一次"模型调用次数用完"，没有循环；会话记录里没有压缩事件。
+收尾：删掉冒烟写的 settings.json、cases.json、daily-case.json、案件根名单.json、hidden-cases.json、两个 marker 目录里的 marker.txt、桌面的走查案件文件夹；
+    <用户目录>\连越律师工作台\日常事务（冒烟前就有）没有动；%LOCALAPPDATA%\lawbench 下冒烟前就有的 capsules.json、dsh-documents、logs 没有动
+    回收站里留着走查移除的两份虚构材料（转账截图.jpg、现场勘验图文.pdf），没有清
