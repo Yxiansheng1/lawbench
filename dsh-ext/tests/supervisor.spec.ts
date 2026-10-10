@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { PORT_CATEGORIES, portFailure, portText, Supervisor, startFailureText, type ChildHandle } from '../host/supervisor.ts'
-import { unavailableText } from '../host/index.ts'
+import { unavailableText, VERSION_MISMATCH } from '../host/index.ts'
 import { CONTRACT_VERSION } from '../shared/contracts.ts'
 
 const FAKE = join(__dirname, '..', 'dev', 'fake-service.mjs')
@@ -97,6 +97,18 @@ describe('看护：策略（模拟进程）', () => {
     }
     return { deps, spawned, events }
   }
+
+  it('版本对不上（如 1.4 的客户端配了 1.3 的服务，rv 1.4 客户端 P3-3）：停在 version_mismatch，律师看到"组件版本不一致，请重新安装律师工作台"，不是"稍后重试"', async () => {
+    const { deps, events } = simDeps([])
+    const s = new Supervisor({ ...deps, expectedVersion: '1.4' }) // 服务（probe）报的是 1.1
+    await s.start()
+    await waitFor(() => s.state === 'version_mismatch')
+    expect(events).toContain('service.version_mismatch')
+    expect(unavailableText(s)).toBe('组件版本不一致，请重新安装律师工作台')
+    expect(unavailableText(s)).toBe(VERSION_MISMATCH)
+    expect(unavailableText(s)).not.toContain('稍后')
+    await s.stop()
+  })
 
   it('起不来时留原因（令 2033）：反复退出到 failed，记 service.start_failed（退出码），律师看到"本机服务未能启动：…请联系技术支持"', async () => {
     const { deps, events } = simDeps([1, 1, 1, 1, 1, 1])

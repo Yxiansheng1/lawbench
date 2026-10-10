@@ -666,12 +666,15 @@ export function scrubPaths(text: string, installDir: string | undefined, platfor
 
 /** 服务不可用时给律师的话：重启也救不回来（failed）时说出原因、请联系技术支持；还在启动 / 重启中照旧"请稍后重试"（令 2033）。 */
 export function unavailableText(s: Pick<Supervisor, 'state' | 'lastFailure'>): string {
+  // 客户端和服务的契约版本对不上（如新客户端配了旧服务，rv 1.4 客户端 P3-3）：等也等不好，直接说要重新安装
+  if (s.state === 'version_mismatch') return VERSION_MISMATCH
   if (s.state !== 'failed') return UNAVAILABLE
   const why = startFailureText(s.lastFailure).replace(/[。.]+$/, '')
   // 律师自己能处理的（端口被占：关掉占用的程序再试）不再叫他找技术支持
   // 原因里已经说了找谁的（保留端口段、系统拒绝）也不再接一句
   return /重试$|请联系技术支持$/.test(why) ? `本机服务未能启动：${why}` : `本机服务未能启动：${why}，请联系技术支持`
 }
+export const VERSION_MISMATCH = '组件版本不一致，请重新安装律师工作台'
 export const RESTORE_FAILED = '测试未通过，且未能恢复原配置，请重新填写后保存'
 
 /** 粘贴截图的临时目录 <应用数据>\临时\粘贴\。 */

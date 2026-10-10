@@ -42,6 +42,18 @@ const PAUSE_WORD: Record<string, string> = { offline: '网络断开', prep_down:
 export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: string }) {
   const id = caseRef.case_id
   const [showRemoved, setShowRemoved] = useState(false)
+  // 正在移除的材料（从点下去到服务答复为止）：按钮置灰，连点不重复问、不重复发（rv 1.4 客户端 P3-1）
+  const removingNow = useRef(new Set<string>())
+  const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set())
+  const remove = (m: Material) => {
+    if (removingNow.current.has(m.material_id)) return
+    removingNow.current.add(m.material_id)
+    setRemoving(new Set(removingNow.current))
+    void removeMaterial(caseRef, m).then((done) => { if (done) void reloadMats() }).finally(() => {
+      removingNow.current.delete(m.material_id)
+      setRemoving(new Set(removingNow.current))
+    })
+  }
   const [mats, reloadMats] = useLoad(() => call<{ materials: Material[] }>('materialsList', { case_id: id }), [id])
   const [jobs, reloadJobs] = useLoad(() => call<{ jobs: OcrJob[] }>('ocrList', { case_id: id }), [id], POLL_MS)
   const [over, setOver] = useState(false)
@@ -111,7 +123,7 @@ export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrReques
           const shown = showRemoved ? v.materials : v.materials.filter((m) => m.status !== 'removed')
           return v.materials.length === 0 ? <Empty>还没有材料。点"导入文件"或把文件拖进来。</Empty> : (
             <>
-              <ul style={S.list}>{shown.map((m) => <MaterialRow key={m.material_id} m={m} onOcr={() => setOcrFor([m])} onRemove={() => void removeMaterial(caseRef, m).then((done) => { if (done) void reloadMats() })} />)}</ul>
+              <ul style={S.list}>{shown.map((m) => <MaterialRow key={m.material_id} m={m} onOcr={() => setOcrFor([m])} removing={removing.has(m.material_id)} onRemove={() => remove(m)} />)}</ul>
               {gone ? <div style={{ ...S.between, marginTop: 6 }}><span style={S.sub}>已移除 {gone} 份</span><Button size="sm" variant="ghost" onClick={() => setShowRemoved(!showRemoved)}>{showRemoved ? '隐藏已移除的' : '显示已移除的'}</Button></div> : null}
             </>
           )
@@ -130,7 +142,7 @@ export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrReques
   )
 }
 
-function MaterialRow({ m, onOcr, onRemove }: { m: Material; onOcr: () => void; onRemove: () => void }) {
+function MaterialRow({ m, removing, onOcr, onRemove }: { m: Material; removing: boolean; onOcr: () => void; onRemove: () => void }) {
   const tone = m.status === 'parsed' ? 'ok' : m.status === 'removed' ? 'info' : m.status === 'failed' || m.status === 'source_deleted' ? 'err' : m.status === 'ocr_running' ? 'info' : 'warn'
   return (
     <li style={{ ...S.card, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -150,7 +162,7 @@ function MaterialRow({ m, onOcr, onRemove }: { m: Material; onOcr: () => void; o
       ) : null}
       {/* 令 2043 第 2 条、契约 1.4：移到回收站；识别进行中不能移除（服务还在用这个文件）；已移除的没有这个按钮 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        {m.status === 'removed' ? null : <Button size="sm" variant="ghost" disabled={m.status === 'ocr_running'} onClick={onRemove}>移除此材料</Button>}
+        {m.status === 'removed' ? null : <Button size="sm" variant="ghost" disabled={m.status === 'ocr_running' || removing} onClick={onRemove}>移除此材料</Button>}
       </div>
     </li>
   )

@@ -165,6 +165,29 @@ describe('材料页', () => {
     expect(box.textContent).toContain('询问笔录')
   })
 
+  it('连点两次只问一次、只发一次；请求在途时按钮是灰的，答复后恢复（rv 1.4 客户端 P3-1）', async () => {
+    const calls = setup([[row('M0001', '起诉意见书', 'parsed'), row('M0002', '询问笔录', 'parsed')]])
+    let answer: (v: unknown) => void = () => {}
+    setApi({ ...(await import('../ui/state.ts')).lb(), materialsRemove: (r: unknown) => { calls.push(['materialsRemove', r]); return new Promise((res) => { answer = res }) } } as unknown as LawbenchApi)
+    await render()
+    const btn = () => buttons('移除此材料')[0]!
+    await act(async () => { btn().click(); btn().click() })
+    expect(dialogs().filter((d) => d.kind === 'confirm').length).toBe(1)
+    expect(btn().disabled).toBe(true)
+    expect(buttons('移除此材料')[1]!.disabled).toBe(false) // 别的材料不受影响
+    await act(async () => { dialogs().find((d) => d.kind === 'confirm')!.resolve!(true) })
+    app.set((s) => ({ ...s, dialogs: [] }))
+    await act(async () => { btn().click() }) // 服务还没答复：再点没有反应
+    await settle()
+    expect(calls.length).toBe(1)
+    expect(dialogs().filter((d) => d.kind === 'confirm').length).toBe(0)
+    expect(btn().disabled).toBe(true)
+    await act(async () => { answer(value({ failed: [{ material_id: 'M0001', reason: '原件正在被其他程序占用' }] })) })
+    await settle()
+    expect(calls.length).toBe(1)
+    expect(btn().disabled).toBe(false) // 没移走：可以再试
+  })
+
   it('已移除的材料：默认收起，只写"已移除 1 份"；点开后标"已移除"、没有"移除此材料"按钮；可以再收起', async () => {
     expect(STATUS_WORD.removed).toBe('已移除')
     setup([[row('M0001', '起诉意见书', 'parsed'), row('M0002', '旧版合同', 'removed')]])
