@@ -9,7 +9,7 @@ import { Badge, Button, C, Empty, ErrorLine, getNav, Loading, S, Section, useLoa
 import { app, call, confirm, notice, type CaseRef, type Params } from './state.ts'
 import { WithCase, type SessionProps } from './session-case.tsx'
 import { ocrTargets } from './estimate.ts'
-import { MATERIAL_REMOVE_ENABLED, openCaseFolder, REMOVE_DISABLED_TIP, removeMaterial } from './folder-actions.ts'
+import { openCaseFolder, removeMaterial } from './folder-actions.ts'
 
 const POLL_MS = 3000
 const FALLBACK_PARAMS: Params = { thinking: '中', window: '128K', max_tokens: 16384 }
@@ -41,6 +41,7 @@ const PAUSE_WORD: Record<string, string> = { offline: '网络断开', prep_down:
 /** 材料页的内容（已知是哪个案件）；导出给界面用例直接渲染。 */
 export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrRequest?: string }) {
   const id = caseRef.case_id
+  const [showRemoved, setShowRemoved] = useState(false)
   const [mats, reloadMats] = useLoad(() => call<{ materials: Material[] }>('materialsList', { case_id: id }), [id])
   const [jobs, reloadJobs] = useLoad(() => call<{ jobs: OcrJob[] }>('ocrList', { case_id: id }), [id], POLL_MS)
   const [over, setOver] = useState(false)
@@ -104,9 +105,17 @@ export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrReques
           <Button size="sm" variant="outline" onClick={() => mats.state === 'ok' && setOcrFor(mats.value.materials.filter((m) => m.pages_need_ocr.length))}>待识别页全部提交…</Button>
         ) : null}
       </div>}>
-        <Loading data={mats}>{(v) => v.materials.length === 0 ? <Empty>还没有材料。点"导入文件"或把文件拖进来。</Empty> : (
-          <ul style={S.list}>{v.materials.map((m) => <MaterialRow key={m.material_id} m={m} onOcr={() => setOcrFor([m])} onRemove={() => void removeMaterial(caseRef, m).then((done) => { if (done) void reloadMats() })} />)}</ul>
-        )}</Loading>
+        <Loading data={mats}>{(v) => {
+          // 契约 1.4：已移除的材料（服务通常不再列出；列出来的标"已移除"）默认收起，可以点开看
+          const gone = v.materials.filter((m) => m.status === 'removed').length
+          const shown = showRemoved ? v.materials : v.materials.filter((m) => m.status !== 'removed')
+          return v.materials.length === 0 ? <Empty>还没有材料。点"导入文件"或把文件拖进来。</Empty> : (
+            <>
+              <ul style={S.list}>{shown.map((m) => <MaterialRow key={m.material_id} m={m} onOcr={() => setOcrFor([m])} onRemove={() => void removeMaterial(caseRef, m).then((done) => { if (done) void reloadMats() })} />)}</ul>
+              {gone ? <div style={{ ...S.between, marginTop: 6 }}><span style={S.sub}>已移除 {gone} 份</span><Button size="sm" variant="ghost" onClick={() => setShowRemoved(!showRemoved)}>{showRemoved ? '隐藏已移除的' : '显示已移除的'}</Button></div> : null}
+            </>
+          )
+        }}</Loading>
       </Section>
 
       <Section title="识别进度">
@@ -122,7 +131,7 @@ export function Materials({ caseRef, ocrRequest }: { caseRef: CaseRef; ocrReques
 }
 
 function MaterialRow({ m, onOcr, onRemove }: { m: Material; onOcr: () => void; onRemove: () => void }) {
-  const tone = m.status === 'parsed' ? 'ok' : m.status === 'failed' || m.status === 'source_deleted' ? 'err' : m.status === 'ocr_running' ? 'info' : 'warn'
+  const tone = m.status === 'parsed' ? 'ok' : m.status === 'removed' ? 'info' : m.status === 'failed' || m.status === 'source_deleted' ? 'err' : m.status === 'ocr_running' ? 'info' : 'warn'
   return (
     <li style={{ ...S.card, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={S.between}>
@@ -139,9 +148,9 @@ function MaterialRow({ m, onOcr, onRemove }: { m: Material; onOcr: () => void; o
           <Button size="sm" variant="outline" disabled={m.status === 'ocr_running'} onClick={onOcr}>提交识别…</Button>
         </div>
       ) : null}
-      {/* 令 2043 第 2 条：识别进行中不能移除（服务还在用这个文件）；服务能从索引里去掉之前整项禁用（MATERIAL_REMOVE_ENABLED） */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }} title={MATERIAL_REMOVE_ENABLED ? undefined : REMOVE_DISABLED_TIP}>
-        <Button size="sm" variant="ghost" disabled={!MATERIAL_REMOVE_ENABLED || m.status === 'ocr_running'} onClick={onRemove}>移除此材料</Button>
+      {/* 令 2043 第 2 条、契约 1.4：移到回收站；识别进行中不能移除（服务还在用这个文件）；已移除的没有这个按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {m.status === 'removed' ? null : <Button size="sm" variant="ghost" disabled={m.status === 'ocr_running'} onClick={onRemove}>移除此材料</Button>}
       </div>
     </li>
   )

@@ -27,10 +27,9 @@ import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
-import { chosenFolders, droppedItems, folderKind, insideCase, localCaseFolder, mkdirInCase, openableFile, removableMaterial, sameFolder, toolExe, type DeskDeps, type DroppedItem } from './desk-actions.ts'
+import { chosenFolders, droppedItems, folderKind, insideCase, localCaseFolder, mkdirInCase, openableFile, sameFolder, toolExe, type DeskDeps, type DroppedItem } from './desk-actions.ts'
 import { nodeDeskDeps } from './desk-node.ts'
 import { readCaseWiki, type CaseWiki } from './case-wiki.ts'
-import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
 
 export const name = 'lawbench-host'
 export const inject = ['subprocess']
@@ -263,25 +262,6 @@ export class LawbenchRemote {
     const known = cases.find((c) => c.case_id === caseId)
     // 注记 0934 ①：同一文件夹经联接、subst、映射盘到达时按实际位置比，不误拒；用的仍是登记的那个根
     return known && sameFolder(known.root, root, this.desk.realpath) ? { ok: true, value: known.root } : bad
-  }
-
-  /**
-   * 右栏"移除此材料"（令 2043 第 2 条，N61）：删掉案件文件夹里这份材料的文件，再走现有的重新扫描，让服务把它从材料表和索引里去掉。
-   * 先核对 case_id 与案件根确是服务登记的同一个案件；文件须是案件根里的普通文件。日志不记文件名。
-   * @param request - { case_id, root, rel_path }。
-   * @returns 重新扫描的结果（added/changed/removed/failed/review_needed）。
-   */
-  async materialRemove(request: unknown): Promise<ApiResult | ApiFail> {
-    // 复核 AMEND P2-3：服务能从检索里去掉之前整项关闭（不只是界面按钮禁用），调用一律拒绝
-    if (!MATERIAL_REMOVE_ENABLED) return { ok: false, error: { code: 'NOT_AVAILABLE', message: REMOVE_DISABLED_TIP } }
-    const r = request as { case_id?: unknown; root?: unknown; rel_path?: unknown } | null
-    const known = await this.knownCase(r?.case_id, r?.root)
-    if (!known.ok) return known
-    const file = removableMaterial(known.value, r?.rel_path)
-    if (!file.ok) return file
-    try { await this.desk.remove(file.value) } catch { return { ok: false, error: { code: 'INTERNAL', message: '文件没能删除（可能正被别的程序打开），关掉后再试' } } }
-    this.log('info', 'material.removed', {})
-    return this.callApi(API_ROUTES.find((x) => x.method === 'materialsScan')!, { case_id: (r as { case_id: string }).case_id })
   }
 
   /**

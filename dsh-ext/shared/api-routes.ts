@@ -30,6 +30,8 @@ export const API_ROUTES: readonly ApiRoute[] = [
   { method: 'materialsScan', http: 'POST', path: '/api/materials/scan', contract: 'materials_scan', timeoutMs: LONG },
   { method: 'materialsImport', http: 'POST', path: '/api/materials/import', contract: 'materials_import', timeoutMs: LONG },
   { method: 'materialsList', http: 'GET', path: '/api/materials', contract: 'materials_list' },
+  // 契约 1.4：移除材料（原件移到系统回收站，清掉文本、识别页、检索记录）。界面直接调它，Host 不再自己删文件
+  { method: 'materialsRemove', http: 'POST', path: '/api/materials/remove', contract: 'materials_remove', timeoutMs: LONG },
   { method: 'ocrSubmit', http: 'POST', path: '/api/ocr/jobs', contract: 'ocr_submit' },
   { method: 'ocrList', http: 'GET', path: '/api/ocr/jobs', contract: 'ocr_list' },
   { method: 'ocrCancel', http: 'POST', path: '/api/ocr/jobs/{job_id}/cancel', contract: 'ocr_cancel' },

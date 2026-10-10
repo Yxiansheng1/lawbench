@@ -102,7 +102,7 @@ function ImportDialog({ d, close }: { d: Extract<Dialog, { kind: 'import' }>; cl
         <ul style={{ ...S.list, maxHeight: 160, overflow: 'auto', fontSize: 12, color: C.sub }}>
           {d.paths.map((p) => <li key={p}>{p}</li>)}
         </ul>
-        <div style={S.sub}>同名同内容的跳过；同名不同内容的改名为"原名(2)"，不覆盖；云同步目录里的文件和快捷方式不复制。</div>
+        <div style={S.sub}>同名同内容的跳过；同名不同内容的改名为"原名(2)"，不覆盖；链接和快捷方式不复制。</div>
       </div>
     </Modal>
   )

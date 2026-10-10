@@ -48,7 +48,6 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'openFolder', params: ['request'] },
   // 令 1321 C.2：成果卡片"打开"（默认程序打开案件根里的成果文件）
   { method: 'openFile', params: ['request'] },
-  { method: 'materialRemove', params: ['request'] },
   { method: 'localCaseFolder', params: ['request'] },
   // 令 1852 第 17 条：新建案件时按律师勾的名单补建子文件夹（契约 case_open 的 template 只能整套建）
   { method: 'caseFolders', params: ['request'] },

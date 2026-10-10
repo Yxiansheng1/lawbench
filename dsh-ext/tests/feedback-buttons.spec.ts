@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-// 令 2043（律师第一批反馈）第 1、2 条：首页日常事务卡片的"工具"一栏；右栏"打开所在文件夹""移除此材料"。
+// 令 2043（律师第一批反馈）第 1、2 条：首页日常事务卡片的"工具"一栏；右栏"打开所在文件夹"。（"移除此材料"见 material-remove.spec.ts）
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ToolsRow } from '../ui/home-page.tsx'
-import { MATERIAL_REMOVE_ENABLED, openCaseFolder, removeMaterial, REMOVE_TITLE } from '../ui/folder-actions.ts'
+import { openCaseFolder } from '../ui/folder-actions.ts'
 import { app, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
 import { openCase, SYNC_NAME_TITLE, SYNC_OK, SYNC_TITLE, syncText } from '../ui/cases.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
@@ -45,25 +45,6 @@ describe('右栏按钮', () => {
     expect(await openCaseFolder(CASE, 'materials')).toBe(true)
     expect(await openCaseFolder(CASE, 'outputs')).toBe(true)
     expect(asked).toEqual([{ case_id: 'c-1', root: CASE.root, rel: '02案件材料' }, { case_id: 'c-1', root: CASE.root, rel: '' }, { case_id: 'c-1', root: CASE.root, rel: '成果' }])
-  })
-
-  it('移除此材料暂为禁用态（服务删原件后仍保留文本和检索，做不到从索引里去掉；令 2043 第 2 条退路）', () => {
-    expect(MATERIAL_REMOVE_ENABLED).toBe(false)
-  })
-
-  it('（服务支持后启用）移除流程：先问；取消不动；确认后经 Host 删文件并重新扫描', async () => {
-    const removed: unknown[] = []
-    setApi({ materialRemove: async (r: unknown) => { removed.push(r); return { ok: true, value: { added: 0, changed: 0, removed: 1, failed: 0, review_needed: true } } } } as unknown as LawbenchApi)
-    const m = { name: '起诉意见书', rel_path: '02案件材料\\起诉意见书.pdf' }
-    const no = removeMaterial(CASE, m)
-    expect(lastDialog()).toMatchObject({ kind: 'confirm', title: REMOVE_TITLE })
-    lastDialog()!.resolve!(false)
-    expect(await no).toBe(false)
-    expect(removed).toEqual([])
-    const yes = removeMaterial(CASE, m)
-    lastDialog()!.resolve!(true)
-    expect(await yes).toBe(true)
-    expect(removed).toEqual([{ case_id: 'c-1', root: CASE.root, rel_path: '02案件材料\\起诉意见书.pdf' }])
   })
 })
 

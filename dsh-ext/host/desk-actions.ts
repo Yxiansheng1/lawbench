@@ -42,25 +42,6 @@ export function insideCase(root: unknown, rel: unknown): { ok: true; value: stri
   return { ok: true, value: full }
 }
 
-/**
- * 要移除的材料文件：须在案件根里、是普通文件（不是链接、不是文件夹），且实际位置（解析链接后）仍在案件根里。
- * @param statFn、realFn 测试替身；默认用真文件系统。
- */
-export function removableMaterial(root: unknown, rel: unknown,
-  statFn: (p: string) => { isFile(): boolean; isSymbolicLink(): boolean } = lstatSync,
-  realFn: (p: string) => string = realpathSync.native): { ok: true; value: string } | Fail {
-  const at = insideCase(root, rel)
-  if (!at.ok) return at
-  let st
-  try { st = statFn(at.value) } catch { return fail('NOT_FOUND', '这份材料的文件已经不在了，点"重新扫描"更新列表') }
-  if (st.isSymbolicLink() || !st.isFile()) return fail('INVALID_ARGUMENT', '只能移除普通文件')
-  let realRoot: string, realFile: string
-  try { realRoot = realFn(root as string); realFile = realFn(at.value) } catch { return fail('NOT_FOUND', '这份材料的文件已经不在了，点"重新扫描"更新列表') }
-  const back = relative(realRoot, realFile)
-  if (back === '' || back.startsWith('..') || isAbsolute(back)) return BAD_ARG
-  return { ok: true, value: at.value }
-}
-
 /** 成果卡片"打开"能开的文件类型（令 1321 C.2）：只开文书类，不开程序、脚本、快捷方式（案件文件夹里可能有任何东西）。 */
 export const OPENABLE_FILE_EXT: ReadonlySet<string> = new Set(['.docx', '.doc', '.wps', '.md', '.pdf', '.xlsx', '.xls', '.txt'])
 
@@ -115,7 +96,6 @@ export interface DeskDeps {
   launch(file: string, args: string[]): Promise<void>
   /** 在资源管理器（Mac 为访达）里打开文件夹。 */
   openPath(dir: string): Promise<void>
-  remove(file: string): Promise<void>
   mkdir(dir: string): Promise<void>
   /** 新建案件补建子文件夹（mkdirInCase）用的文件系统操作；不给时用真文件系统。 */
   mkdirFs?: MkdirFs

@@ -2,7 +2,7 @@
 // 词表检查（scripts\check_ui_words.py）扫这里的字符串：不出现 token、context 这类词。
 
 export type Unit = 'page' | 'para' | 'cell' | 'line'
-export type MaterialStatus = 'parsed' | 'needs_ocr' | 'ocr_running' | 'partial' | 'failed' | 'source_deleted'
+export type MaterialStatus = 'parsed' | 'needs_ocr' | 'ocr_running' | 'partial' | 'failed' | 'source_deleted' | 'removed'
 
 export interface Material {
   material_id: string
@@ -32,6 +32,7 @@ export const STATUS_WORD: Record<MaterialStatus, string> = {
   partial: '部分页未识别',
   failed: '无法处理',
   source_deleted: '原件已删除',
+  removed: '已移除',
 }
 
 export const TYPE_WORD: Record<string, string> = {

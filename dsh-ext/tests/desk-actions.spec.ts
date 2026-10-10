@@ -1,9 +1,8 @@
-// 令 2043（律师第一批反馈）：Host 打开小工具、打开案件子文件夹、移除材料、在本机建案件文件夹。
+// 令 2043（律师第一批反馈）：Host 打开小工具、打开案件子文件夹、在本机建案件文件夹。（移除材料契约 1.4 起走服务，见 material-remove.spec.ts）
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { insideCase, localCaseFolder, localRoot, openableFolder, removableMaterial, safeFolderName, sameFolder, toolExe, type DeskDeps } from '../host/desk-actions.ts'
-import { MATERIAL_REMOVE_ENABLED } from '../shared/feature-flags.ts'
+import { insideCase, localCaseFolder, localRoot, openableFolder, safeFolderName, sameFolder, toolExe, type DeskDeps } from '../host/desk-actions.ts'
 import { explorerArg, nodeDeskDeps, type SpawnFn } from '../host/desk-node.ts'
 import { LawbenchRemote } from '../host/index.ts'
 import type { Supervisor } from '../host/supervisor.ts'
@@ -69,31 +68,12 @@ describe('交给资源管理器的路径（第七版待办 16：名字里有逗�
   })
 })
 
-describe('移除材料（真文件系统）', () => {
-  let dir: string
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'lb-desk-')) })
-  afterEach(() => rmSync(dir, { recursive: true, force: true }))
-
-  it('只收案件根里的普通文件；文件夹、不存在的、链到外面的都不收', () => {
-    const root = join(dir, '甲案')
-    mkdirSync(join(root, '02 案件材料'), { recursive: true })
-    writeFileSync(join(root, '02 案件材料', '起诉书.pdf'), 'x')
-    writeFileSync(join(dir, '外面.pdf'), 'x')
-    expect(removableMaterial(root, '02 案件材料\\起诉书.pdf')).toEqual({ ok: true, value: join(root, '02 案件材料', '起诉书.pdf') })
-    expect(removableMaterial(root, '02 案件材料').ok).toBe(false)
-    expect(removableMaterial(root, '02 案件材料\\没有.pdf')).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
-    let linked = false
-    try { symlinkSync(join(dir, '外面.pdf'), join(root, '02 案件材料', '链接.pdf')); linked = true } catch { /* 没有建链接的权限就跳过这一项 */ }
-    if (linked) expect(removableMaterial(root, '02 案件材料\\链接.pdf').ok).toBe(false)
-  })
-})
-
 describe('Host 方法', () => {
   const up = { endpoint: () => ({ port: 1, token: 't' }), state: 'running' } as unknown as Supervisor
   function remote(desk: Partial<DeskDeps>, api: Record<string, (body: unknown) => unknown> = {}) {
     const r = new LawbenchRemote(up, tmpdir(), () => undefined)
     const calls: Array<[string, unknown]> = []
-    r.desk = { installDir: 'E:\\law', userProfile: 'C:\\Users\\x', exists: () => true, isDir: () => true, openable: (root, rel) => ({ ok: true, value: rel ? join(root, String(rel)) : root }), launch: async (f, a) => { calls.push(['launch', [f, a]]) }, openPath: async (d) => { calls.push(['open', d]) }, remove: async (f) => { calls.push(['remove', f]) }, mkdir: async (d) => { calls.push(['mkdir', d]) }, ...desk }
+    r.desk = { installDir: 'E:\\law', userProfile: 'C:\\Users\\x', exists: () => true, isDir: () => true, openable: (root, rel) => ({ ok: true, value: rel ? join(root, String(rel)) : root }), launch: async (f, a) => { calls.push(['launch', [f, a]]) }, openPath: async (d) => { calls.push(['open', d]) }, mkdir: async (d) => { calls.push(['mkdir', d]) }, ...desk }
     ;(r as unknown as { callApi: (route: { method: string }, body: unknown) => Promise<unknown> }).callApi = async (route, body) => {
       calls.push([route.method, body])
       return api[route.method] ? { ok: true, value: api[route.method]!(body) } : { ok: false, error: { code: 'X', message: 'x' } }
@@ -189,14 +169,6 @@ describe('Host 方法', () => {
     expect(sameFolder('D:\\案件\\甲', 'Y:\\甲', () => { throw new Error('ENOENT') })).toBe(false)
     // 复核 rv-A52 P3-2：界面给的是网络路径时不解析（不连 SMB）
     expect(sameFolder('D:\\案件\\甲', '\\\\fs01\\案卷\\甲', () => { throw new Error('不该解析') })).toBe(false)
-  })
-
-  it('materialRemove：开关关着时 Host 直接拒绝（NOT_AVAILABLE），不问服务、不删文件（复核 P2-3）', async () => {
-    expect(MATERIAL_REMOVE_ENABLED).toBe(false)
-    const api = { caseRecent: () => ({ cases: [{ case_id: 'c-1', root: 'D:\\案件\\甲', name: '甲', exists: true }] }) }
-    const { r, calls } = remote({}, api)
-    expect(await r.materialRemove({ case_id: 'c-1', root: 'D:\\案件\\甲', rel_path: '02 案件材料\\起诉书.pdf' })).toMatchObject({ ok: false, error: { code: 'NOT_AVAILABLE' } })
-    expect(calls).toEqual([])
   })
 
   it('localCaseFolder：在 <用户目录>\\连越律师工作台 下建好并回位置', async () => {

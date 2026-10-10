@@ -41,7 +41,8 @@ const facts = (v: unknown): WikiFact[] => (Array.isArray(v) ? v : [])
 const shaMap = (v: unknown): Map<string, string> | null => {
   if (!Array.isArray(v)) return null
   const m = new Map<string, string>()
-  for (const x of v) if (x && typeof x.material_id === 'string' && typeof x.sha256 === 'string') m.set(x.material_id, x.sha256)
+  // 契约 1.4：律师移除的材料在 index.json 里留着一条（status 为 removed，编号不复用），不算现有的材料
+  for (const x of v) if (x && typeof x.material_id === 'string' && typeof x.sha256 === 'string' && x.status !== 'removed') m.set(x.material_id, x.sha256)
   return m
 }
 

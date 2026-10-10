@@ -30,21 +30,28 @@ export async function openCaseFile(c: CaseRef, rel: string): Promise<boolean> {
   return true
 }
 
-// 开关与提示在 shared/feature-flags.ts（Host 也照它拒绝）
-export { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
-
 export const REMOVE_TITLE = '移除这份材料？'
 export const removeText = (m: Pick<Material, 'name' | 'rel_path'>): string =>
-  `会从案件文件夹里删掉"${m.rel_path}"这个文件，并从材料列表和检索里去掉。删掉的文件不进回收站，需要时请先自己留一份。已有的成果和 wiki 里引用到它的地方需要复核。`
+  `"${m.rel_path}"会移到回收站，可从回收站找回；同时从材料列表和检索里去掉。已有的成果和 wiki 里引用到它的地方需要复核。`
+export const WIKI_UPDATE_HINT = '案件 wiki 生成时用过这份材料，请到材料页更新 wiki。'
+
+/** 契约 1.4 `POST /api/materials/remove` 的返回。 */
+export interface RemoveResult { removed: string[]; already_removed: string[]; failed: Array<{ material_id: string; reason: string }>; wiki_needs_update: boolean }
 
 /**
- * 移除一份材料：先确认，再让 Host 删文件并重新扫描。
- * @returns 移除了为 true（取消或失败为 false）。
+ * 移除一份材料（契约 1.4）：先确认，再请服务把原件移到回收站并清掉它的文本和检索记录。
+ * 移走了、此前已经移除过的都算成功（让列表刷新）；没移走的把服务给的原因原样告诉律师（如"该位置没有回收站，未移除…"）。
+ * @returns 列表需要刷新为 true（取消或失败为 false）。
  */
-export async function removeMaterial(c: CaseRef, m: Pick<Material, 'name' | 'rel_path'>): Promise<boolean> {
-  if (!await confirm(REMOVE_TITLE, removeText(m), '移除')) return false
-  const r = await call<{ removed: number; review_needed: boolean }>('materialRemove', { case_id: c.case_id, root: c.root, rel_path: m.rel_path })
+export async function removeMaterial(c: CaseRef, m: Pick<Material, 'material_id' | 'name' | 'rel_path'>): Promise<boolean> {
+  if (!await confirm(REMOVE_TITLE, removeText(m), '移到回收站')) return false
+  const r = await call<RemoveResult>('materialsRemove', { case_id: c.case_id, material_ids: [m.material_id] })
   if (!r.ok) { notice('材料没能移除', errorText(r.error)); return false }
-  notice('已移除', `"${m.name}"已从案件里移除。${r.value.review_needed ? '材料有变化，案件 wiki 和已有成果需要复核。' : ''}`)
+  const failed = r.value.failed.find((f) => f.material_id === m.material_id) ?? r.value.failed[0]
+  if (failed) { notice('材料没能移除', `"${m.name}"：${failed.reason}`); return false }
+  const wiki = r.value.wiki_needs_update ? WIKI_UPDATE_HINT : ''
+  if (r.value.already_removed.includes(m.material_id)) notice('这份材料此前已经移除', `"${m.name}"已经不在案件里，列表已更新。${wiki}`)
+  else notice('已移到回收站', `"${m.name}"已从案件里移除，需要时可从回收站找回。${wiki}`)
+  window.dispatchEvent(new CustomEvent('lawbench:materials-changed', { detail: c.case_id }))
   return true
 }

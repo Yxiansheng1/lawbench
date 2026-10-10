@@ -2,7 +2,7 @@
 // 启动的程序与 Host 脱离（detached、不接输入输出），去掉 Electron 当 Node 跑的那个环境变量，免得小工具或资源管理器被它影响。
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { openableFolder, type DeskDeps } from './desk-actions.ts'
 
@@ -40,7 +40,6 @@ export function nodeDeskDeps(installDir: string | undefined, platform: NodeJS.Pl
     launch: (file, args) => start(spawnFn, file, args),
     // explorer.exe 打开成功也常返回非 0，这里只看能不能启动起来
     openPath: (dir) => (platform === 'darwin' ? start(spawnFn, 'open', [dir]) : start(spawnFn, `${process.env.SystemRoot ?? 'C:\\Windows'}\\explorer.exe`, [explorerArg(dir)], true)),
-    remove: (file) => rm(file, { force: false }),
     mkdir: async (dir) => { await mkdir(dir, { recursive: true }) },
   }
 }
