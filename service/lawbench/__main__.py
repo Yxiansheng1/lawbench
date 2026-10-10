@@ -38,7 +38,11 @@ EXIT_LISTEN_FAILED = 2
 
 def _report_port(port: int) -> None:
     """绑不上的端口：标准错误写一行"<类别> <端口> <一句话>"（portdiag；Host 按类别给律师看）。按 UTF-8 写，不随控制台代码页。"""
-    text = portdiag.line(port, portdiag.classify(port, portdiag.bind_error(LOOPBACK, port)))
+    try:
+        category = portdiag.classify(port, portdiag.bind_error(LOOPBACK, port))
+    except Exception:  # noqa: BLE001 分类本身出错：按"系统拒绝"报，不影响退出码 2
+        category = portdiag.PORT_DENIED
+    text = portdiag.line(port, category)
     try:
         sys.stderr.buffer.write((text + "\n").encode("utf-8"))
         sys.stderr.flush()

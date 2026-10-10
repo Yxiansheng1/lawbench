@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import errno
+import functools
+import os
 import re
 import socket
 import subprocess
@@ -29,7 +31,9 @@ MESSAGES = {
 }
 
 WSAEACCES, WSAEADDRINUSE = 10013, 10048
-NETSH = ["netsh", "int", "ipv4", "show", "excludedportrange", "protocol=tcp"]
+# 用系统目录里的 netsh（绝对路径），不靠 PATH 找
+NETSH = [os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "netsh.exe"),
+         "int", "ipv4", "show", "excludedportrange", "protocol=tcp"]
 NETSH_TIMEOUT = 3.0
 _RANGE = re.compile(r"^\s*(\d{1,5})\s+(\d{1,5})\b")
 
@@ -44,8 +48,10 @@ def parse_excluded(text: str) -> list[tuple[int, int]]:
     return out
 
 
+@functools.lru_cache(maxsize=1)
 def run_netsh() -> str | None:
-    """只在 Windows 上跑；失败、超时返回 None。输出只取数字，按什么代码页解码都行。"""
+    """只在 Windows 上跑；失败、超时返回 None。输出只取数字，按什么代码页解码都行。
+    一个进程里只跑一次（两个端口都绑不上时不重复跑）。"""
     if sys.platform != "win32":
         return None
     try:
@@ -58,13 +64,15 @@ def run_netsh() -> str | None:
 
 def bind_error(host: str, port: int) -> OSError | None:
     """再绑一次拿到系统的错误（uvicorn 绑定失败只给 SystemExit，不带原因）。绑得上（刚被放开）返回 None。"""
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = None
     try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
     except OSError as e:
         return e
     finally:
-        s.close()
+        if s is not None:
+            s.close()
     return None
 
 

@@ -104,8 +104,48 @@ def test_port_category_three_kinds():
     assert pd.classify(18901, _oserr(10013), netsh) == pd.PORT_DENIED                     # 10013 但不在保留段
     assert pd.classify(18765, _oserr(10013), lambda: None) == pd.PORT_DENIED              # netsh 跑不了、超时
     assert pd.classify(18765, _oserr(10022), netsh) == pd.PORT_DENIED                     # 其余错误
+    # 保留段两端都算在内（复核 P3-1）：单端口段、段的起点和终点；紧邻段外的不算
+    assert pd.classify(5357, _oserr(10013), netsh) == pd.PORT_RESERVED
+    assert pd.classify(18700, _oserr(10013), netsh) == pd.PORT_RESERVED
+    assert pd.classify(18799, _oserr(10013), netsh) == pd.PORT_RESERVED
+    assert pd.classify(18699, _oserr(10013), netsh) == pd.PORT_DENIED
+    assert pd.classify(18800, _oserr(10013), netsh) == pd.PORT_DENIED
     assert pd.classify(18765, None, netsh) == pd.PORT_DENIED
     assert pd.line(18765, pd.PORT_RESERVED) == "PORT_RESERVED 18765 18765 在 Windows 保留端口段内，请在设置里换一个端口"
+
+
+def test_netsh_absolute_path_and_runs_once(monkeypatch):
+    """复核 P3-2、P3-3：netsh 用系统目录的绝对路径；一个进程里只跑一次。"""
+    from lawbench import portdiag as pd
+    assert os.path.isabs(pd.NETSH[0]) and pd.NETSH[0].lower().endswith(os.path.join("system32", "netsh.exe"))
+    calls = []
+
+    class P:
+        returncode, stdout = 0, NETSH_OUT.encode("utf-8")
+
+    monkeypatch.setattr(pd.sys, "platform", "win32")
+    monkeypatch.setattr(pd.subprocess, "run", lambda *a, **k: calls.append(a[0]) or P())
+    pd.run_netsh.cache_clear()
+    try:
+        assert pd.classify(18765, _oserr(10013)) == pd.PORT_RESERVED and pd.classify(18901, _oserr(10013)) == pd.PORT_DENIED
+        assert len(calls) == 1 and calls[0] == pd.NETSH
+    finally:
+        pd.run_netsh.cache_clear()
+
+
+def test_report_port_never_raises(monkeypatch, capfdbinary):
+    """复核 P3-4：分类过程出错也照样写一行（按系统拒绝），不抛出去。"""
+    from lawbench import __main__ as m
+    from lawbench import portdiag as pd
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(pd, "bind_error", boom)
+    m._report_port(18765)
+    assert capfdbinary.readouterr().err.decode("utf-8").startswith("PORT_DENIED 18765 ")
+    monkeypatch.setattr(pd.socket, "socket", boom)          # 建 socket 就出错：bind_error 自己不抛 OSError 以外的也被兜住
+    m._report_port(18765)
+    assert capfdbinary.readouterr().err.decode("utf-8").startswith("PORT_DENIED 18765 ")
 
 
 def test_port_in_use_first_stderr_line(tmp_path):
