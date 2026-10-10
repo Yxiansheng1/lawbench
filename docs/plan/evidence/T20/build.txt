@@ -209,3 +209,67 @@ DSH 打包冒烟（prepare 后与打包后各一次）："desktop runtime: front
   卸载 /S，退出 0，8 s：安装目录、%APPDATA%\lawbench-desktop、dsh-home、installer-cache、开始菜单三项、桌面快捷方式都不在；两个 marker 仍在；
     HKCU\Software\Classes\dsh 仍在（按设计）
   冒烟后还原：删掉冒烟写的 settings.json 等四个文件、<用户目录>\连越律师工作台 和两个 marker 目录
+
+
+==== 第七版候选包（令 致A-ORCH-执行令-打第七版-20261010-1556）· 2026-10-10 ====
+安装包：packaging\out\lawbench-0.1.0-win-x64-unsigned.exe（不入库）
+  大小 655955124 B（626 MB；第六版 655925037 B，+30087 B）
+  sha256 67a10102f2c60d5879c9f217e36f5eeecff7d8c8565a55e7fd2130190719a267
+  未签名
+基座 main 0a37121（rebase 后 HEAD 与 main 一致）。LAWBENCH_BUILD_STAMP=202610101611，界面版本号 0.1.0+202610101611。
+16:11 起，16:30 完成。打法同第六版（官方 Python 3.12.10 包，sha256 同锁）。
+各步耗时：brand 2 s · dsh 84 s · python 27 s · tools 20 s · smalltools 93 s · skills 1 s · engines 1 s · lock 2 s · signcheck 16 s · package 1023 s
+运行时 npm 锁 323/323；electron 缓存未新增；签名 339 个 210 个无有效签名（同前）；DSH 打包后冒烟通过。
+打包前严格补丁链：18 个补丁、158 个路径、0 处不同。
+versions.lock 由 lock 步重生成，变一行：retainer 3.4.1 → 3.4.1-lawbench.1（engines\retainer 的版本此前已改，不是这次改的）。
+
+冒烟（evidence\T20\冒烟清单.md 全项 + 令加的三项）
+一、全新安装：/S /D=D:\lawbench-smoke7，退出 0，55 s
+  布局全在；装后 24726 个文件、2108 MB；无 primary-runtime、无 libreoffice-kit-win32-x64 引擎（只剩 koffi.node 那个目录）
+  installer-cache 装完不在；两个模拟原版 marker 装、卸都不变
+  开始菜单：连越律师工作台、长截图切分、格式互转，指向正确；桌面一个快捷方式
+  python -I：stderr utf-8，3.12.10
+  端口被占：先用 node 占住 127.0.0.1:18765 再启动，按秒计时：
+    服务只拉起 1 次（第六版 6 次）：服务标准错误第一行给出类别，Host 记
+      service.port_failed {category: PORT_IN_USE, port: 18765}
+      service.start_failed {reason: exited, exitCode: 2, port: 18765, portCategory: PORT_IN_USE}
+    启动后 18 秒 Host 记下原因，同一秒首次配置页自己显示
+      "本机服务未能启动：本机 18765 端口被其他程序占用，请关闭占用程序后重试"（smoke-第七版-端口被占-首次配置.png）
+    首页不点"重试"也是同一句
+    每次拉起 ≥4 秒的情形：现在转发端口绑不上第一次就停，不再依赖重试次数；老服务（没有类别行）的情形仍由用例证明（supervisor.spec 假时钟）
+    PORT_RESERVED、PORT_DENIED 两类本机造不出（要端口落在 Windows 保留段），靠用例
+  放开端口、重启：服务 running，自检 python/tokenizer/libreoffice/pandoc ok；首次配置页地址已填好、可填；填"测试律师"→ 首页，
+    版本号 0.1.0+202610101611，"工具：长截图切分、格式互转"可见（smoke-第七版-首页工具栏-版本号.png，用户名已遮）
+  卸载 /S，退出 0，10 s：安装目录、%APPDATA%\lawbench-desktop、dsh-home、installer-cache、开始菜单三项、桌面快捷方式都不在；两个 marker 仍在；
+    HKCU\Software\Classes\dsh 仍在（按设计）
+
+二、加项①旧版覆盖装新版
+  先删掉上一步冒烟写的设置，装第六版（sha256 058648538564055428f63bb43c055360c20542cdbb7af5c298966ba388f298b4，56 s）到同一目录并启动：
+    首次配置填"测试律师"；"打开案件…"打开虚构文件夹"甲,乙买卖合同纠纷（虚构）"；版本号显示 0.1.0（smoke-第七版-覆盖前-第六版.png）
+    第六版 resources\app.asar sha256 38c2d847…27fee6
+  不卸载，直接装第七版（退出 0，63 s），启动：
+    不再出首次配置页，直接到首页；律师姓名"测试律师"在；案件"甲,乙买卖合同纠纷（虚构）"和"日常事务"都在
+    版本号 0.1.0+202610101611（smoke-第七版-覆盖后-版本号与案件保留.png）
+    装上的 resources\app.asar sha256 761ece70…a0212a，等于这次构建出的那份
+
+三、加项②首页拖文件夹（装好的第七版 + 真服务）
+  两种高亮：空白处"松开：建新案件"、卡片"松开：加入 甲,乙买卖合同纠纷（虚构） 的材料"，不同时亮
+    （smoke-第七版-拖到空白处-松开建新案件.png、smoke-第七版-拖到卡片-松开加入材料.png；在页面里派发拖放事件后截的，真实拖放进行中截图接口不返回）
+  真实拖放（CDP 带本机路径）把虚构文件夹"李某借贷纠纷（虚构）"拖到空白处：
+    弹"把『李某借贷纠纷（虚构）』建成案件？"和三种类型（smoke-第七版-拖文件夹-确认框.png）→"建成案件"
+    → 原地成为案件并进入（smoke-第七版-拖文件夹-建成进入案件.png）；文件夹里多了 工作区、成果，原有的 证据\借条.txt、起诉状草稿.txt 原样在
+    发现：建成后"材料 0 份"，要到材料页点"重新扫描"才认出来（扫描完成：新增 2）。见交付说明"发现"
+  真实拖放把一个文件拖到案件卡片上：
+    弹原来的"导入材料"确认框（smoke-第七版-拖到卡片-加材料确认框.png）→ 复制到案件并解析 → "复制 1 个…已复制：02案件材料/附加材料.txt"
+    发现：拖在卡片上方时卡片的高亮状态在两次 dragover 之间来回翻。见交付说明"发现"
+
+四、加项③名字含逗号的成果
+  在"甲,乙买卖合同纠纷（虚构）"案件里放一份虚构成果"借款合同,补充协议-v1.docx"（成果\索引.json 一条），概览卡列出（smoke-第七版-含逗号的成果.png）
+  点文件名：Word 打开的正是这份文件
+  点"打开所在文件夹"：资源管理器打开的是 …\甲,乙买卖合同纠纷（虚构）\成果，没有多出别的窗口
+  （案件文件夹名和文件名都含逗号、都没有空格——第六版在这种路径上会开到"文档"）
+
+五、收尾
+  卸载 /S，退出 0，11 s，各项同上
+  还原：删掉冒烟写的 settings.json、cases.json、daily-case.json、案件根名单.json 和两个 marker 目录；测试时打开的 Word 文档、资源管理器窗口都已关
+  <用户目录>\连越律师工作台\日常事务 是冒烟前就有的（10-07 21:21 建），没有删

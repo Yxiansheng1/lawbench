@@ -49,7 +49,7 @@ electron      44.0.0  -  -  npm electron  MIT
 node          24.21.0  win-x64.zip  158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541  nodejs.org（DSH 内置运行时）  MIT
 python        3.12.10（python.org 官方 NuGet 包 python，PSF 签名；3.12 最后一个带 Windows 二进制的版本）  python.3.12.10.nupkg  0eb85c2dfccccf1b17352de4c397f69194035b7d37149eacc16f1147d93de3b8  nuget.org（build.ps1 -PythonPackage）  PSF-2.0
 invoice-ledger  3.9.4.1  engines\invoice-ledger\  -  律所提供（周海沺律师），见 CHANGELOG  作者授权
-retainer      3.4.1  engines\retainer\  -  律所提供（周海沺律师）  作者授权
+retainer      3.4.1-lawbench.1  engines\retainer\  -  律所提供（周海沺律师）  作者授权
 tokenizer     Qwen3  tokenizer.json  87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4  6000D 同款模型的分词文件（N16）  Apache-2.0
 libreoffice   26.8.0.3  tools\libreoffice\program\soffice.exe  a2823391857db1dd8ebbd8234267f9ec58ec7e5b5fc434665c0ecec4671cb988  documentfoundation.org（本机现有安装拷入；正式构建以选定的发布包为准）  MPL-2.0
 pandoc        3.11  tools\pandoc\pandoc.exe  8063cc4bc334a73d1400e7434a34b13ff75b3709cec5a511595630eb9a3ea098  github.com/jgm/pandoc releases（本机现有安装拷入；正式构建以选定的发布包为准）  GPL-2.0-or-later
