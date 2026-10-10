@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 
 import pytest
 
@@ -218,6 +219,47 @@ def test_tasks_list(env):
     v = ok(env.client.get("/api/tasks", params={"case_id": env.case_id}), "api/tasks_list.schema.json")
     mine = [t for t in v["tasks"] if t["task_id"] == tid][0]
     assert mine["status"] == "running" and mine["drafts"][0]["title"] == "列表用" and mine["citation_passed"] is True
+
+
+def _idle(env, tid, minutes):
+    """把 result.json 的修改时间拨到 minutes 分钟前（当成这么久没有进度）。"""
+    t = time.time() - minutes * 60
+    os.utime(env.task_dir(tid) / "result.json", (t, t))
+
+
+def _status(env, tid):
+    v = ok(env.client.get("/api/tasks", params={"case_id": env.case_id}), "api/tasks_list.schema.json")
+    return [t for t in v["tasks"] if t["task_id"] == tid][0]
+
+
+def test_stale_running_task_closed_on_list(env):
+    """客户端没报 task/end：超过时间预算（45 分钟）没有进度的，读列表时按异常中断收尾，草稿不动。"""
+    tid = env.begin("sess-stale")["task_id"]
+    env.tool_ok(tid, "case_save_draft", {"title": "留着", "content": "x"})
+    _idle(env, tid, 50)
+    mine = _status(env, tid)
+    assert mine["status"] == "abnormal" and mine["drafts"][0]["title"] == "留着"
+    assert env.read_json(tid, "result.json", "files/result.schema.json")["status"] == "abnormal"   # 写回了
+    assert env.read_json(tid, "task.json", "files/task.schema.json")["state"] == "abnormal"
+    assert any(p.name.startswith("留着") for p in (env.task_dir(tid) / "草稿").iterdir())
+
+
+def test_running_task_within_budget_stays_running(env):
+    tid = env.begin("sess-fresh")["task_id"]
+    _idle(env, tid, 30)
+    assert _status(env, tid)["status"] == "running"
+    # 之后 end 正常到达，不受影响
+    v = ok(env.client.post("/core/task/end", json={"task_id": tid, "reason": "completed", "model_calls": 1,
+                                                    "tool_calls": 0, "elapsed_s": 5}), "core/task_end.schema.json")
+    assert v["status"] == "completed" and _status(env, tid)["status"] == "completed"
+
+
+def test_finished_task_never_marked_stale(env):
+    tid = env.begin("sess-done")["task_id"]
+    ok(env.client.post("/core/task/end", json={"task_id": tid, "reason": "completed", "model_calls": 1,
+                                                "tool_calls": 0, "elapsed_s": 5}), "core/task_end.schema.json")
+    _idle(env, tid, 500)
+    assert _status(env, tid)["status"] == "completed"
 
 
 def test_core_requires_token(env):

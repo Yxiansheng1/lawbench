@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 import threading
+import time
 from datetime import datetime
 
 from .. import contracts, logs
@@ -186,6 +187,7 @@ class TaskStore:
         out = []
         if base.is_dir():
             for d in sorted(base.iterdir(), key=lambda p: p.name, reverse=True):
+                self._close_stale(root, case_id, d.name)
                 try:
                     task = self._read(root, self.rel(d.name, "task.json"), "files/task.schema.json")
                     res = self._read(root, self.rel(d.name, "result.json"), "files/result.schema.json")
@@ -311,6 +313,32 @@ class TaskStore:
                 pass
             n += 1
         return n
+
+    # ---------- 读任务列表：没报结束、超过时间预算没有进度的任务收尾 ----------
+
+    def _close_stale(self, root: str, case_id: str, task_id: str) -> None:
+        """客户端有的结束路径不报 task/end，result.json 一直是 running，草稿的"确认保存"就一直不能点。
+        对话任务最近一次写 result.json（begin、progress、存草稿都会写）距今超过它的 minutes 预算的，
+        按"异常中断"收尾；草稿不动。流水线任务在本进程里自己收尾，不在此列。"""
+        with self.task_lock(task_id):
+            try:
+                task = self._read(root, self.rel(task_id, "task.json"), "files/task.schema.json")
+                if task["state"] != "running" or task["kind"] != "agent":
+                    return
+                p = gate.resolve_internal(root, self.rel(task_id, "result.json"), op="task")
+                idle = time.time() - p.stat().st_mtime
+                if idle <= task["budget"]["minutes"] * 60:
+                    return
+                res = self._read(root, self.rel(task_id, "result.json"), "files/result.schema.json")
+                if res["status"] != "running":
+                    return
+                res["status"] = "abnormal"
+                self._write(root, self.rel(task_id, "result.json"), res, "files/result.schema.json")
+                task["state"] = "abnormal"
+                self._write(root, self.rel(task_id, "task.json"), task, "files/task.schema.json")
+            except (ApiError, OSError, contracts.ContractError, ValueError):
+                return
+        logs.event("task", "stale", status="fail", case_id=case_id, error="stale")
 
     # ---------- 结果清单、读取记录 ----------
 
