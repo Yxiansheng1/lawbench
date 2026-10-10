@@ -222,6 +222,18 @@
   "expect": "invalid"
  },
  {
+  "file": "api_case_open.req_kind.json",
+  "schema": "api/case_open.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "valid"
+ },
+ {
+  "file": "api_case_open.req_bad_kind.json",
+  "schema": "api/case_open.schema.json",
+  "pointer": "#/$defs/request",
+  "expect": "invalid"
+ },
+ {
   "file": "prep_ocr.res.json",
   "schema": "prep395/ocr_page.schema.json",
   "pointer": "#/$defs/response",

@@ -110,6 +110,11 @@ ex("api_materials_import.res_bad_reason.json", "api/materials_import.schema.json
                           "scan": {"added": 0, "changed": 0, "removed": 0, "failed": 0, "review_needed": False}}},
    "#/$defs/response", expect="invalid")
 
+ex("api_case_open.req_kind.json", "api/case_open.schema.json",
+   {"path": "D:\\案件\\张某甲诈骗案", "template": "criminal", "kind": "criminal"}, "#/$defs/request")
+ex("api_case_open.req_bad_kind.json", "api/case_open.schema.json",
+   {"path": "D:\\案件\\张某甲诈骗案", "kind": "合同"}, "#/$defs/request", expect="invalid")
+
 # 395
 ex("prep_ocr.res.json", "prep395/ocr_page.schema.json",
    {"markdown": "借条\n今借到李某人民币陆万元整（¥60,000.00）…", "unclear": 1, "elapsed_ms": 5400,

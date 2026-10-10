@@ -22,8 +22,11 @@ def load_card(root: str) -> dict | None:
     p = gate.resolve_internal(root, CARD_REL, op="context")
     if not p.is_file():
         return None
-    data = contracts.read_json(p)
-    contracts.validate("files/case_card.schema.json", "", data)
+    try:
+        data = contracts.read_json(p)
+        contracts.validate("files/case_card.schema.json", "", data)
+    except (ValueError, contracts.ContractError):
+        raise ApiError("CASE_CARD_INVALID", "case_card_invalid") from None   # 契约 1.4（复核 P3-1）：原来是 INTERNAL
     return data
 
 

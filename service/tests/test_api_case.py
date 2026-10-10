@@ -122,6 +122,26 @@ def test_template_folder_names_have_no_separator(client, case_root):
     assert d.is_dir() and not any(d.iterdir()) and not (root / "08执行（财产刑").exists()
 
 
+def test_case_open_kind_travels_with_case(make_client, case_root, tmp_path):
+    """契约 1.4 候项 15：case_open 可带 kind，记在案件的 case.db 里；不带沿用已有的；最近案件里带回；换一个应用数据目录
+    （另一台电脑）打开同一个文件夹仍然读得到。"""
+    c = make_client()
+    v = ok(c.post("/api/case/open", json={"path": str(case_root)}), "case_open")
+    assert v["kind"] is None                                                   # 缺省：沿旧行为
+    assert ok(c.get("/api/case/recent"), "case_recent")["cases"][0]["kind"] is None
+    v = ok(c.post("/api/case/open", json={"path": str(case_root), "kind": "criminal"}), "case_open")
+    assert v["kind"] == "criminal"
+    assert ok(c.post("/api/case/open", json={"path": str(case_root)}), "case_open")["kind"] == "criminal"   # 不带：沿用
+    assert ok(c.get("/api/case/recent"), "case_recent")["cases"][0]["kind"] == "criminal"
+    fail(c.post("/api/case/open", json={"path": str(case_root), "kind": "合同"}), "case_open", "INVALID_ARGUMENT")
+    from lawbench.case.registry import CaseRegistry
+    from lawbench.config import REPO_ROOT
+    other = CaseRegistry(tmp_path / "另一台电脑的应用数据", REPO_ROOT / "contracts" / "case_db.sql")
+    (tmp_path / "另一台电脑的应用数据").mkdir()
+    assert other.open(str(case_root), None)["kind"] == "criminal"
+    assert ok(c.post("/api/case/open", json={"path": str(case_root), "kind": "daily"}), "case_open")["kind"] == "daily"
+
+
 def test_case_open_chosen_folders(client, case_root):
     """契约 1.4：folders 给了就只建勾选的（按标准目录表顺序），不在表里或没给 template 的整个拒绝、什么都不建。"""
     fail(client.post("/api/case/open", json={"path": str(case_root), "template": "criminal",

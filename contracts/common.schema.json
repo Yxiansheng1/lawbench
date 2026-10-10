@@ -49,6 +49,14 @@
       "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$",
       "description": "相对案件根目录的路径，分隔符一律用 /，不以 / 开头，不含 .. 段"
     },
+    "case_kind": {
+      "enum": [
+        "civil",
+        "criminal",
+        "daily"
+      ],
+      "description": "案件类型（1.4 起）：民商事 / 刑事 / 日常事务。打开案件时可带；记在案件的 case.db 里，跟着案件文件夹走"
+    },
     "material_type": {
       "enum": [
         "pdf",

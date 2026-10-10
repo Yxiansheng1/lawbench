@@ -585,7 +585,8 @@ class WikiRun:
                 "materials_at_generation": [{"material_id": m.mid, "sha256": m.meta["sha256"]} for m in mats]}
         contracts.validate("files/case_card.schema.json", "", card)
         payload = json.dumps(card, ensure_ascii=False, indent=2)
-        gate.write_bytes(self.root, f"{WIKI}/case.json", payload.encode("utf-8"), op="pipeline")
+        with _WIKI_LOCK:                             # 与"核对完成"（wiki/review）写 case.json 用同一把锁（1.4 复核 P3-2）
+            gate.write_bytes(self.root, f"{WIKI}/case.json", payload.encode("utf-8"), op="pipeline")
         self._draft("案件卡片", payload)
 
     def _cite_ok(self, cite: str, text: str) -> bool:

@@ -166,6 +166,7 @@ class Materials:
         self.after_render = None
         self.before_remove = None                # 识别队列挂上：移除材料前取消它还没做完的识别任务，签名 (case_id, material_id)
         self.recycle = trash.recycle             # 原件移到系统回收站；测试里可以换掉
+        self.can_recycle = trash.has_recycle_bin  # 这个位置有没有回收站（网络盘、U 盘没有：不移，免得被系统静默永久删除）
         self._chars_cache: dict[tuple, tuple] = {}   # 材料文本字数（materials_list.chars），按文本文件 mtime+大小缓存
 
     def _lock(self, case_id: str) -> threading.Lock:
@@ -510,8 +511,14 @@ class Materials:
         编号不在本案的：整个请求拒绝、什么都不做。已移除的再来一次算 already_removed。原件移不进回收站的那一份不动。"""
         root = self.cases.root_of(case_id)
         t0 = time.monotonic()
-        with self._lock(case_id):
-            known = {m["material_id"] for m in self._load_index(root, case_id)["materials"]}
+        try:
+            with self._lock(case_id):
+                known = {m["material_id"] for m in self._load_index(root, case_id)["materials"]}
+        except contracts.ContractError:
+            # index.json 不合契约（如某条路径被改到案件外）：不敢按它去动文件，也没法安全改写，全部记为没移除（1.4 复核 NOTE 2）
+            logs.event("materials", "remove", status="fail", case_id=case_id, error="INDEX_INVALID")
+            return {"removed": [], "already_removed": [], "wiki_needs_update": False,
+                    "failed": [{"material_id": mid, "reason": "材料索引已损坏，未移除；请先重新扫描"} for mid in material_ids]}
         if any(mid not in known for mid in material_ids):
             raise ApiError("MATERIAL_NOT_FOUND", "remove_unknown")
         if self.before_remove is not None:               # 识别队列：先停掉这些材料还在跑的识别（它自己要拿案件锁）
@@ -526,15 +533,24 @@ class Materials:
                 if m["status"] == "removed":
                     already.append(mid)
                     continue
+                reason = None
                 try:
                     if m["status"] != "source_deleted":
                         src = gate.resolve_read(root, m["rel_path"], op="materials_remove")
                         if src.is_file():
-                            self.recycle(src)
-                except (OSError, ApiError) as e:
-                    failed.append({"material_id": mid, "reason": "原件移不进回收站（可能正被其他程序打开），这份没有移除"})
-                    logs.event("materials", "remove", status="fail", case_id=case_id, material_id=mid,
-                               error=getattr(e, "code", None) or type(e).__name__)
+                            if not self.can_recycle(src):
+                                reason, err = "该位置没有回收站，未移除；请在资源管理器里自行处理", "NO_RECYCLE_BIN"
+                            else:
+                                self.recycle(src)
+                except ApiError as e:      # 闸门拒绝：原件位置被换成链接、rel_path 被改出案件等
+                    reason, err = "该材料位置不在案件内，未移除", e.code
+                except OSError as e:
+                    reason, err = "原件移不进回收站（可能正被其他程序打开），这份没有移除", type(e).__name__
+                except Exception as e:  # noqa: BLE001 这一份出了没料到的错：只让这一份失败
+                    reason, err = "未能移除，请稍后再试", type(e).__name__
+                if reason is not None:
+                    failed.append({"material_id": mid, "reason": reason})
+                    logs.event("materials", "remove", status="fail", case_id=case_id, material_id=mid, error=err)
                     continue
                 self._drop_derived(root, m)
                 m.update(status="removed", pages_need_ocr=[], pages_mixed=[], error=None, updated_at=now_iso())

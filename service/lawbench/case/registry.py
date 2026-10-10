@@ -114,11 +114,12 @@ class CaseRegistry:
         order = {id(c): i for i, c in enumerate(cases)}
         cases.sort(key=lambda c: (datetime.fromisoformat(c["last_opened"]), order[id(c)]), reverse=True)
         return [{"case_id": c["case_id"], "name": c["name"], "root": c["root"],
-                 "last_opened": c["last_opened"], "exists": os.path.isdir(c["root"])} for c in cases]
+                 "last_opened": c["last_opened"], "exists": os.path.isdir(c["root"]), "kind": c.get("kind")} for c in cases]
 
     # ---------- 打开案件 ----------
 
-    def open(self, path: str, template: str | None, folders: list[str] | None = None) -> dict:
+    def open(self, path: str, template: str | None, folders: list[str] | None = None,
+             kind: str | None = None) -> dict:
         """folders（契约 1.4）：律师勾选要建的子文件夹。给了就只建这些，必须都在 template 的标准目录表里
         （没给 template 或有不在表里的，整个请求拒绝、什么都不建）；不给按 template 全建。只补缺。"""
         wanted = None
@@ -132,6 +133,7 @@ class CaseRegistry:
             for rel in WORK_DIRS:
                 gate.mkdir_work(root, rel, op="case_open")
             case_id = self._init_db(root)
+            kind = self._kind(root, kind)
             folders_created: list[str] = []
             if template:
                 for rel in (TEMPLATES[template] if wanted is None else wanted):
@@ -142,10 +144,25 @@ class CaseRegistry:
             # 同一 case_id 只保留一条：整个文件夹复制到别处后在新位置打开，注册表指向新位置（F-CASE-04）
             data["cases"] = [c for c in data["cases"]
                              if c["case_id"] != case_id and os.path.normcase(c["root"]) != os.path.normcase(root)]
-            data["cases"].append({"case_id": case_id, "root": root, "name": name, "last_opened": now_iso()})
+            data["cases"].append({"case_id": case_id, "root": root, "name": name, "last_opened": now_iso(), "kind": kind})
             self._save(data)
         logs.event("case", "open", case_id=case_id)
-        return {"case_id": case_id, "name": name, "created": created, "folders_created": folders_created}
+        return {"case_id": case_id, "name": name, "created": created, "folders_created": folders_created, "kind": kind}
+
+    @staticmethod
+    def _kind(root: str, kind: str | None) -> str | None:
+        """案件类型（契约 1.4 case_open.kind）：记在案件的 case.db meta 里，跟着案件文件夹走。
+        这次带了就写上（覆盖原来的）；没带就读已有的，没有为 None（沿旧行为）。"""
+        con = sqlite3.connect(gate.resolve_write(root, "工作区/case.db", op="case_db"))
+        try:
+            if kind is not None:
+                with con:
+                    con.execute("INSERT OR REPLACE INTO meta VALUES ('kind', ?)", (kind,))
+                return kind
+            row = con.execute("SELECT value FROM meta WHERE key='kind'").fetchone()
+            return row[0] if row and row[0] in ("civil", "criminal", "daily") else None
+        finally:
+            con.close()
 
     def _init_db(self, root: str) -> str:
         db_path = gate.resolve_write(root, "工作区/case.db", op="case_db")

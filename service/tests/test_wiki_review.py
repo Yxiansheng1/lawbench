@@ -73,3 +73,16 @@ def test_broken_card(env):
     p = card(env)
     p.write_text("{", encoding="utf-8")
     fail(env.client.get("/api/wiki/review", params={"case_id": env.case_id}), "CASE_CARD_INVALID")
+
+
+def test_context_load_card_broken_is_case_card_invalid(env):
+    """复核 P3-1：读 L0 用的 load_card 遇到坏的 case.json，回 CASE_CARD_INVALID，不是 INTERNAL。"""
+    from lawbench.case import context
+    from lawbench.errors import ApiError
+    p = card(env)
+    for bad in ("{", '{"v": 1, "stance": {"text": "只有立场"}}'):
+        p.write_text(bad, encoding="utf-8")
+        with pytest.raises(ApiError) as e:
+            context.load_card(str(env.root))
+        assert e.value.code == "CASE_CARD_INVALID"
+

@@ -25,6 +25,16 @@
           },
           "last_opened": {
             "$ref": "lawbench://contracts/common.schema.json#/$defs/time"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "lawbench://contracts/common.schema.json#/$defs/case_kind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

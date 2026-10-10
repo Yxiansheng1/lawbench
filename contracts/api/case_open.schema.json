@@ -32,7 +32,10 @@
           },
           "maxItems": 200,
           "uniqueItems": true,
-          "description": "律师勾选要建的子文件夹（1.4 起）：给了就只建这些（必须都在 template 对应的标准目录表里），不给按 template 全建；只补缺"
+          "description": "律师勾选要建的子文件夹（1.4 起）：给了就只建这些（必须都在 template 对应的标准目录表里），不给按 template 全建；只补缺。只管标准目录；律师自己填的目录名不走这里"
+        },
+        "kind": {
+          "$ref": "lawbench://contracts/common.schema.json#/$defs/case_kind"
         }
       },
       "additionalProperties": false,
@@ -68,6 +71,16 @@
                     "type": "string"
                   },
                   "description": "本次按目录模板新建的子文件夹"
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "$ref": "lawbench://contracts/common.schema.json#/$defs/case_kind"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "additionalProperties": false,
@@ -110,6 +123,16 @@
             "type": "string"
           },
           "description": "本次按目录模板新建的子文件夹"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "lawbench://contracts/common.schema.json#/$defs/case_kind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
