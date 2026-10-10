@@ -18,6 +18,27 @@ OCR_PROMPT = (
     "印章、水印、手写批注中的文字，能看清的照写，并在前面标注（印章）或（批注）。"
 )
 
+# Xiaomi-OCR-0（SeerRay-Lab，基于 Qwen3.5-0.8B）是专用模型，只认模型卡里的任务提示词；下面这句是"Document"一项的原文，
+# 一个字不能改（模型卡 README "Task prompts"，2026-10-10 核）。表格按 OTSL、公式按 LaTeX 输出。
+XIAOMI_OCR_PROMPT = (
+    "Extract all information from the main body of the document image and represent it "
+    "in markdown format, ignoring headers and footers. Tables should be expressed in OTSL "
+    "format, formulas in the document should be represented using LATEX format, and the "
+    "parsing should be organized according to the reading order."
+)
+
+# 识别提示词模板，按 PREP395_OCR_MODEL（模型名或 GGUF 文件名）选：名字里带 xiaomi 的用模型卡的写法（图在前、提示词在后），
+# 其余用 default（PaddleOCR-VL 等通用视觉模型沿用的中文提示词）。换回原模型只要把 PREP395_OCR_MODEL 改回去。
+OCR_TEMPLATES = {
+    "default": {"prompt": OCR_PROMPT, "image_first": False},
+    "xiaomi-ocr-0": {"prompt": XIAOMI_OCR_PROMPT, "image_first": True},
+}
+
+
+def ocr_template_name(model: str) -> str:
+    return "xiaomi-ocr-0" if "xiaomi" in (model or "").lower() else "default"
+
+
 FIELDS_PROMPT = (
     "从下面的材料文本中抽取这些字段：{fields}。材料里的位置标记形如【第N页】【第N段】【第N行】。"
     "只输出 JSON 数组，每个元素为 {{\"field\": 字段名, \"value\": 原文中原样出现的值, \"loc\": \"第N页\"}}，"
@@ -141,6 +162,9 @@ class LlamaServerBackend:
         self.llm9b_url = llm9b_url
         self.ocr_model = ocr_model
         self.llm9b_model = llm9b_model
+        self.ocr_template = ocr_template_name(ocr_model)
+        if self.ocr_template != "default":                 # 识别结果的 backend 字段带上模板名，看得出现在是哪个模型的写法
+            self.name = f"{type(self).name}:{self.ocr_template}"
         # trust_env=False：不走系统代理，只连本机
         self.client = httpx.AsyncClient(timeout=timeout_s, trust_env=False)
 
@@ -154,7 +178,9 @@ class LlamaServerBackend:
 
     async def ocr(self, png: bytes) -> str:
         url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
-        content = [{"type": "text", "text": OCR_PROMPT}, {"type": "image_url", "image_url": {"url": url}}]
+        t = OCR_TEMPLATES[self.ocr_template]
+        text, image = {"type": "text", "text": t["prompt"]}, {"type": "image_url", "image_url": {"url": url}}
+        content = [image, text] if t["image_first"] else [text, image]
         return await self._chat(self.ocr_url, self.ocr_model, content, 4096)
 
     async def extract_fields(self, text: str, fields: list[str]) -> list[dict]:

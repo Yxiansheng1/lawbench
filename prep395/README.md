@@ -33,7 +33,7 @@ cd D:\lawbench-C\prep395
 | `PREP395_LLM_BASE` | `http://192.168.8.77:8000` | 6000D 网关，用于 Key 校验；只允许 6000D 的所内、所外地址或 127.0.0.1 |
 | `PREP395_BACKEND` | `llama` | `llama`（部署）或 `fake`（只用于开发和测试：返回固定假文本，`/health` 的 `status` 报 `degraded`） |
 | `PREP395_OCR_URL` / `PREP395_LLM9B_URL` | `http://127.0.0.1:9101` / `:9102` | 本机 llama-server；只允许 127.0.0.1 |
-| `PREP395_OCR_MODEL` / `PREP395_LLM9B_MODEL` | `ocr` / `llm9b` | 发给 llama-server 的 model 名 |
+| `PREP395_OCR_MODEL` / `PREP395_LLM9B_MODEL` | `ocr` / `llm9b` | 发给 llama-server 的 model 名；OCR 一项同时用来选识别提示词模板：名字里带 `xiaomi` 用 Xiaomi-OCR-0 模型卡的提示词，其余用原提示词（`install.ps1` 会把 `-OcrModel` 的文件名写进来） |
 | `PREP395_OCR_CONCURRENCY` | `2` | 识别同时处理页数 N（按 G-5 实测调整）；9B 固定 1 |
 | `PREP395_QUEUE_MAX` | `20` | 排队上限，超出返回 503 `QUEUE_FULL` + `Retry-After` |
 | `PREP395_OCR_TIMEOUT` | `120` | 单页识别超时（秒），超时返回 504 |

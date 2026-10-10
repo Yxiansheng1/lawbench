@@ -58,6 +58,42 @@ def test_ocr_request_carries_base64_image():
     assert body["stream"] is False and body["chat_template_kwargs"] == {"enable_thinking": False}
 
 
+def _ocr_body(model: str) -> tuple[dict, str]:
+    app = fake_llama("ok")
+    with ServerThread(app) as s:
+        be = LlamaServerBackend(s.url, s.url, ocr_model=model)
+
+        async def go():
+            await be.ocr(png_bytes(size=(20, 30)))
+            await be.aclose()
+
+        asyncio.run(go())
+    return app.state.bodies[0], be.name
+
+
+def test_ocr_template_default_keeps_paddle_prompt():
+    """PREP395_OCR_MODEL 不带 xiaomi（默认 "ocr"、PaddleOCR-VL 的文件名）：原来的中文提示词，文字在前、图在后。"""
+    from prep395.backends import OCR_PROMPT
+    for model in ("ocr", "PaddleOCR-VL-1.6-Q8_0.gguf"):
+        body, name = _ocr_body(model)
+        parts = body["messages"][0]["content"]
+        assert [p["type"] for p in parts] == ["text", "image_url"] and parts[0]["text"] == OCR_PROMPT
+        assert body["model"] == model and name == "llama.cpp/vulkan"
+
+
+def test_ocr_template_xiaomi_uses_model_card_prompt():
+    """PREP395_OCR_MODEL 带 xiaomi：模型卡 Document 任务的提示词原文，图在前、提示词在后；backend 名带模板名。"""
+    body, name = _ocr_body("Xiaomi-OCR-0.BF16.gguf")
+    parts = body["messages"][0]["content"]
+    assert [p["type"] for p in parts] == ["image_url", "text"]
+    assert parts[1]["text"] == (
+        "Extract all information from the main body of the document image and represent it in markdown format, "
+        "ignoring headers and footers. Tables should be expressed in OTSL format, formulas in the document should be "
+        "represented using LATEX format, and the parsing should be organized according to the reading order.")
+    assert name == "llama.cpp/vulkan:xiaomi-ocr-0"
+    assert body["chat_template_kwargs"] == {"enable_thinking": False} and body["temperature"] == 0
+
+
 def test_extract_parses_json_in_code_fence():
     app = fake_llama('```json\n[{"field": "金额", "value": "80,000", "loc": "第2页"}]\n```')
     with ServerThread(app) as s:

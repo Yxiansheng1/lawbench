@@ -94,7 +94,7 @@ $defs = @(
      args = "-m `"$(Join-Path $models $LlmModel)`" --port 9102 -np 1 -c $LlmCtx $common"; env = @{} },
   @{ id = "prep395"; name = "prep395 preprocessing service"; exe = $py; args = "-m prep395";
      env = @{ PREP395_HOST = (@($LanIp, $VpnIp) | Where-Object { $_ }) -join ","; PREP395_PORT = "9000"; PREP395_BACKEND = "llama"; PREP395_LLM_BASE = $LlmBase;
-              PREP395_OCR_CONCURRENCY = "$OcrParallel"; PREP395_HOME = $Root;
+              PREP395_OCR_CONCURRENCY = "$OcrParallel"; PREP395_HOME = $Root; PREP395_OCR_MODEL = $OcrModel;
               PREP395_ADMIN_USER = $AdminUser; PREP395_ADMIN_PASS_SHA256 = $AdminPassSha256 } }
 )
 foreach ($d in $defs) {
