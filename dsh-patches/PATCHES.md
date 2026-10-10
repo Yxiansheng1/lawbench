@@ -23,6 +23,7 @@ git -C dsh apply ..\dsh-patches\P-20-no-workspace-word.patch
 git -C dsh apply ..\dsh-patches\P-21-home-above-new-session.patch
 git -C dsh apply ..\dsh-patches\P-22-macos.patch
 git -C dsh apply ..\dsh-patches\P-23-windows-payload.patch
+git -C dsh apply ..\dsh-patches\P-24-add-case-adopter.patch
 # P-4 的图片不放进补丁（与 packaging\brand\desktop\ 重复，且二进制补丁约 2MB）：由 packaging\brand\make_brand.py 从 logo\ 原件生成，打补丁后拷进去
 Copy-Item -Recurse -Force packaging\brand\desktop\* dsh\apps\desktop\
 ```
@@ -242,3 +243,11 @@ Windows 行为不变：每处改动都在 `darwin` / `LAWBENCH_MAC_ADHOC` 分支
 | P-23 | `apps/desktop/src/client/WelcomePage.tsx`：读不到设置时每 3 秒再读，读到 Host 给的原因（"本机服务未能启动：…"）就停在原因上，最多 100 次（约 5 分钟；Host 判定起不来要一分多钟）；读到了就填好地址、清掉提示；新用例 `tests/lawbench-welcome-retry.client.spec.tsx` 3 例（令 1556 第 2 条） | 首次启动时服务常还在起；原来只读一次，停在"工作台服务未启动"，端口被占等原因永远显示不出来（第五版重打后冒烟发现） | 用例 3 例；首次配置页相关 3 个文件 17 过 |
 | P-23 | `WelcomePage.tsx` 再改（复核 rv-A50 P3-1，令 1759 第 2 条）：重读期间表单保持不可填（`loading`），读到设置、读到原因或读满 5 分钟才放开；用例 2 例（`lawbench-welcome-retry.client.spec.tsx` 共 5 例） | 原来第一次读失败就放开表单，之后读到时整体填入，会把律师已填的地址、姓名盖成服务给的值，并清掉校验提示 | 首次配置页相关 3 个文件 19 过 |
 | P-23 | `WelcomePage.tsx` 再改（令 1257 第 4 条，复核 rv-A51 NOTE）：`getSetup` 本身抛错时 `catch`，放开表单并显示通用说法（`SETUP_READ_FAILED`）；"最多读 100 次"用例补读满后的断言，新用例"getSetup 抛错" | 原来抛错时表单一直不可填 | 首次配置页相关 3 个文件 20 过 |
+
+## P-24：左栏"添加案件"选完文件夹交给我方建案件流程（令 `致A-ORCH-执行令-停止重打-左栏添加案件进第七版-20261010-1851.md`）
+
+新补丁，排在 P-23 之后，对"固定提交 + P-10 … P-23"做差分。
+
+| 补丁 | 改了什么 | 为什么 | 怎么验 |
+|---|---|---|---|
+| P-24 | `packages/client/ui-workspace/src/client/lawbench-adopter.ts`（新）：一个可设、可清的"接手人"（`setLawbenchDirectoryAdopter` / `lawbenchDirectoryAdopter`）。`WorkspacePicker.tsx` 的 `adoptDirectory`：选完文件夹时有接手人就把路径交给它（它做完后只收起选文件夹的流程，不建工作区、不选中），没有接手人照原样 `createWorkspace` 再选中；接手人抛错落在原有的"文件夹出错"框。`navigation.ts` 的 `UiWorkspaceService` 加 `setDirectoryAdopter(adopter)`（我方界面插件经 `ctx.uiWorkspace` 调）。`tests/workspace-picker.client.spec.tsx` 加两例（补丁 `P-24-add-case-adopter.patch`） | 左栏"添加案件"（"+"、Ctrl+O）和选案件菜单里的"添加案件…"是 DSH 原生的添加工作区，P-20 只改了名：直接把文件夹挂成工作区、不经案件登记，律师在里面新建对话被 `session-store` 拒（"这个文件夹还没有作为案件打开…"），按钮成了陷阱（用户 2026-10-10）。这三个入口在 DSH 里都走 `WorkspacePicker` 的 `adoptDirectory` 一处，在这里交给我方即可；DSH 没有现成的插槽能拦这一步 | DSH `ui-workspace` 12 个测试文件 384 项通过、3 项跳过（新两例：有接手人时路径交过去、不建不选；接手人出错进出错框、清掉接手人后恢复原行为）；`tsc -b tsconfig.client.json` 通过。我方 `tests\drop-case.spec.ts`"左栏添加案件"六例（含读 DSH 源码核口子在）。严格补丁链 19 个补丁、161 个路径与工作区逐字节一致。真机见 `docs\plan\evidence\T13\交付说明.md` |

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 令 1422（第七版待办 20）：首页空白处拖入文件夹 = 建案件；拖到案件卡片仍是加进该案的材料。
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
@@ -8,7 +8,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { droppedItems } from '../host/desk-actions.ts'
 import { BLANK_OVER_MS, HomeLanding } from '../ui/home-page.tsx'
 import { DialogHost } from '../ui/dialogs.tsx'
-import { ASK_OK, askTitle, badCaseName, BLANK_HINT, cardHint, dropOnBlank, FILE_TEXT, NAME_TITLE, readKind, ROOT_TEXT, SYNC_DROP_OK, SYNC_DROP_TITLE, type DroppedItem } from '../ui/drop-case.ts'
+import { registerAddCaseAdopter } from '../ui/index.tsx'
+import { addCaseFromPicked, ASK_OK, askTitle, badCaseName, BLANK_HINT, cardHint, dropOnBlank, FILE_TEXT, NAME_TITLE, OTHER_TEXT_PICKED, readKind, ROOT_TEXT, SYNC_DROP_OK, SYNC_DROP_TITLE, type DroppedItem } from '../ui/drop-case.ts'
 import { app, lb, setApi, type CaseRef, type LawbenchApi } from '../ui/state.ts'
 import { setNav, type Nav } from '../ui/kit.tsx'
 
@@ -233,6 +234,97 @@ describe('空白处松手', () => {
     expect(await p).toEqual([])
     expect(only(calls, 'localCaseFolder')).toEqual([])
     expect(only(calls, 'materialsScan')).toEqual([])
+  })
+})
+
+describe('左栏"添加案件"选完文件夹（令 1851，DSH 补丁 P-24）', () => {
+  /** 记下有没有把文件夹挂进左栏（打开案件工作区）。 */
+  function withNav() {
+    const entered: string[] = []
+    setNav({ openCaseWorkspace: async (root: string) => { entered.push(root) }, openTab: () => {}, seedTabs: () => {}, pathFor: () => '' } as unknown as Nav)
+    return entered
+  }
+
+  it('接线：界面插件把"选完文件夹之后"接过来，卸下时还回去；DSH 没有这个口子时什么也不做', () => {
+    const set: unknown[] = []
+    const cleanups: Array<() => void> = []
+    registerAddCaseAdopter({ setDirectoryAdopter: (fn: unknown) => { set.push(fn) } } as never, (fn) => { cleanups.push(fn()) })
+    expect(set).toEqual([addCaseFromPicked])
+    cleanups[0]!()
+    expect(set).toEqual([addCaseFromPicked, undefined])
+    let ran = false
+    registerAddCaseAdopter({} as never, () => { ran = true })
+    expect(ran).toBe(false)
+  })
+
+  it('选了一个没登记的文件夹：调用序列与拖入一致（看一眼 → 问 → 登记 → 扫材料 → 进入），类型记下', async () => {
+    const calls = setup([dir(DIR)])
+    const entered = withNav()
+    const p = addCaseFromPicked(DIR)
+    await tick()
+    expect(last()).toMatchObject({ kind: 'newCase', name: '李某合同纠纷' })
+    expect(entered).toEqual([]) // 还没确认：左栏里没有它
+    last()!.resolve!('civil'); app.set((s) => ({ ...s, dialogs: [] }))
+    await p
+    expect(calls.map((c) => c[0])).toEqual(['dropInfo', 'caseOpen', 'materialsScan'])
+    expect(only(calls, 'dropInfo')).toEqual([{ paths: [DIR] }])
+    expect(only(calls, 'caseOpen')).toEqual([{ path: DIR, template: null }])
+    expect(entered).toEqual([DIR])
+    expect(readKind('id-李某合同纠纷')).toBe('civil')
+  })
+
+  it('取消：不登记、不挂进左栏、不弹别的', async () => {
+    const calls = setup([dir(DIR)])
+    const entered = withNav()
+    const p = addCaseFromPicked(DIR)
+    await tick()
+    last()!.resolve!(null)
+    app.set((s) => ({ ...s, dialogs: s.dialogs.filter((d) => d.kind !== 'newCase') }))
+    await p
+    expect(only(calls, 'caseOpen')).toEqual([])
+    expect(only(calls, 'materialsScan')).toEqual([])
+    expect(entered).toEqual([])
+    expect(dialogs()).toEqual([])
+  })
+
+  it('已登记的案件：不问，直接打开；云同步目录同样只给"复制到本机建案件"', async () => {
+    const known: CaseRef = { case_id: 'k', name: '李某合同纠纷', root: DIR, exists: true }
+    let calls = setup([dir(DIR)])
+    let entered = withNav()
+    app.set((s) => ({ ...s, cases: [known] }))
+    await addCaseFromPicked(DIR)
+    expect(dialogs().some((d) => d.kind === 'newCase')).toBe(false)
+    expect(calls.map((c) => c[0])).toEqual(['dropInfo', 'caseOpen'])
+    expect(entered).toEqual([DIR])
+    app.set((s) => ({ ...s, dialogs: [], cases: [] }))
+    const SYNCED = 'C:\\Users\\x\\OneDrive\\文档\\李某合同纠纷'
+    calls = setup([dir(SYNCED)])
+    entered = withNav()
+    const p = addCaseFromPicked(SYNCED)
+    await tick(); last()!.resolve!('civil'); app.set((s) => ({ ...s, dialogs: [] }))
+    await tick(); await tick()
+    expect(last()).toMatchObject({ kind: 'confirm', title: SYNC_DROP_TITLE, ok: SYNC_DROP_OK })
+    last()!.resolve!(false)
+    await p
+    expect(entered).toEqual([]) // 原文件夹不挂进左栏
+    expect(only(calls, 'localCaseFolder')).toEqual([])
+  })
+
+  it('选的是链接或网络位置上的文件夹：说明用"选"不用"拖"；出错不往外抛', async () => {
+    setup([{ path: '\\\\fs01\\案卷\\丙', name: '丙', kind: 'other', has_case: false, children: [] }])
+    await addCaseFromPicked('\\\\fs01\\案卷\\丙')
+    expect(dialogs().map((d) => d.text)).toEqual([OTHER_TEXT_PICKED])
+    app.set((s) => ({ ...s, dialogs: [] }))
+    setApi({ dropInfo: async () => { throw new Error('boom') } } as unknown as LawbenchApi)
+    await expect(addCaseFromPicked(DIR)).resolves.toBeUndefined()
+    expect(dialogs().map((d) => d.title)).toEqual(['没能建案件']) // Host 调用出错已被接住并说明，不往 DSH 那边抛
+  })
+
+  it('DSH 里有 P-24 的口子：选完文件夹先看有没有接手的，有就交过去，不直接建工作区', () => {
+    const base = join(__dirname, '..', '..', 'dsh', 'packages', 'client', 'ui-workspace', 'src', 'client')
+    const picker = readFileSync(join(base, 'WorkspacePicker.tsx'), 'utf8')
+    expect(picker).toMatch(/const adopter = lawbenchDirectoryAdopter\(\)[\s\S]{0,200}adopter\(path\)/)
+    expect(readFileSync(join(base, 'navigation.ts'), 'utf8')).toContain('setDirectoryAdopter(adopter: LawbenchDirectoryAdopter | undefined): void')
   })
 })
 

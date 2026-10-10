@@ -16,6 +16,7 @@ import { DailyErrorLine } from './daily-error.tsx'
 import { CaseSwitcher } from './case-switcher.tsx'
 import { createRightbarSeeder, forgetIfGone, loadSeeded, RIGHTBAR_TABS, saveSeeded, seedTabsCollapsed } from './rightbar.ts'
 import { landOnDailyCase, openCase, TABS } from './cases.ts'
+import { addCaseFromPicked } from './drop-case.ts'
 import { ensureFieldStyle, getNav, setNav, type Nav } from './kit.tsx'
 import { app, call, currentCase, notice, samePath, setApi, unwrapRemote, type LawbenchApi } from './state.ts'
 import { installPasteTextWatch, makeIntakeHook, type IntakeHook } from './intake.ts'
@@ -41,7 +42,11 @@ type Ctx = {
   layout: { selectPanel(id: string | null): void }
   sessions: { list: Observable<{ byId: Record<string, { cwd?: string; running?: boolean } | undefined> }> }
   uiSession: { adapter: { current: Observable<{ key?: string } | undefined> } }
-  uiWorkspace: { openWorkspace(id: string): Promise<unknown>; openSession(id: string): void; pickDirectory?(): Promise<string | null | undefined> }
+  uiWorkspace: {
+    openWorkspace(id: string): Promise<unknown>; openSession(id: string): void; pickDirectory?(): Promise<string | null | undefined>
+    /** P-24："添加案件"选完文件夹后交给谁（不设时 DSH 直接把文件夹挂成工作区）。 */
+    setDirectoryAdopter?(adopter: ((path: string) => Promise<void>) | undefined): void
+  }
   workspaces: {
     create(req: { path: string }): Promise<{ workspaceId: string }>
     delete(workspaceId: string): Promise<void>
@@ -164,11 +169,25 @@ function registerWorkspace(ctx: Ctx): void {
   const fallbackPick = ctx.uiWorkspace.pickDirectory
   if (!win.__DSH_DIRECTORY_PICKER__ && fallbackPick) navImpl.pickDirectory = async () => (await fallbackPick.call(ctx.uiWorkspace)) ?? null
   ctx.effect(() => () => { navImpl.openCaseWorkspace = undefined; navImpl.openSession = undefined; navImpl.forgetCaseWorkspace = undefined }, '律师工作台界面：打开案件')
+  // 令 1851：左栏"添加案件"、菜单"添加案件…"选完文件夹走建案件流程（同首页拖文件夹），不再直接挂成没登记的工作区
+  registerAddCaseAdopter(ctx.uiWorkspace, (fn, label) => ctx.effect(fn, label))
   // 纯聊天的默认工作区"日常事务"（执行令 1156 第 4 条）：当前会话不在案件里时打开它。走"进入"同一条路（再登记一次、
   // 记进界面状态、打开工作区）：只打开工作区时，DSH 新建的空会话在输入区认不出案件（真机核过）
   // 令 1426：启动落首页——日常事务照样打开（空会话要落在一个案件里），打开后再回首页
   void landOnDailyCase((root) => openCase(root, null).then(() => { navImpl.goHome?.() })).catch(() => undefined)
   // 1612 复核 P3：去掉"重启后不在登记里的一律撤"（服务的登记丢了会把全部案件撤掉）；重启前的旧位置那一项留着，律师可在侧栏菜单"从列表移除案件"
+}
+
+/**
+ * 把"添加案件"选完文件夹之后的事接过来（DSH 的 P-24 给的口子）；界面插件卸下时还回去。
+ * DSH 没有这个口子（补丁没打上）时什么也不做。
+ */
+export function registerAddCaseAdopter(uiWorkspace: Ctx['uiWorkspace'], effect: (fn: () => () => void, label: string) => void): void {
+  if (!uiWorkspace.setDirectoryAdopter) return
+  effect(() => {
+    uiWorkspace.setDirectoryAdopter!(addCaseFromPicked)
+    return () => { uiWorkspace.setDirectoryAdopter!(undefined) }
+  }, '律师工作台界面：添加案件走建案件流程')
 }
 
 /** 当前会话 → 工作目录，首页据此知道"当前案件"。 */

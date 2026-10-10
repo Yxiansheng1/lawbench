@@ -28,6 +28,8 @@ export const FILE_TEXT = '一个文件不能成为案件：请拖到某个案件
 export const NO_PATH_TEXT = '拖进来的内容没有本机路径，请从资源管理器里拖文件夹进来。'
 export const OTHER_TITLE = '这一项不能建成案件'
 export const OTHER_TEXT = '快捷方式、链接和网络位置上的文件夹不能建成案件，请拖本机上的文件夹本身。'
+/** 左栏"添加案件"选的文件夹不能建成案件时（令 1851）：同一个意思，说"选"不说"拖"。 */
+export const OTHER_TEXT_PICKED = '快捷方式、链接和网络位置上的文件夹不能建成案件，请选本机上的文件夹本身。'
 export const NAME_TITLE = '这个文件夹名不能当案件名'
 export const ROOT_TEXT = '不能把整个盘当成案件。请拖盘里的某个文件夹进来。'
 /** 盘根（D:\\）：不问，直接说明（否则先问"把『D:』建成案件？"再被服务拒，复核 rv-A55 顺手项）。 */
@@ -53,9 +55,10 @@ export function readKind(caseId: string): DropKind | null {
 /**
  * 首页空白处松手：文件夹逐个问、各建一案；文件不建，说明一次。
  * @param paths - 拖进来各项的本机路径（没有路径的已被调用方去掉）。
+ * @param picked - 这些路径是在"添加案件"的选文件夹框里选的（不是拖进来的）：只影响一句说明的用词。
  * @returns 建成或打开的案件。
  */
-export async function dropOnBlank(paths: string[]): Promise<CaseRef[]> {
+export async function dropOnBlank(paths: string[], picked = false): Promise<CaseRef[]> {
   const clean = [...new Set(paths.filter(Boolean))]
   if (!clean.length) { notice(FILE_TITLE, NO_PATH_TEXT); return [] }
   const info = await call<{ items: DroppedItem[] }>('dropInfo', { paths: clean })
@@ -63,7 +66,7 @@ export async function dropOnBlank(paths: string[]): Promise<CaseRef[]> {
   const dirs = info.value.items.filter((x) => x.kind === 'dir')
   // 第 4 条：文件不建案件（文件夹和文件混拖只处理文件夹），说明一次
   if (info.value.items.some((x) => x.kind === 'file')) notice(FILE_TITLE, FILE_TEXT)
-  if (info.value.items.some((x) => x.kind === 'other')) notice(OTHER_TITLE, OTHER_TEXT)
+  if (info.value.items.some((x) => x.kind === 'other')) notice(OTHER_TITLE, picked ? OTHER_TEXT_PICKED : OTHER_TEXT)
   const made: CaseRef[] = []
   for (const [i, d] of dirs.entries()) {
     // 只有最后一个转到案件里；前面的建好留在首页列表
@@ -72,6 +75,16 @@ export async function dropOnBlank(paths: string[]): Promise<CaseRef[]> {
     if (c) made.push(c)
   }
   return made
+}
+
+/**
+ * 左栏"添加案件"（Ctrl+O、菜单"添加案件…"）选完文件夹之后（令 1851，用户 2026-10-10 定）：走与首页拖文件夹建案件同一套流程——
+ * 已登记或当过案件的直接打开；否则问"把『××』建成案件？"选类型 → 登记 → 扫材料 → 打开；云同步目录退"复制到本机建案件"；
+ * 取消就什么都不挂进左栏。原来 DSH 直接把文件夹挂成工作区、不经案件登记，在里面新建对话会被拒（"这个文件夹还没有作为案件打开…"）。
+ * 由 DSH 的 P-24 在选完文件夹时交过来；这里不抛错（出错都已弹说明）。
+ */
+export async function addCaseFromPicked(path: string): Promise<void> {
+  await dropOnBlank([path], true).catch(() => { notice('没能添加案件', '请重试；仍不行请从首页"打开案件…"打开这个文件夹。') })
 }
 
 /** 一个文件夹建成案件（或已是案件就直接打开）。取消、被拒返回 undefined。 */

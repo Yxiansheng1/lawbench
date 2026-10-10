@@ -1,0 +1,160 @@
+diff --git a/packages/client/ui-workspace/src/client/WorkspacePicker.tsx b/packages/client/ui-workspace/src/client/WorkspacePicker.tsx
+index a8e40b7889..d1d9cfed85 100644
+--- a/packages/client/ui-workspace/src/client/WorkspacePicker.tsx
++++ b/packages/client/ui-workspace/src/client/WorkspacePicker.tsx
+@@ -19,6 +19,7 @@ import type {
+ import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
+ import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+ import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
++import { lawbenchDirectoryAdopter } from './lawbench-adopter.ts'
+ import css from './WorkspacePicker.module.css'
+ 
+ const ADD_WORKSPACE = '::add-workspace'
+@@ -128,15 +129,22 @@ export function WorkspacePickFlow({
+   }
+ 
+   /** Adopt a picked directory; failures land in the folder-error dialog (Choose again reopens the flow). */
+-  const adoptDirectory = (path: string): Promise<void> =>
+-    createWorkspace({ path }).then((workspace) => {
+-      setFlowOpen(false)
+-      onPick(workspace.workspaceId)
+-    }).catch((reason: unknown) => {
++  const adoptDirectory = (path: string): Promise<void> => {
++    // lawbench P-24: with an adopter set, the picked directory goes to it (case registration, then it opens the
++    // case itself); nothing is created or picked here, so a declined pick leaves no workspace behind.
++    const adopter = lawbenchDirectoryAdopter()
++    const adopted: Promise<void> = adopter !== undefined
++      ? adopter(path).then(() => { setFlowOpen(false) })
++      : createWorkspace({ path }).then((workspace) => {
++        setFlowOpen(false)
++        onPick(workspace.workspaceId)
++      })
++    return adopted.catch((reason: unknown) => {
+       setModalError(reason instanceof Error ? reason.message : String(reason))
+       setFlowOpen(false)
+       setErrorOpen(true)
+     })
++  }
+ 
+   const openDirectoryFlow = useCallback((): void => {
+     onClose()
+diff --git a/packages/client/ui-workspace/src/client/lawbench-adopter.ts b/packages/client/ui-workspace/src/client/lawbench-adopter.ts
+new file mode 100644
+index 0000000000..f53743aabd
+--- /dev/null
++++ b/packages/client/ui-workspace/src/client/lawbench-adopter.ts
+@@ -0,0 +1,28 @@
++/**
++ * lawbench P-24: one hand-over point for "add workspace" (sidebar "+", Ctrl+O, the picker menu's add entry).
++ *
++ * A lawbench case is a workspace that the workbench service has registered. Attaching a picked directory straight
++ * as a workspace skips that registration, and the next new conversation there is refused. So when the lawbench
++ * client plugin has set an adopter, the picked directory is handed to it instead of being created as a workspace
++ * here; the adopter registers the case (or declines) and opens it itself. Without an adopter the original
++ * behaviour stays.
++ */
++export type LawbenchDirectoryAdopter = (path: string) => Promise<void>
++
++let adopter: LawbenchDirectoryAdopter | undefined
++
++/**
++ * Set or clear the adopter.
++ * @param next - the adopter, or undefined to restore the original add-workspace behaviour.
++ */
++export function setLawbenchDirectoryAdopter(next: LawbenchDirectoryAdopter | undefined): void {
++  adopter = next
++}
++
++/**
++ * The adopter in force.
++ * @returns the adopter, or undefined when none is set.
++ */
++export function lawbenchDirectoryAdopter(): LawbenchDirectoryAdopter | undefined {
++  return adopter
++}
+diff --git a/packages/client/ui-workspace/src/client/navigation.ts b/packages/client/ui-workspace/src/client/navigation.ts
+index 1b9ff0be25..239ac7ca37 100644
+--- a/packages/client/ui-workspace/src/client/navigation.ts
++++ b/packages/client/ui-workspace/src/client/navigation.ts
+@@ -19,6 +19,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+ import type { RowToast } from './contract/slots.ts'
+ import { pinOrderAccounts, pinOrderSource } from './pin-order.ts'
+ import type { WorkspaceViewStoreActions } from './stores.ts'
++import { setLawbenchDirectoryAdopter, type LawbenchDirectoryAdopter } from './lawbench-adopter.ts'
+ 
+ interface MainSelection {
+   readonly sessionId?: SessionId
+@@ -262,6 +263,14 @@ class UiWorkspaceService extends Service implements UiWorkspace {
+     await this.workspaces.unpinSession(sessionId)
+   }
+ 
++  /**
++   * lawbench P-24: route "add workspace" picks to the lawbench client plugin (see lawbench-adopter.ts).
++   * @param adopter - receives the picked directory; undefined restores the original behaviour.
++   */
++  setDirectoryAdopter(adopter: LawbenchDirectoryAdopter | undefined): void {
++    setLawbenchDirectoryAdopter(adopter)
++  }
++
+   async pickDirectory(): Promise<string | null> {
+     const result = await this.directoryPicker.pick()
+     if (!result.ok) throw new Error(`directory picker failed: ${result.error.message}`)
+diff --git a/packages/client/ui-workspace/tests/workspace-picker.client.spec.tsx b/packages/client/ui-workspace/tests/workspace-picker.client.spec.tsx
+index 3b1eec0500..ddb391cd86 100644
+--- a/packages/client/ui-workspace/tests/workspace-picker.client.spec.tsx
++++ b/packages/client/ui-workspace/tests/workspace-picker.client.spec.tsx
+@@ -12,13 +12,14 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
+ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+ import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from '../src/client/contract/slots.ts'
+ import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
++import { setLawbenchDirectoryAdopter } from '../src/client/lawbench-adopter.ts'
+ import { zh } from '../src/client/locales.ts'
+ 
+ // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
+ const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
+ const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
+ 
+-afterEach(cleanup)
++afterEach(() => { cleanup(); setLawbenchDirectoryAdopter(undefined) })
+ 
+ // The seat's key domain is workspace ∪ common; the stub mirrors the real
+ // lookup chain (namespace, then common vocabulary, then the key).
+@@ -147,6 +148,38 @@ describe('WorkspacePicker', () => {
+     expect(screen.queryByTestId('directory-flow')).toBeNull()
+   })
+ 
++  it('lawbench P-24: with an adopter set, the picked path goes to it; no Workspace is created or picked here', async () => {
++    const adopter = vi.fn(async () => {})
++    setLawbenchDirectoryAdopter(adopter)
++    const b = mount([workspace('alpha', 'Alpha')])
++    chooseAdd()
++    await act(async () => { b.probe.owner!.onPicked('/tmp/project') })
++    expect(adopter).toHaveBeenCalledWith('/tmp/project')
++    expect(b.createWorkspace).not.toHaveBeenCalled()
++    expect(b.onPick).not.toHaveBeenCalled()
++    // The flow request is withdrawn once the adopter settles (it opened the case itself, or the pick was declined).
++    await waitFor(() => { expect(screen.queryByTestId('directory-flow')).toBeNull() })
++    expect(screen.queryByRole('dialog')).toBeNull()
++  })
++
++  it('lawbench P-24: an adopter failure lands in the folder-error surface; clearing the adopter restores creation', async () => {
++    setLawbenchDirectoryAdopter(async () => { throw new Error('adopter failed') })
++    const b = mount([workspace('alpha', 'Alpha')])
++    chooseAdd()
++    await act(async () => { b.probe.owner!.onPicked('/tmp/project') })
++    await waitFor(() => { expect(screen.getByRole('dialog').textContent).toContain('adopter failed') })
++    expect(b.createWorkspace).not.toHaveBeenCalled()
++    cleanup()
++    setLawbenchDirectoryAdopter(undefined)
++    const created = { ...workspace('adopted'), path: '/tmp/project', title: 'project' }
++    const createWorkspace = vi.fn(async () => created)
++    const c = mount([workspace('alpha', 'Alpha')], createWorkspace)
++    chooseAdd()
++    await act(async () => { c.probe.owner!.onPicked('/tmp/project') })
++    expect(createWorkspace).toHaveBeenCalledWith({ path: '/tmp/project' })
++    await waitFor(() => { expect(c.onPick).toHaveBeenCalledWith(created.workspaceId) })
++  })
++
+   it('raises the flow straight from the anchor gesture when adding is the only entry', () => {
+     // Nothing to list and one action left: a one-row menu would offer no
+     // choice, so the owner's open request lands in the flow itself.
