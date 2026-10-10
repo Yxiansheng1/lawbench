@@ -26,7 +26,7 @@ import { pathState, type PathStateResult } from './path-state.ts'
 import { notes, problems, selfCheck, type CheckItem } from './selfcheck.ts'
 import { nodeSelfCheckDeps } from './selfcheck-node.ts'
 import { effectiveConfig } from './install-layout.ts'
-import { chosenFolders, folderKind, insideCase, localCaseFolder, mkdirInCase, openableFile, removableMaterial, sameFolder, toolExe, type DeskDeps } from './desk-actions.ts'
+import { chosenFolders, droppedItems, folderKind, insideCase, localCaseFolder, mkdirInCase, openableFile, removableMaterial, sameFolder, toolExe, type DeskDeps, type DroppedItem } from './desk-actions.ts'
 import { nodeDeskDeps } from './desk-node.ts'
 import { readCaseWiki, type CaseWiki } from './case-wiki.ts'
 import { MATERIAL_REMOVE_ENABLED, REMOVE_DISABLED_TIP } from '../shared/feature-flags.ts'
@@ -326,6 +326,18 @@ export class LawbenchRemote {
     const out = readCaseWiki(known.value)
     this.log('info', 'wiki.read', { exists: out.ok ? out.value.exists : undefined })
     return out
+  }
+
+  /**
+   * 首页空白处拖进文件夹建案件（令 1422）：界面分不清拖进来的是文件还是文件夹、是不是已经当过案件，由 Host 看一眼，见 desk-actions.ts 的 droppedItems。
+   * 只收普通绝对路径，只看类型和顶层名字，不读内容；日志只记各类几个，不记路径、名字。
+   * @param request - { paths }：拖进来的各项的本机路径。
+   */
+  async dropInfo(request: unknown): Promise<{ ok: true; value: { items: DroppedItem[] } } | ApiFail> {
+    const r = droppedItems((request as { paths?: unknown } | null)?.paths, this.desk.dropFs)
+    if (!r.ok) return r
+    this.log('info', 'drop.info', { dirs: r.value.filter((x) => x.kind === 'dir').length, files: r.value.filter((x) => x.kind === 'file').length, other: r.value.filter((x) => x.kind === 'other').length })
+    return { ok: true, value: { items: r.value } }
   }
 
   private dailyQueue: Promise<unknown> = Promise.resolve()

@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmS
 import { API_ROUTES } from '../shared/api-routes.ts'
 import { basename, join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { loadContracts, CONTRACTS_DIR } from '../scripts/contracts-source.mjs'
 import { makeTools } from './fake-tools.mjs'
@@ -40,6 +40,8 @@ const FIXTURES = flag('--fixtures')
 // 真服务按案件编号去重：律师在新位置打开（/api/case/open）之后，最近案件只列新位置（T17 第五轮复核的证据缺口）。
 // 这里模拟：给了 --case-root 时，打开的路径若与它同名（复制、搬家后的同一案件），之后第一个案件就报打开的那个路径。
 let CASE_ROOT = arg('--case-root', null)
+/** 本次运行里新打开的文件夹（假数据之外的），排在最近案件最前面。 */
+let openedCases = []
 // --case-root-file <文件>：每次请求都从这个文件读第一个案件的位置（桌面端复测时手动切换"服务现在只列哪个位置"）
 const CASE_ROOT_FILE = arg('--case-root-file', null)
 // 契约 1.2（N37）：任务单按"管到律师改掉为止"模拟——/api/task 设置该会话当前的选择（新的顶掉旧的）；
@@ -216,11 +218,25 @@ function fromFixtures(method, path, query, body) {
     const base = fixture('outputs_list.json')
     return [ok({ ...base.value, outputs: [...confirmed, ...base.value.outputs] })]
   }
+  // 同真服务 SEC-14：路径里有同步软件的名字就拒（令 1422 真机核"复制到本机建案件"用；只认几个常见的名字）
+  if (r.method === 'caseOpen' && typeof request?.path === 'string' && /onedrive|坚果云|nutstore|dropbox/i.test(request.path)) {
+    return [fail('CASE_IN_SYNC_FOLDER', '该文件夹在云同步目录中，请移到本机普通文件夹后再打开')]
+  }
   if (!existsSync(join(FIXTURE_DIR, `${r.contract}.json`))) return [fail('INTERNAL', '内部错误，请重试；多次出现请联系技术支持'), [`没有 ${r.contract} 的假数据`]]
   const out = fixture(`${r.contract}.json`)
+  // 同真服务：假数据之外的文件夹第一次打开时登记成一个新案件（自己的编号），之后出现在最近案件里（令 1422 真机核拖文件夹建案件用）
+  if (r.method === 'caseOpen' && typeof request?.path === 'string' && !(CASE_ROOT && basename(request.path) === basename(CASE_ROOT))
+    && !out.value.name.includes(basename(request.path)) && !fixture('case_recent.json').value.cases.some((c) => c.root === request.path)) {
+    const h = createHash('sha256').update(request.path.toLowerCase()).digest('hex')
+    const caseId = `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`
+    const had = openedCases.some((c) => c.case_id === caseId)
+    openedCases = [{ case_id: caseId, name: basename(request.path), root: request.path, last_opened: isoNow(), exists: true }, ...openedCases.filter((c) => c.case_id !== caseId)]
+    return [ok({ case_id: caseId, name: basename(request.path), created: !had, folders_created: [] })]
+  }
   if (CASE_ROOT_FILE && existsSync(CASE_ROOT_FILE)) CASE_ROOT = readFileSync(CASE_ROOT_FILE, 'utf8').trim() || CASE_ROOT
   if (CASE_ROOT && r.method === 'caseOpen' && typeof request?.path === 'string' && basename(request.path) === basename(CASE_ROOT)) CASE_ROOT = request.path
   if (CASE_ROOT && r.method === 'caseRecent' && out.ok && out.value.cases[0]) out.value.cases[0].root = CASE_ROOT
+  if (r.method === 'caseRecent' && out.ok) out.value.cases = [...openedCases, ...out.value.cases]
   return [out]
 }
 

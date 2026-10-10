@@ -54,6 +54,8 @@ export const REMOTE_METHODS: readonly RemoteMethodSpec[] = [
   { method: 'caseFolders', params: ['request'] },
   // 令 1852 第 18 条：案件 wiki 合成一张卡，Host 读六个板块（服务没有读 wiki 正文的接口）
   { method: 'caseWiki', params: ['request'] },
+  // 令 1422（第七版待办 20）：首页空白处拖进文件夹建案件，Host 看拖进来的是文件还是文件夹、是不是已经当过案件
+  { method: 'dropInfo', params: ['request'] },
   // T13 执行令 Q6：/api/* 各接口，返回完整的 {ok, value} 或 {ok: false, error: {code, message}}
   ...API_ROUTES.map(({ method }) => ({ method, params: ['request'] })),
 ]

@@ -75,8 +75,11 @@ export async function loadRecent(): Promise<CaseRef[] | { code: string; message:
  * @param navigate - 登记后是否转到该案件的会话（在会话里"作为案件打开"时不转）。
  * @param offerLocal - 在云同步目录里被拒时是否提议"为我在本机建一个文件夹"；打开本机建好的文件夹时为 false（只给一次）。
  * @param picked - 已经选好的子文件夹（换到本机文件夹再开时沿用，不再问）。
+ * @param hooks - onSync：在云同步目录里被拒时改走这里（首页拖文件夹建案件：只给"复制到本机建案件"，令 1422），给了就不走 offerLocal；
+ *   onOpened：登记成功后、转到案件之前调一次（要随案件记下的东西在这里记，不等打开工作区）。
  */
-export async function openCase(path: string | null, template: CaseKind | null, navigate = true, offerLocal = true, picked?: FolderChoice): Promise<CaseRef | undefined> {
+export async function openCase(path: string | null, template: CaseKind | null, navigate = true, offerLocal = true, picked?: FolderChoice,
+  hooks: { onSync?: (dir: string) => Promise<CaseRef | undefined>; onOpened?: (c: CaseRef) => void } = {}): Promise<CaseRef | undefined> {
   const nav = getNav()
   const dir = path ?? await nav.pickDirectory()
   if (!dir) return undefined
@@ -86,6 +89,7 @@ export async function openCase(path: string | null, template: CaseKind | null, n
   // 契约 case_open 的 template 只能整套建：一律传 null（服务只建 工作区/、成果/），勾的由 Host 补建（交回件说明，候契约 1.4）
   const r = await call<{ case_id: string; name: string; created: boolean; folders_created: string[] }>('caseOpen', { path: dir, template: null })
   if (!r.ok && r.error.code === 'CASE_IN_SYNC_FOLDER') {
+    if (hooks.onSync) return hooks.onSync(dir)
     if (offerLocal) return offerLocalFolder(dir, template, navigate, choice ?? undefined)
     const name = folderName(dir)
     notice(syncWordIn(name) ? SYNC_NAME_TITLE : '没能打开案件', syncWordIn(name) ? syncNameText(name) : errorText(r.error))
@@ -97,6 +101,7 @@ export async function openCase(path: string | null, template: CaseKind | null, n
   // 服务的登记已替换成新位置；界面这边也只留新的一条，打开后把侧栏里旧位置那一项移除
   const prev = app.get().cases.find((x) => x.case_id === c.case_id && !samePath(x.root, dir))
   rememberCase(c)
+  hooks.onOpened?.(c)
   if (template && choice) await makeFolders(c, template, choice)
   if (navigate) {
     const opened = await nav.openCaseWorkspace(dir)
@@ -165,14 +170,18 @@ export interface ImportResult {
 export async function runImport(caseRef: CaseRef, paths: string[], target: string, unzip: boolean): Promise<void> {
   const r = await call<ImportResult>('materialsImport', { case_id: caseRef.case_id, paths, target, unzip })
   if (!r.ok) { notice('导入没有完成', errorText(r.error)); return }
-  const v = r.value
+  reportImport(caseRef, r.value, '导入结果')
+}
+
+/** 说明复制了几个、跳过了几个和解析结果，并让材料列表刷新（导入、"复制到本机建案件"共用）。 */
+export function reportImport(caseRef: CaseRef, v: ImportResult, title: string): void {
   const lines = [
     ...v.copied.map((c) => `已复制：${c.to}`),
     ...v.skipped.map((s) => `已跳过：${s.path}（${s.reason}）`),
   ]
   const summary = `复制 ${v.copied.length} 个，跳过 ${v.skipped.length} 个；解析：新增 ${v.scan.added}、变化 ${v.scan.changed}、移除 ${v.scan.removed}、失败 ${v.scan.failed}。`
     + (v.scan.review_needed ? '材料有变化，案件 wiki 和已有成果需要复核。' : '')
-  notice('导入结果', summary, lines)
+  notice(title, summary, lines)
   window.dispatchEvent(new CustomEvent('lawbench:materials-changed', { detail: caseRef.case_id }))
 }
 

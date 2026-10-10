@@ -7,6 +7,7 @@ import { Button, C, Empty, S } from './kit.tsx'
 import { DEFAULT_TARGET, loadRecent, openCase, runImport } from './cases.ts'
 import { KEEP_LABEL } from './settings-draft.ts'
 import { OCR_FIRST, OCR_GO } from './estimate.ts'
+import { ASK_OK, ASK_TEXT, askTitle, DROP_KINDS, type DropKind } from './drop-case.ts'
 import { CASE_TEMPLATES, customFolderProblem, KIND_WORD, MAX_CUSTOM, type FolderChoice } from '../shared/case-folders.ts'
 
 export function DialogHost() {
@@ -66,6 +67,8 @@ function OneDialog({ d }: { d: Dialog }) {
       return <CasePickDialog then={d.then} close={close} />
     case 'folders':
       return <FoldersDialog d={d} />
+    case 'newCase':
+      return <NewCaseDialog d={d} />
   }
 }
 
@@ -189,6 +192,26 @@ function FoldersDialog({ d }: { d: Extract<Dialog, { kind: 'folders' }> }) {
           <Button size="sm" variant="outline" disabled={!draft.trim()} onClick={add}>添加一项</Button>
         </div>
         {err ? <div role="alert" style={{ color: C.err, fontSize: 12 }}>{err}</div> : null}
+      </div>
+    </Modal>
+  )
+}
+
+/** 首页空白处拖进文件夹（令 1422）：把它建成案件？选类型（民商事 / 刑事 / 日常事务），确定 / 取消。取消什么都不发生。 */
+function NewCaseDialog({ d }: { d: Extract<Dialog, { kind: 'newCase' }> }) {
+  const [kind, setKind] = useState<DropKind>('civil')
+  const answer = (k: DropKind | null) => { popDialog(d); d.resolve(k) }
+  return (
+    <Modal open onClose={() => answer(null)} title={askTitle(d.name)} closeLabel="关闭"
+      footer={<><Button variant="outline" onClick={() => answer(null)}>取消</Button><Button variant="primary" data-modal-autofocus onClick={() => answer(kind)}>{ASK_OK}</Button></>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ lineHeight: 1.7 }}>{ASK_TEXT}</div>
+        <div role="radiogroup" aria-label="案件类型" style={{ ...S.row, flexWrap: 'wrap' }}>
+          <span style={S.sub}>类型</span>
+          {DROP_KINDS.map((k) => (
+            <label key={k.kind} style={S.row}><input type="radio" name="lawbench-new-case-kind" checked={kind === k.kind} onChange={() => setKind(k.kind)} />{k.label}</label>
+          ))}
+        </div>
       </div>
     </Modal>
   )

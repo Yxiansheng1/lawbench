@@ -3,7 +3,7 @@
 // 最近案件大卡片（"日常事务"单独一张排第一，其余按上次打开倒序、最多 12 个），每张：案件名、路径、材料 / 待识别 / 成果份数、
 // 上次打开时间，整卡可点进入，可把文件拖到卡片导入；没有案件时居中一段欢迎语和三个按钮（技术支持只在窗口右下角，令 1515）。
 // 数据走现有的 caseRecent、materialsList、outputsList、getCapsules，不加接口。
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { Capsules } from './capsules.ts'
 import { loadRecent, openCase, startImport } from './cases.ts'
 import { Badge, Button, C, CONNECTING_TEXT, Empty, ErrorLine, getNav, useLoad, useRetryLoad } from './kit.tsx'
@@ -15,6 +15,7 @@ import { BrandMark } from './brand.tsx'
 import { PRODUCT_NAME } from '../shared/product.ts'
 import { materialCounts, shortTime } from './overview.tsx'
 import { loadSettingsIntoState } from './settings.tsx'
+import { BLANK_HINT, BLANK_IDLE, cardHint, dropOnBlank } from './drop-case.ts'
 
 /** 首页最多列这么多个案件（日常事务另算）；其余在"打开案件…"里。 */
 export const HOME_MAX_CASES = 12
@@ -33,6 +34,11 @@ export function homeCases(cases: CaseRef[], dailyRoot: string | null): { daily: 
   return { daily, others }
 }
 
+/** 空白处"松开：建新案件"的高亮：这么久没再收到 dragover 就关掉。 */
+export const BLANK_OVER_MS = 1200
+
+/** 空白处高亮用固定的蓝色：深色主题下品牌色接近白色，白字压在上面看不见（真机核出）。 */
+const DROP_BLUE = '#2f6bff'
 const PAGE = { boxSizing: 'border-box' as const, width: '100%', maxWidth: 1180, margin: '0 auto', padding: '40px 32px 24px', display: 'flex', flexDirection: 'column' as const, gap: 28, color: C.text }
 const SHADOW = '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)'
 
@@ -49,8 +55,33 @@ export function HomeLanding({ banner }: { banner?: ReactNode }) {
   const dailyRoot = useStore(app, (s) => s.dailyRoot)
   const lawyer = useStore(app, (s) => s.lawyerName)
   const { daily, others } = homeCases(cases, dailyRoot)
+  // 令 1422：空白处（案件卡片之外）拖进文件夹 = 建案件。卡片自己接住拖放并停止冒泡，所以到这里的一定不在卡片上；
+  // 拖到卡片上时由卡片把这里的高亮关掉（onOver），两种高亮不同时亮
+  const [blankOver, setBlankOverRaw] = useState(false)
+  // 拖着不动时浏览器也会不停地发 dragover；一段时间没再收到（拖动被取消而没有发 dragleave）就把高亮关掉，不让它卡在亮着
+  const overTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const setBlankOver = (on: boolean) => {
+    clearTimeout(overTimer.current)
+    if (on) overTimer.current = setTimeout(() => setBlankOverRaw(false), BLANK_OVER_MS)
+    setBlankOverRaw(on)
+  }
+  useEffect(() => () => clearTimeout(overTimer.current), [])
+  const hasFiles = (e: DragEvent) => [...e.dataTransfer.types].includes('Files')
+  const blankDrop = (e: DragEvent) => {
+    if (!hasFiles(e)) return
+    e.preventDefault(); e.stopPropagation(); setBlankOver(false) // 不冒泡到 DSH 的 document 拖入监听（否则会被当成聊天附件）
+    void dropOnBlank([...e.dataTransfer.files].map((f) => getNav().pathFor(f))).then((made) => { if (made.length) void reload() })
+  }
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div style={{ height: '100%', overflowY: 'auto', position: 'relative', outline: blankOver ? `2px dashed ${DROP_BLUE}` : 'none', outlineOffset: -6 }}
+      data-lawbench-drop='' data-home-blank={blankOver ? 'over' : ''}
+      onDragEnter={(e) => { if (hasFiles(e)) e.stopPropagation() }}
+      onDragOver={(e) => { if (!hasFiles(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; setBlankOver(true) }}
+      onDragLeave={(e) => { e.stopPropagation(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setBlankOver(false) }}
+      onDrop={blankDrop}>
+      {blankOver ? (
+        <div role="status" style={{ position: 'sticky', top: 12, zIndex: 2, width: 'fit-content', margin: '0 auto -44px', padding: '8px 18px', borderRadius: 999, background: DROP_BLUE, color: '#fff', fontSize: 15, fontWeight: 600, boxShadow: SHADOW, pointerEvents: 'none' }}>{BLANK_HINT}</div>
+      ) : null}
       <div style={PAGE}>
         <header style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -77,12 +108,15 @@ export function HomeLanding({ banner }: { banner?: ReactNode }) {
         {recent.state === 'ok' && (others.length > 0 || daily) ? (
           <section aria-label="最近案件" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>最近案件</h2>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>最近案件</h2>
+                <span style={{ fontSize: 12, color: C.faint }}>{BLANK_IDLE}</span>
+              </div>
               {others.length > 0 ? <MainButtons /> : null}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-              {daily ? <CaseCard c={daily} daily /> : null}
-              {others.map((c) => <CaseCard key={c.case_id} c={c} />)}
+              {daily ? <CaseCard c={daily} daily onOver={() => setBlankOver(false)} /> : null}
+              {others.map((c) => <CaseCard key={c.case_id} c={c} onOver={() => setBlankOver(false)} />)}
             </div>
           </section>
         ) : null}
@@ -103,7 +137,8 @@ function MainButtons() {
 }
 
 /** 一张案件卡片：整卡可点进入；接受拖入文件和文件夹导入（U-12）。 */
-export function CaseCard({ c, daily = false }: { c: CaseRef; daily?: boolean }) {
+/** @param onOver - 拖到卡片上时告诉首页（把空白处"建新案件"的高亮关掉，令 1422 第 3 条）。 */
+export function CaseCard({ c, daily = false, onOver }: { c: CaseRef; daily?: boolean; onOver?: () => void }) {
   const [over, setOver] = useState(false)
   const [mats] = useLoad(() => call<{ materials: Array<{ pages_need_ocr?: unknown[] }> }>('materialsList', { case_id: c.case_id }), [c.case_id])
   const [outs] = useLoad(() => call<{ outputs: unknown[] }>('outputsList', { case_id: c.case_id }), [c.case_id])
@@ -123,10 +158,10 @@ export function CaseCard({ c, daily = false }: { c: CaseRef; daily?: boolean }) 
   return (
     <div role="button" tabIndex={missing ? -1 : 0} aria-label={`进入${c.name}`} data-case-card={daily ? 'daily' : 'case'} data-lawbench-drop=''
       onClick={enter} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter() } }}
-      onDragEnter={(e) => e.stopPropagation()} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (missing) e.dataTransfer.dropEffect = 'none'; else setOver(true) }}
+      onDragEnter={(e) => { e.stopPropagation(); onOver?.() }} onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); onOver?.(); if (missing) e.dataTransfer.dropEffect = 'none'; else setOver(true) }}
       onDragLeave={(e) => { e.stopPropagation(); setOver(false) }} onDrop={drop}
       style={{
-        border: `1px solid ${over ? C.brand : C.border}`, borderRadius: 14, padding: '18px 18px 14px', minHeight: 150, boxShadow: SHADOW,
+        border: `${over ? 2 : 1}px solid ${over ? C.brand : C.border}`, borderRadius: 14, padding: '18px 18px 14px', minHeight: 150, boxShadow: SHADOW,
         background: daily ? 'rgba(47,107,255,0.05)' : 'transparent', cursor: missing ? 'not-allowed' : 'pointer', opacity: missing ? 0.7 : 1,
         display: 'flex', flexDirection: 'column', gap: 8, outline: 'none',
       }}>
@@ -141,7 +176,7 @@ export function CaseCard({ c, daily = false }: { c: CaseRef; daily?: boolean }) 
       <div style={{ fontSize: 14, color: C.text }}>{stats}</div>
       {daily ? <ToolsRow /> : null}
       <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.faint }}>
-        <span>{over ? '松开即导入到这个案件' : '可把文件拖到这里导入'}</span>
+        <span style={over ? { color: C.brand, fontWeight: 600 } : undefined}>{over ? cardHint(c.name) : '可把文件拖到这里导入'}</span>
         <span>{c.last_opened ? `上次打开 ${shortTime(c.last_opened)}` : ''}</span>
       </div>
     </div>

@@ -29,6 +29,8 @@ export type Dialog =
   | { kind: 'ocrFirst'; title: string; text: string; resolve: (choice: 'ocr' | 'go' | 'cancel') => void }
   /** 新建案件选好文件夹后：要建哪些子文件夹（令 1852 第 17 条）；取消为 null（不新建）。 */
   | { kind: 'folders'; caseName: string; template: CaseKind; resolve: (choice: FolderChoice | null) => void }
+  /** 首页空白处拖进文件夹：把它建成案件？选类型（令 1422）；取消为 null。 */
+  | { kind: 'newCase'; name: string; resolve: (kind: 'civil' | 'criminal' | 'daily' | null) => void }
 
 export interface AppState {
   cases: CaseRef[]
@@ -159,6 +161,11 @@ export function popDialog(d: Dialog): void { app.set((s) => ({ ...s, dialogs: s.
 /** 弹确认框，律师点确定返回 true。所有发往服务器的操作都先经这里（工单第 3 步）。 */
 export function confirm(title: string, text: string, ok = '确定'): Promise<boolean> {
   return new Promise((resolve) => pushDialog({ kind: 'confirm', title, text, ok, resolve }))
+}
+
+/** 首页空白处拖进文件夹时问"把它建成案件？"并选类型；取消为 null。 */
+export function askNewCase(name: string): Promise<'civil' | 'criminal' | 'daily' | null> {
+  return new Promise((resolve) => pushDialog({ kind: 'newCase', name, resolve }))
 }
 
 /** 新建案件时问要建哪些子文件夹（默认全不勾）；取消为 null。 */

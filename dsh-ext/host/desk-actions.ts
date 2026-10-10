@@ -1,8 +1,8 @@
 // 律师第一批反馈（令 2043）里要 Host 动本机的几件事：打开小工具、打开案件子文件夹、移除一份材料、在本机建案件文件夹。
 // 路径判断都在这里（纯函数，tests\desk-actions.spec.ts）；真正启动程序、删文件由调用方注入，便于测。
 // 日志只记事件和结果，不记路径、文件名。
-import { lstatSync, mkdirSync, realpathSync, statSync } from 'node:fs'
-import { extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
+import { lstatSync, mkdirSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { basename, extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 import { CASE_TEMPLATES, customFolderProblem, folderRels, isDeviceName, MAX_CUSTOM, safeFolderName, type CaseKind } from '../shared/case-folders.ts'
 
 /** 首页"工具"一栏的两个小工具（打包后在 <安装目录>\tools\<名>\<名>.exe，见 packaging\build.ps1 smalltools 步）。 */
@@ -119,6 +119,8 @@ export interface DeskDeps {
   mkdir(dir: string): Promise<void>
   /** 新建案件补建子文件夹（mkdirInCase）用的文件系统操作；不给时用真文件系统。 */
   mkdirFs?: MkdirFs
+  /** 看首页拖进来的东西（droppedItems）用的文件系统操作；不给时用真文件系统。 */
+  dropFs?: DropFs
 }
 
 /**
@@ -205,4 +207,54 @@ export function mkdirInCase(root: string, rel: string, fs: MkdirFs = nodeMkdirFs
     made = true
   }
   return made
+}
+
+/** 首页空白处拖进来的一项（令 1422，第七版待办 20）：是不是文件夹、是不是已经当过案件、顶层有哪些东西。 */
+export interface DroppedItem {
+  path: string
+  /** 文件夹名（或文件名）。 */
+  name: string
+  /** dir：普通文件夹；file：文件；other：链接、联接、不存在、网络路径或相对路径（都不能建案件）。 */
+  kind: 'dir' | 'file' | 'other'
+  /** 文件夹里已有 工作区\（以前当过案件）。 */
+  has_case: boolean
+  /** 顶层各项的绝对路径（不含以 . 开头的和 工作区、成果）；"复制到本机建案件"时逐项交给 /api/materials/import。超过上限为 null。 */
+  children: string[] | null
+}
+/** 顶层最多列这么多项（多了不列，界面改为整个文件夹复制）。 */
+export const MAX_DROP_CHILDREN = 2000
+/** 一次最多看这么多项。 */
+export const MAX_DROP_ITEMS = 50
+
+/** 看拖进来的东西用到的文件系统操作（测试换成替身，默认真文件系统）。 */
+export interface DropFs {
+  lstat(p: string): { isDirectory(): boolean; isFile(): boolean; isSymbolicLink(): boolean } | undefined
+  readdir(p: string): string[]
+}
+export const nodeDropFs: DropFs = {
+  lstat: (p) => { try { return lstatSync(p) } catch { return undefined } },
+  readdir: (p) => readdirSync(p),
+}
+
+/**
+ * 看首页空白处拖进来的各项：只收普通绝对路径（同 knownCase / openFolder 的口径，网络路径、相对路径算 other，不去碰）；
+ * 链接、联接算 other（案件根不能是链接，服务也拒）。只看是不是文件夹和顶层名字，不读文件内容。
+ */
+export function droppedItems(paths: unknown, fs: DropFs = nodeDropFs): { ok: true; value: DroppedItem[] } | Fail {
+  if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_DROP_ITEMS || paths.some((p) => typeof p !== 'string')) return BAD_ARG
+  const reserved = new Set(['工作区', '成果'])
+  const out = (paths as string[]).map((path): DroppedItem => {
+    const item: DroppedItem = { path, name: basename(path.replace(/[\\/]+$/, '')), kind: 'other', has_case: false, children: [] }
+    if (!plainAbsolute(path)) return item
+    const st = fs.lstat(path)
+    if (!st || st.isSymbolicLink()) return item
+    if (st.isFile()) return { ...item, kind: 'file' }
+    if (!st.isDirectory()) return item
+    let names: string[]
+    try { names = fs.readdir(path) } catch { return item }
+    const work = fs.lstat(join(path, '工作区'))
+    const kept = names.filter((n) => !n.startsWith('.') && !reserved.has(n)).sort()
+    return { ...item, kind: 'dir', has_case: !!work && work.isDirectory() && !work.isSymbolicLink(), children: kept.length > MAX_DROP_CHILDREN ? null : kept.map((n) => join(path, n)) }
+  })
+  return { ok: true, value: out }
 }
